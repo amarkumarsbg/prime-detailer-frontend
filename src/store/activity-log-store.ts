@@ -1,24 +1,21 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { activityLogs as seedLogs } from "@/lib/mock-data";
 import type { ActivityLog } from "@/types";
+import { putCollectionDocument } from "@/lib/collection-sync";
 
 interface ActivityLogStore {
   logs: ActivityLog[];
-  addLog: (entry: ActivityLog) => void;
+  addLog: (entry: ActivityLog) => Promise<void>;
 }
 
-export const useActivityLogStore = create<ActivityLogStore>()(
-  persist(
-    (set) => ({
-      logs: seedLogs,
-      addLog: (entry) =>
-        set((s) => ({
-          logs: [entry, ...s.logs],
-        })),
-    }),
-    { name: "prime-detailers-activity-log" }
-  )
-);
+export const useActivityLogStore = create<ActivityLogStore>((set) => ({
+  logs: [],
+
+  addLog: async (entry) => {
+    await putCollectionDocument("activityLogs", entry.id, entry);
+    set((s) => ({
+      logs: [entry, ...s.logs],
+    }));
+  },
+}));

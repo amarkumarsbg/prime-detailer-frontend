@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,7 @@ import {
 
 export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "mobile">("email");
-  const [email, setEmail] = useState("rajesh@primedetailers.in");
+  const [email, setEmail] = useState("rajesh.kumar@primedetailers.in");
   const [password, setPassword] = useState("password");
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
@@ -30,7 +29,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
-  const router = useRouter();
 
   const handleSendOtp = async () => {
     if (!mobile || mobile.length < 10) {
@@ -49,19 +47,18 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    await new Promise((r) => setTimeout(r, 800));
-
     if (loginMethod === "mobile") {
       if (otp === "1234") {
-        login("rajesh@primedetailers.in", "password");
-        router.push("/dashboard");
+        const success = await login("rajesh.kumar@primedetailers.in", "password");
+        if (success) window.location.assign("/dashboard");
+        else setError("Could not sign in. Is the API running on port 4000?");
       } else {
         setError("Invalid OTP. Use 1234 for demo.");
       }
     } else {
-      const success = login(email, password);
+      const success = await login(email, password);
       if (success) {
-        router.push("/dashboard");
+        window.location.assign("/dashboard");
       } else {
         setError("Invalid email or password");
       }
@@ -389,7 +386,7 @@ export default function LoginPage() {
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground/60 w-14 shrink-0">Email</span>
                 <code className="text-xs bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border font-mono">
-                  rajesh@primedetailers.in
+                  rajesh.kumar@primedetailers.in
                 </code>
               </div>
               <div className="flex items-center gap-2">

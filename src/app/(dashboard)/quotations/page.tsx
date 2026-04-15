@@ -36,8 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { serviceCatalog } from "@/lib/mock-data";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useQuotationStore } from "@/store/quotation-store";
@@ -50,7 +50,14 @@ import {
   isValidIndianVehicleRegistration,
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
-import type { JobCard, Quotation, QuotationStatus, ServiceItem, VehicleSegment } from "@/types";
+import type {
+  JobCard,
+  Quotation,
+  QuotationStatus,
+  ServiceCatalogItem,
+  ServiceItem,
+  VehicleSegment,
+} from "@/types";
 import {
   Plus,
   FileText,
@@ -93,14 +100,19 @@ const SEGMENT_OPTIONS: { value: VehicleSegment; label: string }[] = [
   { value: "LUXURY", label: "Luxury" },
 ];
 
-function getServicePrice(serviceId: string, segment: VehicleSegment): number {
-  const svc = serviceCatalog.find((s) => s.id === serviceId);
+function getServicePrice(
+  catalog: ServiceCatalogItem[],
+  serviceId: string,
+  segment: VehicleSegment
+): number {
+  const svc = catalog.find((s) => s.id === serviceId);
   if (!svc) return 0;
   const price = svc.segmentPricing[segment as keyof typeof svc.segmentPricing];
   return price ?? svc.defaultPrice;
 }
 
 export default function QuotationsPage() {
+  const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const customers = useCustomerStore((s) => s.customers);
@@ -157,12 +169,12 @@ export default function QuotationsPage() {
     const segment = effectiveSegment;
     let subtotal = 0;
     formServiceIds.forEach((sid) => {
-      subtotal += getServicePrice(sid, segment);
+      subtotal += getServicePrice(catalog, sid, segment);
     });
     const taxAmount = Math.round(subtotal * TAX_RATE);
     const grandTotal = subtotal + taxAmount;
     return { subtotal, taxAmount, grandTotal };
-  }, [formServiceIds, effectiveSegment]);
+  }, [formServiceIds, effectiveSegment, catalog]);
 
   const segmentSelectLocked = customerMode === "existing" && !!selectedVehicle;
   const canSelectServices =
@@ -196,7 +208,7 @@ export default function QuotationsPage() {
     setFormTerms("");
   };
 
-  const handleNewQuotationSubmit = (e: React.FormEvent) => {
+  const handleNewQuotationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formServiceIds.size === 0) {
       toast.error("Please select at least one service");
@@ -251,8 +263,6 @@ export default function QuotationsPage() {
         });
         return;
       }
-      const now = new Date().toISOString();
-      customerId = `cust-quot-${Date.now()}`;
       customerName = name;
       customerPhone =
         newCustomerPhone.replace(/\D/g, "").length >= 10 && newCustomerPhone.startsWith("+")
@@ -264,24 +274,33 @@ export default function QuotationsPage() {
       vehicleMakeModel = `${make} ${model}`.trim();
       vehicleSegment = formSegment;
 
-      const customerAdded = addCustomer({
-        id: customerId,
-        name: customerName,
-        phone: customerPhone,
-        email: newCustomerEmail.trim() || `${customerId}@placeholder.local`,
-        address: "",
-        referralCode: `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        totalVisits: 0,
-        rewardPoints: 0,
-        walletBalance: 0,
-        createdAt: now,
-      });
-      if (!customerAdded) {
+      let createdCustomer;
+      try {
+        createdCustomer = await addCustomer({
+          name: customerName,
+          phone: customerPhone,
+          email:
+            newCustomerEmail.trim() ||
+            `noemail+${phoneDigits}@customers.placeholder`,
+          address: "",
+          referralCode: `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          totalVisits: 0,
+          rewardPoints: 0,
+          walletBalance: 0,
+        });
+      } catch {
+        toast.error("Could not create customer", {
+          description: "Check that the API server is running.",
+        });
+        return;
+      }
+      if (!createdCustomer) {
         toast.error("This phone number is already registered", {
           description: "Use Existing customer or a different mobile number.",
         });
         return;
       }
+      customerId = createdCustomer.id;
 
       setVehicles((prev) => [
         ...prev,
@@ -312,8 +331,8 @@ export default function QuotationsPage() {
       vehicleMakeModel,
       vehicleSegment,
       services: Array.from(formServiceIds).map((sid) => {
-        const svc = serviceCatalog.find((s) => s.id === sid)!;
-        const price = getServicePrice(sid, vehicleSegment);
+        const svc = catalog.find((s) => s.id === sid)!;
+        const price = getServicePrice(catalog, sid, vehicleSegment);
         return { serviceCatalogId: sid, name: svc.name, price };
       }),
       subtotal: formCalculations.subtotal,
@@ -380,7 +399,7 @@ export default function QuotationsPage() {
     const now = new Date().toISOString();
 
     const serviceItems: ServiceItem[] = q.services.map((s, idx) => {
-      const cat = serviceCatalog.find((c) => c.id === s.serviceCatalogId);
+      const cat = catalog.find((c) => c.id === s.serviceCatalogId);
       return {
         id: `si-${jobId}-${idx}`,
         jobCardId: jobId,
@@ -877,8 +896,8 @@ export default function QuotationsPage() {
             <div className="space-y-2">
               <Label>Services</Label>
               <div className="rounded-lg border border-border p-3 max-h-48 overflow-y-auto space-y-2">
-                {serviceCatalog.filter((s) => s.isActive).map((svc) => {
-                  const price = getServicePrice(svc.id, effectiveSegment);
+                {catalog.filter((s) => s.isActive).map((svc) => {
+                  const price = getServicePrice(catalog, svc.id, effectiveSegment);
                   return (
                     <div
                       key={svc.id}

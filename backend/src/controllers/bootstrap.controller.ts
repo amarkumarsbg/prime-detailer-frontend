@@ -1,0 +1,11 @@
+import type { Request, Response, NextFunction } from "express";
+import { getBootstrapPayload } from "../services/bootstrap.service.js";
+
+export async function getBootstrap(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await getBootstrapPayload();
+    res.json({ data, error: null });
+  } catch (e) {
+    next(e);
+  }
+}

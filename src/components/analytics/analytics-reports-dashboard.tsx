@@ -52,7 +52,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { isAllBranchesScope } from "@/lib/all-branches";
 import { getStockStatus } from "@/lib/inventory-units";
-import { dashboardStats } from "@/lib/mock-data";
+import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
 import {
   rangeStartDays,
   revenueByDay,
@@ -112,6 +112,7 @@ export function AnalyticsReportsDashboard() {
   const parts = useInventoryStore((s) => s.parts);
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const branches = useBranchStore((s) => s.branches);
+  const averageRating = useDashboardStatsStore((s) => s.stats?.averageRating ?? 0);
 
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
   const start = useMemo(() => rangeStartDays(days), [days, tick]);
@@ -264,7 +265,7 @@ export function AnalyticsReportsDashboard() {
         <KPICard
           tone="emerald"
           title="Avg. rating"
-          value={dashboardStats.averageRating.toFixed(1)}
+          value={averageRating.toFixed(1)}
           subtitle="customer feedback"
           icon={BarChart3}
         />

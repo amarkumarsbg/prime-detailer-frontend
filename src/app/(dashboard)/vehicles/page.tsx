@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { customers } from "@/lib/mock-data";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { useCustomerStore } from "@/store/customer-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,7 @@ function getColorHex(colorName: string): string {
 
 export default function VehiclesPage() {
   const router = useRouter();
+  const customers = useCustomerStore((s) => s.customers);
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const [addDialogOpen, setAddDialogOpen] = useState(false);

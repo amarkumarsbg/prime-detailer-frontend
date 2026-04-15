@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth-store";
+import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ScrollToTopButton } from "@/components/layout/scroll-to-top-button";
+import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -29,6 +32,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [authReady, isAuthenticated, router]);
 
+  const runBootstrap = useAppBootstrapStore((s) => s.run);
+  const resetBootstrap = useAppBootstrapStore((s) => s.reset);
+  const bootstrapError = useAppBootstrapStore((s) => s.error);
+
+  useEffect(() => {
+    if (authReady && !isAuthenticated) {
+      resetBootstrap();
+    }
+  }, [authReady, isAuthenticated, resetBootstrap]);
+
+  useEffect(() => {
+    if (!authReady || !isAuthenticated) return;
+    void runBootstrap();
+  }, [authReady, isAuthenticated, runBootstrap]);
+
+  useEffect(() => {
+    if (!bootstrapError) return;
+    toast.error(bootstrapError, {
+      id: "bootstrap-load-error",
+      duration: 10_000,
+      description: "Check that the API is running (backend npm run dev) and NEXT_PUBLIC_API_URL points to it.",
+    });
+  }, [bootstrapError]);
+
   if (!authReady || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -46,6 +73,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ref={mainScrollRef}
           className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain p-4 md:p-6 [scrollbar-gutter:stable]"
         >
+          {bootstrapError ? (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
+            >
+              <p className="font-medium text-destructive">Could not load data from the API</p>
+              <p className="mt-1 text-muted-foreground">{bootstrapError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void runBootstrap()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
           {children}
         </main>
         <ScrollToTopButton scrollContainerRef={mainScrollRef} />

@@ -6,8 +6,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import type { UserRole } from "@/types";
 import { canAccessNavItem } from "@/lib/rbac";
-import { invoices } from "@/lib/mock-data";
 import { useCustomerStore } from "@/store/customer-store";
+import { useInvoiceStore } from "@/store/invoice-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useStaffStore } from "@/store/staff-store";
@@ -86,6 +86,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const vehicles = useVehicleStore((s) => s.vehicles);
   const { jobCards } = useJobCardStore();
   const staff = useStaffStore((s) => s.staff);
+  const invoices = useInvoiceStore((s) => s.invoices);
 
   const groupClass = "**:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:py-1.5 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:text-muted-foreground";
   const itemClass = "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer aria-selected:bg-accent";

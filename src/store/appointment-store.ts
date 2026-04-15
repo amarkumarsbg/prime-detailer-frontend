@@ -1,33 +1,32 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { appointments as mockAppointments } from "@/lib/mock-data";
 import type { Appointment } from "@/types";
+import { putCollectionDocument } from "@/lib/collection-sync";
 
 interface AppointmentStore {
   appointments: Appointment[];
-  addAppointment: (appointment: Appointment) => void;
-  updateAppointment: (id: string, updates: Partial<Appointment>) => void;
+  addAppointment: (appointment: Appointment) => Promise<void>;
+  updateAppointment: (id: string, updates: Partial<Appointment>) => Promise<void>;
 }
 
-export const useAppointmentStore = create<AppointmentStore>()(
-  persist(
-    (set) => ({
-      appointments: mockAppointments,
+export const useAppointmentStore = create<AppointmentStore>((set, get) => ({
+  appointments: [],
 
-      addAppointment: (appointment) =>
-        set((state) => ({
-          appointments: [appointment, ...state.appointments],
-        })),
+  addAppointment: async (appointment) => {
+    await putCollectionDocument("appointments", appointment.id, appointment);
+    set((state) => ({
+      appointments: [appointment, ...state.appointments],
+    }));
+  },
 
-      updateAppointment: (id, updates) =>
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === id ? { ...a, ...updates } : a
-          ),
-        })),
-    }),
-    { name: "prime-detailers-appointments" }
-  )
-);
+  updateAppointment: async (id, updates) => {
+    const prev = get().appointments.find((a) => a.id === id);
+    if (!prev) return;
+    const next = { ...prev, ...updates };
+    await putCollectionDocument("appointments", id, next);
+    set((state) => ({
+      appointments: state.appointments.map((a) => (a.id === id ? next : a)),
+    }));
+  },
+}));

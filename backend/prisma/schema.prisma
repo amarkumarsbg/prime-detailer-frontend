@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  BRANCH_MANAGER
+  MANAGER
+  SUPERVISOR
+  RECEPTIONIST
+  MECHANIC
+}
+
+enum VehicleSegment {
+  HATCHBACK
+  SEDAN
+  SUV
+  LUXURY
+  MUV
+  COMPACT_SUV
+  BIKE
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  CNG
+  ELECTRIC
+  HYBRID
+}
+
+model Branch {
+  id           String   @id
+  name         String
+  address      String
+  phone        String
+  isActive     Boolean  @default(true)
+  qrCodeId     String?
+  code         String?
+  city         String?
+  state        String?
+  pincode      String?
+  email        String?
+  managerName  String?
+  managerPhone String?
+  users        User[]
+}
+
+model User {
+  id                   String   @id
+  name                 String
+  email                String   @unique
+  phone                String
+  role                 UserRole
+  branchId             String
+  branch               Branch   @relation(fields: [branchId], references: [id])
+  avatar               String?
+  isActive             Boolean  @default(true)
+  emailVerified        Boolean  @default(false)
+  attendancePin        String?
+  totalJobsCompleted   Int?
+  totalIncentiveEarned Int?
+  birthday             String?
+  anniversary          String?
+  passwordHash         String
+}
+
+model Customer {
+  id            String    @id
+  name          String
+  phone         String
+  email         String
+  address       String
+  referralCode  String
+  referredBy    String?
+  totalVisits   Int       @default(0)
+  rewardPoints  Int       @default(0)
+  walletBalance Float     @default(0)
+  lastVisitDate String?
+  isInactive    Boolean   @default(false)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime
+  vehicles      Vehicle[]
+}
+
+model Vehicle {
+  id                 String         @id
+  customerId         String
+  customer           Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerName       String
+  registrationNumber String
+  make               String
+  model              String
+  segment            VehicleSegment
+  variant            String?
+  fuelType           FuelType
+  color              String
+  year               Int
+  notes              String?
+  previousOwners     Json?
+}
+
+/** JSON documents keyed by collection name + entity id (e.g. jobCards / jc-001). */
+model AppJsonRow {
+  collection String
+  entityId   String
+  payload    Json
+  updatedAt  DateTime @updatedAt
+
+  @@id([collection, entityId])
+}

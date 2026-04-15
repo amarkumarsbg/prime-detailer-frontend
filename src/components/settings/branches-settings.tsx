@@ -31,19 +31,23 @@ export function BranchesSettings() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit) return;
     if (!name.trim() || !address.trim() || !phone.trim()) {
       toast.error("Name, address, and phone are required.");
       return;
     }
-    addBranch({ name, address, phone, isActive: true });
-    toast.success("Branch added.");
-    setName("");
-    setAddress("");
-    setPhone("");
-    setOpen(false);
+    try {
+      await addBranch({ name, address, phone, isActive: true });
+      toast.success("Branch added.");
+      setName("");
+      setAddress("");
+      setPhone("");
+      setOpen(false);
+    } catch {
+      toast.error("Could not add branch. Is the API running?");
+    }
   };
 
   if (!canManageOrgBranches(userRole)) {
@@ -102,9 +106,13 @@ export function BranchesSettings() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      deactivateBranch(b.id);
-                      toast.success("Branch deactivated.");
+                    onClick={async () => {
+                      try {
+                        await deactivateBranch(b.id);
+                        toast.success("Branch deactivated.");
+                      } catch {
+                        toast.error("Could not deactivate. Is the API running?");
+                      }
                     }}
                   >
                     Deactivate

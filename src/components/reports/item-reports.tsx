@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { serviceCatalog } from "@/lib/mock-data";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import {
   dateInPreset,
   reportSelectItemClass,
@@ -294,9 +294,10 @@ export function LowStockSummaryReport() {
 }
 
 export function RateListReport() {
+  const catalog = useServiceCatalogStore((s) => s.catalog);
   const rows = useMemo(
-    () => [...serviceCatalog].filter((s) => s.isActive).sort((a, b) => a.name.localeCompare(b.name)),
-    []
+    () => [...catalog].filter((s) => s.isActive).sort((a, b) => a.name.localeCompare(b.name)),
+    [catalog]
   );
 
   const downloadCsv = () => {

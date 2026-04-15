@@ -2,8 +2,8 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { jobCards } from "@/lib/mock-data";
 import { useStaffStore, generateRandomAttendancePin } from "@/store/staff-store";
+import { useJobCardStore } from "@/store/job-card-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import {
@@ -51,6 +51,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const member = useStaffStore((s) => s.staff.find((row) => row.id === id));
   const updateAttendancePin = useStaffStore((s) => s.updateAttendancePin);
   const updateStaff = useStaffStore((s) => s.updateStaff);
+  const jobCards = useJobCardStore((s) => s.jobCards);
 
   const [pinInput, setPinInput] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -113,9 +114,9 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const branch = branches.find((b) => b.id === member.branchId);
   const assignedJobs = jobCards.filter((j) => j.mechanicId === member.id);
 
-  const handleSaveAttendancePin = () => {
+  const handleSaveAttendancePin = async () => {
     if (!member) return;
-    const result = updateAttendancePin(member.id, pinInput);
+    const result = await updateAttendancePin(member.id, pinInput);
     if (!result.ok) {
       if (result.error === "DUPLICATE") {
         toast.error("Another team member already uses this PIN.");
@@ -137,7 +138,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     syncEditFromMember();
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     const name = editName.trim();
     const email = editEmail.trim();
     const phone = editPhone.trim();
@@ -150,7 +151,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       toast.error("You can't assign that role.");
       return;
     }
-    const result = updateStaff(member.id, {
+    const result = await updateStaff(member.id, {
       name,
       email,
       phone,
@@ -170,11 +171,11 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditingProfile(false);
   };
 
-  const handleGenerateAttendancePin = () => {
+  const handleGenerateAttendancePin = async () => {
     if (!member) return;
     for (let i = 0; i < 60; i++) {
       const candidate = generateRandomAttendancePin();
-      const result = updateAttendancePin(member.id, candidate);
+      const result = await updateAttendancePin(member.id, candidate);
       if (result.ok) {
         setPinInput(candidate);
         toast.success("New PIN generated.");

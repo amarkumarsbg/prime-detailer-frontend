@@ -385,7 +385,7 @@ export default function StaffPage() {
     []
   );
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canManageStaffUsers(authRole)) {
       toast.error("You don't have permission to add staff.");
@@ -416,19 +416,23 @@ export default function StaffPage() {
       return;
     }
     const branchId = branchLocked && authUser?.branchId ? authUser.branchId : newBranchId;
-    addStaff({
-      name,
-      email,
-      phone,
-      role: newRole,
-      branchId,
-      isActive: newIsActive,
-      ...(newBirthday.trim() ? { birthday: newBirthday.trim() } : {}),
-      ...(newAnniversary.trim() ? { anniversary: newAnniversary.trim() } : {}),
-    });
-    toast.success("User created successfully.");
-    resetAddForm();
-    setDialogOpen(false);
+    try {
+      await addStaff({
+        name,
+        email,
+        phone,
+        role: newRole,
+        branchId,
+        isActive: newIsActive,
+        ...(newBirthday.trim() ? { birthday: newBirthday.trim() } : {}),
+        ...(newAnniversary.trim() ? { anniversary: newAnniversary.trim() } : {}),
+      });
+      toast.success("User created successfully.");
+      resetAddForm();
+      setDialogOpen(false);
+    } catch {
+      toast.error("Could not create user. Check API server and try again.");
+    }
   };
 
   return (

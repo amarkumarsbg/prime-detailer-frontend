@@ -1000,7 +1000,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       useBookingWizard &&
@@ -1043,7 +1043,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     const id = `jc-local-${Date.now()}`;
     const mechanic = mechanics.find((m) => m.id === mechanicId);
 
-    const custId = existingCustomerId ?? `cust-local-${Date.now()}`;
+    let custId = existingCustomerId ?? `cust-local-${Date.now()}`;
     const regStored = normalizeRegistrationNumber(vehicleNumber);
     const formDigits = customerPhone.replace(/\D/g, "").slice(-10);
 
@@ -1074,26 +1074,38 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       const referredByWalkIn = referralCode.trim() || undefined;
       const referredByJobCard =
         isJobCard && referrerInfo ? referralCode.trim().toUpperCase() : undefined;
-      const ok = addCustomer({
-        id: custId,
-        name: customerName.trim(),
-        phone: customerPhone,
-        email: customerEmail,
-        address: customerAddress,
-        referralCode: newReferralCode,
-        referredBy: isJobCard ? referredByJobCard : referredByWalkIn,
-        totalVisits: 1,
-        lastVisitDate: now,
-        rewardPoints: 0,
-        walletBalance: 0,
-        createdAt: now,
-      });
-      if (!ok) {
+      let createdWalkIn;
+      try {
+        createdWalkIn = await addCustomer({
+          name: customerName.trim(),
+          phone: customerPhone,
+          email: customerEmail,
+          address: customerAddress,
+          referralCode: newReferralCode,
+          referredBy: isJobCard ? referredByJobCard : referredByWalkIn,
+          totalVisits: 1,
+          lastVisitDate: now,
+          rewardPoints: 0,
+          walletBalance: 0,
+        });
+      } catch {
+        toast.error("Could not create customer", {
+          description: "Check that the API server is running.",
+        });
+        return;
+      }
+      if (!createdWalkIn) {
         toast.error("Phone already registered — search again to load customer.");
         return;
       }
+      custId = createdWalkIn.id;
       if (isJobCard && referrerInfo) {
-        creditWallet(referrerInfo.id, referralRewardAmount);
+        try {
+          await creditWallet(referrerInfo.id, referralRewardAmount);
+        } catch {
+          toast.error("Customer saved but referral wallet credit failed.");
+          return;
+        }
         addTransaction({
           id: `wt-ref-${Date.now()}`,
           customerId: referrerInfo.id,
@@ -1112,10 +1124,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
     } else {
       const existing = customers.find((c) => c.id === existingCustomerId);
-      updateCustomer(existingCustomerId, {
-        totalVisits: (existing?.totalVisits ?? 0) + 1,
-        lastVisitDate: now,
-      });
+      try {
+        await updateCustomer(existingCustomerId, {
+          totalVisits: (existing?.totalVisits ?? 0) + 1,
+          lastVisitDate: now,
+        });
+      } catch {
+        toast.error("Could not update customer visit stats.", {
+          description: "Check that the API server is running.",
+        });
+        return;
+      }
     }
 
     const seg = vehicleSegment as VehicleSegment;

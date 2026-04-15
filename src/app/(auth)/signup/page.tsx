@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -27,8 +26,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const login = useAuthStore((s) => s.login);
-  const router = useRouter();
+  const signup = useAuthStore((s) => s.signup);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,15 +43,15 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-
-    const success = login(email, password);
-    if (success) {
-      router.push("/dashboard");
-    } else {
-      setError("Something went wrong. Please try again.");
-    }
+    const result = await signup({ name, email, phone, password });
     setLoading(false);
+    if (result.ok) {
+      // Full navigation avoids a broken App Router client transition (failed `dashboard?_rsc` flight)
+      // leaving the URL stuck on /signup even though the session was saved.
+      window.location.assign("/dashboard");
+    } else {
+      setError(result.message);
+    }
   };
 
   const passwordChecks = [

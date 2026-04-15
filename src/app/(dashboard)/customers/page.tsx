@@ -29,8 +29,6 @@ import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-fil
 import { isInactiveCustomer } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
-import type { Customer } from "@/types";
-
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
@@ -39,10 +37,6 @@ const addCustomerSchema = z.object({
 });
 
 type AddCustomerFormData = z.infer<typeof addCustomerSchema>;
-
-function generateId(): string {
-  return `cust-${Date.now().toString(36)}`;
-}
 
 function generateReferralCode(): string {
   return `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -185,29 +179,33 @@ export default function CustomersPage() {
     defaultValues: { name: "", phone: "", email: "", address: "" },
   });
 
-  const onSubmit = (data: AddCustomerFormData) => {
-    const newCustomer: Customer = {
-      id: generateId(),
-      name: data.name,
-      phone: data.phone,
-      email: data.email,
-      address: data.address,
-      referralCode: generateReferralCode(),
-      totalVisits: 0,
-      rewardPoints: 0,
-      walletBalance: 0,
-      createdAt: new Date().toISOString(),
-    };
-    const added = addCustomerToStore(newCustomer);
-    if (!added) {
-      toast.error("This phone number is already registered", {
-        description: "Each mobile number can only be used once. Open the existing customer or use a different number.",
+  const onSubmit = async (data: AddCustomerFormData) => {
+    try {
+      const created = await addCustomerToStore({
+        name: data.name,
+        phone: data.phone,
+        email: data.email,
+        address: data.address,
+        referralCode: generateReferralCode(),
+        totalVisits: 0,
+        rewardPoints: 0,
+        walletBalance: 0,
       });
-      return;
+      if (!created) {
+        toast.error("This phone number is already registered", {
+          description:
+            "Each mobile number can only be used once. Open the existing customer or use a different number.",
+        });
+        return;
+      }
+      reset();
+      setAddDialogOpen(false);
+      toast.success("Customer added", { description: `${data.name} has been added successfully.` });
+    } catch {
+      toast.error("Could not add customer", {
+        description: "Check that the API server is running (npm run dev in /backend).",
+      });
     }
-    reset();
-    setAddDialogOpen(false);
-    toast.success("Customer added", { description: `${data.name} has been added successfully.` });
   };
 
   const handleRowClick = (item: Record<string, unknown>) => {

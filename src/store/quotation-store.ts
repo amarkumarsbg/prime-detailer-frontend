@@ -1,41 +1,40 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { quotations as seedQuotations } from "@/lib/mock-data";
 import type { Quotation } from "@/types";
+import { putCollectionDocument } from "@/lib/collection-sync";
 
 interface QuotationStore {
   quotations: Quotation[];
-  addQuotation: (q: Quotation) => void;
-  updateQuotation: (id: string, patch: Partial<Quotation>) => void;
+  addQuotation: (q: Quotation) => Promise<void>;
+  updateQuotation: (id: string, patch: Partial<Quotation>) => Promise<void>;
   getNextQuotationNumber: () => string;
 }
 
-export const useQuotationStore = create<QuotationStore>()(
-  persist(
-    (set, get) => ({
-      quotations: seedQuotations,
+export const useQuotationStore = create<QuotationStore>((set, get) => ({
+  quotations: [],
 
-      addQuotation: (q) =>
-        set((s) => ({ quotations: [q, ...s.quotations] })),
+  addQuotation: async (q) => {
+    await putCollectionDocument("quotations", q.id, q);
+    set((s) => ({ quotations: [q, ...s.quotations] }));
+  },
 
-      updateQuotation: (id, patch) =>
-        set((s) => ({
-          quotations: s.quotations.map((q) =>
-            q.id === id ? { ...q, ...patch, updatedAt: new Date().toISOString() } : q
-          ),
-        })),
+  updateQuotation: async (id, patch) => {
+    const prev = get().quotations.find((x) => x.id === id);
+    if (!prev) return;
+    const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
+    await putCollectionDocument("quotations", id, next);
+    set((s) => ({
+      quotations: s.quotations.map((x) => (x.id === id ? next : x)),
+    }));
+  },
 
-      getNextQuotationNumber: () => {
-        const all = get().quotations;
-        const max = all.reduce((m, q) => {
-          const match = q.quotationNumber.match(/QUO-\d{4}-(\d+)/);
-          return match ? Math.max(m, parseInt(match[1], 10)) : m;
-        }, 0);
-        return `QUO-2026-${String(max + 1).padStart(4, "0")}`;
-      },
-    }),
-    { name: "prime-detailers-quotations" }
-  )
-);
+  getNextQuotationNumber: () => {
+    const all = get().quotations;
+    const max = all.reduce((m, q) => {
+      const match = q.quotationNumber.match(/QUO-\d{4}-(\d+)/);
+      return match ? Math.max(m, parseInt(match[1], 10)) : m;
+    }, 0);
+    return `QUO-2026-${String(max + 1).padStart(4, "0")}`;
+  },
+}));

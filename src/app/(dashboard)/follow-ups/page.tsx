@@ -2,8 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
-import { followUps } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
+import { useFollowUpStore } from "@/store/follow-up-store";
 import { UserX, Phone } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "suc
 };
 
 export default function FollowUpsPage() {
+  const followUps = useFollowUpStore((s) => s.followUps);
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader

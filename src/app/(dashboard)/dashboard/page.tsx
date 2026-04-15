@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { KPICard } from "@/components/shared/kpi-card";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
-import { dashboardStats, serviceReminders } from "@/lib/mock-data";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
+import { useReminderStore } from "@/store/reminder-store";
 import { isAllBranchesScope } from "@/lib/all-branches";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -54,7 +55,7 @@ import {
   isReadyForDeliveryJob,
   isInactiveCustomer,
 } from "@/lib/dashboard-filters";
-import type { JobCard } from "@/types";
+import type { DashboardStats, JobCard } from "@/types";
 import { DashboardSkeleton } from "@/components/shared/skeleton-loader";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 
@@ -75,6 +76,24 @@ const BRANCH_SHORT: Record<string, string> = {
   "br-002": "PD-WFD",
 };
 
+const EMPTY_DASHBOARD_STATS: DashboardStats = {
+  averageRating: 0,
+  carsReceivedToday: 0,
+  carsDeliveredToday: 0,
+  inProgressServices: 0,
+  dailyRevenue: 0,
+  totalExpensesToday: 0,
+  netProfitToday: 0,
+  newCustomersToday: 0,
+  inactiveCustomers: 0,
+  activeJobCards: 0,
+  pendingPayments: 0,
+  monthlyRevenue: [],
+  serviceBreakdown: [],
+  todaysBookings: [],
+  readyForDelivery: [],
+};
+
 function daysAgoMidnight(days: number): Date {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -90,7 +109,9 @@ export default function DashboardPage() {
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const parts = useInventoryStore((s) => s.parts);
   const customers = useCustomerStore((s) => s.customers);
-  const stats = dashboardStats;
+  const stats =
+    useDashboardStatsStore((s) => s.stats) ?? EMPTY_DASHBOARD_STATS;
+  const serviceReminders = useReminderStore((s) => s.reminders);
 
   const viewingLabel = useMemo(() => {
     if (!currentBranch || isAllBranchesScope(currentBranch)) return "All branches";
@@ -291,7 +312,13 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [stats.pendingPayments, stats.inactiveCustomers, scopedJobCards, parts]);
+  }, [
+    stats.pendingPayments,
+    stats.inactiveCustomers,
+    scopedJobCards,
+    parts,
+    serviceReminders,
+  ]);
 
   const branchNameById = useMemo(
     () => Object.fromEntries(branches.map((b) => [b.id, b.name])),

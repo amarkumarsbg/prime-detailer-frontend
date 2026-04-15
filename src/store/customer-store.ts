@@ -1,73 +1,118 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { customers as mockCustomers } from "@/lib/mock-data";
 import type { Customer } from "@/types";
+import { apiGet, apiPost, apiPut, apiPatch, ApiError } from "@/lib/api-client";
+
+export type NewCustomerInput = Omit<Customer, "id" | "createdAt"> & {
+  referralCode: string;
+};
 
 interface CustomerStore {
   customers: Customer[];
-  /** Returns false if another customer already uses this phone (last 10 digits). */
-  addCustomer: (customer: Customer) => boolean;
+  customersLoading: boolean;
+  customersError: string | null;
+  fetchCustomers: () => Promise<void>;
+  /** Returns the created customer on success, or null if phone conflict / error. */
+  addCustomer: (customer: NewCustomerInput) => Promise<Customer | null>;
   /** Returns false if updates.phone is already used by another customer. */
-  updateCustomer: (id: string, updates: Partial<Customer>) => boolean;
+  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<boolean>;
   findByPhone: (phone: string) => Customer | undefined;
   findByEmail: (email: string) => Customer | undefined;
   findByReferralCode: (code: string) => Customer | undefined;
-  creditWallet: (customerId: string, amount: number) => void;
+  creditWallet: (customerId: string, amount: number) => Promise<void>;
 }
 
-export const useCustomerStore = create<CustomerStore>()(
-  persist(
-    (set, get) => ({
-      customers: mockCustomers,
+export const useCustomerStore = create<CustomerStore>((set, get) => ({
+  customers: [],
+  customersLoading: false,
+  customersError: null,
 
-      addCustomer: (customer) => {
-        const dup = get().findByPhone(customer.phone);
-        if (dup) return false;
-        set((state) => ({ customers: [customer, ...state.customers] }));
-        return true;
-      },
+  fetchCustomers: async () => {
+    set({ customersLoading: true, customersError: null });
+    try {
+      const data = await apiGet<{ customers: Customer[] }>("/api/customers");
+      set({ customers: data.customers, customersLoading: false });
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Failed to load customers";
+      set({ customersError: message, customersLoading: false });
+    }
+  },
 
-      updateCustomer: (id, updates) => {
-        if (updates.phone !== undefined) {
-          const other = get().findByPhone(updates.phone);
-          if (other && other.id !== id) return false;
-        }
-        set((state) => ({
-          customers: state.customers.map((c) =>
-            c.id === id ? { ...c, ...updates } : c
-          ),
-        }));
-        return true;
-      },
+  addCustomer: async (customer) => {
+    try {
+      const data = await apiPost<{ customer: Customer }>("/api/customers", {
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        address: customer.address,
+        referralCode: customer.referralCode,
+        referredBy: customer.referredBy,
+        totalVisits: customer.totalVisits,
+        rewardPoints: customer.rewardPoints,
+        walletBalance: customer.walletBalance,
+        lastVisitDate: customer.lastVisitDate,
+        isInactive: customer.isInactive,
+        emailVerified: customer.emailVerified,
+      });
+      set((state) => ({ customers: [data.customer, ...state.customers] }));
+      return data.customer;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) return null;
+      throw e;
+    }
+  },
 
-      findByPhone: (phone) => {
-        const cleaned = phone.replace(/\D/g, "").slice(-10);
-        if (cleaned.length !== 10) return undefined;
-        return get().customers.find((c) => c.phone.replace(/\D/g, "").slice(-10) === cleaned);
-      },
+  updateCustomer: async (id, updates) => {
+    try {
+      const data = await apiPut<{ customer: Customer }>(`/api/customers/${id}`, {
+        ...(updates.name !== undefined && { name: updates.name }),
+        ...(updates.phone !== undefined && { phone: updates.phone }),
+        ...(updates.email !== undefined && { email: updates.email }),
+        ...(updates.address !== undefined && { address: updates.address }),
+        ...(updates.referralCode !== undefined && { referralCode: updates.referralCode }),
+        ...(updates.referredBy !== undefined && { referredBy: updates.referredBy }),
+        ...(updates.totalVisits !== undefined && { totalVisits: updates.totalVisits }),
+        ...(updates.rewardPoints !== undefined && { rewardPoints: updates.rewardPoints }),
+        ...(updates.walletBalance !== undefined && { walletBalance: updates.walletBalance }),
+        ...(updates.lastVisitDate !== undefined && { lastVisitDate: updates.lastVisitDate }),
+        ...(updates.isInactive !== undefined && { isInactive: updates.isInactive }),
+        ...(updates.emailVerified !== undefined && { emailVerified: updates.emailVerified }),
+      });
+      set((state) => ({
+        customers: state.customers.map((c) => (c.id === id ? data.customer : c)),
+      }));
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) return false;
+      throw e;
+    }
+  },
 
-      findByEmail: (email) => {
-        const norm = email.trim().toLowerCase();
-        if (!norm) return undefined;
-        return get().customers.find((c) => c.email?.trim().toLowerCase() === norm);
-      },
+  findByPhone: (phone) => {
+    const cleaned = phone.replace(/\D/g, "").slice(-10);
+    if (cleaned.length !== 10) return undefined;
+    return get().customers.find((c) => c.phone.replace(/\D/g, "").slice(-10) === cleaned);
+  },
 
-      findByReferralCode: (code) => {
-        const upper = code.trim().toUpperCase();
-        return get().customers.find((c) => c.referralCode.toUpperCase() === upper);
-      },
+  findByEmail: (email) => {
+    const norm = email.trim().toLowerCase();
+    if (!norm) return undefined;
+    return get().customers.find((c) => c.email?.trim().toLowerCase() === norm);
+  },
 
-      creditWallet: (customerId, amount) =>
-        set((state) => ({
-          customers: state.customers.map((c) =>
-            c.id === customerId
-              ? { ...c, walletBalance: c.walletBalance + amount }
-              : c
-          ),
-        })),
-    }),
-    { name: "prime-detailers-customers" }
-  )
-);
+  findByReferralCode: (code) => {
+    const upper = code.trim().toUpperCase();
+    return get().customers.find((c) => c.referralCode.toUpperCase() === upper);
+  },
+
+  creditWallet: async (customerId, amount) => {
+    const data = await apiPatch<{ customer: Customer }>(
+      `/api/customers/${customerId}/wallet`,
+      { amount }
+    );
+    set((state) => ({
+      customers: state.customers.map((c) => (c.id === customerId ? data.customer : c)),
+    }));
+  },
+}));

@@ -60,7 +60,7 @@ export default function BranchesPage() {
     return m;
   }, [staff]);
 
-  const applyForm = (values: BranchFormValues, id?: string) => {
+  const applyForm = async (values: BranchFormValues, id?: string) => {
     const payload = {
       name: values.name,
       code: values.code,
@@ -74,12 +74,16 @@ export default function BranchesPage() {
       managerPhone: values.managerPhone || undefined,
       isActive: values.isActive,
     };
-    if (id) {
-      updateBranch(id, payload);
-      toast.success("Location updated");
-    } else {
-      addBranch(payload);
-      toast.success("Location created");
+    try {
+      if (id) {
+        await updateBranch(id, payload);
+        toast.success("Location updated");
+      } else {
+        await addBranch(payload);
+        toast.success("Location created");
+      }
+    } catch {
+      toast.error("Could not save location. Is the API running?");
     }
   };
 
@@ -285,9 +289,9 @@ export default function BranchesPage() {
         onOpenChange={setFormOpen}
         mode={formMode}
         branch={editing}
-        onSubmit={(values) => {
-          if (formMode === "edit" && editing) applyForm(values, editing.id);
-          else applyForm(values);
+        onSubmit={async (values) => {
+          if (formMode === "edit" && editing) await applyForm(values, editing.id);
+          else await applyForm(values);
         }}
       />
 
@@ -349,10 +353,14 @@ export default function BranchesPage() {
             <Button
               type="button"
               variant="destructive"
-              onClick={() => {
+              onClick={async () => {
                 if (deactivateTarget) {
-                  deactivateBranch(deactivateTarget.id);
-                  toast.success("Site deactivated");
+                  try {
+                    await deactivateBranch(deactivateTarget.id);
+                    toast.success("Site deactivated");
+                  } catch {
+                    toast.error("Could not deactivate. Is the API running?");
+                  }
                 }
                 setDeactivateTarget(null);
               }}

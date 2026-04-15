@@ -3,8 +3,8 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { serviceReminders } from "@/lib/mock-data";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { useReminderStore } from "@/store/reminder-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { Button } from "@/components/ui/button";
@@ -437,7 +437,8 @@ const REMINDER_LABELS: Record<string, string> = {
 };
 
 function VehicleReminders({ vehicleId }: { vehicleId: string }) {
-  const reminders = serviceReminders
+  const storeReminders = useReminderStore((s) => s.reminders);
+  const reminders = storeReminders
     .filter((r) => r.vehicleId === vehicleId && r.status !== "COMPLETED" && r.status !== "DISMISSED")
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 

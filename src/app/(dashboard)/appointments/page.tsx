@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { serviceCatalog } from "@/lib/mock-data";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
@@ -85,6 +85,7 @@ const APPOINTMENT_VEHICLE_SEGMENTS: { value: VehicleSegment; label: string }[] =
 ];
 
 export default function AppointmentsPage() {
+  const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const customers = useCustomerStore((s) => s.customers);
@@ -154,9 +155,9 @@ export default function AppointmentsPage() {
     }
   };
 
-  const handleNewAppointmentSubmit = (e: React.FormEvent) => {
+  const handleNewAppointmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const service = serviceCatalog.find((s) => s.id === formServiceId);
+    const service = catalog.find((s) => s.id === formServiceId);
     if (!service) {
       toast.error("Please select a service");
       return;
@@ -206,27 +207,34 @@ export default function AppointmentsPage() {
         toast.error("Enter vehicle registration, make, and model");
         return;
       }
-      const nowIso = new Date().toISOString();
-      const custId = `cust-apt-${Date.now()}`;
       const referralCode = `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-      const ok = addCustomer({
-        id: custId,
-        name,
-        phone: newCustomerPhone,
-        email: newCustomerEmail.trim(),
-        address: newCustomerAddress.trim(),
-        referralCode,
-        totalVisits: 0,
-        rewardPoints: 0,
-        walletBalance: 0,
-        createdAt: nowIso,
-      });
-      if (!ok) {
+      let createdCustomer;
+      try {
+        createdCustomer = await addCustomer({
+          name,
+          phone: newCustomerPhone,
+          email:
+            newCustomerEmail.trim() ||
+            `noemail+${phoneDigits}@customers.placeholder`,
+          address: newCustomerAddress.trim(),
+          referralCode,
+          totalVisits: 0,
+          rewardPoints: 0,
+          walletBalance: 0,
+        });
+      } catch {
+        toast.error("Could not create customer", {
+          description: "Check that the API server is running.",
+        });
+        return;
+      }
+      if (!createdCustomer) {
         toast.error("This phone number is already registered", {
           description: "Choose Existing customer and pick that customer, or use another number.",
         });
         return;
       }
+      const custId = createdCustomer.id;
       const vehId = `veh-apt-${Date.now()}`;
       const newVehicle: Vehicle = {
         id: vehId,
@@ -619,7 +627,7 @@ export default function AppointmentsPage() {
                         <SelectValue placeholder="Select service" />
                       </SelectTrigger>
                       <SelectContent>
-                        {serviceCatalog
+                        {catalog
                           .filter((s) => s.isActive)
                           .map((s) => (
                             <SelectItem key={s.id} value={s.id}>

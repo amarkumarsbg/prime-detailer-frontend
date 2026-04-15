@@ -241,7 +241,7 @@ export default function CustomerDetailPage() {
 
   const cancelEditing = () => setIsEditing(false);
 
-  const saveEditing = () => {
+  const saveEditing = async () => {
     if (!editName.trim() || !editPhone.trim()) {
       toast.error("Name and phone are required");
       return;
@@ -254,18 +254,24 @@ export default function CustomerDetailPage() {
       });
       return;
     }
-    const ok = updateCustomer(id, {
-      name: editName.trim(),
-      phone: phoneTrim,
-      email: editEmail.trim(),
-      address: editAddress.trim(),
-    });
-    if (!ok) {
-      toast.error("Could not save: phone number conflict");
-      return;
+    try {
+      const ok = await updateCustomer(id, {
+        name: editName.trim(),
+        phone: phoneTrim,
+        email: editEmail.trim(),
+        address: editAddress.trim(),
+      });
+      if (!ok) {
+        toast.error("Could not save: phone number conflict");
+        return;
+      }
+      setIsEditing(false);
+      toast.success("Customer updated successfully");
+    } catch {
+      toast.error("Could not save customer", {
+        description: "Check that the API server is running.",
+      });
     }
-    setIsEditing(false);
-    toast.success("Customer updated successfully");
   };
 
   const handleShareViaWhatsApp = () => {

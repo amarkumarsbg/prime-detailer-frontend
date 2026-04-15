@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { serviceCatalog } from "@/lib/mock-data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
@@ -55,6 +54,7 @@ const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
 ];
 import { toast } from "sonner";
 import { useInventoryStore, parseLitresInput } from "@/store/inventory-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { carsPossibleForPartAndService } from "@/lib/inventory/consumption";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isLowStockPart } from "@/lib/dashboard-filters";
@@ -74,13 +74,10 @@ const allCategories: PartCategory[] = [
   "Other",
 ];
 
-const normalWashService = serviceCatalog.find((s) => s.id === "svc-016");
-const advancedWashService = serviceCatalog.find((s) => s.id === "svc-017");
-const premiumWashService = serviceCatalog.find((s) => s.id === "svc-021");
-
 type StockTableFilter = "all" | "low" | "out";
 
 export default function InventoryPage() {
+  const catalog = useServiceCatalogStore((s) => s.catalog);
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const parts = useInventoryStore((s) => s.parts);
@@ -199,6 +196,9 @@ export default function InventoryPage() {
       label: "Est. cars (wash)",
       className: "hidden xl:table-cell",
       render: (item: Part) => {
+        const normalWashService = catalog.find((s) => s.id === "svc-016");
+        const advancedWashService = catalog.find((s) => s.id === "svc-017");
+        const premiumWashService = catalog.find((s) => s.id === "svc-021");
         if (!normalWashService || !isMlTrackedPart(item) || item.id !== "prt-021") {
           return <span className="text-muted-foreground text-sm">—</span>;
         }

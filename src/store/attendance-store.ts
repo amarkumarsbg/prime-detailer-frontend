@@ -14,7 +14,8 @@ export type PunchResult =
 
 interface AttendanceStoreState {
   records: AttendanceRecord[];
-  sync: () => Promise<void>;
+  /** @returns whether the server returned fresh records */
+  sync: () => Promise<boolean>;
   punch: (args: { staff: User; branchId: string }) => Promise<PunchResult>;
   resetToSeed: () => Promise<void>;
 }
@@ -25,11 +26,12 @@ export const useAttendanceStore = create<AttendanceStoreState>((set) => ({
   sync: async () => {
     try {
       const res = await fetch("/api/attendance", { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const data = (await res.json()) as { records: AttendanceRecord[] };
       set({ records: data.records });
+      return true;
     } catch {
-      /* keep last known */
+      return false;
     }
   },
 
