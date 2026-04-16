@@ -72,8 +72,8 @@ const FUNNEL_IN_PROGRESS: JobCard["status"][] = [
 ];
 
 const BRANCH_SHORT: Record<string, string> = {
-  "br-001": "PD-KOR",
-  "br-002": "PD-WFD",
+  "br-main": "PD-DEL",
+  "br-002": "PD-NOI",
 };
 
 const EMPTY_DASHBOARD_STATS: DashboardStats = {
@@ -147,8 +147,13 @@ export default function DashboardPage() {
     });
     const rev30 = createdIn30.reduce((s, j) => s + j.estimatedAmount, 0);
     const revPrev = createdPrevWindow.reduce((s, j) => s + j.estimatedAmount, 0);
-    const revenueTrendPct =
-      revPrev > 0 ? Math.round(((rev30 - revPrev) / revPrev) * 100) : 12;
+    const revenueTrend =
+      revPrev > 0
+        ? {
+            value: Math.abs(Math.round(((rev30 - revPrev) / revPrev) * 100)),
+            isPositive: rev30 >= revPrev,
+          }
+        : undefined;
 
     const todaysJobCount = scopedJobCards.filter(isTodaysBookingsJob).length;
     const pendingBookings = scopedJobCards.filter((jc) =>
@@ -168,8 +173,7 @@ export default function DashboardPage() {
 
     return {
       totalRevenue30d: rev30,
-      revenueTrendPct,
-      revenueTrendPositive: rev30 >= revPrev,
+      revenueTrend,
       todaysJobCount,
       pendingBookings,
       completed30d,
@@ -441,10 +445,7 @@ export default function DashboardPage() {
               subtitle="Last 30 days"
               footerNote={viewingLabel}
               icon={IndianRupee}
-              trend={{
-                value: Math.abs(executive.revenueTrendPct),
-                isPositive: executive.revenueTrendPositive,
-              }}
+              trend={executive.revenueTrend}
             />
             <KPICard
               tone="emerald"
@@ -452,7 +453,6 @@ export default function DashboardPage() {
               value={formatCurrency(stats.dailyRevenue)}
               subtitle="collected"
               icon={IndianRupee}
-              trend={{ value: 15, isPositive: true }}
             />
             <KPICard
               tone="blue"
@@ -460,7 +460,6 @@ export default function DashboardPage() {
               value={formatCurrency(stats.netProfitToday)}
               subtitle="revenue - expenses"
               icon={IndianRupee}
-              trend={{ value: 12, isPositive: true }}
             />
             <KPICard
               tone="amber"

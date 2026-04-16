@@ -4,14 +4,19 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User, Branch } from "@/types";
 import { ALL_BRANCHES_BRANCH } from "@/lib/all-branches";
+import { buildApiUrl } from "@/lib/api-base";
 
 type SignupResult = { ok: true } | { ok: false; message: string };
+
+export type SendLoginOtpResult = { ok: true } | { ok: false; message: string };
 
 interface AuthState {
   user: User | null;
   currentBranch: Branch | null;
   isAuthenticated: boolean;
   accessToken: string | null;
+  sendLoginOtp: (phone: string) => Promise<SendLoginOtpResult>;
+  verifyLoginOtp: (phone: string, code: string) => Promise<boolean>;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (input: {
     name: string;
@@ -29,10 +34,6 @@ function canOrgWideRole(role: User["role"]): boolean {
   );
 }
 
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-}
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -41,11 +42,76 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       accessToken: null,
 
+      sendLoginOtp: async (phone: string) => {
+        const digits = phone.replace(/\D/g, "");
+        if (digits.length !== 10) {
+          return { ok: false as const, message: "Enter a valid 10-digit mobile number" };
+        }
+        try {
+          const res = await fetch(buildApiUrl("/api/auth/otp/send"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: digits }),
+          });
+          const body = (await res.json()) as {
+            error?: { message?: string } | null;
+          };
+          if (!res.ok || body.error) {
+            return {
+              ok: false as const,
+              message: body.error?.message ?? "Could not send OTP. Try again.",
+            };
+          }
+          return { ok: true as const };
+        } catch {
+          return {
+            ok: false as const,
+            message: "Network error — is the API running?",
+          };
+        }
+      },
+
+      verifyLoginOtp: async (phone: string, code: string) => {
+        const digits = phone.replace(/\D/g, "");
+        const trimmed = code.replace(/\D/g, "");
+        if (digits.length !== 10 || trimmed.length < 4) return false;
+        try {
+          const res = await fetch(buildApiUrl("/api/auth/otp/verify"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: digits, code: trimmed }),
+          });
+          const body = (await res.json()) as {
+            data: {
+              accessToken: string;
+              user: User;
+              branch: Branch | null;
+            } | null;
+            error: { message?: string } | null;
+          };
+          if (!res.ok || body.error || !body.data) {
+            return false;
+          }
+          const { accessToken, user, branch } = body.data;
+          const canOrgWide = canOrgWideRole(user.role);
+          const homeBranch = branch ?? null;
+          set({
+            accessToken,
+            user,
+            currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+            isAuthenticated: true,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+
       login: async (email: string, password: string) => {
         const trimmed = email.trim();
         if (!trimmed || !password) return false;
         try {
-          const res = await fetch(`${apiBase()}/api/auth/login`, {
+          const res = await fetch(buildApiUrl("/api/auth/login"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: trimmed, password }),
@@ -82,7 +148,7 @@ export const useAuthStore = create<AuthState>()(
           return { ok: false, message: "Please fill in all fields" };
         }
         try {
-          const res = await fetch(`${apiBase()}/api/auth/register`, {
+          const res = await fetch(buildApiUrl("/api/auth/register"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

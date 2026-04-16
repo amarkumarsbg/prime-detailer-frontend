@@ -1,6 +1,14 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { buildJobCardCustomerWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -93,12 +101,14 @@ import type {
   InspectionPhoto,
   MembershipTier,
   MembershipServiceUsage,
+  JobCard,
 } from "@/types";
 
 const GST_RATE = 0.18;
-const TRENDING_IDS = ["svc-016", "svc-017", "svc-021", "svc-018"];
-/** Quick-pick add-ons in the optional section */
-const ADDON_IDS_PREFERRED = ["svc-016", "svc-017", "svc-020", "svc-021"];
+/** Must match seeded `serviceCatalog` main rows (`srv-001` … `srv-005` in prisma/seed). */
+const TRENDING_IDS = ["srv-001", "srv-002", "srv-003", "srv-004", "srv-005"];
+/** Quick-pick add-ons in the optional section (`srv-a01` … `srv-a05` in seed). */
+const ADDON_IDS_PREFERRED = ["srv-a01", "srv-a02", "srv-a03", "srv-a04", "srv-a05"];
 
 function segmentBannerLabel(seg: VehicleSegment | ""): string {
   if (!seg) return "vehicle";
@@ -224,6 +234,39 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     skipJobCardListRedirectRef.current = true;
     router.replace(`/job-cards/${jobId}`);
   }, [router]);
+
+  const sendJobCardCreatedWhatsApp = useCallback(async (job: JobCard) => {
+    const phone = job.customerPhone?.trim();
+    if (!phone) return;
+    const message = buildJobCardCustomerWhatsAppMessage(job);
+    const notify = (channel: "api" | "composer") => {
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title:
+          channel === "api" ? "Job created — WhatsApp sent" : "Job created — WhatsApp composer",
+        message: `${job.jobNumber} → ${phone}`,
+        href: `/job-cards/${job.id}`,
+      });
+    };
+    try {
+      await sendCustomerWhatsApp(phone, message);
+      toast.success("WhatsApp sent to customer", { description: phone });
+      notify("api");
+    } catch (e) {
+      if (isWhatsAppNotConfiguredError(e)) {
+        openWhatsAppComposer(phone, message);
+        toast.info("WhatsApp opened", {
+          description: "Finish sending in the app, or configure Twilio on the server.",
+        });
+        notify("composer");
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: e instanceof ApiError ? e.message : "Could not send",
+      });
+    }
+  }, []);
+
   const jobCards = useJobCardStore((s) => s.jobCards);
   const { addJobCard, getNextJobNumber, updateJobCard } = useJobCardStore();
   const { services: highEndServices } = useHighEndServiceStore();
@@ -1263,7 +1306,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     })();
 
     if (isWalkIn) {
-      addJobCard({
+      const walkInJob: JobCard = {
         id,
         jobNumber,
         branchId,
@@ -1290,7 +1333,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         createdBy: user?.id ?? "USR-WALKIN",
         createdAt: now,
         updatedAt: now,
-      });
+      };
+      addJobCard(walkInJob);
 
       if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
         const sub = getActiveMembership(custId, resolvedVehicleId);
@@ -1315,13 +1359,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       });
 
       toast.success("Booking created", { description: jobNumber });
+      void sendJobCardCreatedWhatsApp(walkInJob);
       navigateToCreatedJobCard(id);
       return;
     }
 
     const termsWithAdvanceNote = `${termsAndConditions.trim()}\n\nOptional: a partial advance may be collected toward this job; record the amount on the job card when agreed.`;
 
-    addJobCard({
+    const newJobCard: JobCard = {
       id,
       jobNumber,
       branchId,
@@ -1371,7 +1416,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       createdBy: user?.id ?? "USR-001",
       createdAt: now,
       updatedAt: now,
-    });
+    };
+    addJobCard(newJobCard);
 
     if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
       const sub = getActiveMembership(custId, resolvedVehicleId);
@@ -1394,6 +1440,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       entityLabel: jobNumber,
       details: `Job ${jobNumber} created for ${customerName.trim()} — ${vehicleNumber}`,
     });
+
+    void sendJobCardCreatedWhatsApp(newJobCard);
 
     setCheckInJob({
       id,
@@ -3939,8 +3987,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         <aside
           className={cn(
             "mt-4 w-full shrink-0 sm:mt-6 lg:mt-0 lg:min-h-0 lg:w-[min(100%,340px)]",
-            jobWizardStepId !== "jobSummary" && "hidden",
-            jobWizardStepId === "jobSummary" &&
+            useBookingWizard &&
               cn(
                 "hidden lg:flex lg:flex-col",
                 compactJobCardDesktop

@@ -10,6 +10,8 @@ import { branchApiRouter } from "./routes/branch-api.routes.js";
 import { userApiRouter } from "./routes/user-api.routes.js";
 import { vehicleApiRouter } from "./routes/vehicle-api.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import { isTwilioSmsEnabled, isTwilioWhatsAppEnabled } from "./services/twilio-sms.service.js";
+import { messagingRouter } from "./routes/messaging.routes.js";
 
 const app = express();
 
@@ -32,9 +34,21 @@ app.use("/api/collections", collectionRouter);
 app.use("/api/branches", branchApiRouter);
 app.use("/api/users", userApiRouter);
 app.use("/api/vehicles", vehicleApiRouter);
+app.use("/api/messaging", messagingRouter);
 
 app.use(errorHandler);
 
 app.listen(env.PORT, () => {
   console.log(`API listening on http://localhost:${env.PORT}`);
+  if (isTwilioSmsEnabled()) {
+    const sid = env.TWILIO_ACCOUNT_SID ?? "";
+    const viaApiKey = Boolean(env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET);
+    console.log(
+      `[twilio] SMS enabled (auth: ${viaApiKey ? "API key" : "Auth Token"}, Account SID …${sid.slice(-6)})`
+    );
+  }
+  if (isTwilioWhatsAppEnabled()) {
+    const wa = env.TWILIO_WHATSAPP_FROM ?? "";
+    console.log(`[twilio] WhatsApp outbound enabled (sender …${wa.slice(-8)})`);
+  }
 });

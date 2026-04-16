@@ -6,7 +6,7 @@ import {
 
 /**
  * Placeholder metrics for demos when there is no backend and no jobs fall in the selected period.
- * Branch names follow the active branch list when ids match the seed (`br-001`, `br-002`).
+ * Branch ids align with seed branches (`br-main` Delhi, `br-002` Noida).
  */
 export function getDemoBranchPerformance(
   branches: Branch[],
@@ -19,14 +19,14 @@ export function getDemoBranchPerformance(
     branches.filter((b) => b.isActive !== false).map((b) => b.id)
   );
 
-  const korName = resolveName("br-001", "Prime Detailers Koramangala");
-  const wfdName = resolveName("br-002", "Prime Detailers Whitefield");
+  const delhiName = resolveName("br-main", "Delhi");
+  const noidaName = resolveName("br-002", "Noida");
 
   const all: BranchPerformanceMetrics[] = [
     {
-      branchId: "br-001",
-      branchName: korName,
-      chartLabel: shortBranchChartLabel(korName),
+      branchId: "br-main",
+      branchName: delhiName,
+      chartLabel: shortBranchChartLabel(delhiName),
       jobCount: 46,
       deliveredCount: 41,
       totalJobValue: 1_968_000,
@@ -37,8 +37,8 @@ export function getDemoBranchPerformance(
     },
     {
       branchId: "br-002",
-      branchName: wfdName,
-      chartLabel: shortBranchChartLabel(wfdName),
+      branchName: noidaName,
+      chartLabel: shortBranchChartLabel(noidaName),
       jobCount: 33,
       deliveredCount: 29,
       totalJobValue: 1_412_500,

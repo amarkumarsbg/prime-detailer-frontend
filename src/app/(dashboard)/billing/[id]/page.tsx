@@ -40,6 +40,14 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { buildInvoiceWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
 import {
   additionalDiscountTotal,
   buildTaxInvoicePrintHtml,
@@ -209,6 +217,51 @@ export default function InvoiceDetailPage() {
     printWindow.document.close();
   };
 
+  const handleInvoiceWhatsApp = async () => {
+    if (!invoice) return;
+    const message = buildInvoiceWhatsAppMessage(invoice, {
+      businessName,
+      remainingBalance,
+    });
+    const phone = invoice.customerPhone;
+    const notify = (channel: "api" | "composer") => {
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: channel === "api" ? "Invoice shared via WhatsApp" : "Invoice — WhatsApp composer",
+        message: `${invoice.invoiceNumber} → ${phone}`,
+        href: `/billing/${invoice.id}`,
+      });
+    };
+    const logSent = () => {
+      pushActivityLog({
+        action: "WHATSAPP_SENT",
+        entityType: "INVOICE",
+        entityId: invoice.id,
+        entityLabel: invoice.invoiceNumber,
+        details: `Invoice ${invoice.invoiceNumber} shared with ${invoice.customerName} via WhatsApp`,
+      });
+    };
+    try {
+      await sendCustomerWhatsApp(phone, message);
+      toast.success("Invoice sent via WhatsApp", { description: phone });
+      notify("api");
+      logSent();
+    } catch (err) {
+      if (isWhatsAppNotConfiguredError(err)) {
+        openWhatsAppComposer(phone, message);
+        toast.info("WhatsApp opened", {
+          description: "Finish sending in the app, or configure Twilio WhatsApp on the server.",
+        });
+        notify("composer");
+        logSent();
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: err instanceof ApiError ? err.message : "Could not send",
+      });
+    }
+  };
+
   if (!invoice) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
@@ -245,11 +298,7 @@ export default function InvoiceDetailPage() {
               </Link>
             </Button>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => toast.success("Invoice sent via WhatsApp")}
-              >
+              <Button variant="outline" size="sm" type="button" onClick={() => void handleInvoiceWhatsApp()}>
                 <MessageCircle className="w-4 h-4 mr-2" />
                 WhatsApp
               </Button>

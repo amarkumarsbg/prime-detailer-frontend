@@ -1,8 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { seedSalaryStructures } from "@/lib/mock-data/payroll-seed";
+import { putSingletonDocument } from "@/lib/collection-sync";
 import type {
   ExperienceBand,
   PayrollRecord,
@@ -48,6 +47,10 @@ function nextRecordId(existing: PayrollRecord[]): string {
 function workingDaysInMonth(year: number, month: number): number {
   const days = new Date(year, month, 0).getDate();
   return Math.min(26, Math.max(22, days - 8));
+}
+
+function persistPayroll(salaryStructures: SalaryStructure[], payrollRecords: PayrollRecord[]) {
+  void putSingletonDocument("payroll", { salaryStructures, payrollRecords }).catch(console.error);
 }
 
 interface PayrollStore {
@@ -97,121 +100,109 @@ function computeRecordFromStructure(
   };
 }
 
-export const usePayrollStore = create<PayrollStore>()(
-  persist(
-    (set, get) => ({
-      salaryStructures: [...seedSalaryStructures],
-      payrollRecords: [],
+export const usePayrollStore = create<PayrollStore>((set, get) => ({
+  salaryStructures: [],
+  payrollRecords: [],
 
-      resetToSeed: () =>
-        set({
-          salaryStructures: [...seedSalaryStructures],
-          payrollRecords: [],
-        }),
+  resetToSeed: () => {
+    set({ salaryStructures: [], payrollRecords: [] });
+    persistPayroll([], []);
+  },
 
-      setSalaryStructures: (structures) => set({ salaryStructures: structures }),
+  setSalaryStructures: (structures) => {
+    set({ salaryStructures: structures });
+    persistPayroll(structures, get().payrollRecords);
+  },
 
-      upsertSalaryStructure: (s) => {
-        const list = get().salaryStructures;
-        const i = list.findIndex((x) => x.id === s.id);
-        if (i >= 0) {
-          set({
-            salaryStructures: list.map((x) => (x.id === s.id ? s : x)),
-          });
-        } else {
-          set({ salaryStructures: [...list, s] });
-        }
-      },
+  upsertSalaryStructure: (s) => {
+    const list = get().salaryStructures;
+    const i = list.findIndex((x) => x.id === s.id);
+    const salaryStructures =
+      i >= 0 ? list.map((x) => (x.id === s.id ? s : x)) : [...list, s];
+    set({ salaryStructures });
+    persistPayroll(salaryStructures, get().payrollRecords);
+  },
 
-      removeSalaryStructure: (id) =>
-        set({
-          salaryStructures: get().salaryStructures.filter((x) => x.id !== id),
-        }),
+  removeSalaryStructure: (id) => {
+    const salaryStructures = get().salaryStructures.filter((x) => x.id !== id);
+    set({ salaryStructures });
+    persistPayroll(salaryStructures, get().payrollRecords);
+  },
 
-      generatePayroll: ({ year, month, staff, branchId }) => {
-        const structures = get().salaryStructures;
-        if (structures.length === 0) return 0;
+  generatePayroll: ({ year, month, staff, branchId }) => {
+    const structures = get().salaryStructures;
+    if (structures.length === 0) return 0;
 
-        const monthDays = new Date(year, month, 0).getDate();
-        const targetStaff = staff.filter((u) => {
-          if (!u.isActive) return false;
-          if (branchId && u.branchId !== branchId) return false;
-          return true;
-        });
+    const monthDays = new Date(year, month, 0).getDate();
+    const targetStaff = staff.filter((u) => {
+      if (!u.isActive) return false;
+      if (branchId && u.branchId !== branchId) return false;
+      return true;
+    });
 
-        const existing = get().payrollRecords;
-        const now = new Date().toISOString();
-        let created = 0;
-        const next: PayrollRecord[] = [...existing];
+    const existing = get().payrollRecords;
+    const now = new Date().toISOString();
+    let created = 0;
+    const next: PayrollRecord[] = [...existing];
 
-        for (const member of targetStaff) {
-          const dup = next.some(
-            (r) =>
-              r.employeeId === member.id &&
-              r.periodYear === year &&
-              r.periodMonth === month
-          );
-          if (dup) continue;
+    for (const member of targetStaff) {
+      const dup = next.some(
+        (r) => r.employeeId === member.id && r.periodYear === year && r.periodMonth === month
+      );
+      if (dup) continue;
 
-          const structure = pickStructure(member, structures);
-          if (!structure) continue;
+      const structure = pickStructure(member, structures);
+      if (!structure) continue;
 
-          const att = workingDaysInMonth(year, month);
-          const calc = computeRecordFromStructure(structure, att, monthDays);
+      const att = workingDaysInMonth(year, month);
+      const calc = computeRecordFromStructure(structure, att, monthDays);
 
-          next.push({
-            id: nextRecordId(next),
-            employeeId: member.id,
-            employeeName: member.name,
-            branchId: member.branchId,
-            periodMonth: month,
-            periodYear: year,
-            attendanceDays: att,
-            salaryStructureId: structure.id,
-            status: "PENDING",
-            createdAt: now,
-            updatedAt: now,
-            ...calc,
-          });
-          created++;
-        }
+      next.push({
+        id: nextRecordId(next),
+        employeeId: member.id,
+        employeeName: member.name,
+        branchId: member.branchId,
+        periodMonth: month,
+        periodYear: year,
+        attendanceDays: att,
+        salaryStructureId: structure.id,
+        status: "PENDING",
+        createdAt: now,
+        updatedAt: now,
+        ...calc,
+      });
+      created++;
+    }
 
-        set({ payrollRecords: next });
-        return created;
-      },
+    set({ payrollRecords: next });
+    persistPayroll(get().salaryStructures, next);
+    return created;
+  },
 
-      recalculateAll: () => {
-        const structures = get().salaryStructures;
-        const monthDays = (y: number, m: number) => new Date(y, m, 0).getDate();
+  recalculateAll: () => {
+    const structures = get().salaryStructures;
+    const monthDays = (y: number, m: number) => new Date(y, m, 0).getDate();
 
-        set({
-          payrollRecords: get().payrollRecords.map((r) => {
-            const structure = structures.find((s) => s.id === r.salaryStructureId);
-            if (!structure) return r;
-            const md = monthDays(r.periodYear, r.periodMonth);
-            const calc = computeRecordFromStructure(
-              structure,
-              r.attendanceDays,
-              md
-            );
-            return {
-              ...r,
-              ...calc,
-              updatedAt: new Date().toISOString(),
-            };
-          }),
-        });
-      },
+    const payrollRecords = get().payrollRecords.map((r) => {
+      const structure = structures.find((s) => s.id === r.salaryStructureId);
+      if (!structure) return r;
+      const md = monthDays(r.periodYear, r.periodMonth);
+      const calc = computeRecordFromStructure(structure, r.attendanceDays, md);
+      return {
+        ...r,
+        ...calc,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    set({ payrollRecords });
+    persistPayroll(structures, payrollRecords);
+  },
 
-      setRecordStatus: (id, status) =>
-        set({
-          payrollRecords: get().payrollRecords.map((r) =>
-            r.id === id
-              ? { ...r, status, updatedAt: new Date().toISOString() }
-              : r
-          ),
-        }),
-    }),
-    { name: "prime-detailers-payroll", version: 1 }
-  )
-);
+  setRecordStatus: (id, status) => {
+    const payrollRecords = get().payrollRecords.map((r) =>
+      r.id === id ? { ...r, status, updatedAt: new Date().toISOString() } : r
+    );
+    set({ payrollRecords });
+    persistPayroll(get().salaryStructures, payrollRecords);
+  },
+}));

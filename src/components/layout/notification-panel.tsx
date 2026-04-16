@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   X,
   BellOff,
+  MessageCircle,
 } from "lucide-react";
 
 const TYPE_CONFIG: Record<NotificationType, { icon: typeof ClipboardList; color: string }> = {
@@ -24,6 +25,7 @@ const TYPE_CONFIG: Record<NotificationType, { icon: typeof ClipboardList; color:
   customer_new: { icon: UserPlus, color: "text-violet-500 bg-violet-50 dark:bg-violet-950" },
   vehicle_added: { icon: Car, color: "text-indigo-500 bg-indigo-50 dark:bg-indigo-950" },
   reminder: { icon: Clock, color: "text-orange-500 bg-orange-50 dark:bg-orange-950" },
+  whatsapp_sent: { icon: MessageCircle, color: "text-green-600 bg-green-50 dark:bg-green-950" },
   system: { icon: Settings, color: "text-slate-500 bg-slate-100 dark:bg-slate-800" },
 };
 

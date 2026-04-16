@@ -9,11 +9,13 @@ import {
   creditWallet,
 } from "../services/customer.service.js";
 
+const trimmed = (v: unknown) => (typeof v === "string" ? v.trim() : v);
+
 const createSchema = z.object({
   name: z.string().min(1),
   phone: z.string().min(1),
-  email: z.string().email(),
-  address: z.string().min(1),
+  email: z.preprocess(trimmed, z.union([z.literal(""), z.string().email()])),
+  address: z.preprocess(trimmed, z.string()),
   referralCode: z.string().min(1),
   referredBy: z.string().optional(),
   totalVisits: z.number().int().nonnegative().optional(),

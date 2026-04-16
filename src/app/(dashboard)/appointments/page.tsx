@@ -7,18 +7,19 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useSettingsStore } from "@/store/settings-store";
+import { useAuthStore } from "@/store/auth-store";
+import { useBranchStore } from "@/store/branch-store";
+import { isAllBranchesScope } from "@/lib/all-branches";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -51,20 +52,20 @@ import {
   Clock,
   User,
   Calendar,
-  MessageCircle,
   Check,
-  Copy,
-  ExternalLink,
-  Sparkles,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import type { Appointment, AppointmentStatus, Vehicle, VehicleSegment } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { buildBookingConfirmationMessage } from "@/lib/booking-confirmation-message";
 import {
-  buildBookingConfirmationMessage,
-  buildWhatsAppBookingUrl,
-  pickAppointmentForWhatsAppPreview,
-} from "@/lib/booking-confirmation-message";
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -94,10 +95,12 @@ export default function AppointmentsPage() {
   const appointments = useAppointmentStore((s) => s.appointments);
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
-  const businessName = useSettingsStore((s) => s.businessName);
   const businessPhone = useSettingsStore((s) => s.businessPhone);
   const businessEmail = useSettingsStore((s) => s.businessEmail);
   const businessAddress = useSettingsStore((s) => s.businessAddress);
+  const businessWebsite = useSettingsStore((s) => s.businessWebsite);
+  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const branches = useBranchStore((s) => s.branches);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
@@ -304,64 +307,73 @@ export default function AppointmentsPage() {
     setCurrentMonth(scheduledDay);
   };
 
-  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
-  const [messagePreview, setMessagePreview] = useState("");
-  const [messageTarget, setMessageTarget] = useState<Appointment | null>(null);
+  const branchLabel = useMemo(() => {
+    if (currentBranch && !isAllBranchesScope(currentBranch)) return currentBranch.name;
+    return branches[0]?.name ?? "Main workshop";
+  }, [currentBranch, branches]);
 
-  const studioName = businessName.toLowerCase().includes("studio")
-    ? businessName
-    : `${businessName} Studio`;
+  const termsUrl = useMemo(() => {
+    const w = businessWebsite?.trim();
+    if (!w) return undefined;
+    return /^https?:\/\//i.test(w) ? w : `https://${w}`;
+  }, [businessWebsite]);
 
   const businessPayload = useMemo(
     () => ({
-      studioName,
+      branchName: branchLabel,
       address: businessAddress,
       phone: businessPhone,
       email: businessEmail,
+      termsUrl,
     }),
-    [studioName, businessAddress, businessPhone, businessEmail]
+    [branchLabel, businessAddress, businessPhone, businessEmail, termsUrl]
   );
 
-  const openConfirmationMessage = (apt: Appointment) => {
-    const text = buildBookingConfirmationMessage(apt, businessPayload);
-    setMessageTarget(apt);
-    setMessagePreview(text);
-    setMessageDialogOpen(true);
-  };
-
-  const openDemoWhatsAppPreview = () => {
-    const apt = pickAppointmentForWhatsAppPreview(appointments);
-    if (!apt) {
-      toast.error("No appointments available");
+  const sendBookingConfirmationWhatsApp = async (apt: Appointment, messageText: string) => {
+    const phone = (apt.whatsappPhone ?? apt.customerPhone)?.trim();
+    if (!phone) {
+      toast.error("WhatsApp not sent", { description: "Customer has no phone number on file." });
       return;
     }
-    openConfirmationMessage(apt);
-  };
-
-  const handleConfirmBooking = (apt: Appointment) => {
-    if (apt.status !== "SCHEDULED") return;
-    const next: Appointment = { ...apt, status: "CONFIRMED" };
-    updateAppointment(apt.id, { status: "CONFIRMED" });
-    openConfirmationMessage(next);
-    toast.success("Booking confirmed");
-  };
-
-  const handleCopyMessage = async () => {
+    const notify = (channel: "api" | "composer") => {
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: channel === "api" ? "Booking confirmation sent" : "Booking — WhatsApp composer",
+        message: `${apt.bookingId} → ${phone}`,
+        href: "/appointments",
+      });
+    };
+    const finishSent = async () => {
+      await updateAppointment(apt.id, { whatsappSent: true });
+    };
     try {
-      await navigator.clipboard.writeText(messagePreview);
-      toast.success("Message copied");
-    } catch {
-      toast.error("Could not copy");
+      await sendCustomerWhatsApp(phone, messageText);
+      await finishSent();
+      toast.success("WhatsApp sent", { description: phone });
+      notify("api");
+    } catch (e) {
+      if (isWhatsAppNotConfiguredError(e)) {
+        openWhatsAppComposer(phone, messageText);
+        await finishSent();
+        toast.info("WhatsApp opened", {
+          description: "Twilio WhatsApp not configured — finish sending in the WhatsApp app.",
+        });
+        notify("composer");
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: e instanceof ApiError ? e.message : "Could not send",
+      });
     }
   };
 
-  const handleOpenWhatsApp = () => {
-    if (!messageTarget) return;
-    const url = buildWhatsAppBookingUrl(messageTarget, messagePreview);
-    window.open(url, "_blank", "noopener,noreferrer");
-    updateAppointment(messageTarget.id, { whatsappSent: true });
-    toast.success("Message sent");
-    setMessageDialogOpen(false);
+  const handleConfirmBooking = async (apt: Appointment) => {
+    if (apt.status !== "SCHEDULED") return;
+    const next: Appointment = { ...apt, status: "CONFIRMED" };
+    await updateAppointment(apt.id, { status: "CONFIRMED" });
+    toast.success("Booking confirmed");
+    const messageText = buildBookingConfirmationMessage(next, businessPayload);
+    await sendBookingConfirmationWhatsApp(next, messageText);
   };
 
   const monthStart = startOfMonth(currentMonth);
@@ -408,10 +420,6 @@ export default function AppointmentsPage() {
         description="Manage bookings and the service calendar — calendar for the month view, list for upcoming work."
         actions={
           <div className="flex flex-wrap items-center gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={openDemoWhatsAppPreview}>
-              <Sparkles className="w-4 h-4 mr-2" />
-              WhatsApp message
-            </Button>
             <Dialog open={dialogOpen} onOpenChange={handleAppointmentDialogChange}>
             <DialogTrigger asChild>
               <Button type="button">
@@ -698,52 +706,6 @@ export default function AppointmentsPage() {
         }
       />
 
-      <Dialog
-        open={messageDialogOpen}
-        onOpenChange={(open) => {
-          setMessageDialogOpen(open);
-          if (!open) setMessageTarget(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-            <DialogTitle>Booking confirmation (WhatsApp)</DialogTitle>
-            <DialogDescription>
-              {messageTarget ? (
-                <span className="text-foreground font-medium">
-                  {messageTarget.customerName}{" "}
-                  <span className="text-muted-foreground font-normal">
-                    · {messageTarget.whatsappPhone ?? messageTarget.customerPhone} · {messageTarget.bookingId}
-                  </span>
-                </span>
-              ) : null}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-6 flex-1 min-h-0 overflow-y-auto border-y border-border">
-            <Textarea
-              readOnly
-              value={messagePreview}
-              className="min-h-[320px] max-h-[50vh] font-mono text-xs leading-relaxed resize-none border-0 bg-muted/30 focus-visible:ring-0 rounded-none px-3 py-3"
-            />
-          </div>
-          <DialogFooter className="px-6 py-4 flex-row flex-wrap gap-2 sm:justify-between">
-            <Button type="button" variant="outline" onClick={handleCopyMessage}>
-              <Copy className="w-4 h-4 mr-2" />
-              Copy message
-            </Button>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => setMessageDialogOpen(false)}>
-                Close
-              </Button>
-              <Button type="button" onClick={handleOpenWhatsApp}>
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Open WhatsApp
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
@@ -928,7 +890,7 @@ export default function AppointmentsPage() {
                                 <Button
                                   size="sm"
                                   className="h-8 text-xs"
-                                  onClick={() => handleConfirmBooking(apt)}
+                                  onClick={() => void handleConfirmBooking(apt)}
                                 >
                                   <Check className="w-3 h-3 mr-1" />
                                   Confirm booking
@@ -939,9 +901,14 @@ export default function AppointmentsPage() {
                                   size="sm"
                                   variant="outline"
                                   className="h-8 text-xs"
-                                  onClick={() => openConfirmationMessage(apt)}
+                                  onClick={() =>
+                                    void sendBookingConfirmationWhatsApp(
+                                      apt,
+                                      buildBookingConfirmationMessage(apt, businessPayload)
+                                    )
+                                  }
                                 >
-                                  <MessageCircle className="w-3 h-3 mr-1" />
+                                  <WhatsAppIcon className="w-3.5 h-3.5 mr-1 text-[#25D366]" />
                                   Send WhatsApp
                                 </Button>
                               )}
@@ -1001,7 +968,7 @@ export default function AppointmentsPage() {
                           <Button
                             size="sm"
                             className="h-8 text-xs"
-                            onClick={() => handleConfirmBooking(apt)}
+                            onClick={() => void handleConfirmBooking(apt)}
                           >
                             <Check className="w-3.5 h-3.5 mr-1.5" />
                             Confirm booking
@@ -1012,9 +979,14 @@ export default function AppointmentsPage() {
                             size="sm"
                             variant="outline"
                             className="h-8 text-xs"
-                            onClick={() => openConfirmationMessage(apt)}
+                            onClick={() =>
+                              void sendBookingConfirmationWhatsApp(
+                                apt,
+                                buildBookingConfirmationMessage(apt, businessPayload)
+                              )
+                            }
                           >
-                            <MessageCircle className="w-3.5 h-3.5 mr-1.5" />
+                            <WhatsAppIcon className="w-3.5 h-3.5 mr-1.5 text-[#25D366]" />
                             Send WhatsApp
                           </Button>
                         )}

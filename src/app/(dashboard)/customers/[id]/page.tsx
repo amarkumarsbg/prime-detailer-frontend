@@ -42,6 +42,13 @@ import {
 } from "@/store/membership-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { formatCurrency, formatDate, formatInrFull, getInitials, cn } from "@/lib/utils";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
 import { getTransferTagForCustomer } from "@/lib/ownership-transfers";
 import {
   findVehicleByNormalizedReg,
@@ -274,13 +281,34 @@ export default function CustomerDetailPage() {
     }
   };
 
-  const handleShareViaWhatsApp = () => {
-    if (customer?.referralCode) {
-      const text = encodeURIComponent(
-        `Use my referral code ${customer.referralCode} at Prime Detailers for exclusive benefits!`
-      );
-      window.open(`https://wa.me/?text=${text}`, "_blank");
-      toast.success("Opening WhatsApp to share");
+  const handleShareViaWhatsApp = async () => {
+    if (!customer?.referralCode) return;
+    const phone = customer.phone?.trim();
+    if (!phone) {
+      toast.error("Add a phone number to send via WhatsApp");
+      return;
+    }
+    const message = `Use my referral code ${customer.referralCode} at Prime Detailers for exclusive benefits!`;
+    try {
+      await sendCustomerWhatsApp(phone, message);
+      toast.success("Referral message sent", { description: phone });
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: "Referral code via WhatsApp",
+        message: `${customer.name} · ${customer.referralCode}`,
+        href: `/customers/${customer.id}`,
+      });
+    } catch (e) {
+      if (isWhatsAppNotConfiguredError(e)) {
+        openWhatsAppComposer(phone, message);
+        toast.info("WhatsApp opened", {
+          description: "Twilio not configured — finish sending in the WhatsApp app.",
+        });
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: e instanceof ApiError ? e.message : "Could not send",
+      });
     }
   };
 
@@ -1033,12 +1061,6 @@ export default function CustomerDetailPage() {
   );
 }
 
-const MOCK_FEEDBACKS = [
-  { id: "fb-1", jobCardId: "jc-019", jobNumber: "JC-2026-0019", rating: 5, comment: "Excellent service! Car feels brand new. Murugan was very professional.", createdAt: "2026-03-10T17:00:00Z" },
-  { id: "fb-2", jobCardId: "jc-022", jobNumber: "JC-2026-0022", rating: 4, comment: "Good work on the brakes. Took a bit longer than expected but quality is great.", createdAt: "2026-03-07T18:00:00Z" },
-  { id: "fb-3", jobCardId: "jc-023", jobNumber: "JC-2026-0023", rating: 5, comment: "Always happy with the service here. Will keep coming back!", createdAt: "2026-03-06T17:00:00Z" },
-];
-
 function StarRating({ rating, onRate, size = "md" }: { rating: number; onRate?: (r: number) => void; size?: "sm" | "md" }) {
   const dim = size === "sm" ? "w-4 h-4" : "w-5 h-5";
   return (
@@ -1060,7 +1082,9 @@ function StarRating({ rating, onRate, size = "md" }: { rating: number; onRate?: 
 }
 
 function CustomerFeedback({ customerId, customerJobCards }: { customerId: string; customerJobCards: JobCard[] }) {
-  const [feedbacks, setFeedbacks] = useState(MOCK_FEEDBACKS);
+  const [feedbacks, setFeedbacks] = useState<
+    { id: string; jobCardId: string; jobNumber: string; rating: number; comment: string; createdAt: string }[]
+  >([]);
   const [newRating, setNewRating] = useState(0);
   const [newComment, setNewComment] = useState("");
   const [showForm, setShowForm] = useState(false);

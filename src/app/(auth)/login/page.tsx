@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,12 @@ import {
   Smartphone,
   Mail,
 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "mobile">("email");
-  const [email, setEmail] = useState("rajesh.kumar@primedetailers.in");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -29,41 +30,62 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
+  const sendLoginOtp = useAuthStore((s) => s.sendLoginOtp);
+  const verifyLoginOtp = useAuthStore((s) => s.verifyLoginOtp);
+  const verifyOtpLock = useRef(false);
+
+  const runMobileOtpVerify = async (code?: string) => {
+    const digits = (code ?? otp).replace(/\D/g, "");
+    if (digits.length !== 4 || verifyOtpLock.current) return;
+    verifyOtpLock.current = true;
+    setError("");
+    setLoading(true);
+    try {
+      const success = await verifyLoginOtp(mobile, digits);
+      if (success) window.location.assign("/dashboard");
+      else setError("Invalid or expired OTP, or the server could not be reached.");
+    } finally {
+      setLoading(false);
+      verifyOtpLock.current = false;
+    }
+  };
 
   const handleSendOtp = async () => {
     if (!mobile || mobile.length < 10) {
-      setError("Enter a valid 10-digit mobile number");
+      const msg = "Enter a valid 10-digit mobile number";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     setError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setOtpSent(true);
+    const result = await sendLoginOtp(mobile);
     setLoading(false);
+    if (result.ok) {
+      setOtp("");
+      setOtpSent(true);
+      toast.success("OTP sent to your mobile number");
+    } else {
+      toast.error(result.message);
+      setError(result.message);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-
     if (loginMethod === "mobile") {
-      if (otp === "1234") {
-        const success = await login("rajesh.kumar@primedetailers.in", "password");
-        if (success) window.location.assign("/dashboard");
-        else setError("Could not sign in. Is the API running on port 4000?");
-      } else {
-        setError("Invalid OTP. Use 1234 for demo.");
-      }
+      await runMobileOtpVerify();
     } else {
+      setError("");
+      setLoading(true);
       const success = await login(email, password);
+      setLoading(false);
       if (success) {
         window.location.assign("/dashboard");
       } else {
         setError("Invalid email or password");
       }
     }
-    setLoading(false);
   };
 
   return (
@@ -251,7 +273,7 @@ export default function LoginPage() {
               {/* Login with Mobile */}
               <button
                 type="button"
-                onClick={() => { setLoginMethod("mobile"); setError(""); setOtpSent(false); }}
+                onClick={() => { setLoginMethod("mobile"); setError(""); setOtp(""); setOtpSent(false); }}
                 className="w-full flex items-center justify-center gap-2 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm font-medium text-foreground hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Smartphone className="w-4 h-4" />
@@ -272,7 +294,7 @@ export default function LoginPage() {
                     <Input
                       id="mobile"
                       type="tel"
-                      placeholder="9876543210"
+                      placeholder="Enter your 10-digit mobile number"
                       value={mobile}
                       onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
                       required
@@ -319,14 +341,15 @@ export default function LoginPage() {
                         inputMode="numeric"
                         placeholder="Enter 4-digit OTP"
                         value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setOtp(v);
+                          if (v.length === 4) void runMobileOtpVerify(v);
+                        }}
                         required
                         maxLength={4}
                         className="h-11 rounded-xl bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 px-4 text-center text-lg tracking-[0.5em] font-mono transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        OTP sent to +91-{mobile.slice(0, 2)}****{mobile.slice(-2)}
-                      </p>
                     </div>
 
                     {error && (
@@ -374,35 +397,6 @@ export default function LoginPage() {
               </button>
             </>
           )}
-
-          <div className="mt-6 p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-700/40">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                Demo Credentials
-              </p>
-            </div>
-            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground/60 w-14 shrink-0">Email</span>
-                <code className="text-xs bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border font-mono">
-                  rajesh.kumar@primedetailers.in
-                </code>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground/60 w-14 shrink-0">Pass</span>
-                <code className="text-xs bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border font-mono">
-                  password
-                </code>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground/60 w-14 shrink-0">OTP</span>
-                <code className="text-xs bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border font-mono">
-                  1234 (any mobile)
-                </code>
-              </div>
-            </div>
-          </div>
 
           <p className="text-center text-sm text-muted-foreground mt-8">
             Don&apos;t have an account?{" "}

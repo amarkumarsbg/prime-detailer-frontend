@@ -196,10 +196,13 @@ export default function InventoryPage() {
       label: "Est. cars (wash)",
       className: "hidden xl:table-cell",
       render: (item: Part) => {
-        const normalWashService = catalog.find((s) => s.id === "svc-016");
-        const advancedWashService = catalog.find((s) => s.id === "svc-017");
-        const premiumWashService = catalog.find((s) => s.id === "svc-021");
-        if (!normalWashService || !isMlTrackedPart(item) || item.id !== "prt-021") {
+        const normalWashService =
+          catalog.find((s) => s.id === "srv-001") ?? catalog.find((s) => s.id === "svc-016");
+        const advancedWashService =
+          catalog.find((s) => s.id === "srv-002") ?? catalog.find((s) => s.id === "svc-017");
+        const premiumWashService =
+          catalog.find((s) => s.id === "srv-005") ?? catalog.find((s) => s.id === "svc-021");
+        if (!normalWashService || !isMlTrackedPart(item) || item.id !== "part-002") {
           return <span className="text-muted-foreground text-sm">—</span>;
         }
         const n = carsPossibleForPartAndService(item, normalWashService);

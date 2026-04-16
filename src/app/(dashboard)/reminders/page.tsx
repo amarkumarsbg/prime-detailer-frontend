@@ -8,6 +8,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useReminderStore } from "@/store/reminder-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
+import { buildServiceReminderWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isDueSoonReminder } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
@@ -103,6 +112,7 @@ function DueBadge({ dueDate }: { dueDate: string }) {
 export default function RemindersPage() {
   const reminders = useReminderStore((s) => s.reminders);
   const updateReminder = useReminderStore((s) => s.updateReminder);
+  const whatsappReminderEnabled = useSettingsStore((s) => s.whatsappReminderEnabled);
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState("all");
@@ -138,15 +148,52 @@ export default function RemindersPage() {
     toast.info("Reminder dismissed");
   };
 
-  const handleSendWhatsAppReminder = (reminder: ServiceReminder) => {
-    const now = new Date().toISOString();
-    updateReminder(reminder.id, {
-      whatsappSent: true,
-      lastMessageSentAt: now,
-    });
-    toast.success("WhatsApp reminder sent", {
-      description: `Sent to ${reminder.customerName} at ${reminder.customerPhone}`,
-    });
+  const handleSendWhatsAppReminder = async (reminder: ServiceReminder) => {
+    if (!whatsappReminderEnabled) {
+      toast.error("WhatsApp reminders are off", {
+        description: "Turn on “WhatsApp Reminders” under Settings → Reminders.",
+      });
+      return;
+    }
+    const message = buildServiceReminderWhatsAppMessage(reminder);
+    const markSent = () => {
+      const now = new Date().toISOString();
+      updateReminder(reminder.id, {
+        whatsappSent: true,
+        lastMessageSentAt: now,
+      });
+    };
+    try {
+      await sendCustomerWhatsApp(reminder.customerPhone, message);
+      markSent();
+      toast.success("WhatsApp reminder sent", {
+        description: `Sent to ${reminder.customerName} at ${reminder.customerPhone}`,
+      });
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: "Service reminder via WhatsApp",
+        message: `${reminder.customerName} — ${reminder.vehicleRegNumber}`,
+        href: "/reminders",
+      });
+    } catch (e) {
+      if (isWhatsAppNotConfiguredError(e)) {
+        openWhatsAppComposer(reminder.customerPhone, message);
+        markSent();
+        toast.info("WhatsApp opened", {
+          description: "Finish sending in the app. Reminder marked as sent.",
+        });
+        useNotificationStore.getState().addNotification({
+          type: "whatsapp_sent",
+          title: "Reminder — WhatsApp composer",
+          message: `${reminder.customerName} — ${reminder.vehicleRegNumber}`,
+          href: "/reminders",
+        });
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: e instanceof ApiError ? e.message : "Could not send reminder",
+      });
+    }
   };
 
   return (
@@ -158,6 +205,16 @@ export default function RemindersPage() {
           message="⚠ Showing due service reminders"
           onDismiss={() => setActiveFilter(null)}
         />
+      )}
+
+      {!whatsappReminderEnabled && (
+        <p className="text-sm rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          WhatsApp reminder sending is disabled in{" "}
+          <Link href="/settings" className="font-medium underline underline-offset-2">
+            Settings → Reminders
+          </Link>
+          . Enable “WhatsApp Reminders” to send messages from this page.
+        </p>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -336,7 +393,13 @@ export default function RemindersPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleSendWhatsAppReminder(reminder)}
+                                  onClick={() => void handleSendWhatsAppReminder(reminder)}
+                                  disabled={!whatsappReminderEnabled}
+                                  title={
+                                    whatsappReminderEnabled
+                                      ? undefined
+                                      : "Enable WhatsApp reminders in Settings → Reminders"
+                                  }
                                   className="text-xs"
                                 >
                                   <MessageCircle className="w-3.5 h-3.5 mr-1.5" />

@@ -23,7 +23,6 @@ import {
   Lock,
   AlertTriangle,
   Sparkles,
-  DollarSign,
   IndianRupee,
   LayoutGrid,
   ListChecks,
@@ -70,6 +69,14 @@ import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
+import { buildJobCardCustomerWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import {
   buildHighEndReminderMonthIntervals,
@@ -980,10 +987,37 @@ export default function JobCardDetailPage() {
     });
   };
 
-  const handleWhatsAppNotify = () => {
-    toast.success("WhatsApp notification sent", {
-      description: `Simulated notification to ${jobCard?.customerPhone}`,
-    });
+  const handleWhatsAppNotify = async () => {
+    if (!jobCard) return;
+    const message = buildJobCardCustomerWhatsAppMessage(jobCard);
+    const phone = jobCard.customerPhone;
+    const pushStaffNotification = (channel: "api" | "composer") => {
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: channel === "api" ? "WhatsApp sent to customer" : "WhatsApp composer opened",
+        message:
+          channel === "api"
+            ? `${jobCard.jobNumber} — message sent to ${phone}.`
+            : `${jobCard.jobNumber} — finish sending in WhatsApp (${phone}); API sender not configured.`,
+        href: `/job-cards/${jobCard.id}`,
+      });
+    };
+    try {
+      await sendCustomerWhatsApp(phone, message);
+      toast.success("WhatsApp sent", { description: `Delivered to ${phone}` });
+      pushStaffNotification("api");
+    } catch (e) {
+      if (isWhatsAppNotConfiguredError(e)) {
+        openWhatsAppComposer(phone, message);
+        toast.info("WhatsApp opened", {
+          description: "Server WhatsApp is not configured — complete the message in the WhatsApp app.",
+        });
+        pushStaffNotification("composer");
+        return;
+      }
+      const desc = e instanceof ApiError ? e.message : "Could not send WhatsApp";
+      toast.error("WhatsApp failed", { description: desc });
+    }
   };
 
   const handleGenerateInvoice = () => {
@@ -1148,7 +1182,7 @@ export default function JobCardDetailPage() {
                     title="Creates the invoice if needed and opens billing to print or record payment."
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    {invoiceForJob ? "View invoice" : "Generate invoice"}
+                    {invoiceForJob ? "View invoice" : "Generate Invoice"}
                   </Button>
                 </div>
               ) : (
@@ -1311,14 +1345,14 @@ export default function JobCardDetailPage() {
               {invoiceForJob ? (
                 <Button size="sm" asChild>
                   <Link href={`/billing/${invoiceForJob.id}`}>
-                    <DollarSign className="w-4 h-4 mr-1.5" />
+                    <IndianRupee className="w-4 h-4 mr-1.5" />
                     Record payment
                   </Link>
                 </Button>
               ) : currentStatus === "DELIVERED" ? (
                 <Button size="sm" type="button" onClick={handleGenerateInvoice}>
-                  <DollarSign className="w-4 h-4 mr-1.5" />
-                  Generate invoice
+                  <IndianRupee className="w-4 h-4 mr-1.5" />
+                  Generate Invoice
                 </Button>
               ) : (
                 <Button
@@ -1328,7 +1362,7 @@ export default function JobCardDetailPage() {
                   disabled
                   title="Invoice is available after the job is marked delivered."
                 >
-                  <DollarSign className="w-4 h-4 mr-1.5" />
+                  <IndianRupee className="w-4 h-4 mr-1.5" />
                   Billing
                 </Button>
               )}

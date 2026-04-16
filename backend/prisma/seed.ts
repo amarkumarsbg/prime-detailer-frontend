@@ -91,9 +91,17 @@ const ARRAY_COLLECTIONS = [
   "stockMovements",
   "productPurchases",
   "followUps",
+  "serviceCategories",
+  "notifications",
 ] as const;
 
-const SINGLETON_COLLECTIONS = ["dashboardStats", "expenseMeta"] as const;
+const SINGLETON_COLLECTIONS = [
+  "dashboardStats",
+  "expenseMeta",
+  "cashBank",
+  "payroll",
+  "membership",
+] as const;
 const SINGLETON_ENTITY_ID = "default";
 
 const prisma = new PrismaClient();
@@ -278,6 +286,18 @@ async function main() {
       update: { payload: payload as object },
     });
   }
+
+  const allowedBranchIds = branches.map((b) => b.id);
+  const fallbackBranchId = allowedBranchIds[0] ?? "br-main";
+  if (allowedBranchIds.length > 0) {
+    await prisma.user.updateMany({
+      where: { branchId: { notIn: allowedBranchIds } },
+      data: { branchId: fallbackBranchId },
+    });
+  }
+  await prisma.branch.deleteMany({
+    where: { id: { notIn: allowedBranchIds } },
+  });
 }
 
 main()

@@ -7,9 +7,21 @@ const OUR_SERVICES_LINE =
 const PRODUCTS_LINE =
   "We use 100% original products from 3M, Meguiar's, Puris, SystemX, PaintGuard, Garware, XPEL, Llumar, Saint-Gobain & more.";
 
-const DISCLAIMER = `No detailing service is perfect. Most complaints arise from pre-existing conditions that become visible after cleaning. Our team is not liable for mechanical or electrical issues revealed post-service. Sensitive areas (engine bay, infotainment, cameras) are avoided. Your presence during the service is required. Please remove all valuables before handover.`;
+const EXTRA_SERVICES_LINE = "& Denting-Painting & Mechanical Services (where offered).";
 
-const TERMS = `(a) GST invoice provided online. (b) Services subject to availability and feasibility. (c) Advance is non-refundable or non-transferable upon customer cancellation or rescheduling. (d) Visit/pickup charges: Rs. 200 minimum + Rs. 10/km beyond 10 km from our studio.`;
+const BRAND_TAGLINE =
+  "Quality never goes out of style — fair pricing, genuine products, and workmanship you can trust.";
+
+const DISCLAIMER = `No car wash or detailing is perfect. Most concerns relate to pre-existing conditions that show up after cleaning. We are not liable for mechanical or electrical issues found after service. We avoid sensitive areas (engine bay, infotainment, cameras, etc.). Your presence during service is required. Please remove all valuables before handover.`;
+
+function buildTermsLine(termsUrl?: string): string {
+  const base =
+    "(a) A GST invoice will be provided. (b) Services are subject to availability and feasibility. (c) Advance is non-refundable and non-transferable if you cancel or reschedule. (d) Visit / pick-up charges: Rs. 200 minimum plus Rs. 10/km beyond 10 km from our outlet.";
+  if (termsUrl?.trim()) {
+    return `${base} Full terms: ${termsUrl.trim()}`;
+  }
+  return base;
+}
 
 function formatRs(amount: number): string {
   return `Rs. ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(amount)}`;
@@ -35,24 +47,37 @@ function expectedDeliveryLine(apt: Appointment): string {
 }
 
 export type BookingConfirmationBusiness = {
-  studioName: string;
+  /**
+   * Branch / outlet label shown as *Prime Detailers - {branchName}* (e.g. "Main workshop").
+   */
+  branchName: string;
+  /** @deprecated Use branchName; kept for older call sites */
+  studioName?: string;
   address: string;
   phone: string;
   email: string;
+  /** Optional full terms URL appended to T&C */
+  termsUrl?: string;
 };
+
+function outletBrandLine(business: BookingConfirmationBusiness): string {
+  const branch = (business.branchName || business.studioName || "Main workshop").trim();
+  return `Prime Detailers - ${branch}`;
+}
 
 export function buildBookingConfirmationMessage(
   apt: Appointment,
   business: BookingConfirmationBusiness
 ): string {
   const name = firstName(apt);
+  const brand = outletBrandLine(business);
   const vehicleLine = apt.vehicleColor
     ? `${apt.vehicleMakeModel} (${apt.vehicleColor})`
     : apt.vehicleMakeModel;
 
   const bookingDetailsExtra =
     apt.bookingPricingLine?.trim() ||
-    `Pricing and package details will be confirmed at the studio.`;
+    `Pricing and package details will be confirmed at the outlet.`;
 
   const priceBlock =
     apt.priceSubtotalExGst != null &&
@@ -61,34 +86,35 @@ export function buildBookingConfirmationMessage(
       ? [
           `*PRICE DETAILS:*`,
           `${formatRs(apt.priceSubtotalExGst)} + ${formatRs(apt.priceGstAmount)} (GST) = *${formatRs(apt.priceGrandTotal)}*`,
-          apt.advancePaid != null ? `Advance Paid: ${formatRs(apt.advancePaid)}` : "",
+          apt.advancePaid != null ? `Advance: ${formatRs(apt.advancePaid)}` : "",
           apt.advancePolicyNote
             ? `Note: ${apt.advancePolicyNote}`
-            : "Note: 30% advance required to confirm and pre-schedule your slot.",
+            : "Note: An advance payment of 30% is required to confirm and pre-schedule your service slot.",
         ]
           .filter(Boolean)
           .join("\n")
       : [
           `*PRICE DETAILS:*`,
-          `Pricing will be confirmed at the studio before work begins.`,
-          apt.advancePaid != null ? `Advance Paid: ${formatRs(apt.advancePaid)}` : "",
+          `Pricing will be confirmed at the outlet before work begins.`,
+          apt.advancePaid != null ? `Advance: ${formatRs(apt.advancePaid)}` : "",
           apt.advancePolicyNote
             ? `Note: ${apt.advancePolicyNote}`
-            : "Note: 30% advance required to confirm and pre-schedule your slot.",
+            : "Note: An advance payment of 30% is required to confirm and pre-schedule your service slot.",
         ]
           .filter(Boolean)
           .join("\n");
 
   const deliveryNote =
     apt.deliveryExpectationNote?.trim() ||
-    "(We will do our best to deliver by Saturday evening.)";
+    "(We will do our best to meet the expected delivery date.)";
 
   const wa = (apt.whatsappPhone ?? apt.customerPhone).trim();
   const mobile = apt.customerPhone.trim();
+  const terms = buildTermsLine(business.termsUrl);
 
   return [
     `Hi *${name}*,`,
-    `Your booking *(No: ${apt.bookingId})* has been confirmed at *${business.studioName}.*`,
+    `Your booking request *(No: ${apt.bookingId})* has been successfully accepted @*${brand}*.`,
     ``,
     `*BOOKING DETAILS:*`,
     vehicleLine,
@@ -98,29 +124,31 @@ export function buildBookingConfirmationMessage(
     priceBlock,
     ``,
     `*BOOKING DATE & TIME:*`,
-    bookingDateTimeLine(apt),
-    `Expected Delivery: ${expectedDeliveryLine(apt)}`,
+    `${bookingDateTimeLine(apt)} | Expected delivery: *${expectedDeliveryLine(apt)}*`,
     deliveryNote,
-    `Please arrive 30 minutes before your slot so we can begin on time.`,
+    `Kindly reach our outlet *30 minutes before* your slot so we can start on time, subject to feasibility.`,
     ``,
     `*CUSTOMER DETAILS:*`,
     `Name: ${apt.customerName}`,
-    `Mobile: ${mobile} | WhatsApp: ${wa}`,
+    `Mobile No: ${mobile} | WhatsApp: ${wa}`,
     `Address: ${apt.customerAddress ?? "—"}`,
     ``,
     `*OUR SERVICES:*`,
     OUR_SERVICES_LINE,
     ``,
     PRODUCTS_LINE,
+    EXTRA_SERVICES_LINE,
+    ``,
+    BRAND_TAGLINE,
     ``,
     `*DISCLAIMER:*`,
     DISCLAIMER,
     ``,
-    `*TERMS & CONDITIONS:*`,
-    TERMS,
+    `*STANDARD TERMS & CONDITIONS:*`,
+    terms,
     ``,
     `Regards,`,
-    `*Team Prime Detailers*`,
+    `*${brand}*`,
     `${business.address}`,
     `${business.phone} | ${business.email}`,
   ].join("\n");
@@ -132,11 +160,6 @@ export function whatsappDigits(phone: string): string {
   if (d.length === 10) return `91${d}`;
   if (d.startsWith("91") && d.length >= 12) return d;
   return d;
-}
-
-export function buildWhatsAppBookingUrl(apt: Appointment, message: string): string {
-  const target = whatsappDigits(apt.whatsappPhone ?? apt.customerPhone);
-  return `https://wa.me/${target}?text=${encodeURIComponent(message)}`;
 }
 
 /**

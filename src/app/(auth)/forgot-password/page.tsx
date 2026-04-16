@@ -212,15 +212,6 @@ export default function ForgotPasswordPage() {
                 </Button>
               </div>
 
-              <div className="mt-10 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200/60 dark:border-amber-700/30 text-left">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">
-                  Demo Note
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-400/80">
-                  This is a demo app — no email is actually sent. Use the login
-                  page with the demo credentials to access the dashboard.
-                </p>
-              </div>
             </div>
           )}
 

@@ -760,6 +760,8 @@ export interface PickupDropRequest {
   jobNumber: string;
   type: PickupDropType;
   customerName: string;
+  /** For WhatsApp; optional for legacy persisted rows (phone may appear in notes). */
+  customerPhone?: string;
   address: string;
   scheduledTime: string;
   driverId?: string;

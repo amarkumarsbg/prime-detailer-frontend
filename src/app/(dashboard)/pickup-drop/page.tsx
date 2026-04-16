@@ -29,9 +29,25 @@ import { useStaffStore } from "@/store/staff-store";
 import { useAuthStore } from "@/store/auth-store";
 import { isAllBranchesScope } from "@/lib/all-branches";
 import { cn, formatDateTime } from "@/lib/utils";
-import type { PickupDropStatus, PickupDropType } from "@/types";
+import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { Plus, RefreshCw, Truck } from "lucide-react";
 import { toast } from "sonner";
+import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
+
+function customerPhoneFromPickupRequest(r: PickupDropRequest): string | undefined {
+  const direct = r.customerPhone?.trim();
+  if (direct) return direct;
+  const m = r.notes?.match(/Phone:\s*([^\n]+)/i);
+  return m?.[1]?.trim() || undefined;
+}
 
 function formatDatetimeLocalInput(d: Date): string {
   const z = (n: number) => String(n).padStart(2, "0");
@@ -186,6 +202,7 @@ export default function PickupDropPage() {
         jobNumber: jc.jobNumber,
         branchId: jc.branchId,
         customerName: jc.customerName,
+        customerPhone: jc.customerPhone,
         address,
         scheduledTime: jc.expectedDelivery,
         type: reqType,
@@ -232,6 +249,7 @@ export default function PickupDropPage() {
       jobNumber: "NEW",
       branchId: newBranchId,
       customerName: name,
+      customerPhone: newCustomerPhone.trim() || undefined,
       address: addr,
       scheduledTime: scheduled.toISOString(),
       type: reqType,
@@ -252,6 +270,43 @@ export default function PickupDropPage() {
           newBranchId &&
           newScheduledLocal
         );
+
+  const handlePickupDropWhatsApp = async (r: PickupDropRequest) => {
+    const phone = customerPhoneFromPickupRequest(r);
+    if (!phone) {
+      toast.error("No customer phone", {
+        description: "Add a phone when creating the request, or open the job card for this booking.",
+      });
+      return;
+    }
+    const branchName = branches.find((b) => b.id === r.branchId)?.name;
+    const message = buildPickupDropWhatsAppMessage(r, { branchName });
+    const notify = (channel: "api" | "composer") => {
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: channel === "api" ? "Pickup/Drop update via WhatsApp" : "Pickup/Drop — WhatsApp composer",
+        message: `${r.jobNumber} → ${phone}`,
+        href: "/pickup-drop",
+      });
+    };
+    try {
+      await sendCustomerWhatsApp(phone, message);
+      toast.success("WhatsApp sent", { description: phone });
+      notify("api");
+    } catch (e) {
+      if (isWhatsAppNotConfiguredError(e)) {
+        openWhatsAppComposer(phone, message);
+        toast.info("WhatsApp opened", {
+          description: "Finish sending in the app, or configure Twilio on the server.",
+        });
+        notify("composer");
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: e instanceof ApiError ? e.message : "Could not send",
+      });
+    }
+  };
 
   return (
     <div>
@@ -370,6 +425,7 @@ export default function PickupDropPage() {
                     <th className="px-4 py-3 font-semibold whitespace-nowrap">Scheduled Time</th>
                     <th className="px-4 py-3 font-semibold">Driver</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">WhatsApp</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -391,6 +447,24 @@ export default function PickupDropPage() {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={r.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={!customerPhoneFromPickupRequest(r)}
+                          title={
+                            customerPhoneFromPickupRequest(r)
+                              ? "Send pickup/drop update to customer"
+                              : "No phone on file for this request"
+                          }
+                          onClick={() => void handlePickupDropWhatsApp(r)}
+                        >
+                          <WhatsAppIcon className="w-3.5 h-3.5 mr-1 text-[#25D366]" />
+                          Send
+                        </Button>
                       </td>
                     </tr>
                   ))}

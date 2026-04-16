@@ -4,16 +4,21 @@ import type {
   Appointment,
   Branch,
   Customer,
+  CustomerMembership,
   DashboardStats,
   Expense,
   ExpenseVendorProfile,
   FollowUp,
   Invoice,
   JobCard,
+  MembershipPackage,
   Part,
+  PayrollRecord,
   ProductPurchase,
   Quotation,
+  SalaryStructure,
   ServiceCatalogItem,
+  ServiceCategoryRecord,
   ServiceReminder,
   StockMovement,
   User,
@@ -36,6 +41,13 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
 import { useFollowUpStore } from "@/store/follow-up-store";
+import type { CashBankAccount, CashBankTransaction } from "@/store/cash-bank-store";
+import { useCashBankStore } from "@/store/cash-bank-store";
+import { usePayrollStore } from "@/store/payroll-store";
+import { useMembershipStore } from "@/store/membership-store";
+import { useServiceCategoryStore } from "@/store/service-category-store";
+import type { Notification } from "@/store/notification-store";
+import { useNotificationStore } from "@/store/notification-store";
 
 export type BootstrapPayload = {
   customers: Customer[];
@@ -94,4 +106,39 @@ export async function bootstrapAppData(): Promise<void> {
     stats: (c.dashboardStats as DashboardStats) ?? null,
   });
   useFollowUpStore.setState({ followUps: (c.followUps as FollowUp[]) ?? [] });
+
+  const cashBank = c.cashBank as
+    | { accounts?: CashBankAccount[]; transactions?: CashBankTransaction[] }
+    | null
+    | undefined;
+  useCashBankStore.setState({
+    accounts: Array.isArray(cashBank?.accounts) ? cashBank.accounts : [],
+    transactions: Array.isArray(cashBank?.transactions) ? cashBank.transactions : [],
+  });
+
+  const payroll = c.payroll as
+    | { salaryStructures?: SalaryStructure[]; payrollRecords?: PayrollRecord[] }
+    | null
+    | undefined;
+  usePayrollStore.setState({
+    salaryStructures: Array.isArray(payroll?.salaryStructures) ? payroll.salaryStructures : [],
+    payrollRecords: Array.isArray(payroll?.payrollRecords) ? payroll.payrollRecords : [],
+  });
+
+  const membership = c.membership as
+    | { packages?: MembershipPackage[]; subscriptions?: CustomerMembership[] }
+    | null
+    | undefined;
+  useMembershipStore.setState({
+    packages: Array.isArray(membership?.packages) ? membership.packages : [],
+    subscriptions: Array.isArray(membership?.subscriptions) ? membership.subscriptions : [],
+  });
+
+  useServiceCategoryStore.setState({
+    categories: (c.serviceCategories as ServiceCategoryRecord[]) ?? [],
+  });
+
+  useNotificationStore.setState({
+    notifications: (c.notifications as Notification[]) ?? [],
+  });
 }

@@ -1,13 +1,11 @@
 import { useAuthStore } from "@/store/auth-store";
-
-function baseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-}
+import { buildApiUrl } from "./api-base";
 
 export class ApiError extends Error {
   constructor(
     public status: number,
-    message: string
+    message: string,
+    public code?: string
   ) {
     super(message);
     this.name = "ApiError";
@@ -17,10 +15,14 @@ export class ApiError extends Error {
 async function parseResponse<T>(res: Response): Promise<T> {
   const body = (await res.json()) as {
     data: T | null;
-    error: { message?: string } | null;
+    error: { message?: string; code?: string } | null;
   };
   if (!res.ok || body.error) {
-    throw new ApiError(res.status, body.error?.message ?? res.statusText ?? "Request failed");
+    throw new ApiError(
+      res.status,
+      body.error?.message ?? res.statusText ?? "Request failed",
+      body.error?.code
+    );
   }
   return body.data as T;
 }
@@ -35,7 +37,7 @@ function authHeaders(): HeadersInit {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: "GET",
     headers: authHeaders(),
   });
@@ -43,7 +45,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(body),
@@ -52,7 +54,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: "PUT",
     headers: authHeaders(),
     body: JSON.stringify(body),
@@ -61,7 +63,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: "PATCH",
     headers: authHeaders(),
     body: JSON.stringify(body),
@@ -70,7 +72,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     method: "DELETE",
     headers: authHeaders(),
   });

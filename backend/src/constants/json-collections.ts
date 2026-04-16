@@ -13,12 +13,20 @@ export const ARRAY_JSON_COLLECTIONS = [
   "stockMovements",
   "productPurchases",
   "followUps",
+  "serviceCategories",
+  "notifications",
 ] as const;
 
 export type ArrayJsonCollection = (typeof ARRAY_JSON_COLLECTIONS)[number];
 
 /** Single-document collections (fixed entityId). */
-export const SINGLETON_COLLECTIONS = ["dashboardStats", "expenseMeta"] as const;
+export const SINGLETON_COLLECTIONS = [
+  "dashboardStats",
+  "expenseMeta",
+  "cashBank",
+  "payroll",
+  "membership",
+] as const;
 
 export type SingletonCollection = (typeof SINGLETON_COLLECTIONS)[number];
 

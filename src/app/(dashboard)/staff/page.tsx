@@ -111,7 +111,7 @@ export default function StaffPage() {
   const authRole = useAuthStore((s) => s.user?.role);
   const authUser = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
-  const defaultBranchId = branches.find((b) => b.isActive)?.id ?? branches[0]?.id ?? "br-001";
+  const defaultBranchId = branches.find((b) => b.isActive)?.id ?? branches[0]?.id ?? "br-main";
   const branchLocked =
     authRole === "BRANCH_MANAGER" || authRole === "MANAGER";
 

@@ -19,5 +19,5 @@ export function resolveSessionBranchId(
   homeBranchId: string | undefined
 ): string {
   if (currentBranch && !isAllBranchesScope(currentBranch)) return currentBranch.id;
-  return homeBranchId ?? "br-001";
+  return homeBranchId ?? "br-main";
 }

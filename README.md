@@ -39,7 +39,7 @@ src/
 │   ├── shared/          # PageHeader, DataTable, KPICard, Breadcrumbs, etc.
 │   └── ui/              # Radix-based primitives (Button, Card, Dialog, etc.)
 ├── lib/
-│   ├── mock-data/       # Mock data split by entity
+│   ├── api-client.ts    # Calls Express API (Postgres via Prisma)
 │   └── utils.ts         # formatCurrency, formatDate, cn, etc.
 ├── store/               # Zustand stores (auth, sidebar, notification, settings)
 └── types/               # Shared TypeScript interfaces and types
@@ -92,7 +92,7 @@ Add `"use client"` at the top of every file that uses hooks, browser APIs, or ev
 
 | Item | Convention | Example |
 |---|---|---|
-| Files & folders | kebab-case | `page-header.tsx`, `mock-data/` |
+| Files & folders | kebab-case | `page-header.tsx`, `collection-sync.ts` |
 | Page components | `export default function XxxPage()` | `DashboardPage`, `CustomersPage` |
 | Shared components | `export function XxxYyy()` | `PageHeader`, `KPICard` |
 | TypeScript types/interfaces | PascalCase | `JobCard`, `UserRole` |
@@ -163,11 +163,11 @@ Never use bare `toast("message")` — always use `.success()`, `.error()`, or `.
 - Use `import type { X }` for type-only imports
 - Never duplicate type definitions inline — import from `@/types`
 
-### Mock Data
+### Data
 
-- Store mock data in `src/lib/mock-data/` split by entity (e.g. `inventory.ts`, `reminders.ts`)
-- Re-export everything from `src/lib/mock-data/index.ts`
-- Always import from `@/lib/mock-data` (the barrel), never from individual files
+- **Relational data** (branches, users, customers, vehicles) lives in Postgres and is loaded via `/api/bootstrap` and entity routes.
+- **Document-style data** (job cards, invoices, cash bank state, payroll, etc.) is stored in `AppJsonRow` and synced via `/api/collections/*`.
+- Optional seed: `cd backend && npm run db:seed` (minimal starter branch + admin; password `password` for `admin@local.dev` until you change it).
 
 ### Utilities
 

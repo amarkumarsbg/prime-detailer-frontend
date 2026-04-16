@@ -44,6 +44,14 @@ import { useQuotationStore } from "@/store/quotation-store";
 import { useAuthStore } from "@/store/auth-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency } from "@/lib/utils";
+import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import {
+  sendCustomerWhatsApp,
+  openWhatsAppComposer,
+  isWhatsAppNotConfiguredError,
+} from "@/lib/whatsapp-send";
+import { useNotificationStore } from "@/store/notification-store";
+import { ApiError } from "@/lib/api-client";
 import {
   findVehicleByNormalizedReg,
   INDIAN_VEHICLE_REG_HINT,
@@ -366,8 +374,7 @@ export default function QuotationsPage() {
     resetForm();
   };
 
-  const handleSendWhatsApp = (q: Quotation, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const finalizeQuotationWhatsApp = (q: Quotation) => {
     const now = new Date().toISOString();
     const patch: Partial<Quotation> = {
       sentViaWhatsApp: true,
@@ -385,9 +392,41 @@ export default function QuotationsPage() {
       entityLabel: q.quotationNumber,
       details: `Estimate ${q.quotationNumber} sent to ${q.customerName} via WhatsApp`,
     });
-    toast.success("Quotation sent via WhatsApp", {
-      description: `Estimate sent to ${q.customerName} at ${q.customerPhone}`,
-    });
+  };
+
+  const handleSendWhatsApp = async (q: Quotation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const message = buildQuotationWhatsAppMessage(q);
+    const phone = q.customerPhone;
+    const notify = (channel: "api" | "composer") => {
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: channel === "api" ? "Quotation sent via WhatsApp" : "Quotation — WhatsApp composer",
+        message: `${q.quotationNumber} → ${phone}`,
+        href: "/quotations",
+      });
+    };
+    try {
+      await sendCustomerWhatsApp(phone, message);
+      finalizeQuotationWhatsApp(q);
+      toast.success("Quotation sent via WhatsApp", {
+        description: `${q.customerName} · ${phone}`,
+      });
+      notify("api");
+    } catch (err) {
+      if (isWhatsAppNotConfiguredError(err)) {
+        openWhatsAppComposer(phone, message);
+        finalizeQuotationWhatsApp(q);
+        toast.info("WhatsApp opened", {
+          description: "Finish sending in the app, or configure Twilio WhatsApp on the server.",
+        });
+        notify("composer");
+        return;
+      }
+      toast.error("WhatsApp failed", {
+        description: err instanceof ApiError ? err.message : "Could not send",
+      });
+    }
   };
 
   const handleConvertToJobCard = (q: Quotation, e: React.MouseEvent) => {
@@ -417,7 +456,7 @@ export default function QuotationsPage() {
     const newJob: JobCard = {
       id: jobId,
       jobNumber,
-      branchId: "br-001",
+      branchId: "br-main",
       customerId: q.customerId,
       customerName: q.customerName,
       customerPhone: q.customerPhone,

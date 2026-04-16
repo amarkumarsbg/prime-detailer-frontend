@@ -1,6 +1,4 @@
 import { Redis } from "@upstash/redis";
-import { attendanceRecords as seedRecords } from "@/lib/mock-data/attendance";
-import { staff as seedStaff } from "@/lib/mock-data/staff";
 import { applyPunchToRecords } from "@/lib/attendance-punch-logic";
 import type { AttendanceRecord, User, UserRole } from "@/types";
 import { format } from "date-fns";
@@ -30,7 +28,7 @@ function mergeClock(
 function padHhMm(t: string): string {
   const [h, m] = t.split(":");
   if (h == null || m == null) return t;
-  return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+  return `${h.padStart(2, "0")}:${m}`;
 }
 
 const REDIS_KEY = "attendance:records:v1";
@@ -53,9 +51,12 @@ function getRedis(): Redis | null {
   return redisSingleton;
 }
 
+/** No demo seed — records come from punches only (or Redis restore). */
+const EMPTY_SEED: AttendanceRecord[] = [];
+
 function getMutableRecords(): AttendanceRecord[] {
   if (!globalForAttendance.__serverAttendanceRecords) {
-    globalForAttendance.__serverAttendanceRecords = [...seedRecords];
+    globalForAttendance.__serverAttendanceRecords = [...EMPTY_SEED];
   }
   return globalForAttendance.__serverAttendanceRecords;
 }
@@ -67,7 +68,7 @@ async function readRecords(): Promise<AttendanceRecord[]> {
   }
   const raw = await r.get(REDIS_KEY);
   if (raw == null || raw === "") {
-    return [...seedRecords];
+    return [...EMPTY_SEED];
   }
   if (Array.isArray(raw)) {
     return raw as AttendanceRecord[];
@@ -75,12 +76,12 @@ async function readRecords(): Promise<AttendanceRecord[]> {
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw) as AttendanceRecord[];
-      return Array.isArray(parsed) ? parsed : [...seedRecords];
+      return Array.isArray(parsed) ? parsed : [...EMPTY_SEED];
     } catch {
-      return [...seedRecords];
+      return [...EMPTY_SEED];
     }
   }
-  return [...seedRecords];
+  return [...EMPTY_SEED];
 }
 
 async function writeRecords(records: AttendanceRecord[]): Promise<void> {
@@ -97,7 +98,7 @@ export async function getServerAttendanceRecords(): Promise<AttendanceRecord[]> 
 }
 
 export async function resetServerAttendanceToSeed(): Promise<void> {
-  const next = [...seedRecords];
+  const next = [...EMPTY_SEED];
   await writeRecords(next);
 }
 
@@ -105,13 +106,12 @@ export async function serverPunch(
   staffId: string,
   branchId: string,
   now = new Date(),
-  /** Staff added in-app (not in seed) — client sends name/role after PIN check (demo trust). */
+  /** Resolved staff from DB (dashboard / punch UI) — required when no local seed list exists. */
   snapshot?: { name: string; role: UserRole },
-  /** Phone/browser local calendar day + time so records match the dashboard date filter on Vercel (UTC). */
   clientClock?: { clientLocalDate?: string; clientLocalTime?: string }
 ) {
-  let staffMember: User | undefined = seedStaff.find((s) => s.id === staffId);
-  if (!staffMember && snapshot) {
+  let staffMember: User | undefined;
+  if (snapshot) {
     staffMember = {
       id: staffId,
       name: snapshot.name,

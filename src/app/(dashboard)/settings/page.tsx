@@ -133,7 +133,6 @@ export default function SettingsPage() {
   const [reminderOilChange, setReminderOilChange] = useState("3months");
   const [reminderPpfMaintenance, setReminderPpfMaintenance] = useState("6months");
   const [reminderCeramicMaintenance, setReminderCeramicMaintenance] = useState("6months");
-  const [whatsappReminderEnabled, setWhatsappReminderEnabled] = useState(true);
   const [reminderLeadDays, setReminderLeadDays] = useState("7");
 
   const [newHesName, setNewHesName] = useState("");
@@ -502,7 +501,10 @@ export default function SettingsPage() {
                       <p className="text-xs text-muted-foreground">Send service reminders via WhatsApp</p>
                     </div>
                   </div>
-                  <ToggleSwitch enabled={whatsappReminderEnabled} onToggle={() => setWhatsappReminderEnabled((v) => !v)} />
+                  <ToggleSwitch
+                    enabled={settings.whatsappReminderEnabled}
+                    onToggle={() => settings.setWhatsappReminderEnabled(!settings.whatsappReminderEnabled)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Reminder Lead Days</Label>
