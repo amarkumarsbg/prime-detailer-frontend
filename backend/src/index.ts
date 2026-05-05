@@ -23,6 +23,16 @@ app.use(
 );
 app.use(express.json());
 
+app.get("/", (_req, res) => {
+  res.json({
+    ok: true,
+    name: "Prime Detailers API",
+    hint: "Use the Next.js app in your browser (usually port 3000), not this URL alone.",
+    frontend: env.FRONTEND_ORIGIN,
+    endpoints: { health: "/health", api: "/api" },
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });

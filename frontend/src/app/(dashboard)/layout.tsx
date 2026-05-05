@@ -52,7 +52,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     toast.error(bootstrapError, {
       id: "bootstrap-load-error",
       duration: 10_000,
-      description: "Check that the API is running (backend npm run dev) and NEXT_PUBLIC_API_URL points to it.",
+      description:
+        "Check that the API is running (cd backend && npm run dev) and NEXT_PUBLIC_API_URL points to it.",
     });
   }, [bootstrapError]);
 

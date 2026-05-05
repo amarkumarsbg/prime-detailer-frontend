@@ -4,12 +4,25 @@ A modern garage/auto-service management platform built with Next.js, Tailwind CS
 
 ## Getting Started
 
+**Frontend** (Next.js) — one terminal:
+
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+**Backend** (API) — another terminal:
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser. The API listens on [http://localhost:4000](http://localhost:4000) by default.
+
+From the repo root you can also run `npm run dev:frontend` or `npm run dev:backend` (shortcuts to the same commands).
 
 ## Attendance (Vercel / QR)
 
@@ -29,7 +42,7 @@ On Vercel, each serverless function can run on a **different instance** with its
 ## Project Structure
 
 ```
-src/
+frontend/src/
 ├── app/
 │   ├── (auth)/          # Login, signup, forgot-password
 │   ├── (dashboard)/     # All dashboard pages
@@ -199,4 +212,4 @@ Never use bare `toast("message")` — always use `.success()`, `.error()`, or `.
 
 ## Deployment
 
-Deploy on [Vercel](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) or any Node.js hosting. See the [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying) for details.
+Deploy the **frontend** from the `frontend/` directory on [Vercel](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) (set the project root to `frontend` if the repo is split this way). Deploy the **backend** separately as a Node service. See the [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying) for details.
