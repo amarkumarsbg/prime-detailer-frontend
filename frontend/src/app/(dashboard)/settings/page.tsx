@@ -118,6 +118,7 @@ export default function SettingsPage() {
   const [notifNewCustomer, setNotifNewCustomer] = useState(false);
   const [notifLowStock, setNotifLowStock] = useState(true);
   const [autoCleanupDays, setAutoCleanupDays] = useState("10");
+
   const [currency, setCurrency] = useState("INR");
   const [timeZone, setTimeZone] = useState("Asia/Kolkata");
 

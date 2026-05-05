@@ -64,7 +64,21 @@ export default function LoginPage() {
     if (result.ok) {
       setOtp("");
       setOtpSent(true);
-      toast.success("OTP sent to your mobile number");
+      if (result.delivery === "sms") {
+        toast.success("OTP sent to your mobile number");
+      } else if (result.devDemoCode) {
+        toast.success("Dev mode — no SMS", {
+          description: `Use code ${result.devDemoCode}, or copy the OTP from the API terminal (backend).`,
+          duration: 12_000,
+        });
+      } else if (result.hint) {
+        toast.warning("OTP not sent via SMS", {
+          description: result.hint,
+          duration: 10_000,
+        });
+      } else {
+        toast.success("OTP ready — check SMS or server logs");
+      }
     } else {
       toast.error(result.message);
       setError(result.message);

@@ -46,7 +46,9 @@ export interface CashBankTransaction {
 }
 
 function persist(accounts: CashBankAccount[], transactions: CashBankTransaction[]) {
-  void putSingletonDocument("cashBank", { accounts, transactions }).catch(console.error);
+  void putSingletonDocument("cashBank", { accounts, transactions }).catch((err) => {
+    if (process.env.NODE_ENV !== "production") console.error(err);
+  });
 }
 
 export interface CashBankStore {

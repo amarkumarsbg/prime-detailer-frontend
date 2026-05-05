@@ -8,7 +8,14 @@ import { buildApiUrl } from "@/lib/api-base";
 
 type SignupResult = { ok: true } | { ok: false; message: string };
 
-export type SendLoginOtpResult = { ok: true } | { ok: false; message: string };
+export type SendLoginOtpResult =
+  | {
+      ok: true;
+      delivery?: "sms" | "log_only";
+      hint?: string;
+      devDemoCode?: string;
+    }
+  | { ok: false; message: string };
 
 interface AuthState {
   user: User | null;
@@ -54,6 +61,12 @@ export const useAuthStore = create<AuthState>()(
             body: JSON.stringify({ phone: digits }),
           });
           const body = (await res.json()) as {
+            data?: {
+              ok?: boolean;
+              delivery?: "sms" | "log_only";
+              hint?: string;
+              devDemoCode?: string;
+            } | null;
             error?: { message?: string } | null;
           };
           if (!res.ok || body.error) {
@@ -62,7 +75,13 @@ export const useAuthStore = create<AuthState>()(
               message: body.error?.message ?? "Could not send OTP. Try again.",
             };
           }
-          return { ok: true as const };
+          const d = body.data;
+          return {
+            ok: true as const,
+            delivery: d?.delivery,
+            hint: typeof d?.hint === "string" ? d.hint : undefined,
+            devDemoCode: typeof d?.devDemoCode === "string" ? d.devDemoCode : undefined,
+          };
         } catch {
           return {
             ok: false as const,

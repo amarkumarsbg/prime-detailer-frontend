@@ -25,7 +25,9 @@ export interface Notification {
 }
 
 function persist(notifications: Notification[]) {
-  void postCollectionSnapshot("notifications", notifications).catch(console.error);
+  void postCollectionSnapshot("notifications", notifications).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.error(err);
+    });
 }
 
 interface NotificationState {

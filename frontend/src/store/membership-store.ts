@@ -34,7 +34,9 @@ function isSubscriptionActiveNow(sub: CustomerMembership): boolean {
 }
 
 function persistMembership(packages: MembershipPackage[], subscriptions: CustomerMembership[]) {
-  void putSingletonDocument("membership", { packages, subscriptions }).catch(console.error);
+  void putSingletonDocument("membership", { packages, subscriptions }).catch((err) => {
+    if (process.env.NODE_ENV !== "production") console.error(err);
+  });
 }
 
 interface MembershipState {

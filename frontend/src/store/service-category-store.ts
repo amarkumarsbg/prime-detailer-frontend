@@ -5,7 +5,9 @@ import { postCollectionSnapshot } from "@/lib/collection-sync";
 import type { ServiceCategoryRecord } from "@/types";
 
 function persist(categories: ServiceCategoryRecord[]) {
-  void postCollectionSnapshot("serviceCategories", categories).catch(console.error);
+  void postCollectionSnapshot("serviceCategories", categories).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.error(err);
+    });
 }
 
 interface ServiceCategoryState {

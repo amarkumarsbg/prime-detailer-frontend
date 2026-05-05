@@ -229,7 +229,6 @@ export default function AdvancedReportsPage() {
       });
       toast.success("PDF downloaded", { description: "Executive summary saved." });
     } catch (e) {
-      console.error(e);
       toast.error("Could not generate PDF", {
         description: e instanceof Error ? e.message : "Unknown error",
       });

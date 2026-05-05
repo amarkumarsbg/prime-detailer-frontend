@@ -48,7 +48,13 @@ app.use("/api/messaging", messagingRouter);
 
 app.use(errorHandler);
 
+const isProduction = process.env.NODE_ENV === "production";
+
 app.listen(env.PORT, () => {
+  if (isProduction) {
+    console.log(`API listening on port ${env.PORT}`);
+    return;
+  }
   console.log(`API listening on http://localhost:${env.PORT}`);
   if (isTwilioSmsEnabled()) {
     const sid = env.TWILIO_ACCOUNT_SID ?? "";

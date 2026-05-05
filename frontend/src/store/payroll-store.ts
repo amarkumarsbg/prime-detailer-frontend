@@ -50,7 +50,9 @@ function workingDaysInMonth(year: number, month: number): number {
 }
 
 function persistPayroll(salaryStructures: SalaryStructure[], payrollRecords: PayrollRecord[]) {
-  void putSingletonDocument("payroll", { salaryStructures, payrollRecords }).catch(console.error);
+  void putSingletonDocument("payroll", { salaryStructures, payrollRecords }).catch((err) => {
+    if (process.env.NODE_ENV !== "production") console.error(err);
+  });
 }
 
 interface PayrollStore {

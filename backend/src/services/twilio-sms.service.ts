@@ -77,6 +77,11 @@ function whatsappChannelAddress(raw: string): string {
   return `whatsapp:${inner}`;
 }
 
+/** E.164 → `whatsapp:+…` as Twilio expects for WhatsApp `to` / `from`. */
+export function toTwilioWhatsAppAddress(phoneInput: string): string {
+  return whatsappChannelAddress(normalizePhoneToE164(phoneInput));
+}
+
 export async function sendLoginOtpSms(
   e164To: string,
   code: string
@@ -111,6 +116,40 @@ export type WhatsAppTemplateSend = {
   contentVariables?: Record<string, string>;
 };
 
+export type TwilioWhatsAppSendResult = {
+  sid: string;
+  status: string;
+  /** Populated after a short refresh when Twilio reports a delivery/API error */
+  twilioErrorCode?: number | null;
+  twilioErrorMessage?: string | null;
+};
+
+async function fetchMessageOutcome(sid: string): Promise<{
+  status?: string;
+  errorCode?: number | null;
+  errorMessage?: string | null;
+}> {
+  const client = getClient();
+  /** Twilio often leaves error fields empty until the message leaves `queued`. */
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await new Promise((r) => setTimeout(r, attempt === 0 ? 500 : 2000));
+    const m = await client.messages(sid).fetch();
+    const errorCode = m.errorCode ?? null;
+    const errorMessage = (m.errorMessage as string | null) ?? null;
+    const status = m.status ?? undefined;
+    const terminalFail =
+      status === "undelivered" ||
+      status === "failed" ||
+      (typeof errorCode === "number" && errorCode > 0) ||
+      (errorMessage != null && errorMessage.length > 0);
+    const terminalOk = status === "delivered" || status === "read" || status === "sent";
+    if (terminalFail || terminalOk || (status && status !== "queued" && status !== "accepted")) {
+      return { status, errorCode, errorMessage };
+    }
+  }
+  return {};
+}
+
 /**
  * Send WhatsApp via Twilio.
  * - Pass a string for a free-form `body` (session / sandbox).
@@ -119,14 +158,13 @@ export type WhatsAppTemplateSend = {
 export async function sendWhatsAppMessage(
   toPhoneInput: string,
   messageBodyOrTemplate: string | WhatsAppTemplateSend
-): Promise<{ sid: string; status: string }> {
+): Promise<TwilioWhatsAppSendResult> {
   if (!isTwilioWhatsAppEnabled()) {
     throw new Error(
       "Twilio WhatsApp is not configured (set TWILIO_WHATSAPP_FROM=whatsapp:+… with the same account credentials as SMS)"
     );
   }
-  const e164 = normalizePhoneToE164(toPhoneInput);
-  const to = whatsappChannelAddress(e164);
+  const to = toTwilioWhatsAppAddress(toPhoneInput);
   const from = whatsappChannelAddress(env.TWILIO_WHATSAPP_FROM!.trim());
 
   const isTemplate = typeof messageBodyOrTemplate === "object" && messageBodyOrTemplate !== null;
@@ -149,5 +187,24 @@ export async function sendWhatsAppMessage(
         body: messageBodyOrTemplate,
       });
 
-  return { sid: msg.sid, status: msg.status ?? "unknown" };
+  const out: TwilioWhatsAppSendResult = {
+    sid: msg.sid,
+    status: msg.status ?? "unknown",
+    twilioErrorCode: typeof msg.errorCode === "number" ? msg.errorCode : null,
+    twilioErrorMessage: (msg.errorMessage as string | null) ?? null,
+  };
+
+  const later = await fetchMessageOutcome(msg.sid);
+  if (later.status) out.status = later.status;
+  if (later.errorCode !== undefined && later.errorCode !== null) out.twilioErrorCode = later.errorCode;
+  if (later.errorMessage !== undefined && later.errorMessage) out.twilioErrorMessage = later.errorMessage;
+
+  if (process.env.NODE_ENV !== "production") {
+    const err =
+      out.twilioErrorCode != null && out.twilioErrorCode !== 0
+        ? ` error=${out.twilioErrorCode} ${out.twilioErrorMessage ?? ""}`
+        : "";
+    console.info(`[twilio/whatsapp] sid=${out.sid} status=${out.status} from=${from} to=${to}${err}`);
+  }
+  return out;
 }

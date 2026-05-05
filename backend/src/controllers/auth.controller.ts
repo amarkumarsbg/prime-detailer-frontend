@@ -99,6 +99,7 @@ function authSuccessResponse(user: User, branch: Branch | null) {
 }
 
 export async function sendLoginOtp(req: Request, res: Response, next: NextFunction) {
+  const isProduction = process.env.NODE_ENV === "production";
   try {
     const body = otpSendSchema.parse(req.body);
     const user = await findActiveUserByTenDigitPhone(body.phone);
@@ -111,25 +112,55 @@ export async function sendLoginOtp(req: Request, res: Response, next: NextFuncti
     }
     const code = issueLoginOtp(body.phone);
     const e164 = toE164(body.phone);
+
+    /** Real SMS vs console-only — never put the OTP in HTTP responses */
+    let delivery: "sms" | "log_only" = "log_only";
+
     if (isTwilioSmsEnabled()) {
       try {
         const { sid, status } = await sendLoginOtpSms(e164, code);
-        console.info(
-          `[auth/otp] Twilio accepted SMS sid=${sid} status=${status} to=${e164} (check Twilio Console → Monitor → Message log if not delivered)`
-        );
+        delivery = "sms";
+        if (!isProduction) {
+          console.info(
+            `[auth/otp] Twilio accepted SMS sid=${sid} status=${status} to=${e164} (check Twilio Console → Monitor → Message log if not delivered)`
+          );
+        }
       } catch (err) {
-        console.error("[auth/otp] Twilio send failed:", err);
-        console.info(`[auth/otp] OTP for ${body.phone} (${e164}): ${code}`);
+        if (!isProduction) {
+          console.error("[auth/otp] Twilio send failed:", err);
+          console.info(`[auth/otp] OTP for ${body.phone} (${e164}): ${code}`);
+        } else {
+          console.error("[auth/otp] Twilio send failed");
+        }
         res.status(503).json({
           data: null,
           error: { message: formatTwilioSendError(err) },
         });
         return;
       }
-    } else {
+    } else if (!isProduction) {
       console.info(`[auth/otp] Twilio not configured — OTP for ${body.phone}: ${code}`);
     }
-    res.json({ data: { ok: true as const }, error: null });
+
+    const bypassDisabled = process.env.LOGIN_OTP_DEMO_CODE === "";
+    const demoBypassCode = bypassDisabled ? undefined : (process.env.LOGIN_OTP_DEMO_CODE ?? "1234");
+    const isDev = process.env.NODE_ENV !== "production";
+
+    res.json({
+      data: {
+        ok: true as const,
+        delivery,
+        ...(delivery === "log_only" && {
+          hint: isDev
+            ? demoBypassCode !== undefined
+              ? "SMS not configured — OTP is printed in the API terminal, or use the dev bypass code."
+              : "SMS not configured — OTP is printed only in the API terminal (demo bypass disabled via LOGIN_OTP_DEMO_CODE)."
+            : "SMS is not configured for this server. Contact your administrator.",
+          ...(isDev && demoBypassCode !== undefined ? { devDemoCode: demoBypassCode } : {}),
+        }),
+      },
+      error: null,
+    });
   } catch (e) {
     next(e);
   }

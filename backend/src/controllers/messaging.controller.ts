@@ -1,8 +1,12 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import {
+  isTwilioSmsEnabled,
   isTwilioWhatsAppEnabled,
+  normalizePhoneToE164,
+  sendTransactionalSms,
   sendWhatsAppMessage,
+  toTwilioWhatsAppAddress,
 } from "../services/twilio-sms.service.js";
 
 const postWhatsAppSchema = z
@@ -50,6 +54,71 @@ export async function postWhatsApp(req: Request, res: Response, next: NextFuncti
       });
     }
     res.json({ data: { ok: true as const }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+const testPhoneSchema = z.object({
+  phone: z.string().min(8).max(32),
+});
+
+const TEST_SMS_BODY =
+  "Prime Detailers — test SMS. If you received this, Twilio SMS is working. Replies are not monitored.";
+
+const TEST_WHATSAPP_BODY =
+  "Prime Detailers — test WhatsApp. If you received this, Twilio WhatsApp is working. Replies are not monitored.";
+
+/** Authenticated smoke test for transactional SMS (Twilio). */
+export async function postSmsTest(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { phone } = testPhoneSchema.parse(req.body);
+    if (!isTwilioSmsEnabled()) {
+      res.status(503).json({
+        data: null,
+        error: {
+          message:
+            "SMS not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN (or API keys), and TWILIO_FROM_NUMBER on the API server.",
+          code: "SMS_NOT_CONFIGURED",
+        },
+      });
+      return;
+    }
+    const to = normalizePhoneToE164(phone);
+    await sendTransactionalSms(to, TEST_SMS_BODY);
+    res.json({ data: { ok: true as const }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+/** Authenticated smoke test for WhatsApp (same payload shape as production `/whatsapp`). */
+export async function postWhatsAppTest(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { phone } = testPhoneSchema.parse(req.body);
+    if (!isTwilioWhatsAppEnabled()) {
+      res.status(503).json({
+        data: null,
+        error: {
+          message:
+            "WhatsApp not configured. Set TWILIO_WHATSAPP_FROM (e.g. whatsapp:+14155238886 for Twilio sandbox) with the same account credentials as SMS.",
+          code: "WHATSAPP_NOT_CONFIGURED",
+        },
+      });
+      return;
+    }
+    const result = await sendWhatsAppMessage(phone, TEST_WHATSAPP_BODY);
+    res.json({
+      data: {
+        ok: true as const,
+        twilioMessageSid: result.sid,
+        twilioStatus: result.status,
+        whatsappTo: toTwilioWhatsAppAddress(phone),
+        twilioErrorCode: result.twilioErrorCode ?? null,
+        twilioErrorMessage: result.twilioErrorMessage ?? null,
+      },
+      error: null,
+    });
   } catch (e) {
     next(e);
   }
