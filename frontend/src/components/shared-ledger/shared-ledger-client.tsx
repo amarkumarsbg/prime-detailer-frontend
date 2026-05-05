@@ -156,13 +156,13 @@ export function SharedLedgerClient() {
     setInvoicePayOpen(true);
   };
 
-  const submitInvoicePay = () => {
+  const submitInvoicePay = async () => {
     const inv = invoicePayTarget;
     if (!inv) return;
     const amount = Number(invPayAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
-    const result = recordInvoicePayment(
+    const result = await recordInvoicePayment(
       inv.id,
       {
         invoiceId: inv.id,
@@ -725,7 +725,7 @@ export function SharedLedgerClient() {
               Cancel
             </Button>
             <Button
-              onClick={submitInvoicePay}
+              onClick={() => void submitInvoicePay()}
               disabled={
                 !invPayAmount ||
                 Number.isNaN(Number(invPayAmount)) ||

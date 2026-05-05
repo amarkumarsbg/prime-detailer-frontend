@@ -142,12 +142,12 @@ export default function InvoiceDetailPage() {
     setRecordDialogOpen(true);
   };
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     const amount = Number(paymentAmount);
     if (!invoice || isNaN(amount) || amount <= 0) return;
 
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
-    const result = recordInvoicePayment(
+    const result = await recordInvoicePayment(
       invoice.id,
       {
         invoiceId: invoice.id,
@@ -661,7 +661,7 @@ export default function InvoiceDetailPage() {
               Cancel
             </Button>
             <Button
-              onClick={handleRecordPayment}
+              onClick={() => void handleRecordPayment()}
               disabled={
                 !paymentAmount ||
                 isNaN(Number(paymentAmount)) ||

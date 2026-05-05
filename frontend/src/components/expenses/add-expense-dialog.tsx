@@ -149,8 +149,8 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
     toast.success("Category created.");
   };
 
-  const handleAddVendor = () => {
-    const entry = addVendorDirectoryEntry({
+  const handleAddVendor = async () => {
+    const entry = await addVendorDirectoryEntry({
       name: vName,
       contactPerson: vContact || undefined,
       email: vEmail || undefined,
@@ -622,7 +622,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
             <Button type="button" variant="outline" onClick={() => setVendorDialogOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={handleAddVendor}>
+            <Button type="button" onClick={() => void handleAddVendor()}>
               Create Vendor
             </Button>
           </DialogFooter>

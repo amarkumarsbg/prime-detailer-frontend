@@ -92,7 +92,7 @@ export function CustomerCreditCheckDialog({
     setRecordOpen(true);
   };
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     if (!targetInvoice) return;
     const amount = Number(paymentAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -108,7 +108,7 @@ export function CustomerCreditCheckDialog({
     }
 
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
-    const result = recordInvoicePayment(
+    const result = await recordInvoicePayment(
       targetInvoice.id,
       {
         invoiceId: targetInvoice.id,
@@ -262,7 +262,7 @@ export function CustomerCreditCheckDialog({
             <Button type="button" variant="outline" onClick={() => setRecordOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={handleRecordPayment} disabled={!targetInvoice}>
+            <Button type="button" onClick={() => void handleRecordPayment()} disabled={!targetInvoice}>
               Save payment
             </Button>
           </DialogFooter>
