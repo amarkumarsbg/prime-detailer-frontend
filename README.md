@@ -12,11 +12,19 @@ npm install
 npm run dev
 ```
 
-**Backend** (API) — another terminal:
+**Backend** (API) — PostgreSQL required. Another terminal:
 
 ```bash
 cd backend
 npm install
+npm run db:up
+```
+
+Copy `backend/env.example` → `backend/.env`, set `DATABASE_URL` to `postgresql://prime:prime@localhost:5432/primedetailer?schema=public` (Docker Compose defaults), then:
+
+```bash
+npx prisma migrate deploy
+npm run db:seed
 npm run dev
 ```
 
@@ -212,4 +220,11 @@ Never use bare `toast("message")` — always use `.success()`, `.error()`, or `.
 
 ## Deployment
 
-Deploy the **frontend** from the `frontend/` directory on [Vercel](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) (set the project root to `frontend` if the repo is split this way). Deploy the **backend** separately as a Node service. See the [Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying) for details.
+**Stack:** [Vercel](https://vercel.com) (Next.js from `frontend/`) · Render/Railway (Express from `backend/`) · [Neon](https://neon.tech) or any Postgres (`DATABASE_URL`).
+
+1. **Database:** Create Postgres on Neon; copy the URL (append `?sslmode=require` if required).
+2. **API:** Create a Node Web Service with root **`backend`**. Build: `npm ci && npm run db:generate && npm run build`. Start: `npx prisma migrate deploy && npm start`. Env at minimum: `DATABASE_URL`, `JWT_SECRET` (≥16 chars), `FRONTEND_ORIGIN` (exact Vercel URL), `NODE_ENV=production`. Optional: repo-root [`render.yaml`](render.yaml) blueprint (you still must add secrets in the dashboard).
+3. **Seed (once):** With prod `DATABASE_URL` set locally: `cd backend && npx prisma migrate deploy && npm run db:seed`.
+4. **Frontend:** Import repo with root **`frontend`**. Set **`NEXT_PUBLIC_API_URL`** to your API origin (e.g. `https://your-api.onrender.com`), no trailing slash — browsers call `/api/...` on that host.
+
+Examples: [`backend/env.example`](backend/env.example), [`frontend/env.example`](frontend/env.example). See also [Next.js deployment](https://nextjs.org/docs/app/building-your-application/deploying).

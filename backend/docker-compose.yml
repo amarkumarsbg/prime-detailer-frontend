@@ -1,4 +1,4 @@
-# Optional local PostgreSQL — use only if Prisma schema datasource is PostgreSQL again.
+# Local PostgreSQL for development (`npm run db:up` from backend/).
 
 services:
   postgres:

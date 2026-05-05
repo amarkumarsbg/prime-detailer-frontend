@@ -1,0 +1,14 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Set DATABASE_URL (Neon), JWT_SECRET, FRONTEND_ORIGIN, and Twilio vars in the Render dashboard.
+
+services:
+  - type: web
+    name: prime-detailers-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run db:generate && npm run build
+    startCommand: npx prisma migrate deploy && npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
