@@ -13,10 +13,24 @@ export class ApiError extends Error {
 }
 
 async function parseResponse<T>(res: Response): Promise<T> {
-  const body = (await res.json()) as {
+  const text = await res.text();
+  let body: {
     data: T | null;
     error: { message?: string; code?: string } | null;
   };
+  try {
+    body = text ? (JSON.parse(text) as typeof body) : { data: null, error: { message: "Empty response" } };
+  } catch {
+    const hint =
+      res.status >= 500
+        ? " Server may be waking up (Render free tier) — wait ~60s and retry. Also verify NEXT_PUBLIC_API_URL has no trailing /api."
+        : "";
+    const preview = text.replace(/\s+/g, " ").trim().slice(0, 180);
+    throw new ApiError(
+      res.status,
+      preview ? `${preview}${hint}` : `Non-JSON response (${res.status}).${hint}`
+    );
+  }
   if (!res.ok || body.error) {
     throw new ApiError(
       res.status,

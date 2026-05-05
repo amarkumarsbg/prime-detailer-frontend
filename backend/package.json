@@ -20,11 +20,13 @@
   "dependencies": {
     "@prisma/client": "^6.19.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.16.5",
     "bcryptjs": "^3.0.2",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",

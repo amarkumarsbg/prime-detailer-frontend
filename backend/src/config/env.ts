@@ -8,6 +8,27 @@ function trimOpt(v: unknown): string | undefined {
   return s === "" ? undefined : s;
 }
 
+/** Neon CLI/UI sometimes adds `channel_binding=require`, which breaks `pg` in several Linux/container setups (plain-text "Internal Server Error" from the proxy). */
+export function sanitizeDatabaseUrl(raw: string): string {
+  let url = raw.trim();
+  url = url.replace(/[?&]channel_binding=require\b/gi, "");
+  url = url.replace(/&&+/g, "&").replace(/\?&/g, "?").replace(/\?$/, "").replace(/&$/g, "");
+
+  const hostMatch = url.match(/^postgres(?:ql)?:\/\/[^@]*@([^/:]+)/i);
+  const host = hostMatch?.[1] ?? "";
+  const isNeonPooler = host.includes("-pooler.");
+
+  if (isNeonPooler && !/[?&]pgbouncer=true\b/i.test(url)) {
+    url += url.includes("?") ? "&" : "?";
+    url += "pgbouncer=true";
+  }
+  if (!/[?&]connect_timeout=\d+/i.test(url)) {
+    url += url.includes("?") ? "&" : "?";
+    url += "connect_timeout=60";
+  }
+  return url;
+}
+
 const schema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
@@ -32,7 +53,7 @@ const schema = z.object({
 });
 
 export const env = schema.parse({
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL: sanitizeDatabaseUrl(process.env.DATABASE_URL ?? ""),
   JWT_SECRET: process.env.JWT_SECRET,
   PORT: process.env.PORT,
   FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,

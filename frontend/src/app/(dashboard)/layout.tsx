@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       id: "bootstrap-load-error",
       duration: 10_000,
       description:
-        "Check that the API is running (cd backend && npm run dev) and NEXT_PUBLIC_API_URL points to it.",
+        "Production: check NEXT_PUBLIC_API_URL (API origin only, no /api) and FRONTEND_ORIGIN on Render. Wait ~60s if Render was asleep.",
     });
   }, [bootstrapError]);
 

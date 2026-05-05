@@ -1,4 +1,5 @@
 import "dotenv/config";
+import compression from "compression";
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
@@ -13,7 +14,11 @@ import { errorHandler } from "./middleware/error-handler.js";
 import { isTwilioSmsEnabled, isTwilioWhatsAppEnabled } from "./services/twilio-sms.service.js";
 import { messagingRouter } from "./routes/messaging.routes.js";
 
+import { prisma } from "./lib/prisma.js";
+
 const app = express();
+
+app.use(compression());
 
 app.use(
   cors({
@@ -29,12 +34,21 @@ app.get("/", (_req, res) => {
     name: "Prime Detailers API",
     hint: "Use the Next.js app in your browser (usually port 3000), not this URL alone.",
     frontend: env.FRONTEND_ORIGIN,
-    endpoints: { health: "/health", api: "/api" },
+    endpoints: { health: "/health", healthDb: "/health/db", api: "/api" },
   });
 });
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/health/db", async (_req, res, next) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, database: "up" });
+  } catch (e) {
+    next(e);
+  }
 });
 
 app.use("/api/auth", authRouter);
