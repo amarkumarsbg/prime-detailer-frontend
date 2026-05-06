@@ -18,6 +18,8 @@ export type AddPickupDropInput = {
   jobNumber: string;
   branchId: string;
   customerName: string;
+  vehicleMakeModel?: string;
+  vehicleRegNumber?: string;
   customerPhone?: string;
   address: string;
   scheduledTime: string;
@@ -46,6 +48,8 @@ export const usePickupDropStore = create<PickupDropStore>()(
           jobNumber: input.jobNumber,
           branchId: input.branchId,
           customerName: input.customerName,
+          vehicleMakeModel: input.vehicleMakeModel?.trim() || undefined,
+          vehicleRegNumber: input.vehicleRegNumber?.trim() || undefined,
           customerPhone: input.customerPhone?.trim() || undefined,
           address: input.address,
           scheduledTime: input.scheduledTime,

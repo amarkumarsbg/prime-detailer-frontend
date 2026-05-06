@@ -202,6 +202,8 @@ export default function PickupDropPage() {
         jobNumber: jc.jobNumber,
         branchId: jc.branchId,
         customerName: jc.customerName,
+        vehicleMakeModel: jc.vehicleMakeModel,
+        vehicleRegNumber: jc.vehicleRegNumber,
         customerPhone: jc.customerPhone,
         address,
         scheduledTime: jc.expectedDelivery,

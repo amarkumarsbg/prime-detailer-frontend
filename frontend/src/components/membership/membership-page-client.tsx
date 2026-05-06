@@ -34,10 +34,12 @@ import {
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
 import { formatDate, formatInrFull } from "@/lib/utils";
 import { Crown, Package, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
 
 const TIER_OPTIONS: { value: MembershipTier; label: string }[] = [
   { value: "MONTHLY", label: "Monthly (~30 days)" },
@@ -81,6 +83,7 @@ export function MembershipPageClient() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const customers = useCustomerStore((s) => s.customers);
   const vehicles = useVehicleStore((s) => s.vehicles);
+  const businessName = useSettingsStore((s) => s.businessName);
 
   const activeServices = useMemo(
     () => [...catalog].filter((s) => s.isActive).sort((a, b) => a.name.localeCompare(b.name)),
@@ -213,6 +216,26 @@ export function MembershipPageClient() {
     if (!res.ok) {
       toast.error(res.error);
       return;
+    }
+    const pkg = packages.find((p) => p.id === assignPackageId);
+    const cust = customers.find((c) => c.id === assignCustomerId);
+    const veh = vehicles.find((v) => v.id === assignVehicleId);
+    const subRow = useMembershipStore.getState().subscriptions.find((s) => s.id === res.id);
+    if (pkg && cust && subRow) {
+      const names = pkg.includedServiceIds
+        .map((sid) => catalog.find((c) => c.id === sid)?.name)
+        .filter((n): n is string => Boolean(n));
+      notifyMembershipWelcomeWhatsApp({
+        customerPhone: cust.phone,
+        customerName: cust.name,
+        customerId: cust.id,
+        businessName,
+        packageName: pkg.name,
+        tier: pkg.tier,
+        validUntilIso: subRow.endDate,
+        vehicleReg: veh?.registrationNumber,
+        includedServiceNames: names,
+      });
     }
     toast.success("Membership activated (demo).");
     setAssignCustomerId("");

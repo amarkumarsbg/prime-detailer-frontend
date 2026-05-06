@@ -47,6 +47,8 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useExpenseStore } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency, cn, formatDate } from "@/lib/utils";
 import type { Expense, ExpensePaymentMethod, Invoice, PaymentMethod } from "@/types";
@@ -131,6 +133,7 @@ export function SharedLedgerClient() {
   const vendorDirectory = useExpenseStore((s) => s.vendorDirectory);
   const vendorSuggestions = useExpenseStore((s) => s.vendorSuggestions);
   const user = useAuthStore((s) => s.user);
+  const businessName = useSettingsStore((s) => s.businessName);
 
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -162,6 +165,9 @@ export function SharedLedgerClient() {
     const amount = Number(invPayAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
+    const paidAt = new Date().toISOString();
+    const remainingAfter = Math.max(0, inv.grandTotal - invoicePaidTotal(inv) - amount);
+
     const result = await recordInvoicePayment(
       inv.id,
       {
@@ -169,7 +175,7 @@ export function SharedLedgerClient() {
         amount,
         method: invPayMethod,
         referenceNumber: invPayRef.trim() || undefined,
-        paidAt: new Date().toISOString(),
+        paidAt,
       },
       { performedBy }
     );
@@ -186,6 +192,15 @@ export function SharedLedgerClient() {
       entityId: inv.id,
       entityLabel: inv.invoiceNumber,
       details: `${formatCurrency(amount)} received on ${inv.invoiceNumber}`,
+    });
+    void notifyCustomerPaymentRecordedWhatsApp({
+      invoice: inv,
+      amount,
+      method: invPayMethod,
+      referenceNumber: invPayRef.trim() || undefined,
+      paidAt,
+      remainingBalanceAfter: remainingAfter,
+      businessName,
     });
     setInvoicePayOpen(false);
     setInvoicePayTarget(null);

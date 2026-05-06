@@ -11,7 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
+import { notifyInvoiceCreatedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { useInvoiceStore } from "@/store/invoice-store";
+import { useSettingsStore } from "@/store/settings-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isPendingPaymentInvoice } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
@@ -62,6 +64,9 @@ function BillingFromJobCardEffect() {
 
     if (result.created) {
       toast.success("Invoice created", { description: result.invoiceNumber });
+      const inv = useInvoiceStore.getState().invoices.find((i) => i.id === result.invoiceId);
+      const businessName = useSettingsStore.getState().businessName;
+      if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
     }
     router.replace(`/billing/${result.invoiceId}`);
   }, [jobCardId, router]);

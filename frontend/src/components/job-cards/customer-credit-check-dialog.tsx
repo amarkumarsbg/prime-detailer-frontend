@@ -24,6 +24,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Invoice, PaymentMethod } from "@/types";
@@ -57,6 +59,7 @@ export function CustomerCreditCheckDialog({
   const invoices = useInvoiceStore((s) => s.invoices);
   const recordInvoicePayment = useInvoiceStore((s) => s.recordPayment);
   const user = useAuthStore((s) => s.user);
+  const businessName = useSettingsStore((s) => s.businessName);
 
   const pending = useMemo(() => {
     if (!customerId) return [];
@@ -108,6 +111,12 @@ export function CustomerCreditCheckDialog({
     }
 
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
+    const paidAt = new Date().toISOString();
+    const remainingAfter = Math.max(
+      0,
+      targetInvoice.grandTotal - sumPayments(targetInvoice) - amount
+    );
+
     const result = await recordInvoicePayment(
       targetInvoice.id,
       {
@@ -115,7 +124,7 @@ export function CustomerCreditCheckDialog({
         amount,
         method: paymentMethod,
         referenceNumber: referenceNumber.trim() || undefined,
-        paidAt: new Date().toISOString(),
+        paidAt,
       },
       { performedBy }
     );
@@ -132,6 +141,15 @@ export function CustomerCreditCheckDialog({
       entityId: targetInvoice.id,
       entityLabel: targetInvoice.invoiceNumber,
       details: `${formatCurrency(amount)} received on ${targetInvoice.invoiceNumber} (job card credit check)`,
+    });
+    void notifyCustomerPaymentRecordedWhatsApp({
+      invoice: targetInvoice,
+      amount,
+      method: paymentMethod,
+      referenceNumber: referenceNumber.trim() || undefined,
+      paidAt,
+      remainingBalanceAfter: remainingAfter,
+      businessName,
     });
     setRecordOpen(false);
     setTargetInvoice(null);

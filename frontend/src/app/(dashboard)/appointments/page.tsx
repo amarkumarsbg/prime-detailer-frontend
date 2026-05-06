@@ -58,7 +58,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import type { Appointment, AppointmentStatus, Vehicle, VehicleSegment } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { buildBookingConfirmationMessage } from "@/lib/booking-confirmation-message";
+import { buildBookingWhatsAppMessageCompact } from "@/lib/booking-confirmation-message";
 import {
   sendCustomerWhatsApp,
   openWhatsAppComposer,
@@ -66,6 +66,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import { notifyAppointmentScheduledWhatsApp } from "@/lib/whatsapp-automation-triggers";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -294,6 +295,22 @@ export default function AppointmentsPage() {
     };
 
     addAppointment(newApt);
+    const waTermsUrl = businessWebsite?.trim()
+      ? /^https?:\/\//i.test(businessWebsite.trim())
+        ? businessWebsite.trim()
+        : `https://${businessWebsite.trim()}`
+      : undefined;
+    notifyAppointmentScheduledWhatsApp(newApt, {
+      branchName:
+        currentBranch && !isAllBranchesScope(currentBranch)
+          ? currentBranch.name
+          : branches[0]?.name ?? "Main workshop",
+      address: businessAddress,
+      phone: businessPhone,
+      email: businessEmail,
+      termsUrl: waTermsUrl,
+    });
+
     const [yy, mm, dd] = formDate.split("-").map(Number);
     const scheduledDay = new Date(yy, mm - 1, dd);
 
@@ -372,7 +389,7 @@ export default function AppointmentsPage() {
     const next: Appointment = { ...apt, status: "CONFIRMED" };
     await updateAppointment(apt.id, { status: "CONFIRMED" });
     toast.success("Booking confirmed");
-    const messageText = buildBookingConfirmationMessage(next, businessPayload);
+    const messageText = buildBookingWhatsAppMessageCompact(next, businessPayload);
     await sendBookingConfirmationWhatsApp(next, messageText);
   };
 
@@ -904,7 +921,7 @@ export default function AppointmentsPage() {
                                   onClick={() =>
                                     void sendBookingConfirmationWhatsApp(
                                       apt,
-                                      buildBookingConfirmationMessage(apt, businessPayload)
+                                      buildBookingWhatsAppMessageCompact(apt, businessPayload)
                                     )
                                   }
                                 >
@@ -982,7 +999,7 @@ export default function AppointmentsPage() {
                             onClick={() =>
                               void sendBookingConfirmationWhatsApp(
                                 apt,
-                                buildBookingConfirmationMessage(apt, businessPayload)
+                                buildBookingWhatsAppMessageCompact(apt, businessPayload)
                               )
                             }
                           >

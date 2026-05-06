@@ -46,6 +46,7 @@ import {
   openWhatsAppComposer,
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
+import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import {
@@ -146,6 +147,10 @@ export default function InvoiceDetailPage() {
     const amount = Number(paymentAmount);
     if (!invoice || isNaN(amount) || amount <= 0) return;
 
+    const paidAt = new Date().toISOString();
+    const totalPaidBefore = payments.reduce((sum, p) => sum + p.amount, 0);
+    const remainingAfter = Math.max(0, invoice.grandTotal - totalPaidBefore - amount);
+
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
     const result = await recordInvoicePayment(
       invoice.id,
@@ -154,7 +159,7 @@ export default function InvoiceDetailPage() {
         amount,
         method: paymentMethod,
         referenceNumber: referenceNumber || undefined,
-        paidAt: new Date().toISOString(),
+        paidAt,
       },
       { performedBy }
     );
@@ -170,6 +175,15 @@ export default function InvoiceDetailPage() {
         entityId: invoice.id,
         entityLabel: invoice.invoiceNumber,
         details: `${formatCurrency(amount)} received on ${invoice.invoiceNumber}`,
+      });
+      void notifyCustomerPaymentRecordedWhatsApp({
+        invoice,
+        amount,
+        method: paymentMethod,
+        referenceNumber: referenceNumber || undefined,
+        paidAt,
+        remainingBalanceAfter: remainingAfter,
+        businessName,
       });
     }
     setRecordDialogOpen(false);

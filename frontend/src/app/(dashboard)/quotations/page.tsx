@@ -42,6 +42,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useQuotationStore } from "@/store/quotation-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency } from "@/lib/utils";
 import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
@@ -52,6 +53,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import { notifyQuotationConvertedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import {
   findVehicleByNormalizedReg,
   INDIAN_VEHICLE_REG_HINT,
@@ -132,6 +134,7 @@ export default function QuotationsPage() {
   const updateQuotation = useQuotationStore((s) => s.updateQuotation);
   const getNextQuotationNumber = useQuotationStore((s) => s.getNextQuotationNumber);
   const authUser = useAuthStore((s) => s.user);
+  const businessName = useSettingsStore((s) => s.businessName);
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -508,6 +511,8 @@ export default function QuotationsPage() {
     toast.success("Converted to Job Card", {
       description: `${q.quotationNumber} → ${jobNumber}. Open Job Cards to continue.`,
     });
+
+    notifyQuotationConvertedWhatsApp(q, jobNumber, jobId, businessName);
   };
 
   const handleViewDetails = (q: Quotation, e: React.MouseEvent) => {

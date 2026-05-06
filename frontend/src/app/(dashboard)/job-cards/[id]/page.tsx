@@ -69,6 +69,7 @@ import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useSettingsStore } from "@/store/settings-store";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import { buildJobCardCustomerWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
@@ -78,6 +79,12 @@ import {
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
+import {
+  notifyHighEndAdvanceRecordedWhatsApp,
+  notifyInvoiceCreatedWhatsApp,
+  notifyJobDeliveredWhatsApp,
+  notifyJobReadyWhatsApp,
+} from "@/lib/whatsapp-automation-triggers";
 import {
   buildHighEndReminderMonthIntervals,
   defaultManualFirstFollowUpMonths,
@@ -157,6 +164,7 @@ export default function JobCardDetailPage() {
   );
 
   const invoices = useInvoiceStore((s) => s.invoices);
+  const businessName = useSettingsStore((s) => s.businessName);
   const invoiceForJob = useMemo(
     () => (jobCard ? invoices.find((inv) => inv.jobCardId === jobCard.id) : undefined),
     [invoices, jobCard?.id]
@@ -774,6 +782,23 @@ export default function JobCardDetailPage() {
       highEndAdvanceReference: highEndAdvRef.trim() || undefined,
       updatedAt: nowIso,
     });
+    const prevAmt = jobCard.highEndAdvanceAmountInr ?? 0;
+    if (num > 0 && prevAmt <= 0) {
+      const mergedJob: JobCard = {
+        ...jobCard,
+        highEndAdvanceAmountInr: num,
+        highEndAdvanceCollectedAt: jobCard.highEndAdvanceCollectedAt ?? nowIso,
+        highEndAdvanceMethod: highEndAdvMethod,
+        highEndAdvanceReference: highEndAdvRef.trim() || undefined,
+      };
+      notifyHighEndAdvanceRecordedWhatsApp(
+        mergedJob,
+        businessName,
+        num,
+        highEndAdvMethod,
+        highEndAdvRef.trim() || undefined
+      );
+    }
     toast.success("Advance saved");
   };
 
@@ -954,6 +979,15 @@ export default function JobCardDetailPage() {
 
       updateJobCard(jobCard.id, patch);
 
+      const mergedJob: JobCard = { ...jobCard, ...patch };
+
+      if (nextStatus === "READY") {
+        notifyJobReadyWhatsApp(mergedJob, businessName);
+      }
+      if (nextStatus === "DELIVERED") {
+        notifyJobDeliveredWhatsApp(mergedJob, businessName);
+      }
+
       if (nextStatus === "DELIVERED") {
         pushActivityLog({
           action: "STATUS_CHANGED",
@@ -1035,6 +1069,8 @@ export default function JobCardDetailPage() {
     }
     if (result.created) {
       toast.success("Invoice created", { description: result.invoiceNumber });
+      const inv = useInvoiceStore.getState().invoices.find((i) => i.id === result.invoiceId);
+      if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
     }
     router.push(`/billing/${result.invoiceId}`);
   };

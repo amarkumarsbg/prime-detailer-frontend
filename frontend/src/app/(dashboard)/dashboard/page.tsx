@@ -58,6 +58,9 @@ import {
 import type { DashboardStats, JobCard } from "@/types";
 import { DashboardSkeleton } from "@/components/shared/skeleton-loader";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { useSettingsStore } from "@/store/settings-store";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
+import { notifyJobReadyWhatsApp } from "@/lib/whatsapp-automation-triggers";
 
 const PENDING_BOOKING_STATUSES: JobCard["status"][] = [
   "RECEIVED",
@@ -112,6 +115,7 @@ export default function DashboardPage() {
   const stats =
     useDashboardStatsStore((s) => s.stats) ?? EMPTY_DASHBOARD_STATS;
   const serviceReminders = useReminderStore((s) => s.reminders);
+  const businessName = useSettingsStore((s) => s.businessName);
 
   const viewingLabel = useMemo(() => {
     if (!currentBranch || isAllBranchesScope(currentBranch)) return "All branches";
@@ -806,25 +810,39 @@ export default function DashboardPage() {
             ) : (
               <div className="max-h-[min(260px,45vh)] overflow-y-auto overscroll-contain space-y-3 pr-1 -mr-0.5 [scrollbar-gutter:stable]">
                 {readyForDeliveryLive.map((jc) => (
-                  <Link
+                  <div
                     key={jc.id}
-                    href={`/job-cards/${jc.id}`}
-                    className="flex shrink-0 items-center justify-between rounded-lg border border-border p-3 transition-[background-color,border-color] duration-[850ms] ease-[cubic-bezier(0.45,0,0.55,1)] hover:bg-muted/50"
+                    className="flex shrink-0 items-center gap-2 rounded-lg border border-border p-3 transition-[background-color,border-color] duration-[850ms] ease-[cubic-bezier(0.45,0,0.55,1)] hover:bg-muted/50"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-muted-foreground">{jc.jobNumber}</span>
-                        <JobCardStatusBadge status={jc.status} />
+                    <Link
+                      href={`/job-cards/${jc.id}`}
+                      className="flex flex-1 min-w-0 items-center justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">{jc.jobNumber}</span>
+                          <JobCardStatusBadge status={jc.status} />
+                        </div>
+                        <p className="text-sm font-medium mt-1 truncate">{jc.customerName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
+                        </p>
                       </div>
-                      <p className="text-sm font-medium mt-1 truncate">{jc.customerName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
-                      </p>
-                    </div>
-                    <div className="text-right ml-4">
-                      <p className="text-xs text-muted-foreground">{jc.customerPhone}</p>
-                    </div>
-                  </Link>
+                      <div className="text-right ml-4 shrink-0">
+                        <p className="text-xs text-muted-foreground">{jc.customerPhone}</p>
+                      </div>
+                    </Link>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 text-[#25D366] hover:text-[#128C7E] hover:bg-emerald-500/10"
+                      title="WhatsApp: ready for pickup"
+                      onClick={() => notifyJobReadyWhatsApp(jc, businessName)}
+                    >
+                      <WhatsAppIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ))}
               </div>
             )}

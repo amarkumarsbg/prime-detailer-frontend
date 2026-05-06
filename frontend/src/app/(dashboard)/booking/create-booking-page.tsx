@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { buildJobCardCustomerWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import { buildJobCardCustomerWhatsAppMessage, appendAdvanceAckToJobMessage } from "@/lib/whatsapp-customer-messages";
 import {
   sendCustomerWhatsApp,
   openWhatsAppComposer,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -238,7 +239,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const sendJobCardCreatedWhatsApp = useCallback(async (job: JobCard) => {
     const phone = job.customerPhone?.trim();
     if (!phone) return;
-    const message = buildJobCardCustomerWhatsAppMessage(job);
+    const message = appendAdvanceAckToJobMessage(buildJobCardCustomerWhatsAppMessage(job), job);
     const notify = (channel: "api" | "composer") => {
       useNotificationStore.getState().addNotification({
         type: "whatsapp_sent",
@@ -271,7 +272,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const { addJobCard, getNextJobNumber, updateJobCard } = useJobCardStore();
   const { services: highEndServices } = useHighEndServiceStore();
   const { addTransaction } = useWalletStore();
-  const { referralRewardAmount, newCustomerDiscount } = useSettingsStore();
+  const { referralRewardAmount, newCustomerDiscount, businessName } = useSettingsStore();
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
@@ -1199,9 +1200,26 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         toast.error("Could not activate membership", { description: memRes.error });
         return;
       }
-      const pkgName =
-        membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId)?.name ?? "Membership";
-      toast.success("Membership activated", { description: pkgName });
+      const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
+      toast.success("Membership activated", { description: pkg?.name ?? "Membership" });
+
+      const subRow = useMembershipStore.getState().subscriptions.find((s) => s.id === memRes.id);
+      if (pkg && subRow) {
+        const names = pkg.includedServiceIds
+          .map((sid) => serviceCatalog.find((c) => c.id === sid)?.name)
+          .filter((n): n is string => Boolean(n));
+        notifyMembershipWelcomeWhatsApp({
+          customerPhone,
+          customerName: customerName.trim(),
+          customerId: custId,
+          businessName,
+          packageName: pkg.name,
+          tier: pkg.tier,
+          validUntilIso: subRow.endDate,
+          vehicleReg: regStored,
+          includedServiceNames: names,
+        });
+      }
     }
 
     const serviceItems = selectedCatalogItems.map((s) => {

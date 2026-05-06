@@ -32,6 +32,14 @@ function firstName(apt: Appointment): string {
   return apt.customerName.split(/\s+/)[0] ?? apt.customerName;
 }
 
+/** Make/model with registration (car number), optional colour — matches job-card WhatsApp style. */
+export function appointmentVehicleDisplayLine(apt: Appointment): string {
+  const reg = apt.vehicleRegNumber.trim();
+  const base = reg ? `${apt.vehicleMakeModel} (${reg})` : apt.vehicleMakeModel;
+  const colour = apt.vehicleColor?.trim();
+  return colour ? `${base} · ${colour}` : base;
+}
+
 function bookingDateTimeLine(apt: Appointment): string {
   const d = parseISO(apt.date);
   const day = format(d, "EEE, dd-MMM-yyyy");
@@ -71,9 +79,7 @@ export function buildBookingConfirmationMessage(
 ): string {
   const name = firstName(apt);
   const brand = outletBrandLine(business);
-  const vehicleLine = apt.vehicleColor
-    ? `${apt.vehicleMakeModel} (${apt.vehicleColor})`
-    : apt.vehicleMakeModel;
+  const vehicleLine = appointmentVehicleDisplayLine(apt);
 
   const bookingDetailsExtra =
     apt.bookingPricingLine?.trim() ||
@@ -152,6 +158,81 @@ export function buildBookingConfirmationMessage(
     `${business.address}`,
     `${business.phone} | ${business.email}`,
   ].join("\n");
+}
+
+const WHATSAPP_BOOKING_BODY_SAFE_MAX = 1550;
+
+function clipLine(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
+/**
+ * Short WhatsApp body for Twilio/session templates (keeps under ~1600 chars).
+ * Use for automated sends; use {@link buildBookingConfirmationMessage} only when length is not capped (e.g. preview/copy).
+ */
+export function buildBookingWhatsAppMessageCompact(
+  apt: Appointment,
+  business: BookingConfirmationBusiness
+): string {
+  const name = firstName(apt);
+  const brand = outletBrandLine(business);
+  const vehicleLine = appointmentVehicleDisplayLine(apt);
+
+  const statusWord =
+    apt.status === "CONFIRMED"
+      ? "confirmed"
+      : apt.status === "SCHEDULED"
+        ? "scheduled"
+        : apt.status === "IN_PROGRESS"
+          ? "in progress"
+          : apt.status.replace(/_/g, " ").toLowerCase();
+
+  const priceOneLiner =
+    apt.priceGrandTotal != null &&
+    apt.priceSubtotalExGst != null &&
+    apt.priceGstAmount != null
+      ? `Estimate: ${formatRs(apt.priceSubtotalExGst)} + GST ${formatRs(apt.priceGstAmount)} = *${formatRs(apt.priceGrandTotal)}*`
+      : "Pricing will be confirmed at the outlet before work begins.";
+
+  const termsHint = business.termsUrl?.trim()
+    ? `Terms: ${clipLine(business.termsUrl.trim(), 240)}`
+    : "GST invoice on completion. Advance / reschedule rules apply — confirm at outlet.";
+
+  const wa = (apt.whatsappPhone ?? apt.customerPhone).trim();
+  const mobile = apt.customerPhone.trim();
+
+  const body = [
+    `Hi *${name}*,`,
+    ``,
+    `Your booking *(${apt.bookingId})* is *${statusWord}* @ *${brand}*.`,
+    ``,
+    `*When:* ${bookingDateTimeLine(apt)}`,
+    `*Expected delivery:* ${expectedDeliveryLine(apt)}`,
+    `*Vehicle:* ${clipLine(vehicleLine, 160)}`,
+    `*Service:* ${clipLine(apt.serviceType, 80)}`,
+    ``,
+    priceOneLiner,
+    apt.advancePaid != null ? `Advance recorded: ${formatRs(apt.advancePaid)}` : "",
+    ``,
+    `*Where:* ${clipLine(business.address, 220)}`,
+    `*Contact:* ${business.phone} | ${business.email}`,
+    `Mobile: ${mobile}${wa !== mobile ? ` | WhatsApp: ${wa}` : ""}`,
+    ``,
+    termsHint,
+    ``,
+    `Please reach ~30 minutes before your slot. Reply here to reschedule or ask questions.`,
+    ``,
+    `— *${brand}*`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  if (body.length > WHATSAPP_BOOKING_BODY_SAFE_MAX) {
+    return clipLine(body, WHATSAPP_BOOKING_BODY_SAFE_MAX);
+  }
+  return body;
 }
 
 /** Digits only for wa.me (e.g. 919369111655) */
