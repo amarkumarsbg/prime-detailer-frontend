@@ -288,7 +288,7 @@ function ResetPasswordForm() {
             <Button
               type="submit"
               className="w-full h-11 rounded-xl text-sm font-medium shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0"
-              disabled={loading || linkState === "checking"}
+              disabled={loading}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
