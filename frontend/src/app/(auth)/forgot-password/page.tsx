@@ -253,9 +253,20 @@ export default function ForgotPasswordPage() {
               <p className="text-xs text-muted-foreground mb-2">
                 Address used:
               </p>
-              <p className="text-sm font-medium text-foreground bg-slate-100 dark:bg-slate-800 inline-block px-4 py-2 rounded-xl mb-8">
+              <p className="text-sm font-medium text-foreground bg-slate-100 dark:bg-slate-800 inline-block px-4 py-2 rounded-xl mb-4">
                 {email}
               </p>
+              {delivery === "email" ? (
+                <p className="text-xs text-muted-foreground mb-8 max-w-sm mx-auto leading-relaxed">
+                  Nothing yet? Check Spam/Promotions. This workspace only sends a link if that exact email was used when{" "}
+                  <strong className="text-foreground font-medium">signing up here</strong>
+                  {" "}— seeded demos often use addresses like{" "}
+                  <span className="font-mono">admin@local.dev</span>. Wrong inbox means no mail is sent, even though you
+                  still see this screen.
+                </p>
+              ) : (
+                <div className="mb-8" aria-hidden />
+              )}
 
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">

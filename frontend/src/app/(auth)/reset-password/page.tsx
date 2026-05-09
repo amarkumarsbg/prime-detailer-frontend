@@ -1,14 +1,24 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buildApiUrl } from "@/lib/api-base";
-import { Wrench, ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound } from "lucide-react";
+import {
+  Wrench,
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  KeyRound,
+  AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
+
+type ResetLinkState = "absent" | "checking" | "active" | "inactive" | "error";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -20,6 +30,39 @@ function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkState, setLinkState] = useState<ResetLinkState>(() =>
+    token ? "checking" : "absent"
+  );
+
+  useEffect(() => {
+    if (!token) {
+      setLinkState("absent");
+      return;
+    }
+    let cancelled = false;
+    setLinkState("checking");
+    void (async () => {
+      try {
+        const url = `${buildApiUrl("/api/auth/reset-password/status")}?token=${encodeURIComponent(token)}`;
+        const res = await fetch(url);
+        const body = (await res.json()) as {
+          data?: { pending?: boolean } | null;
+          error?: { message?: string } | null;
+        };
+        if (cancelled) return;
+        if (!res.ok || body.error) {
+          setLinkState("error");
+          return;
+        }
+        setLinkState(body.data?.pending === true ? "active" : "inactive");
+      } catch {
+        if (!cancelled) setLinkState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,13 +153,33 @@ function ResetPasswordForm() {
           </Link>
 
           <div className="space-y-2 mb-8">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 mb-6">
-              <KeyRound className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+            <div
+              className={`flex items-center justify-center w-14 h-14 rounded-2xl mb-6 ${
+                linkState === "inactive"
+                  ? "bg-amber-100 dark:bg-amber-900/35"
+                  : "bg-emerald-100 dark:bg-emerald-900/30"
+              }`}
+            >
+              {linkState === "inactive" ? (
+                <AlertCircle className="w-7 h-7 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <KeyRound className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              New password
+              {linkState === "inactive"
+                ? "Link no longer valid"
+                : linkState === "checking"
+                  ? "Checking link"
+                  : "New password"}
             </h1>
-            <p className="text-muted-foreground">Enter your new password twice to confirm.</p>
+            <p className="text-muted-foreground">
+              {linkState === "inactive"
+                ? "This reset link was already used or has expired."
+                : linkState === "checking"
+                  ? "Hang tight — validating your reset link."
+                  : "Enter your new password twice to confirm."}
+            </p>
           </div>
 
           {!token ? (
@@ -126,7 +189,42 @@ function ResetPasswordForm() {
             </p>
           ) : null}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {token && linkState === "checking" ? (
+            <div className="flex flex-col items-center gap-4 py-10 mb-4">
+              <span
+                className="w-9 h-9 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                aria-hidden
+              />
+              <p className="text-sm text-muted-foreground">Checking your reset link…</p>
+            </div>
+          ) : null}
+
+          {token && linkState === "inactive" ? (
+            <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/35 p-5 space-y-4 mb-6">
+              <p className="text-sm text-foreground leading-relaxed">
+                Password reset links work once. If you still need to change your password, request a
+                new email.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button className="rounded-xl h-11" asChild>
+                  <Link href="/forgot-password">Forgot password</Link>
+                </Button>
+                <Button variant="outline" className="rounded-xl h-11" asChild>
+                  <Link href="/login">Back to sign in</Link>
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {token && linkState === "error" ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400 mb-4 rounded-xl border border-amber-200/80 dark:border-amber-800/40 bg-amber-50/80 dark:bg-amber-950/25 px-3 py-2">
+              Couldn&apos;t verify this link right now. You can still try saving a new password
+              below, or request a fresh link.
+            </p>
+          ) : null}
+
+          {token && (linkState === "active" || linkState === "error") ? (
+            <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="new-password" className="text-sm font-medium">
                 New password
@@ -158,17 +256,27 @@ function ResetPasswordForm() {
               <Label htmlFor="confirm-password" className="text-sm font-medium">
                 Confirm password
               </Label>
-              <Input
-                id="confirm-password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="Re-enter your password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-                minLength={6}
-                className="h-11 rounded-xl bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 px-4 transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
+              <div className="relative">
+                <Input
+                  id="confirm-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="Re-enter your password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  required
+                  minLength={6}
+                  className="h-11 rounded-xl bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 px-4 pr-11 transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {error ? (
@@ -180,7 +288,7 @@ function ResetPasswordForm() {
             <Button
               type="submit"
               className="w-full h-11 rounded-xl text-sm font-medium shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0"
-              disabled={loading || !token}
+              disabled={loading || linkState === "checking"}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -194,7 +302,8 @@ function ResetPasswordForm() {
                 </span>
               )}
             </Button>
-          </form>
+            </form>
+          ) : null}
 
           <p className="text-center text-xs text-muted-foreground/60 mt-10 lg:hidden">
             Prime Detailers v1.0 &middot; Internal Use Only

@@ -8,8 +8,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "noEmit": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["../src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*", "prisma/seed.ts"]

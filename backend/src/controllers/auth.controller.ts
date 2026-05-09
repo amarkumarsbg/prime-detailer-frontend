@@ -25,6 +25,7 @@ import {
   createPasswordResetPlainToken,
   issuePasswordResetForUser,
   clearPasswordResetForUser,
+  isPasswordResetTokenPending,
 } from "../services/password-reset.service.js";
 
 const loginSchema = z.object({
@@ -56,6 +57,35 @@ const resetPasswordSchema = z.object({
   token: z.string().min(24),
   password: z.string().min(6),
 });
+
+const resetTokenQuerySchema = z.object({
+  token: z.string().min(24).max(2048),
+});
+
+function parseResetTokenFromQuery(req: Request): string {
+  const raw = req.query.token;
+  if (typeof raw === "string") return raw.trim();
+  if (Array.isArray(raw) && typeof raw[0] === "string") return raw[0].trim();
+  return "";
+}
+
+/** Read-only: whether this reset URL can still complete once (token stored & unexpired). */
+export async function getResetPasswordTokenStatus(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = resetTokenQuerySchema.safeParse({ token: parseResetTokenFromQuery(req) });
+    if (!parsed.success) {
+      res.status(400).json({
+        data: null,
+        error: { message: "Missing or invalid token." },
+      });
+      return;
+    }
+    const pending = await isPasswordResetTokenPending(parsed.data.token);
+    res.json({ data: { pending }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
 
 function formatTwilioSendError(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
@@ -319,8 +349,8 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
         );
       }
     } else if (!isProduction) {
-      console.info(
-        `[auth/forgot-password] ${normalized} — no active account for this email (nothing printed below).`
+      console.warn(
+        `[auth/forgot-password] No active User has email "${normalized}" — no reset mail sent (API still returns generic success). Seed/demo accounts often use admin@local.dev or *@prime-detailers.test. Sign up first if you're using a new Gmail address on this database.`
       );
     }
 
