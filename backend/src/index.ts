@@ -12,6 +12,7 @@ import { userApiRouter } from "./routes/user-api.routes.js";
 import { vehicleApiRouter } from "./routes/vehicle-api.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { isTwilioSmsEnabled, isTwilioWhatsAppEnabled } from "./services/twilio-sms.service.js";
+import { isPasswordResetEmailConfigured } from "./services/password-reset-email.service.js";
 import { messagingRouter } from "./routes/messaging.routes.js";
 
 import { prisma } from "./lib/prisma.js";
@@ -67,6 +68,11 @@ const isProduction = process.env.NODE_ENV === "production";
 app.listen(env.PORT, () => {
   if (isProduction) {
     console.log(`API listening on port ${env.PORT}`);
+    if (!isPasswordResetEmailConfigured()) {
+      console.warn(
+        "[email] RESEND_API_KEY is not set — forgot-password will return 503 until email is configured."
+      );
+    }
     return;
   }
   console.log(`API listening on http://localhost:${env.PORT}`);
@@ -80,5 +86,12 @@ app.listen(env.PORT, () => {
   if (isTwilioWhatsAppEnabled()) {
     const wa = env.TWILIO_WHATSAPP_FROM ?? "";
     console.log(`[twilio] WhatsApp outbound enabled (sender …${wa.slice(-8)})`);
+  }
+  if (isPasswordResetEmailConfigured()) {
+    console.log("[email] Password reset via Resend is enabled (RESEND_API_KEY set).");
+  } else if (!isProduction) {
+    console.log(
+      "[email] RESEND_API_KEY not set — forgot-password prints reset links in this terminal (dev only)."
+    );
   }
 });

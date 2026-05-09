@@ -15,6 +15,18 @@ import {
   toE164,
 } from "../services/twilio-sms.service.js";
 
+import { env } from "../config/env.js";
+import {
+  isPasswordResetEmailConfigured,
+  sendPasswordResetEmail,
+} from "../services/password-reset-email.service.js";
+import {
+  consumePasswordResetToken,
+  createPasswordResetPlainToken,
+  issuePasswordResetForUser,
+  clearPasswordResetForUser,
+} from "../services/password-reset.service.js";
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -38,6 +50,11 @@ const otpVerifySchema = z.object({
 
 const forgotPasswordSchema = z.object({
   email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(24),
+  password: z.string().min(6),
 });
 
 function formatTwilioSendError(err: unknown): string {
@@ -230,28 +247,119 @@ export async function register(req: Request, res: Response, next: NextFunction) 
 }
 
 /**
- * Accepts reset requests without revealing whether the email exists.
- * Email delivery is not wired yet — log in development for operators.
+ * Opaque success if the email is unknown. Issues a time-limited reset token and sends email via Resend when configured.
+ * In development without Resend, prints the reset URL in the API terminal.
  */
 export async function forgotPassword(req: Request, res: Response, next: NextFunction) {
   const isProduction = process.env.NODE_ENV === "production";
   try {
     const body = forgotPasswordSchema.parse(req.body);
     const normalized = body.email.trim().toLowerCase();
-    if (!isProduction) {
-      const user = await prisma.user.findFirst({
-        where: { email: normalized },
-        select: { id: true },
-      });
-      console.info(
-        `[auth/forgot-password] ${normalized} — ${user ? "account found" : "no account"} (configure mailer to send reset links)`
+    const mailOk = isPasswordResetEmailConfigured();
+
+    if (isProduction && !mailOk) {
+      console.error(
+        "[auth/forgot-password] RESEND_API_KEY is missing — cannot send password reset email in production."
       );
+      res.status(503).json({
+        data: null,
+        error: {
+          message:
+            "Password reset email is not configured on this server. Please contact your administrator.",
+        },
+      });
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: normalized, isActive: true },
+      select: { id: true, email: true },
+    });
+
+    if (user) {
+      const plainToken = createPasswordResetPlainToken();
+      await issuePasswordResetForUser(user.id, plainToken);
+      const base = env.FRONTEND_ORIGIN.replace(/\/+$/, "");
+      const resetUrl = `${base}/reset-password?token=${encodeURIComponent(plainToken)}`;
+
+      if (mailOk) {
+        const sendResult = await sendPasswordResetEmail(user.email, resetUrl);
+        if (!sendResult.ok) {
+          if (!isProduction) {
+            console.info(
+              `[auth/forgot-password] Resend failed — dev-only reset link (still valid ~1h) for ${user.email}:\n${resetUrl}`
+            );
+            const trialToBlock =
+              sendResult.detail.includes("only send testing") ||
+              sendResult.detail.includes("verify a domain");
+            const devTip = trialToBlock
+              ? "On a Resend trial, mail only goes to your Resend-login email until you add and verify your domain at resend.com/domains (then MAIL_FROM must use that domain, e.g. support@primedetailers.in). Until then you can copy the reset URL from the backend terminal, or test with a DB user whose email is your Resend account address."
+              : "Try MAIL_FROM=Prime Detailers <onboarding@resend.dev> until your domain is verified, copy the reset URL from the backend terminal, and confirm RESEND_API_KEY is valid.";
+            res.status(503).json({
+              data: null,
+              error: {
+                message: `Resend could not send the email (${sendResult.detail}). ${devTip}`,
+              },
+            });
+          } else {
+            await clearPasswordResetForUser(user.id);
+            res.status(503).json({
+              data: null,
+              error: {
+                message:
+                  "We could not send the reset email right now. Please try again in a few minutes.",
+              },
+            });
+          }
+          return;
+        }
+      } else if (!isProduction) {
+        console.info(
+          `[auth/forgot-password] RESEND_API_KEY not set — reset link for ${user.email}:\n${resetUrl}`
+        );
+      }
+    } else if (!isProduction) {
+      console.info(
+        `[auth/forgot-password] ${normalized} — no active account for this email (nothing printed below).`
+      );
+    }
+
+    const mailInboxMessage =
+      "If an account exists for this email, we've sent password reset instructions. Please check your inbox and spam folder.";
+
+    /** Dev/local only: no SMTP/Resend — nothing is mailed. Users must copy the URL from backend logs if an account existed. */
+    const devTerminalMessage =
+      "This setup does not send email until you configure the backend (add RESEND_API_KEY to backend .env). If your email is registered, the full reset link is printed where the backend API runs (the terminal showing “API listening on …”). Scroll for `[auth/forgot-password]` followed by two lines—a second line starts with http and contains `/reset-password?token=`. Copy that URL into your browser. If nothing like that printed, this email may not be registered on this server.";
+
+    res.json({
+      data: {
+        ok: true as const,
+        message: mailOk ? mailInboxMessage : devTerminalMessage,
+        ...(!mailOk && !isProduction ? { passwordResetDelivery: "dev-console" as const } : {}),
+      },
+      error: null,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function completePasswordReset(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = resetPasswordSchema.parse(req.body);
+    const outcome = await consumePasswordResetToken(body.token, body.password);
+    if (!outcome.ok) {
+      const msg =
+        outcome.reason === "EXPIRED"
+          ? "This reset link has expired. Request a new one from Forgot password."
+          : "Invalid or expired reset link.";
+      res.status(400).json({ data: null, error: { message: msg } });
+      return;
     }
     res.json({
       data: {
         ok: true as const,
-        message:
-          "If an account exists for this email, you will receive password reset instructions once email is configured.",
+        message: "Your password was updated. Sign in with your new password.",
       },
       error: null,
     });

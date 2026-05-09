@@ -205,14 +205,14 @@ export default function LoginPage() {
           {loginMethod === "email" ? (
             <>
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <Label htmlFor="email" className="text-sm font-medium">
                     Email address
                   </Label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@primedetailers.in"
+                    placeholder="Enter your email id"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -220,14 +220,14 @@ export default function LoginPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-baseline justify-between gap-x-3">
                     <Label htmlFor="password" className="text-sm font-medium">
                       Password
                     </Label>
                     <Link
                       href="/forgot-password"
-                      className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                      className="text-xs leading-none font-medium text-primary hover:text-primary/80 transition-colors shrink-0 whitespace-nowrap"
                     >
                       Forgot password?
                     </Link>
@@ -297,7 +297,7 @@ export default function LoginPage() {
           ) : (
             <>
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <Label htmlFor="mobile" className="text-sm font-medium">
                     Mobile Number
                   </Label>
@@ -336,15 +336,15 @@ export default function LoginPage() {
                   </Button>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-baseline justify-between gap-x-3">
                         <Label htmlFor="otp" className="text-sm font-medium">
                           Enter OTP
                         </Label>
                         <button
                           type="button"
                           onClick={handleSendOtp}
-                          className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                          className="text-xs leading-none font-medium text-primary hover:text-primary/80 transition-colors shrink-0"
                         >
                           Resend OTP
                         </button>

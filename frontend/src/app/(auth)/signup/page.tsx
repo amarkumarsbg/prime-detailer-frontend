@@ -172,7 +172,7 @@ export default function SignupPage() {
                 <Input
                   id="name"
                   type="text"
-                  placeholder="Rajesh Kumar"
+                  placeholder="Enter your full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
@@ -186,7 +186,7 @@ export default function SignupPage() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="+91 98765 43210"
+                  placeholder="Enter your phone number"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
@@ -202,7 +202,7 @@ export default function SignupPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@primedetailers.in"
+                placeholder="Enter your email id"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -218,7 +218,7 @@ export default function SignupPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Create a strong password"
+                  placeholder="Enter a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -245,7 +245,7 @@ export default function SignupPage() {
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Repeat your password"
+                placeholder="Re-enter your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required

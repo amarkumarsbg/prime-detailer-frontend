@@ -50,6 +50,13 @@ const schema = z.object({
   TWILIO_WHATSAPP_FROM: z.string().optional(),
   /** Default +91; set +1 etc. if your users are not in India */
   TWILIO_TO_NUMBER_PREFIX: z.string().optional(),
+  /**
+   * Resend API — password reset emails. https://resend.com
+   * Omit in dev to log reset URLs in the API terminal instead (see forgot-password logs).
+   */
+  RESEND_API_KEY: z.string().optional(),
+  /** From address Resend recognizes, e.g. `Prime Detailers <onboarding@resend.dev>` */
+  MAIL_FROM: z.string().optional(),
 });
 
 export const env = schema.parse({
@@ -64,4 +71,6 @@ export const env = schema.parse({
   TWILIO_FROM_NUMBER: trimOpt(process.env.TWILIO_FROM_NUMBER),
   TWILIO_WHATSAPP_FROM: trimOpt(process.env.TWILIO_WHATSAPP_FROM),
   TWILIO_TO_NUMBER_PREFIX: trimOpt(process.env.TWILIO_TO_NUMBER_PREFIX),
+  RESEND_API_KEY: trimOpt(process.env.RESEND_API_KEY),
+  MAIL_FROM: trimOpt(process.env.MAIL_FROM),
 });

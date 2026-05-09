@@ -24,6 +24,7 @@ export default function ForgotPasswordPage() {
   const [step, setStep] = useState<Step>("email");
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string>("");
+  const [delivery, setDelivery] = useState<"email" | "dev-console" | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +39,11 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email: trimmed }),
       });
       const body = (await res.json()) as {
-        data?: { ok?: boolean; message?: string } | null;
+        data?: {
+          ok?: boolean;
+          message?: string;
+          passwordResetDelivery?: "dev-console";
+        } | null;
         error?: { message?: string } | null;
       };
       if (!res.ok || body.error) {
@@ -46,10 +51,11 @@ export default function ForgotPasswordPage() {
         setLoading(false);
         return;
       }
+      setDelivery(body.data?.passwordResetDelivery ?? "email");
       setInfoMessage(
         typeof body.data?.message === "string"
           ? body.data.message
-          : "If an account exists for this email, you will receive reset instructions once email is configured."
+          : "If an account exists for this email, we've sent password reset instructions. Please check your inbox and spam folder."
       );
       setStep("sent");
     } catch {
@@ -181,7 +187,7 @@ export default function ForgotPasswordPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@primedetailers.in"
+                    placeholder="Enter your email id"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -217,13 +223,31 @@ export default function ForgotPasswordPage() {
             </>
           ) : (
             <div className="text-center">
-              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mx-auto mb-6">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+              <div
+                className={
+                  delivery === "dev-console"
+                    ? "flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/35 mx-auto mb-6"
+                    : "flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mx-auto mb-6"
+                }
+              >
+                <CheckCircle2
+                  className={
+                    delivery === "dev-console"
+                      ? "w-8 h-8 text-amber-600 dark:text-amber-400"
+                      : "w-8 h-8 text-emerald-600 dark:text-emerald-400"
+                  }
+                />
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-                Request received
+                {delivery === "dev-console" ? "Backend link — not email" : "Request received"}
               </h1>
-              <p className="text-muted-foreground mb-4 text-sm leading-relaxed px-1">
+              <p
+                className={
+                  delivery === "dev-console"
+                    ? "text-foreground mb-4 text-sm leading-relaxed px-1 text-left rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 py-3 px-3"
+                    : "text-muted-foreground mb-4 text-sm leading-relaxed px-1"
+                }
+              >
                 {infoMessage}
               </p>
               <p className="text-xs text-muted-foreground mb-2">
@@ -245,6 +269,7 @@ export default function ForgotPasswordPage() {
                     setEmail("");
                     setError(null);
                     setInfoMessage("");
+                    setDelivery(null);
                   }}
                 >
                   Try a different email
