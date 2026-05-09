@@ -108,8 +108,10 @@ export default function CustomerDetailPage() {
     },
   });
 
+  /* eslint-disable react-hooks/incompatible-library -- react-hook-form watch() */
   const watchFuelType = watch("fuelType");
   const watchSegment = watch("segment");
+  /* eslint-enable react-hooks/incompatible-library */
 
   const { customers: allCustomers, updateCustomer, findByPhone } = useCustomerStore();
   const customer = useMemo(() => {

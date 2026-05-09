@@ -88,9 +88,11 @@ export default function VehiclesPage() {
     },
   });
 
+  /* eslint-disable react-hooks/incompatible-library -- react-hook-form watch() */
   const watchCustomerId = watch("customerId");
   const watchFuelType = watch("fuelType");
   const watchSegment = watch("segment");
+  /* eslint-enable react-hooks/incompatible-library */
 
   const onSubmit = (data: AddVehicleFormData) => {
     const dup = findVehicleByNormalizedReg(vehicleList, data.registrationNumber);
