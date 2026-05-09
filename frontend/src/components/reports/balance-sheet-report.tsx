@@ -226,7 +226,7 @@ export function BalanceSheetReport() {
       manual += (byCategory.get(k) ?? []).reduce((s, e) => s + e.amount, 0);
     }
     return manual + netIncome;
-  }, [entries, netIncome, byCategory]);
+  }, [netIncome, byCategory]);
 
   const totalAssets = useMemo(() => {
     const assetKeys: BalanceSheetManualCategory[] = [
@@ -243,7 +243,7 @@ export function BalanceSheetReport() {
       manual += (byCategory.get(k) ?? []).reduce((s, e) => s + e.amount, 0);
     }
     return manual + cashInHand + cashInBank + accountsReceivable;
-  }, [entries, cashInHand, cashInBank, accountsReceivable, byCategory]);
+  }, [cashInHand, cashInBank, accountsReceivable, byCategory]);
 
   const resetForm = () => {
     setFormDate(new Date().toISOString().slice(0, 10));

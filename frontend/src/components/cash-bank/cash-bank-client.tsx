@@ -224,7 +224,7 @@ export function CashBankClient() {
 
   useEffect(() => {
     if (accounts.length > 0 && !accounts.some((a) => a.id === selectedId)) {
-      setSelectedId(accounts[0].id);
+      queueMicrotask(() => setSelectedId(accounts[0].id));
     }
   }, [accounts, selectedId]);
   const [customStart, setCustomStart] = useState("");
@@ -808,7 +808,7 @@ function AdjustBalanceDialog({
   const [add, setAdd] = useState(true);
 
   useEffect(() => {
-    if (open) setAccountId(defaultAccountId);
+    if (open) queueMicrotask(() => setAccountId(defaultAccountId));
   }, [open, defaultAccountId]);
   const [amount, setAmount] = useState("");
   const [dateStr, setDateStr] = useState(format(new Date(), "yyyy-MM-dd"));

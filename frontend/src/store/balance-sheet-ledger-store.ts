@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { putSingletonDocument } from "@/lib/collection-sync";
 
 export type BalanceSheetManualCategory =
   | "capital"
@@ -30,6 +30,12 @@ export interface BalanceSheetLedgerEntry {
   createdAt: string;
 }
 
+export interface BalanceSheetManualPayload {
+  entries: BalanceSheetLedgerEntry[];
+  favourite: boolean;
+  lastUpdatedAt: string | null;
+}
+
 export const BALANCE_SHEET_CATEGORY_LABEL: Record<BalanceSheetManualCategory, string> = {
   capital: "Capital",
   gstPayable: "GST Payable",
@@ -49,10 +55,25 @@ export const BALANCE_SHEET_CATEGORY_LABEL: Record<BalanceSheetManualCategory, st
   loansAdvance: "Loans Advance",
 };
 
-interface BalanceSheetLedgerStore {
-  entries: BalanceSheetLedgerEntry[];
-  favourite: boolean;
-  lastUpdatedAt: string | null;
+function pushManualBalanceSheet(payload: BalanceSheetManualPayload): void {
+  void putSingletonDocument("balanceSheetManual", payload).catch((err) => {
+    if (process.env.NODE_ENV !== "production") console.error(err);
+  });
+}
+
+export function mergeBalanceSheetManualPayload(raw: unknown): Partial<BalanceSheetManualPayload> {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  const next: Partial<BalanceSheetManualPayload> = {};
+  if (Array.isArray(o.entries)) next.entries = o.entries as BalanceSheetLedgerEntry[];
+  if (typeof o.favourite === "boolean") next.favourite = o.favourite;
+  if (o.lastUpdatedAt === null || typeof o.lastUpdatedAt === "string") {
+    next.lastUpdatedAt = o.lastUpdatedAt as string | null;
+  }
+  return next;
+}
+
+interface BalanceSheetLedgerStore extends BalanceSheetManualPayload {
   addEntry: (input: {
     category: BalanceSheetManualCategory;
     ledgerName: string;
@@ -62,49 +83,73 @@ interface BalanceSheetLedgerStore {
   removeEntry: (id: string) => void;
   setFavourite: (value: boolean) => void;
   sumFor: (category: BalanceSheetManualCategory) => number;
+  hydrateFromBootstrap: (payload: Partial<BalanceSheetManualPayload>) => void;
 }
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-export const useBalanceSheetLedgerStore = create<BalanceSheetLedgerStore>()(
-  persist(
-    (set, get) => ({
-      entries: [],
-      favourite: false,
-      lastUpdatedAt: null,
+export const useBalanceSheetLedgerStore = create<BalanceSheetLedgerStore>((set, get) => ({
+  entries: [],
+  favourite: false,
+  lastUpdatedAt: null,
 
-      addEntry: ({ category, ledgerName, amount, date }) => {
-        const id = `bs-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-        const row: BalanceSheetLedgerEntry = {
-          id,
-          category,
-          ledgerName: ledgerName.trim() || "Entry",
-          amount: Math.round(amount * 100) / 100,
-          date,
-          createdAt: nowIso(),
-        };
-        set((s) => ({
-          entries: [row, ...s.entries],
-          lastUpdatedAt: nowIso(),
-        }));
-      },
+  hydrateFromBootstrap: (payload) =>
+    set((state) => ({
+      ...state,
+      entries: Array.isArray(payload.entries) ? payload.entries : state.entries,
+      favourite:
+        typeof payload.favourite === "boolean" ? payload.favourite : state.favourite,
+      lastUpdatedAt:
+        payload.lastUpdatedAt !== undefined ? payload.lastUpdatedAt : state.lastUpdatedAt,
+    })),
 
-      removeEntry: (id) =>
-        set((s) => ({
-          entries: s.entries.filter((e) => e.id !== id),
-          lastUpdatedAt: nowIso(),
-        })),
+  addEntry: ({ category, ledgerName, amount, date }) => {
+    const id = `bs-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const row: BalanceSheetLedgerEntry = {
+      id,
+      category,
+      ledgerName: ledgerName.trim() || "Entry",
+      amount: Math.round(amount * 100) / 100,
+      date,
+      createdAt: nowIso(),
+    };
+    set((s) => ({
+      entries: [row, ...s.entries],
+      lastUpdatedAt: nowIso(),
+    }));
+    pushManualBalanceSheet({
+      entries: get().entries,
+      favourite: get().favourite,
+      lastUpdatedAt: get().lastUpdatedAt,
+    });
+  },
 
-      setFavourite: (value) => set({ favourite: value }),
+  removeEntry: (id) => {
+    set((s) => ({
+      entries: s.entries.filter((e) => e.id !== id),
+      lastUpdatedAt: nowIso(),
+    }));
+    pushManualBalanceSheet({
+      entries: get().entries,
+      favourite: get().favourite,
+      lastUpdatedAt: get().lastUpdatedAt,
+    });
+  },
 
-      sumFor: (category) => {
-        return get().entries
-          .filter((e) => e.category === category)
-          .reduce((s, e) => s + e.amount, 0);
-      },
-    }),
-    { name: "prime-detailer-balance-sheet-ledger" }
-  )
-);
+  setFavourite: (favourite) => {
+    set({ favourite });
+    pushManualBalanceSheet({
+      entries: get().entries,
+      favourite: get().favourite,
+      lastUpdatedAt: get().lastUpdatedAt,
+    });
+  },
+
+  sumFor: (category) => {
+    return get()
+      .entries.filter((e) => e.category === category)
+      .reduce((s, e) => s + e.amount, 0);
+  },
+}));

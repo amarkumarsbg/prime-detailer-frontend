@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStaffStore, generateRandomAttendancePin } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -41,7 +41,84 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import type { UserRole } from "@/types";
+import type { UpdatePinResult } from "@/store/staff-store";
+import type { User, UserRole } from "@/types";
+
+function StaffAttendancePinCard({
+  member,
+  updateAttendancePin,
+}: {
+  member: User;
+  updateAttendancePin: (
+    staffId: string,
+    pin: string
+  ) => Promise<UpdatePinResult>;
+}) {
+  const [pinInput, setPinInput] = useState(member.attendancePin ?? "");
+
+  const handleSaveAttendancePin = async () => {
+    const result = await updateAttendancePin(member.id, pinInput);
+    if (!result.ok) {
+      if (result.error === "DUPLICATE") {
+        toast.error("Another team member already uses this PIN.");
+      } else {
+        toast.error("Use 4–8 digits for the PIN.");
+      }
+      return;
+    }
+    toast.success("Attendance PIN saved.");
+  };
+
+  const handleGenerateAttendancePin = async () => {
+    for (let i = 0; i < 60; i++) {
+      const candidate = generateRandomAttendancePin();
+      const result = await updateAttendancePin(member.id, candidate);
+      if (result.ok) {
+        setPinInput(candidate);
+        toast.success("New PIN generated.");
+        return;
+      }
+    }
+    toast.error("Could not generate a unique PIN. Try again.");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound className="w-4 h-4" />
+          Attendance PIN
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Used at the store QR punch terminal. Keep it private. Stored in this browser for the demo only—in production, PINs would be hashed on the server.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2 max-w-sm">
+          <Label htmlFor="attendance-pin">PIN (4–8 digits)</Label>
+          <Input
+            id="attendance-pin"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="e.g. 4521"
+            value={pinInput}
+            onChange={(e) =>
+              setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8))
+            }
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => void handleSaveAttendancePin()}>
+            Save PIN
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void handleGenerateAttendancePin()}>
+            Generate random
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function StaffDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -53,18 +130,13 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const updateStaff = useStaffStore((s) => s.updateStaff);
   const jobCards = useJobCardStore((s) => s.jobCards);
 
-  const [pinInput, setPinInput] = useState("");
-  const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editRole, setEditRole] = useState<UserRole>("MECHANIC");
   const [editBranchId, setEditBranchId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
-
-  useEffect(() => {
-    if (member) setPinInput(member.attendancePin ?? "");
-  }, [member?.id, member?.attendancePin]);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const syncEditFromMember = () => {
     if (!member) return;
@@ -74,6 +146,11 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditRole(member.role);
     setEditBranchId(member.branchId);
     setEditIsActive(member.isActive);
+  };
+
+  const handleStartEditProfile = () => {
+    syncEditFromMember();
+    setEditingProfile(true);
   };
 
   const assignableRoles = useMemo(
@@ -114,25 +191,6 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const branch = branches.find((b) => b.id === member.branchId);
   const assignedJobs = jobCards.filter((j) => j.mechanicId === member.id);
 
-  const handleSaveAttendancePin = async () => {
-    if (!member) return;
-    const result = await updateAttendancePin(member.id, pinInput);
-    if (!result.ok) {
-      if (result.error === "DUPLICATE") {
-        toast.error("Another team member already uses this PIN.");
-      } else {
-        toast.error("Use 4–8 digits for the PIN.");
-      }
-      return;
-    }
-    toast.success("Attendance PIN saved.");
-  };
-
-  const handleStartEditProfile = () => {
-    syncEditFromMember();
-    setEditingProfile(true);
-  };
-
   const handleCancelEditProfile = () => {
     setEditingProfile(false);
     syncEditFromMember();
@@ -171,19 +229,6 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditingProfile(false);
   };
 
-  const handleGenerateAttendancePin = async () => {
-    if (!member) return;
-    for (let i = 0; i < 60; i++) {
-      const candidate = generateRandomAttendancePin();
-      const result = await updateAttendancePin(member.id, candidate);
-      if (result.ok) {
-        setPinInput(candidate);
-        toast.success("New PIN generated.");
-        return;
-      }
-    }
-    toast.error("Could not generate a unique PIN. Try again.");
-  };
   const completedJobs = assignedJobs.filter((j) => j.status === "DELIVERED");
   const activeJobs = assignedJobs.filter((j) => !["DELIVERED", "CANCELLED"].includes(j.status));
 
@@ -384,44 +429,11 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {canEditAttendancePin && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <KeyRound className="w-4 h-4" />
-              Attendance PIN
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Used at the store QR punch terminal. Keep it private. Stored in this browser for the demo only—in production, PINs would be hashed on the server.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2 max-w-sm">
-              <Label htmlFor="attendance-pin">PIN (4–8 digits)</Label>
-              <Input
-                id="attendance-pin"
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="e.g. 4521"
-                value={pinInput}
-                onChange={(e) =>
-                  setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8))
-                }
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={handleSaveAttendancePin}>
-                Save PIN
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleGenerateAttendancePin}
-              >
-                Generate random
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <StaffAttendancePinCard
+          key={`${member.id}:${member.attendancePin ?? ""}`}
+          member={member}
+          updateAttendancePin={updateAttendancePin}
+        />
       )}
 
       {assignedJobs.length > 0 && (

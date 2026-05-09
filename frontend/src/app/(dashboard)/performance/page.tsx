@@ -166,21 +166,19 @@ export default function PerformancePage() {
     [branchRows]
   );
 
-  const rewardsPieData = useMemo(() => {
-    const withRewards = branchRows.filter((r) => r.totalRewards > 0);
-    if (withRewards.length === 0) {
-      return branchRows.map((r) => ({
-        name: r.chartLabel,
-        fullName: r.branchName,
-        value: r.totalRewards,
-      }));
-    }
-    return withRewards.map((r) => ({
-      name: r.chartLabel,
-      fullName: r.branchName,
-      value: r.totalRewards,
-    }));
-  }, [branchRows]);
+  const withRewardsPie = branchRows.filter((r) => r.totalRewards > 0);
+  const rewardsPieData =
+    withRewardsPie.length === 0
+      ? branchRows.map((r) => ({
+          name: r.chartLabel,
+          fullName: r.branchName,
+          value: r.totalRewards,
+        }))
+      : withRewardsPie.map((r) => ({
+          name: r.chartLabel,
+          fullName: r.branchName,
+          value: r.totalRewards,
+        }));
 
   const totalRewardsAll = useMemo(
     () => branchRows.reduce((s, r) => s + r.totalRewards, 0),
@@ -352,59 +350,47 @@ export default function PerformancePage() {
     });
   }, [floorManagersDemo]);
 
-  function sortLeaderboardRows<T extends Record<string, unknown>>(
-    rows: T[],
-    getPaid: (r: T) => number,
-    getJobs: (r: T) => number,
-    getRewards: (r: T) => number,
-    getEff: (r: T) => number,
-    getOnTime: (r: T) => number
-  ): T[] {
-    const next = [...rows];
+  const sortedFloorLeaderboard = useMemo(() => {
+    const next = [...floorLeaderboardRows];
     next.sort((a, b) => {
       switch (leaderboardMetric) {
         case "paid":
-          return getPaid(b) - getPaid(a);
+          return b.paidRevenue - a.paidRevenue;
         case "jobs":
-          return getJobs(b) - getJobs(a);
+          return b.jobs - a.jobs;
         case "rewards":
-          return getRewards(b) - getRewards(a);
+          return b.rewards - a.rewards;
         case "efficiency":
-          return getEff(b) - getEff(a);
+          return b.efficiency - a.efficiency;
         case "onTime":
-          return getOnTime(b) - getOnTime(a);
+          return b.onTime - a.onTime;
         default:
           return 0;
       }
     });
     return next;
-  }
+  }, [floorLeaderboardRows, leaderboardMetric]);
 
-  const sortedFloorLeaderboard = useMemo(
-    () =>
-      sortLeaderboardRows(
-        floorLeaderboardRows,
-        (r) => r.paidRevenue,
-        (r) => r.jobs,
-        (r) => r.rewards,
-        (r) => r.efficiency,
-        (r) => r.onTime
-      ),
-    [floorLeaderboardRows, leaderboardMetric]
-  );
-
-  const sortedSupervisorLeaderboard = useMemo(
-    () =>
-      sortLeaderboardRows(
-        supervisorLeaderboardRows,
-        (r) => r.paid,
-        (r) => r.jobs,
-        (r) => r.rewards,
-        (r) => r.efficiency,
-        (r) => r.onTime
-      ),
-    [supervisorLeaderboardRows, leaderboardMetric]
-  );
+  const sortedSupervisorLeaderboard = useMemo(() => {
+    const next = [...supervisorLeaderboardRows];
+    next.sort((a, b) => {
+      switch (leaderboardMetric) {
+        case "paid":
+          return b.paid - a.paid;
+        case "jobs":
+          return b.jobs - a.jobs;
+        case "rewards":
+          return b.rewards - a.rewards;
+        case "efficiency":
+          return b.efficiency - a.efficiency;
+        case "onTime":
+          return b.onTime - a.onTime;
+        default:
+          return 0;
+      }
+    });
+    return next;
+  }, [supervisorLeaderboardRows, leaderboardMetric]);
 
   const leaderboardSortLabel: Record<LeaderboardSortMetric, string> = {
     paid: "Paid revenue",

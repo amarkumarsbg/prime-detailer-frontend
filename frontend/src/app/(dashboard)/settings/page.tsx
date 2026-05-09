@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
-import { useHighEndServiceStore, type HighEndServiceConfig } from "@/store/high-end-service-store";
+import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import type { VehicleSegment } from "@/types";
 import { BranchesSettings } from "@/components/settings/branches-settings";

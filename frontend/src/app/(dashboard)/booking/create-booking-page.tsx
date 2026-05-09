@@ -288,6 +288,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const membershipPackagesAll = useMembershipStore((s) => s.packages);
   const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
+  const subscriptionEffectiveStatus = useMembershipStore((s) => s.subscriptionEffectiveStatus);
   const getUsedIncludedServiceIds = useMembershipStore((s) => s.getUsedIncludedServiceIds);
   const recordMembershipUsages = useMembershipStore((s) => s.recordMembershipUsages);
   const assignMembership = useMembershipStore((s) => s.assignMembership);
@@ -811,7 +812,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const vehiclesWithActiveMembership = useMemo(() => {
     if (!existingCustomerId) return [];
     return ownedVehicles.filter((v) => getActiveMembership(existingCustomerId, v.id) != null);
-  }, [existingCustomerId, ownedVehicles, getActiveMembership, membershipSubscriptions]);
+  }, [existingCustomerId, ownedVehicles, getActiveMembership]);
 
   /**
    * Garage vehicle for membership: explicit garage selection, or the owned vehicle whose plate matches
@@ -833,19 +834,18 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (membershipLookupVehicleId) {
       return getActiveMembership(existingCustomerId, membershipLookupVehicleId);
     }
-    const now = Date.now();
     return membershipSubscriptions.find(
       (s) =>
         s.customerId === existingCustomerId &&
-        s.status === "ACTIVE" &&
         !s.vehicleId &&
-        new Date(s.endDate).getTime() >= now
+        subscriptionEffectiveStatus(s) === "ACTIVE"
     );
   }, [
     existingCustomerId,
     membershipLookupVehicleId,
     getActiveMembership,
     membershipSubscriptions,
+    subscriptionEffectiveStatus,
   ]);
 
   useEffect(() => {
@@ -3558,8 +3558,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                       onValueChange={(v) => {
                                         if (v === "__unset__") {
                                           setHighEndCompletionMinutesById((p) => {
-                                            const { [hes.id]: _, ...rest } = p;
-                                            return rest;
+                                            const next = { ...p };
+                                            delete next[hes.id];
+                                            return next;
                                           });
                                           return;
                                         }
@@ -3625,8 +3626,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                             const raw = e.target.value;
                                             if (raw === "") {
                                               setHighEndCompletionMinutesById((p) => {
-                                                const { [hes.id]: _, ...rest } = p;
-                                                return rest;
+                                                const next = { ...p };
+                                                delete next[hes.id];
+                                                return next;
                                               });
                                               return;
                                             }
@@ -4244,6 +4246,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   <div className="flex flex-wrap gap-2 pt-1">
                     {checkInPhotos.map((p) => (
                       <div key={p.id} className="relative group w-20 h-20 rounded-md overflow-hidden border bg-muted">
+                        {/* Preview uses blob/object URLs — next/image unsupported without config */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={p.url} alt="" className="w-full h-full object-cover" />
                         <button
                           type="button"

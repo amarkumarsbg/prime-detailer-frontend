@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { putSingletonDocument } from "@/lib/collection-sync";
 
 export type ReportScheduleRecord = {
   id: string;
@@ -14,10 +14,14 @@ export type ReportScheduleRecord = {
   nextDelivery: string;
 };
 
-interface Store {
+export interface ReportSchedulesPayload {
   schedules: ReportScheduleRecord[];
-  addSchedule: (input: Omit<ReportScheduleRecord, "id" | "nextDelivery">) => void;
-  removeSchedule: (id: string) => void;
+}
+
+export function mergeReportSchedulesPayload(raw: unknown): ReportScheduleRecord[] {
+  if (!raw || typeof raw !== "object") return [];
+  const o = raw as Record<string, unknown>;
+  return Array.isArray(o.schedules) ? (o.schedules as ReportScheduleRecord[]) : [];
 }
 
 function defaultNextDelivery(): string {
@@ -32,23 +36,38 @@ function defaultNextDelivery(): string {
   });
 }
 
-export const useAdvancedReportSchedulesStore = create<Store>()(
-  persist(
-    (set) => ({
-      schedules: [],
+function pushSchedulesSnapshot(schedules: ReportScheduleRecord[]): void {
+  void putSingletonDocument("reportSchedules", { schedules }).catch((err) => {
+    if (process.env.NODE_ENV !== "production") console.error(err);
+  });
+}
 
-      addSchedule: (input) => {
-        const row: ReportScheduleRecord = {
-          ...input,
-          id: `sch-${Date.now()}`,
-          nextDelivery: defaultNextDelivery(),
-        };
-        set((s) => ({ schedules: [row, ...s.schedules] }));
-      },
+interface AdvancedReportSchedulesStore {
+  schedules: ReportScheduleRecord[];
+  hydrateFromBootstrap: (schedules: ReportScheduleRecord[]) => void;
+  addSchedule: (input: Omit<ReportScheduleRecord, "id" | "nextDelivery">) => void;
+  removeSchedule: (id: string) => void;
+}
 
-      removeSchedule: (id) =>
-        set((s) => ({ schedules: s.schedules.filter((r) => r.id !== id) })),
-    }),
-    { name: "prime-detailers-advanced-report-schedules", version: 1 }
-  )
-);
+export const useAdvancedReportSchedulesStore = create<AdvancedReportSchedulesStore>((set, get) => ({
+  schedules: [],
+
+  hydrateFromBootstrap: (schedules) => set({ schedules }),
+
+  addSchedule: (input) => {
+    const row: ReportScheduleRecord = {
+      ...input,
+      id: `sch-${Date.now()}`,
+      nextDelivery: defaultNextDelivery(),
+    };
+    const schedules = [row, ...get().schedules];
+    set({ schedules });
+    pushSchedulesSnapshot(schedules);
+  },
+
+  removeSchedule: (id) => {
+    const schedules = get().schedules.filter((r) => r.id !== id);
+    set({ schedules });
+    pushSchedulesSnapshot(schedules);
+  },
+}));

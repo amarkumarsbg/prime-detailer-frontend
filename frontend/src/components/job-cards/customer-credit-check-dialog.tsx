@@ -78,11 +78,13 @@ export function CustomerCreditCheckDialog({
 
   useEffect(() => {
     if (!open) {
-      setRecordOpen(false);
-      setTargetInvoice(null);
-      setPaymentAmount("");
-      setReferenceNumber("");
-      setPaymentMethod("CASH");
+      queueMicrotask(() => {
+        setRecordOpen(false);
+        setTargetInvoice(null);
+        setPaymentAmount("");
+        setReferenceNumber("");
+        setPaymentMethod("CASH");
+      });
     }
   }, [open]);
 

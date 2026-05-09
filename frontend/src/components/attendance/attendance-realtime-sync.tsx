@@ -24,7 +24,7 @@ export function AttendanceRealtimeSync() {
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
-      setAuthReady(true);
+      queueMicrotask(() => setAuthReady(true));
       return;
     }
     const unsub = useAuthStore.persist.onFinishHydration(() => setAuthReady(true));

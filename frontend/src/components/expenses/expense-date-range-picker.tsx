@@ -130,14 +130,16 @@ export function ExpenseDateRangePicker({
 
   useEffect(() => {
     if (!open) return;
-    if (value.kind === "custom") {
-      setDraftStart(value.start);
-      setDraftEnd(value.end);
-    } else {
-      const t = format(new Date(), "yyyy-MM-dd");
-      setDraftStart(t);
-      setDraftEnd(t);
-    }
+    queueMicrotask(() => {
+      if (value.kind === "custom") {
+        setDraftStart(value.start);
+        setDraftEnd(value.end);
+      } else {
+        const t = format(new Date(), "yyyy-MM-dd");
+        setDraftStart(t);
+        setDraftEnd(t);
+      }
+    });
   }, [open, value]);
 
   const applyPreset = (preset: PresetKey) => {

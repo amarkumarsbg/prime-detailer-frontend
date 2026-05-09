@@ -145,10 +145,12 @@ function ExpensesPageContent() {
 
   useEffect(() => {
     if (!highlight) return;
-    setDateFilter({ kind: "preset", preset: "all" });
-    setBranchFilter("all");
-    setCategoryFilter("all");
-    setStatusFilter("all");
+    queueMicrotask(() => {
+      setDateFilter({ kind: "preset", preset: "all" });
+      setBranchFilter("all");
+      setCategoryFilter("all");
+      setStatusFilter("all");
+    });
   }, [highlight]);
 
   const categoryOptions = useMemo(() => {

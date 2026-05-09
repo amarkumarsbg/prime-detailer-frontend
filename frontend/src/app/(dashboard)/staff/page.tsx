@@ -142,18 +142,20 @@ export default function StaffPage() {
 
   useEffect(() => {
     if (assignableRoles.length && !assignableRoles.includes(newRole)) {
-      setNewRole(assignableRoles[0]!);
+      queueMicrotask(() => setNewRole(assignableRoles[0]!));
     }
   }, [assignableRoles, newRole]);
 
   useEffect(() => {
     if (branchLocked && authUser?.branchId) {
-      setNewBranchId(authUser.branchId);
+      queueMicrotask(() => setNewBranchId(authUser.branchId));
       return;
     }
-    setNewBranchId((prev) => {
-      if (branches.some((b) => b.id === prev)) return prev;
-      return defaultBranchId;
+    queueMicrotask(() => {
+      setNewBranchId((prev) => {
+        if (branches.some((b) => b.id === prev)) return prev;
+        return defaultBranchId;
+      });
     });
   }, [branches, defaultBranchId, branchLocked, authUser?.branchId]);
 

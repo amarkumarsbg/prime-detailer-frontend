@@ -1,11 +1,10 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { putSingletonDocument } from "@/lib/collection-sync";
 
-interface SettingsState {
+export interface SerializableAppSettings {
   businessName: string;
-  /** Shown under business name on tax invoices */
   businessTagline: string;
   businessPhone: string;
   businessWhatsApp: string;
@@ -21,12 +20,101 @@ interface SettingsState {
   bankUpi: string;
   referralRewardAmount: number;
   newCustomerDiscount: number;
-  /** When false, /reminders blocks sending WhatsApp from the UI. Persisted locally. */
   whatsappReminderEnabled: boolean;
+}
+
+export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
+  businessName: "Prime Detailers",
+  businessTagline: "Car Wash & Detailing Studio",
+  businessPhone: "+91-80-4123-4567",
+  businessWhatsApp: "+91-80-4123-4567",
+  businessEmail: "hello@primedetailers.in",
+  businessAddress: "80 Feet Road, Koramangala 4th Block, Bengaluru 560034",
+  businessWebsite: "www.primedetailers.com",
+  gstin: "29AABCT1234F1ZP",
+  companyPan: "[Your PAN]",
+  bankName: "[Your Bank Name]",
+  bankBranch: "[Branch Name]",
+  bankAccountNumber: "[Account Number]",
+  bankIfsc: "[IFSC Code]",
+  bankUpi: "[UPI ID or Number]",
+  referralRewardAmount: 500,
+  newCustomerDiscount: 200,
+  whatsappReminderEnabled: true,
+};
+
+function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings {
+  return {
+    businessName: s.businessName,
+    businessTagline: s.businessTagline,
+    businessPhone: s.businessPhone,
+    businessWhatsApp: s.businessWhatsApp,
+    businessEmail: s.businessEmail,
+    businessAddress: s.businessAddress,
+    businessWebsite: s.businessWebsite,
+    gstin: s.gstin,
+    companyPan: s.companyPan,
+    bankName: s.bankName,
+    bankBranch: s.bankBranch,
+    bankAccountNumber: s.bankAccountNumber,
+    bankIfsc: s.bankIfsc,
+    bankUpi: s.bankUpi,
+    referralRewardAmount: s.referralRewardAmount,
+    newCustomerDiscount: s.newCustomerDiscount,
+    whatsappReminderEnabled: s.whatsappReminderEnabled,
+  };
+}
+
+/** Merge API payload into serializable defaults (ignores unknown keys). */
+export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSettings> {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  const next: Partial<SerializableAppSettings> = {};
+  const str = (k: keyof SerializableAppSettings) =>
+    typeof o[k] === "string" ? (o[k] as string) : undefined;
+  const num = (k: keyof SerializableAppSettings) =>
+    typeof o[k] === "number" && Number.isFinite(o[k] as number)
+      ? (o[k] as number)
+      : undefined;
+  const bool = (k: keyof SerializableAppSettings) =>
+    typeof o[k] === "boolean" ? (o[k] as boolean) : undefined;
+
+  const assignStr = (...keys: (keyof SerializableAppSettings)[]) => {
+    for (const k of keys) {
+      const v = str(k);
+      if (v !== undefined) next[k] = v as never;
+    }
+  };
+  assignStr(
+    "businessName",
+    "businessTagline",
+    "businessPhone",
+    "businessWhatsApp",
+    "businessEmail",
+    "businessAddress",
+    "businessWebsite",
+    "gstin",
+    "companyPan",
+    "bankName",
+    "bankBranch",
+    "bankAccountNumber",
+    "bankIfsc",
+    "bankUpi"
+  );
+  const rr = num("referralRewardAmount");
+  if (rr !== undefined) next.referralRewardAmount = rr;
+  const nd = num("newCustomerDiscount");
+  if (nd !== undefined) next.newCustomerDiscount = nd;
+  const wa = bool("whatsappReminderEnabled");
+  if (wa !== undefined) next.whatsappReminderEnabled = wa;
+  return next;
+}
+
+interface SettingsState extends SerializableAppSettings {
   setBusinessProfile: (
     profile: Partial<
       Pick<
-        SettingsState,
+        SerializableAppSettings,
         | "businessName"
         | "businessTagline"
         | "businessPhone"
@@ -47,33 +135,44 @@ interface SettingsState {
   setReferralRewardAmount: (amount: number) => void;
   setNewCustomerDiscount: (amount: number) => void;
   setWhatsappReminderEnabled: (enabled: boolean) => void;
+  patchFromBootstrap: (patch: Partial<SerializableAppSettings>) => void;
 }
 
-export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set) => ({
-      businessName: "Prime Detailers",
-      businessTagline: "Car Wash & Detailing Studio",
-      businessPhone: "+91-80-4123-4567",
-      businessWhatsApp: "+91-80-4123-4567",
-      businessEmail: "hello@primedetailers.in",
-      businessAddress: "80 Feet Road, Koramangala 4th Block, Bengaluru 560034",
-      businessWebsite: "www.primedetailers.com",
-      gstin: "29AABCT1234F1ZP",
-      companyPan: "[Your PAN]",
-      bankName: "[Your Bank Name]",
-      bankBranch: "[Branch Name]",
-      bankAccountNumber: "[Account Number]",
-      bankIfsc: "[IFSC Code]",
-      bankUpi: "[UPI ID or Number]",
-      referralRewardAmount: 500,
-      newCustomerDiscount: 200,
-      whatsappReminderEnabled: true,
-      setBusinessProfile: (profile) => set((state) => ({ ...state, ...profile })),
-      setReferralRewardAmount: (amount) => set({ referralRewardAmount: amount }),
-      setNewCustomerDiscount: (amount) => set({ newCustomerDiscount: amount }),
-      setWhatsappReminderEnabled: (whatsappReminderEnabled) => set({ whatsappReminderEnabled }),
-    }),
-    { name: "prime-detailers-settings" }
-  )
-);
+let settingsSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleAppSettingsSync(get: () => SettingsState): void {
+  if (settingsSyncTimer) clearTimeout(settingsSyncTimer);
+  settingsSyncTimer = setTimeout(() => {
+    settingsSyncTimer = null;
+    const s = get();
+    void putSingletonDocument("appSettings", sliceSerializable(s)).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.error(err);
+    });
+  }, 450);
+}
+
+export const useSettingsStore = create<SettingsState>((set, get) => ({
+  ...DEFAULT_SERIALIZABLE_APP_SETTINGS,
+
+  patchFromBootstrap: (patch) => set((state) => ({ ...state, ...patch })),
+
+  setBusinessProfile: (profile) => {
+    set((state) => ({ ...state, ...profile }));
+    scheduleAppSettingsSync(get);
+  },
+
+  setReferralRewardAmount: (referralRewardAmount) => {
+    set({ referralRewardAmount });
+    scheduleAppSettingsSync(get);
+  },
+
+  setNewCustomerDiscount: (newCustomerDiscount) => {
+    set({ newCustomerDiscount });
+    scheduleAppSettingsSync(get);
+  },
+
+  setWhatsappReminderEnabled: (whatsappReminderEnabled) => {
+    set({ whatsappReminderEnabled });
+    scheduleAppSettingsSync(get);
+  },
+}));

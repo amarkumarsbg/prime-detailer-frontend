@@ -69,7 +69,7 @@ export function MembershipPageClient() {
   const [mainTab, setMainTab] = useState<TabValue>("packages");
 
   useEffect(() => {
-    if (tabParam === "assign") setMainTab("assign");
+    if (tabParam === "assign") queueMicrotask(() => setMainTab("assign"));
   }, [tabParam]);
 
   const packages = useMembershipStore((s) => s.packages);
@@ -186,7 +186,7 @@ export function MembershipPageClient() {
   }, [assignCustomerId, vehicles]);
 
   useEffect(() => {
-    setAssignVehicleId("");
+    queueMicrotask(() => setAssignVehicleId(""));
   }, [assignCustomerId]);
 
   const activePackages = useMemo(() => packages.filter((p) => p.isActive), [packages]);

@@ -71,7 +71,9 @@ export default function AccountingPage() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
 
   useEffect(() => {
-    if (branchScoped && user?.branchId) setBranchFilter(user.branchId);
+    if (branchScoped && user?.branchId) {
+      queueMicrotask(() => setBranchFilter(user.branchId));
+    }
   }, [branchScoped, user?.branchId]);
 
   const filteredInvoices = useMemo(() => {

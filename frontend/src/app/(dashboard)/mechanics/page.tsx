@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";

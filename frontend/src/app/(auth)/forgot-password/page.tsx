@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buildApiUrl } from "@/lib/api-base";
 import {
   Wrench,
   ArrowLeft,
@@ -21,12 +22,39 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<Step>("email");
+  const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string>("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setStep("sent");
+    setError(null);
+    try {
+      const res = await fetch(buildApiUrl("/api/auth/forgot-password"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const body = (await res.json()) as {
+        data?: { ok?: boolean; message?: string } | null;
+        error?: { message?: string } | null;
+      };
+      if (!res.ok || body.error) {
+        setError(body.error?.message ?? "Something went wrong. Try again.");
+        setLoading(false);
+        return;
+      }
+      setInfoMessage(
+        typeof body.data?.message === "string"
+          ? body.data.message
+          : "If an account exists for this email, you will receive reset instructions once email is configured."
+      );
+      setStep("sent");
+    } catch {
+      setError("Network error — is the API running?");
+    }
     setLoading(false);
   };
 
@@ -162,6 +190,12 @@ export default function ForgotPasswordPage() {
                   />
                 </div>
 
+                {error ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+
                 <Button
                   type="submit"
                   className="w-full h-11 rounded-xl text-sm font-medium shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0"
@@ -187,10 +221,13 @@ export default function ForgotPasswordPage() {
                 <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-                Check your email
+                Request received
               </h1>
-              <p className="text-muted-foreground mb-2">
-                We&apos;ve sent a password reset link to
+              <p className="text-muted-foreground mb-4 text-sm leading-relaxed px-1">
+                {infoMessage}
+              </p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Address used:
               </p>
               <p className="text-sm font-medium text-foreground bg-slate-100 dark:bg-slate-800 inline-block px-4 py-2 rounded-xl mb-8">
                 {email}
@@ -198,7 +235,7 @@ export default function ForgotPasswordPage() {
 
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Didn&apos;t receive the email? Check your spam folder or
+                  Need a different account?
                 </p>
                 <Button
                   variant="outline"
@@ -206,6 +243,8 @@ export default function ForgotPasswordPage() {
                   onClick={() => {
                     setStep("email");
                     setEmail("");
+                    setError(null);
+                    setInfoMessage("");
                   }}
                 >
                   Try a different email

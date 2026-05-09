@@ -50,7 +50,8 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     }));
   },
 
-  recordPayment: async (invoiceId, payment, _options) => {
+  recordPayment: async (invoiceId, payment, options) => {
+    void options.performedBy;
     const inv = get().invoices.find((i) => i.id === invoiceId);
     if (!inv) return { ok: false, inventoryError: "Invoice not found" };
 

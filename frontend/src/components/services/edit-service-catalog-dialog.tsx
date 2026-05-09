@@ -150,8 +150,10 @@ export function EditServiceCatalogDialog({
   const [form, setForm] = useState<EditFormState | null>(null);
 
   useEffect(() => {
-    if (service && open) setForm(serviceToForm(service));
-    if (!open) setForm(null);
+    queueMicrotask(() => {
+      if (service && open) setForm(serviceToForm(service));
+      if (!open) setForm(null);
+    });
   }, [service, open]);
 
   const setCompatible = (key: keyof EditFormState["compatible"], on: boolean) => {

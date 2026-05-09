@@ -53,11 +53,16 @@ export interface UseJobTimerResult {
 const TICK_MS = 1000;
 
 export function useJobTimer(input: UseJobTimerInput): UseJobTimerResult {
-  const [, setTick] = useState(0);
+  const [wallNowMs, setWallNowMs] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!input.serviceTimerStartedAt) return;
-    const id = window.setInterval(() => setTick((t) => t + 1), TICK_MS);
+    if (!input.serviceTimerStartedAt) {
+      queueMicrotask(() => setWallNowMs(null));
+      return;
+    }
+    const tick = () => setWallNowMs(Date.now());
+    tick();
+    const id = window.setInterval(tick, TICK_MS);
     return () => window.clearInterval(id);
   }, [input.serviceTimerStartedAt]);
 
@@ -80,7 +85,7 @@ export function useJobTimer(input: UseJobTimerInput): UseJobTimerResult {
   }
 
   const startMs = new Date(input.serviceTimerStartedAt).getTime();
-  const now = Date.now();
+  const now = wallNowMs ?? startMs;
   const totalPausedCompleted = input.totalPausedMs ?? 0;
   const paused = Boolean(input.timerIsPaused && input.timerPausedAt);
   const currentPauseMs = paused

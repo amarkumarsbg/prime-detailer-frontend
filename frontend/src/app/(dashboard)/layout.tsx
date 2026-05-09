@@ -14,11 +14,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const router = useRouter();
   const [authReady, setAuthReady] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const mainScrollRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
-      setAuthReady(true);
+      queueMicrotask(() => setAuthReady(true));
       return;
     }
     const unsub = useAuthStore.persist.onFinishHydration(() => setAuthReady(true));
@@ -27,25 +28,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!authReady) return;
+    let cancelled = false;
+    void (async () => {
+      await useAuthStore.getState().ensureValidSession();
+      if (!cancelled) setSessionChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady]);
+
+  useEffect(() => {
+    if (!authReady || !sessionChecked) return;
     if (!isAuthenticated) {
       router.push("/login");
     }
-  }, [authReady, isAuthenticated, router]);
+  }, [authReady, sessionChecked, isAuthenticated, router]);
 
   const runBootstrap = useAppBootstrapStore((s) => s.run);
   const resetBootstrap = useAppBootstrapStore((s) => s.reset);
   const bootstrapError = useAppBootstrapStore((s) => s.error);
 
   useEffect(() => {
-    if (authReady && !isAuthenticated) {
+    if (authReady && sessionChecked && !isAuthenticated) {
       resetBootstrap();
     }
-  }, [authReady, isAuthenticated, resetBootstrap]);
+  }, [authReady, sessionChecked, isAuthenticated, resetBootstrap]);
 
   useEffect(() => {
-    if (!authReady || !isAuthenticated) return;
+    if (!authReady || !sessionChecked || !isAuthenticated) return;
     void runBootstrap();
-  }, [authReady, isAuthenticated, runBootstrap]);
+  }, [authReady, sessionChecked, isAuthenticated, runBootstrap]);
 
   useEffect(() => {
     if (!bootstrapError) return;
@@ -57,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     });
   }, [bootstrapError]);
 
-  if (!authReady || !isAuthenticated) {
+  if (!authReady || !sessionChecked || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />

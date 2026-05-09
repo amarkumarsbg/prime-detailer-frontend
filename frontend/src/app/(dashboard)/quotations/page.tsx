@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -164,12 +164,6 @@ export default function QuotationsPage() {
     if (!formVehicleId) return null;
     return vehicles.find((v) => v.id === formVehicleId);
   }, [formVehicleId, vehicles]);
-
-  useEffect(() => {
-    if (customerMode === "existing" && selectedVehicle) {
-      setFormSegment(selectedVehicle.segment);
-    }
-  }, [customerMode, selectedVehicle?.id, selectedVehicle?.segment]);
 
   const effectiveSegment = useMemo((): VehicleSegment => {
     if (customerMode === "existing" && selectedVehicle) return selectedVehicle.segment;
@@ -911,7 +905,7 @@ export default function QuotationsPage() {
             <div className="space-y-2">
               <Label>Vehicle segment (pricing)</Label>
               <Select
-                value={segmentSelectLocked && selectedVehicle ? selectedVehicle.segment : formSegment}
+                value={effectiveSegment}
                 onValueChange={(v) => {
                   if (!segmentSelectLocked) setFormSegment(v as VehicleSegment);
                 }}

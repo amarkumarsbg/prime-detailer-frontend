@@ -51,7 +51,9 @@ export function Header() {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    queueMicrotask(() => setMounted(true));
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

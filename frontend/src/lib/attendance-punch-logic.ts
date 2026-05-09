@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import type { AttendanceRecord, User, UserRole } from "@/types";
 
 const LATE_CUTOFF = "09:30";

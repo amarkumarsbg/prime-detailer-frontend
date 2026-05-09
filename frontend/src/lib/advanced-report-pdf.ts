@@ -202,7 +202,7 @@ export function downloadCustomerLifetimeAnalysisPdf(opts: {
 
   const totalLifetimeValueAll = rowsBase.reduce((s, r) => s + r.lifetimeRevenue, 0);
 
-  let portfolio = activeOnly ? rowsBase.filter((r) => !r.customer.isInactive) : [...rowsBase];
+  const portfolio = activeOnly ? rowsBase.filter((r) => !r.customer.isInactive) : [...rowsBase];
   portfolio.sort((a, b) => b.lifetimeRevenue - a.lifetimeRevenue);
 
   const useDemo = portfolio.length === 0;

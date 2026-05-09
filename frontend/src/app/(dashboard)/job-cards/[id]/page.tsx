@@ -160,14 +160,14 @@ export default function JobCardDetailPage() {
 
   const customerRecord = useMemo(
     () => (jobCard ? customers.find((c) => c.id === jobCard.customerId) : undefined),
-    [customers, jobCard?.customerId]
+    [customers, jobCard]
   );
 
   const invoices = useInvoiceStore((s) => s.invoices);
   const businessName = useSettingsStore((s) => s.businessName);
   const invoiceForJob = useMemo(
     () => (jobCard ? invoices.find((inv) => inv.jobCardId === jobCard.id) : undefined),
-    [invoices, jobCard?.id]
+    [invoices, jobCard]
   );
 
   const mechanics = useMemo(
@@ -384,6 +384,7 @@ export default function JobCardDetailPage() {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
   };
 
+  /* eslint-disable react-hooks/purity -- timeline uses wall clock for in-progress mechanic segments */
   const mechanicTimeline = useMemo(() => {
     const timeline: {
       name: string;
@@ -395,7 +396,6 @@ export default function JobCardDetailPage() {
     }[] = [];
 
     const createdAt = jobCard?.createdAt ?? new Date().toISOString();
-    const initialMechanic = jobCard?.mechanicName;
 
     if (switchLog.length === 0 && currentMechanicName) {
       const from = createdAt;
@@ -460,15 +460,8 @@ export default function JobCardDetailPage() {
     }
 
     return timeline;
-  }, [
-    jobCard?.createdAt,
-    jobCard?.mechanicName,
-    jobCard?.status,
-    jobCard?.actualDelivery,
-    jobCard?.updatedAt,
-    switchLog,
-    currentMechanicName,
-  ]);
+  }, [jobCard, switchLog, currentMechanicName]);
+  /* eslint-enable react-hooks/purity */
 
   const totalWorkDuration = useMemo(
     () => mechanicTimeline.reduce((sum, t) => sum + t.duration, 0),
@@ -487,7 +480,7 @@ export default function JobCardDetailPage() {
       }));
     }
     return [];
-  }, [jobCard?.inspectionPhotos, jobCard?.id]);
+  }, [jobCard]);
 
   const [inspectionPhotos, setInspectionPhotos] = useState<
     { id: string; url: string; type: "BEFORE" | "AFTER"; label: string }[]
@@ -582,21 +575,14 @@ export default function JobCardDetailPage() {
       ...initialServiceTimerPatch(jobCard.services, nowIso),
       updatedAt: nowIso,
     });
-  }, [
-    jobCard?.id,
-    jobCard?.status,
-    jobCard?.mechanicId,
-    jobCard?.serviceTimerStartedAt,
-    jobCard?.services,
-    updateJobCard,
-  ]);
+  }, [jobCard, updateJobCard]);
 
   useEffect(() => {
-    if (photoTab === "AFTER" && !canUploadAfter) setPhotoTab("BEFORE");
+    if (photoTab === "AFTER" && !canUploadAfter) queueMicrotask(() => setPhotoTab("BEFORE"));
   }, [photoTab, canUploadAfter]);
 
   useEffect(() => {
-    if (photoTab === "COMPARE" && !canCompare) setPhotoTab("BEFORE");
+    if (photoTab === "COMPARE" && !canCompare) queueMicrotask(() => setPhotoTab("BEFORE"));
   }, [photoTab, canCompare]);
 
   const appendInspectionPhotosFromFiles = (files: FileList | null, type: "BEFORE" | "AFTER"): boolean => {
@@ -1925,7 +1911,8 @@ export default function JobCardDetailPage() {
                           value={completionSelectValue}
                           onValueChange={(v) => {
                             if (v === "__unset__") {
-                              const { [hesId]: _removed, ...rest } = highEndCompletionById;
+                              const rest = { ...highEndCompletionById };
+                              delete rest[hesId];
                               persistHighEndCompletion(rest);
                               return;
                             }
@@ -1982,7 +1969,8 @@ export default function JobCardDetailPage() {
                               onChange={(e) => {
                                 const raw = e.target.value;
                                 if (raw === "") {
-                                  const { [hesId]: _removed, ...rest } = highEndCompletionById;
+                                  const rest = { ...highEndCompletionById };
+                                  delete rest[hesId];
                                   persistHighEndCompletion(rest);
                                   return;
                                 }
@@ -2177,6 +2165,7 @@ export default function JobCardDetailPage() {
                     className={`rounded-xl border border-border overflow-hidden bg-card transition-all ${dragId === photo.id ? "opacity-50 scale-95 ring-2 ring-primary" : "hover:shadow-lg"}`}
                   >
                     <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
                     </div>
                     <div className="flex items-center justify-between px-4 py-3 border-t border-border">
@@ -2262,6 +2251,7 @@ export default function JobCardDetailPage() {
               )}
 
               <div className="max-w-3xl max-h-[80vh] mx-16" onClick={(e) => e.stopPropagation()}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={viewingPhotoData.url} alt={viewingPhotoData.label} className="w-full h-full object-contain rounded-lg" />
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-white text-sm font-medium">{viewingPhotoData.label}</p>
@@ -2546,6 +2536,7 @@ export default function JobCardDetailPage() {
                   .filter((p) => p.type === "BEFORE")
                   .map((photo) => (
                     <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
                       <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
                         <span className="truncate font-medium">{photo.label}</span>
@@ -2672,6 +2663,7 @@ export default function JobCardDetailPage() {
                   .filter((p) => p.type === "AFTER")
                   .map((photo) => (
                     <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
                       <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
                         <span className="truncate font-medium">{photo.label}</span>
@@ -2989,6 +2981,7 @@ function CompareView({ photos }: { photos: { id: string; url: string; type: "BEF
           <div className="rounded-xl border border-border overflow-hidden bg-muted/30">
             {beforePhotos[i] ? (
               <div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={beforePhotos[i].url} alt={beforePhotos[i].label} className="w-full aspect-4/3 object-cover" />
                 <p className="text-xs font-medium text-center py-2 border-t border-border">{beforePhotos[i].label}</p>
               </div>
@@ -3001,6 +2994,7 @@ function CompareView({ photos }: { photos: { id: string; url: string; type: "BEF
           <div className="rounded-xl border border-border overflow-hidden bg-muted/30">
             {afterPhotos[i] ? (
               <div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={afterPhotos[i].url} alt={afterPhotos[i].label} className="w-full aspect-4/3 object-cover" />
                 <p className="text-xs font-medium text-center py-2 border-t border-border">{afterPhotos[i].label}</p>
               </div>

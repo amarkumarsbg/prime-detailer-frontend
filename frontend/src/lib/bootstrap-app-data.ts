@@ -15,6 +15,7 @@ import type {
   Part,
   PayrollRecord,
   ProductPurchase,
+  PickupDropRequest,
   Quotation,
   SalaryStructure,
   ServiceCatalogItem,
@@ -48,6 +49,31 @@ import { useMembershipStore } from "@/store/membership-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import type { Notification } from "@/store/notification-store";
 import { useNotificationStore } from "@/store/notification-store";
+import { usePickupDropStore } from "@/store/pickup-drop-store";
+import {
+  mergeAppSettingsPayload,
+  useSettingsStore,
+} from "@/store/settings-store";
+import {
+  mergeReferralProgramPayload,
+  useReferralSettingsStore,
+} from "@/store/referral-settings-store";
+import {
+  mergeBalanceSheetManualPayload,
+  useBalanceSheetLedgerStore,
+} from "@/store/balance-sheet-ledger-store";
+import {
+  mergeHighEndServicesPayload,
+  useHighEndServiceStore,
+} from "@/store/high-end-service-store";
+import {
+  mergeReportSchedulesPayload,
+  useAdvancedReportSchedulesStore,
+} from "@/store/advanced-report-schedules-store";
+import {
+  mergeVehicleCatalogPayload,
+  useVehicleCatalogStore,
+} from "@/store/vehicle-catalog-store";
 
 export type BootstrapPayload = {
   customers: Customer[];
@@ -141,4 +167,37 @@ export async function bootstrapAppData(): Promise<void> {
   useNotificationStore.setState({
     notifications: (c.notifications as Notification[]) ?? [],
   });
+
+  const pickupDrop = c.pickupDropRequests as PickupDropRequest[] | undefined;
+  usePickupDropStore
+    .getState()
+    .setRequestsFromBootstrap(Array.isArray(pickupDrop) ? pickupDrop : []);
+
+  const appPatch = mergeAppSettingsPayload(c.appSettings);
+  if (Object.keys(appPatch).length > 0) {
+    useSettingsStore.getState().patchFromBootstrap(appPatch);
+  }
+
+  const referralPatch = mergeReferralProgramPayload(c.referralProgram);
+  if (Object.keys(referralPatch).length > 0) {
+    useReferralSettingsStore.getState().patchFromBootstrap(referralPatch);
+  }
+
+  useBalanceSheetLedgerStore
+    .getState()
+    .hydrateFromBootstrap(mergeBalanceSheetManualPayload(c.balanceSheetManual));
+
+  const hesServer = mergeHighEndServicesPayload(c.highEndServices);
+  if (hesServer && hesServer.length > 0) {
+    useHighEndServiceStore.getState().hydrateFromBootstrap(hesServer);
+  }
+
+  useAdvancedReportSchedulesStore
+    .getState()
+    .hydrateFromBootstrap(mergeReportSchedulesPayload(c.reportSchedules));
+
+  const catalogBrands = mergeVehicleCatalogPayload(c.vehicleCatalog);
+  if (catalogBrands && catalogBrands.length > 0) {
+    useVehicleCatalogStore.getState().hydrateFromBootstrap(catalogBrands);
+  }
 }

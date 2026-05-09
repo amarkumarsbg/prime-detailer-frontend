@@ -54,7 +54,7 @@ export function DataTable<T extends Record<string, any>>({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
-    setPage(0);
+    queueMicrotask(() => setPage(0));
   }, [data]);
 
   const filtered = useMemo(() => {
@@ -91,7 +91,7 @@ export function DataTable<T extends Record<string, any>>({
     const idx = sorted.findIndex(
       (item) => String((item as T & { id?: string }).id) === focusItemId
     );
-    if (idx >= 0) setPage(Math.floor(idx / pageSize));
+    if (idx >= 0) queueMicrotask(() => setPage(Math.floor(idx / pageSize)));
   }, [focusItemId, sorted, pageSize]);
 
   useEffect(() => {

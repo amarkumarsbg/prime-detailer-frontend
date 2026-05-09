@@ -77,7 +77,9 @@ export function BranchFormDialog({ open, onOpenChange, mode, branch, onSubmit }:
 
   useEffect(() => {
     if (open) {
-      setForm(mode === "edit" && branch ? branchToForm(branch) : emptyForm());
+      queueMicrotask(() =>
+        setForm(mode === "edit" && branch ? branchToForm(branch) : emptyForm())
+      );
     }
   }, [open, mode, branch]);
 

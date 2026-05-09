@@ -66,7 +66,7 @@ export function AddAddonDialog({
   const [form, setForm] = useState<AddAddonForm>(emptyForm);
 
   useEffect(() => {
-    if (open) setForm(emptyForm());
+    if (open) queueMicrotask(() => setForm(emptyForm()));
   }, [open]);
 
   const handleSubmit = (e: React.FormEvent) => {

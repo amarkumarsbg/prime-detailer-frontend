@@ -28,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { JobCardStatusBadge, InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { useCustomerStore } from "@/store/customer-store";
@@ -55,7 +54,7 @@ import {
   INDIAN_VEHICLE_REG_ERROR_SHORT,
   isValidIndianVehicleRegistration,
 } from "@/lib/vehicle-registration";
-import type { Customer, Vehicle, JobCard, Invoice, WalletTransaction, FuelType, VehicleSegment } from "@/types";
+import type { Vehicle, JobCard, Invoice, WalletTransaction, FuelType, VehicleSegment } from "@/types";
 
 const fuelTypes: FuelType[] = ["PETROL", "DIESEL", "CNG", "ELECTRIC", "HYBRID"];
 const vehicleSegments: VehicleSegment[] = ["HATCHBACK", "SEDAN", "SUV", "LUXURY", "MUV", "COMPACT_SUV"];
@@ -165,7 +164,7 @@ export default function CustomerDetailPage() {
         return { vehicle: v, sub, pkg, daysLeft };
       })
       .filter((x): x is NonNullable<typeof x> => x != null);
-  }, [customer, customerVehicles, getActiveMembership, membershipSubscriptions, packages]);
+  }, [customer, customerVehicles, getActiveMembership, packages]);
 
   const legacyActiveMembership = useMemo(() => {
     if (!customer) return undefined;
@@ -212,7 +211,7 @@ export default function CustomerDetailPage() {
 
   const referralCount = useMemo(() => {
     return allCustomers.filter((c) => c.referredBy === customer?.referralCode).length;
-  }, [id, customer?.referralCode]);
+  }, [allCustomers, customer?.referralCode]);
 
   const normalizeJobCardStatus = (status: string) => {
     return status as JobCard["status"];
@@ -1054,7 +1053,7 @@ export default function CustomerDetailPage() {
           </Card>
         </TabsContent>
         <TabsContent value="feedback" className="space-y-4">
-          <CustomerFeedback customerId={id} customerJobCards={customerJobCards} />
+          <CustomerFeedback />
         </TabsContent>
       </Tabs>
     </div>
@@ -1081,7 +1080,7 @@ function StarRating({ rating, onRate, size = "md" }: { rating: number; onRate?: 
   );
 }
 
-function CustomerFeedback({ customerId, customerJobCards }: { customerId: string; customerJobCards: JobCard[] }) {
+function CustomerFeedback() {
   const [feedbacks, setFeedbacks] = useState<
     { id: string; jobCardId: string; jobNumber: string; rating: number; comment: string; createdAt: string }[]
   >([]);

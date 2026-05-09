@@ -17,7 +17,7 @@ interface ServiceCategoryState {
   remove: (id: string) => void;
 }
 
-export const useServiceCategoryStore = create<ServiceCategoryState>((set, get) => ({
+export const useServiceCategoryStore = create<ServiceCategoryState>((set) => ({
   categories: [],
 
   setCategories: (u) => {

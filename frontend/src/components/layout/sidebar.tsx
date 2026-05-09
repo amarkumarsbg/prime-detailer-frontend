@@ -207,15 +207,17 @@ function SidebarContent({
   const [showScrollHint, setShowScrollHint] = useState(false);
 
   const updateScrollHint = useCallback(() => {
-    const el = navRef.current;
-    if (!el || navOverflow !== "auto") {
-      setShowScrollHint(false);
-      return;
-    }
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const canScroll = scrollHeight > clientHeight + 2;
-    const atBottom = scrollTop + clientHeight >= scrollHeight - 6;
-    setShowScrollHint(canScroll && !atBottom);
+    queueMicrotask(() => {
+      const el = navRef.current;
+      if (!el || navOverflow !== "auto") {
+        setShowScrollHint(false);
+        return;
+      }
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const canScroll = scrollHeight > clientHeight + 2;
+      const atBottom = scrollTop + clientHeight >= scrollHeight - 6;
+      setShowScrollHint(canScroll && !atBottom);
+    });
   }, [navOverflow]);
 
   const navContentSignature = filteredGroups.map((g) => g.items.length).join(",");

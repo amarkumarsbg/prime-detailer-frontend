@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -10,7 +10,6 @@ import { useCustomerStore } from "@/store/customer-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -442,7 +441,17 @@ function VehicleReminders({ vehicleId }: { vehicleId: string }) {
     .filter((r) => r.vehicleId === vehicleId && r.status !== "COMPLETED" && r.status !== "DISMISSED")
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
+  const [nowWallMs, setNowWallMs] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNowWallMs(Date.now());
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   if (reminders.length === 0) return null;
+  if (nowWallMs === null) return null;
+  const clock = nowWallMs;
 
   return (
     <div>
@@ -452,7 +461,9 @@ function VehicleReminders({ vehicleId }: { vehicleId: string }) {
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {reminders.map((r) => {
-          const days = Math.ceil((new Date(r.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          const days = Math.ceil(
+            (new Date(r.dueDate).getTime() - clock) / (1000 * 60 * 60 * 24)
+          );
           const isOverdue = days < 0;
           const isDue = days >= 0 && days <= 3;
           const Icon = REMINDER_ICONS[r.type] ?? Wrench;

@@ -121,18 +121,20 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
 
   useEffect(() => {
     if (!open) return;
-    const resolved = resolveSessionBranchId(currentBranch, user?.branchId);
-    setBranchId(resolved);
-    setTitle("");
-    setAmount("");
-    setDateStr(new Date().toISOString().slice(0, 10));
-    setCategoryInput("SUPPLIES");
-    setVendorInput("");
-    setPaymentStatus("PAID");
-    setPaymentMethod("CASH");
-    setDescription("");
-    setAmountPaid("");
-    setReceiptName("");
+    queueMicrotask(() => {
+      const resolved = resolveSessionBranchId(currentBranch, user?.branchId);
+      setBranchId(resolved);
+      setTitle("");
+      setAmount("");
+      setDateStr(new Date().toISOString().slice(0, 10));
+      setCategoryInput("SUPPLIES");
+      setVendorInput("");
+      setPaymentStatus("PAID");
+      setPaymentMethod("CASH");
+      setDescription("");
+      setAmountPaid("");
+      setReceiptName("");
+    });
   }, [open, currentBranch, user?.branchId]);
 
   const handleAddCategory = () => {

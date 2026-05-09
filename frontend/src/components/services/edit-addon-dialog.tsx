@@ -48,12 +48,14 @@ export function EditAddonDialog({
 
   useEffect(() => {
     if (!item || !open) return;
-    setName(item.name);
-    setDescription(item.description);
-    setPrice(String(item.defaultPrice));
-    setDurationMin(item.durationMinutes != null ? String(item.durationMinutes) : "");
-    setActive(item.isActive);
-    setGlobalScope((item.scope ?? "GLOBAL") === "GLOBAL");
+    queueMicrotask(() => {
+      setName(item.name);
+      setDescription(item.description);
+      setPrice(String(item.defaultPrice));
+      setDurationMin(item.durationMinutes != null ? String(item.durationMinutes) : "");
+      setActive(item.isActive);
+      setGlobalScope((item.scope ?? "GLOBAL") === "GLOBAL");
+    });
   }, [item, open]);
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -60,7 +60,7 @@ import {
   splitCgstSgst,
 } from "@/lib/tax-invoice-format";
 import { toast } from "sonner";
-import type { Payment, PaymentMethod } from "@/types";
+import type { PaymentMethod } from "@/types";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: typeof Banknote }[] = [
   { value: "CASH", label: "Cash", icon: Banknote },
@@ -124,7 +124,7 @@ export default function InvoiceDetailPage() {
     [invoice, customers]
   );
 
-  const payments = invoice?.payments ?? [];
+  const payments = useMemo(() => invoice?.payments ?? [], [invoice]);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");

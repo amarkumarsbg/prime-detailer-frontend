@@ -36,6 +36,10 @@ const otpVerifySchema = z.object({
   code: z.string().min(4).max(16),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
 function formatTwilioSendError(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
     const e = err as {
@@ -220,6 +224,37 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const user = result.user;
     const branch = await prisma.branch.findUnique({ where: { id: user.branchId } });
     res.status(201).json({ data: authSuccessResponse(user, branch), error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+/**
+ * Accepts reset requests without revealing whether the email exists.
+ * Email delivery is not wired yet — log in development for operators.
+ */
+export async function forgotPassword(req: Request, res: Response, next: NextFunction) {
+  const isProduction = process.env.NODE_ENV === "production";
+  try {
+    const body = forgotPasswordSchema.parse(req.body);
+    const normalized = body.email.trim().toLowerCase();
+    if (!isProduction) {
+      const user = await prisma.user.findFirst({
+        where: { email: normalized },
+        select: { id: true },
+      });
+      console.info(
+        `[auth/forgot-password] ${normalized} — ${user ? "account found" : "no account"} (configure mailer to send reset links)`
+      );
+    }
+    res.json({
+      data: {
+        ok: true as const,
+        message:
+          "If an account exists for this email, you will receive password reset instructions once email is configured.",
+      },
+      error: null,
+    });
   } catch (e) {
     next(e);
   }

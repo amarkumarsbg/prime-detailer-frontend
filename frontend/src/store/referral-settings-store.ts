@@ -1,11 +1,11 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { putSingletonDocument } from "@/lib/collection-sync";
 
 export type ReferralRewardMode = "fixed_inr" | "percent_job";
 
-export interface ReferralSettingsState {
+export interface ReferralProgramSerializable {
   programEnabled: boolean;
   advocateRewardMode: ReferralRewardMode;
   advocateAmount: string;
@@ -14,7 +14,7 @@ export interface ReferralSettingsState {
   minJobAmountInr: string;
 }
 
-const DEFAULTS: ReferralSettingsState = {
+const DEFAULT_SERIALIZABLE: ReferralProgramSerializable = {
   programEnabled: true,
   advocateRewardMode: "fixed_inr",
   advocateAmount: "100",
@@ -23,7 +23,7 @@ const DEFAULTS: ReferralSettingsState = {
   minJobAmountInr: "0",
 };
 
-interface ReferralSettingsStore extends ReferralSettingsState {
+interface ReferralSettingsStore extends ReferralProgramSerializable {
   setProgramEnabled: (v: boolean) => void;
   setAdvocateRewardMode: (m: ReferralRewardMode) => void;
   setAdvocateAmount: (s: string) => void;
@@ -31,24 +31,78 @@ interface ReferralSettingsStore extends ReferralSettingsState {
   setNewCustomerAmount: (s: string) => void;
   setMinJobAmountInr: (s: string) => void;
   resetToDefaults: () => void;
+  patchFromBootstrap: (patch: Partial<ReferralProgramSerializable>) => void;
 }
 
-export const useReferralSettingsStore = create<ReferralSettingsStore>()(
-  persist(
-    (set) => ({
-      ...DEFAULTS,
+function pushReferralSnapshot(get: () => ReferralSettingsStore): void {
+  const s = get();
+  const payload: ReferralProgramSerializable = {
+    programEnabled: s.programEnabled,
+    advocateRewardMode: s.advocateRewardMode,
+    advocateAmount: s.advocateAmount,
+    newCustomerRewardMode: s.newCustomerRewardMode,
+    newCustomerAmount: s.newCustomerAmount,
+    minJobAmountInr: s.minJobAmountInr,
+  };
+  void putSingletonDocument("referralProgram", payload).catch((err) => {
+    if (process.env.NODE_ENV !== "production") console.error(err);
+  });
+}
 
-      setProgramEnabled: (programEnabled) => set({ programEnabled }),
-      setAdvocateRewardMode: (advocateRewardMode) => set({ advocateRewardMode }),
-      setAdvocateAmount: (advocateAmount) => set({ advocateAmount }),
-      setNewCustomerRewardMode: (newCustomerRewardMode) => set({ newCustomerRewardMode }),
-      setNewCustomerAmount: (newCustomerAmount) => set({ newCustomerAmount }),
-      setMinJobAmountInr: (minJobAmountInr) => set({ minJobAmountInr }),
-      resetToDefaults: () => set({ ...DEFAULTS }),
-    }),
-    {
-      name: "prime-detailers-referral-settings",
-      version: 1,
-    }
-  )
-);
+export function mergeReferralProgramPayload(raw: unknown): Partial<ReferralProgramSerializable> {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  const next: Partial<ReferralProgramSerializable> = {};
+  if (typeof o.programEnabled === "boolean") next.programEnabled = o.programEnabled;
+  if (o.advocateRewardMode === "fixed_inr" || o.advocateRewardMode === "percent_job") {
+    next.advocateRewardMode = o.advocateRewardMode;
+  }
+  if (typeof o.advocateAmount === "string") next.advocateAmount = o.advocateAmount;
+  if (o.newCustomerRewardMode === "fixed_inr" || o.newCustomerRewardMode === "percent_job") {
+    next.newCustomerRewardMode = o.newCustomerRewardMode;
+  }
+  if (typeof o.newCustomerAmount === "string") next.newCustomerAmount = o.newCustomerAmount;
+  if (typeof o.minJobAmountInr === "string") next.minJobAmountInr = o.minJobAmountInr;
+  return next;
+}
+
+export const useReferralSettingsStore = create<ReferralSettingsStore>((set, get) => ({
+  ...DEFAULT_SERIALIZABLE,
+
+  patchFromBootstrap: (patch) => set((state) => ({ ...state, ...patch })),
+
+  setProgramEnabled: (programEnabled) => {
+    set({ programEnabled });
+    pushReferralSnapshot(get);
+  },
+
+  setAdvocateRewardMode: (advocateRewardMode) => {
+    set({ advocateRewardMode });
+    pushReferralSnapshot(get);
+  },
+
+  setAdvocateAmount: (advocateAmount) => {
+    set({ advocateAmount });
+    pushReferralSnapshot(get);
+  },
+
+  setNewCustomerRewardMode: (newCustomerRewardMode) => {
+    set({ newCustomerRewardMode });
+    pushReferralSnapshot(get);
+  },
+
+  setNewCustomerAmount: (newCustomerAmount) => {
+    set({ newCustomerAmount });
+    pushReferralSnapshot(get);
+  },
+
+  setMinJobAmountInr: (minJobAmountInr) => {
+    set({ minJobAmountInr });
+    pushReferralSnapshot(get);
+  },
+
+  resetToDefaults: () => {
+    set({ ...DEFAULT_SERIALIZABLE });
+    pushReferralSnapshot(get);
+  },
+}));

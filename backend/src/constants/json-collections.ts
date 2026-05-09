@@ -15,6 +15,7 @@ export const ARRAY_JSON_COLLECTIONS = [
   "followUps",
   "serviceCategories",
   "notifications",
+  "pickupDropRequests",
 ] as const;
 
 export type ArrayJsonCollection = (typeof ARRAY_JSON_COLLECTIONS)[number];
@@ -26,6 +27,12 @@ export const SINGLETON_COLLECTIONS = [
   "cashBank",
   "payroll",
   "membership",
+  "appSettings",
+  "referralProgram",
+  "balanceSheetManual",
+  "highEndServices",
+  "reportSchedules",
+  "vehicleCatalog",
 ] as const;
 
 export type SingletonCollection = (typeof SINGLETON_COLLECTIONS)[number];

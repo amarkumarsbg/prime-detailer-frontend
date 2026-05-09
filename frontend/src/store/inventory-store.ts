@@ -59,7 +59,7 @@ function validateDeductions(parts: Part[], lines: ConsumptionDeduction[]): strin
 }
 
 function applyDeductionToParts(parts: Part[], lines: ConsumptionDeduction[]): Part[] {
-  let next = parts.map((p) => ({ ...p }));
+  const next = parts.map((p) => ({ ...p }));
   for (const d of lines) {
     const idx = next.findIndex((x) => x.id === d.partId);
     if (idx < 0) continue;

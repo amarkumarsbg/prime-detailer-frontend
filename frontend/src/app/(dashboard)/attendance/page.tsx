@@ -74,7 +74,7 @@ export default function AttendancePage() {
 
   const staffForBranch = useMemo(
     () => staff.filter((s) => s.branchId === branchId),
-    [branchId]
+    [staff, branchId]
   );
 
   const recordsForDate = useMemo(() => {

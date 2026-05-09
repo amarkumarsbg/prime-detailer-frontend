@@ -22,6 +22,8 @@ interface AuthState {
   currentBranch: Branch | null;
   isAuthenticated: boolean;
   accessToken: string | null;
+  /** Validates JWT with `/api/auth/me` or clears session */
+  ensureValidSession: () => Promise<void>;
   sendLoginOtp: (phone: string) => Promise<SendLoginOtpResult>;
   verifyLoginOtp: (phone: string, code: string) => Promise<boolean>;
   login: (email: string, password: string) => Promise<boolean>;
@@ -43,11 +45,39 @@ function canOrgWideRole(role: User["role"]): boolean {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       currentBranch: null,
       isAuthenticated: false,
       accessToken: null,
+
+      ensureValidSession: async () => {
+        const token = get().accessToken;
+        if (!token) return;
+        try {
+          const res = await fetch(buildApiUrl("/api/auth/me"), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const body = (await res.json()) as {
+            data?: { user: User; branch: Branch | null } | null;
+            error?: { message?: string } | null;
+          };
+          if (!res.ok || body.error || !body.data) {
+            get().logout();
+            return;
+          }
+          const { user, branch } = body.data;
+          const canOrgWide = canOrgWideRole(user.role);
+          const homeBranch = branch ?? null;
+          set({
+            user,
+            currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+            isAuthenticated: true,
+          });
+        } catch {
+          get().logout();
+        }
+      },
 
       sendLoginOtp: async (phone: string) => {
         const digits = phone.replace(/\D/g, "");

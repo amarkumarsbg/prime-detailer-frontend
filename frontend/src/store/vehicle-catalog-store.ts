@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { putSingletonDocument } from "@/lib/collection-sync";
 import type { VehicleSegment } from "@/types";
 
 export interface VehicleModel {
@@ -22,7 +22,8 @@ const CS: VehicleSegment = "COMPACT_SUV";
 const MUV: VehicleSegment = "MUV";
 const L: VehicleSegment = "LUXURY";
 
-const DEFAULT_BRANDS: VehicleBrand[] = [
+/** Exported for bootstrap fallback when API has no catalog yet. */
+export const DEFAULT_BRANDS: VehicleBrand[] = [
   { id: "b-maruti", name: "Maruti", models: [
     { name: "Swift", segment: H }, { name: "Baleno", segment: H }, { name: "Alto", segment: H }, { name: "WagonR", segment: H },
     { name: "Dzire", segment: S }, { name: "Brezza", segment: CS }, { name: "Ertiga", segment: MUV }, { name: "XL6", segment: MUV },
@@ -95,8 +96,16 @@ const DEFAULT_BRANDS: VehicleBrand[] = [
   ]},
 ];
 
+export function mergeVehicleCatalogPayload(raw: unknown): VehicleBrand[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.brands)) return null;
+  return o.brands as VehicleBrand[];
+}
+
 interface VehicleCatalogStore {
   brands: VehicleBrand[];
+  hydrateFromBootstrap: (brands: VehicleBrand[]) => void;
   addBrand: (name: string) => void;
   removeBrand: (id: string) => void;
   addModel: (brandId: string, name: string, segment: VehicleSegment) => void;
@@ -106,59 +115,69 @@ interface VehicleCatalogStore {
   getModelSegment: (brandName: string, modelName: string) => VehicleSegment | null;
 }
 
-export const useVehicleCatalogStore = create<VehicleCatalogStore>()(
-  persist(
-    (set, get) => ({
-      brands: DEFAULT_BRANDS,
+let catalogTimer: ReturnType<typeof setTimeout> | null = null;
 
-      addBrand: (name) =>
-        set((state) => ({
-          brands: [
-            ...state.brands,
-            { id: `b-${Date.now()}`, name: name.trim(), models: [] },
-          ],
-        })),
+function scheduleVehicleCatalogSync(get: () => VehicleCatalogStore): void {
+  if (catalogTimer) clearTimeout(catalogTimer);
+  catalogTimer = setTimeout(() => {
+    catalogTimer = null;
+    const brands = get().brands;
+    void putSingletonDocument("vehicleCatalog", { brands }).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.error(err);
+    });
+  }, 450);
+}
 
-      removeBrand: (id) =>
-        set((state) => ({
-          brands: state.brands.filter((b) => b.id !== id),
-        })),
+export const useVehicleCatalogStore = create<VehicleCatalogStore>((set, get) => ({
+  brands: DEFAULT_BRANDS,
 
-      addModel: (brandId, name, segment) =>
-        set((state) => ({
-          brands: state.brands.map((b) =>
-            b.id === brandId && !b.models.some((m) => m.name === name.trim())
-              ? { ...b, models: [...b.models, { name: name.trim(), segment }] }
-              : b
-          ),
-        })),
+  hydrateFromBootstrap: (brands) =>
+    set({ brands: brands.length > 0 ? brands : DEFAULT_BRANDS }),
 
-      removeModel: (brandId, modelName) =>
-        set((state) => ({
-          brands: state.brands.map((b) =>
-            b.id === brandId
-              ? { ...b, models: b.models.filter((m) => m.name !== modelName) }
-              : b
-          ),
-        })),
+  addBrand: (name) => {
+    set((state) => ({
+      brands: [...state.brands, { id: `b-${Date.now()}`, name: name.trim(), models: [] }],
+    }));
+    scheduleVehicleCatalogSync(get);
+  },
 
-      getBrandNames: () => get().brands.map((b) => b.name).sort(),
+  removeBrand: (id) => {
+    set((state) => ({
+      brands: state.brands.filter((b) => b.id !== id),
+    }));
+    scheduleVehicleCatalogSync(get);
+  },
 
-      getModels: (brandName) => {
-        const brand = get().brands.find((b) => b.name === brandName);
-        return brand ? [...brand.models].sort((a, b) => a.name.localeCompare(b.name)) : [];
-      },
+  addModel: (brandId, name, segment) => {
+    set((state) => ({
+      brands: state.brands.map((b) =>
+        b.id === brandId && !b.models.some((m) => m.name === name.trim())
+          ? { ...b, models: [...b.models, { name: name.trim(), segment }] }
+          : b
+      ),
+    }));
+    scheduleVehicleCatalogSync(get);
+  },
 
-      getModelSegment: (brandName, modelName) => {
-        const brand = get().brands.find((b) => b.name === brandName);
-        const model = brand?.models.find((m) => m.name === modelName);
-        return model?.segment ?? null;
-      },
-    }),
-    {
-      name: "prime-detailers-vehicle-catalog",
-      version: 2,
-      migrate: () => ({ brands: DEFAULT_BRANDS }),
-    }
-  )
-);
+  removeModel: (brandId, modelName) => {
+    set((state) => ({
+      brands: state.brands.map((b) =>
+        b.id === brandId ? { ...b, models: b.models.filter((m) => m.name !== modelName) } : b
+      ),
+    }));
+    scheduleVehicleCatalogSync(get);
+  },
+
+  getBrandNames: () => get().brands.map((b) => b.name).sort(),
+
+  getModels: (brandName) => {
+    const brand = get().brands.find((b) => b.name === brandName);
+    return brand ? [...brand.models].sort((a, b) => a.name.localeCompare(b.name)) : [];
+  },
+
+  getModelSegment: (brandName, modelName) => {
+    const brand = get().brands.find((b) => b.name === brandName);
+    const model = brand?.models.find((m) => m.name === modelName);
+    return model?.segment ?? null;
+  },
+}));

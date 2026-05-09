@@ -57,7 +57,7 @@ export function buildInvoiceFromJobCard(
   const payments: Payment[] = [];
 
   let advanceAmount = 0;
-  let advanceMethod = job.highEndAdvanceMethod ?? "CASH";
+  const advanceMethod = job.highEndAdvanceMethod ?? "CASH";
   let advanceRef = job.highEndAdvanceReference;
   let advancePaidAt = job.highEndAdvanceCollectedAt ?? createdAt;
 

@@ -136,23 +136,25 @@ export function AddServicePackageDialog({
 
   useEffect(() => {
     if (open) {
-      setAddForm(emptyAddPackage());
+      queueMicrotask(() => setAddForm(emptyAddPackage()));
     }
   }, [open]);
 
   useEffect(() => {
     if (categoryDialogOpen) {
-      setCatName("");
-      setCatSlug("");
-      setCatOrder("99");
-      setCatBikeOnly(false);
-      slugTouched.current = false;
+      queueMicrotask(() => {
+        setCatName("");
+        setCatSlug("");
+        setCatOrder("99");
+        setCatBikeOnly(false);
+        slugTouched.current = false;
+      });
     }
   }, [categoryDialogOpen]);
 
   useEffect(() => {
     if (!categoryDialogOpen || slugTouched.current) return;
-    setCatSlug(slugifyCategoryName(catName));
+    queueMicrotask(() => setCatSlug(slugifyCategoryName(catName)));
   }, [catName, categoryDialogOpen]);
 
   const categories = useMemo(

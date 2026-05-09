@@ -1,18 +1,17 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { putSingletonDocument } from "@/lib/collection-sync";
 
 export interface HighEndServiceConfig {
   id: string;
   name: string;
   reminderIntervals: number[];
   totalYears: number;
-  /** Flat amount (excl. GST) added to the job estimate when this program is selected on the job card. */
   estimateAmountInr?: number;
 }
 
-const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
+export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
   {
     id: "hes-001",
     name: "PPF Coating",
@@ -50,38 +49,62 @@ const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
   },
 ];
 
+export interface HighEndServicesPayload {
+  services: HighEndServiceConfig[];
+}
+
+export function mergeHighEndServicesPayload(raw: unknown): HighEndServiceConfig[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.services)) return null;
+  return o.services as HighEndServiceConfig[];
+}
+
 interface HighEndServiceStore {
   services: HighEndServiceConfig[];
+  hydrateFromBootstrap: (services: HighEndServiceConfig[]) => void;
   addService: (service: Omit<HighEndServiceConfig, "id">) => void;
   removeService: (id: string) => void;
   updateService: (id: string, updates: Partial<HighEndServiceConfig>) => void;
 }
 
-export const useHighEndServiceStore = create<HighEndServiceStore>()(
-  persist(
-    (set) => ({
-      services: DEFAULT_HIGH_END_SERVICES,
+let hesTimer: ReturnType<typeof setTimeout> | null = null;
 
-      addService: (service) =>
-        set((state) => ({
-          services: [
-            ...state.services,
-            { ...service, id: `hes-${Date.now()}` },
-          ],
-        })),
+function scheduleHighEndSync(get: () => HighEndServiceStore): void {
+  if (hesTimer) clearTimeout(hesTimer);
+  hesTimer = setTimeout(() => {
+    hesTimer = null;
+    const services = get().services;
+    void putSingletonDocument("highEndServices", { services }).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.error(err);
+    });
+  }, 450);
+}
 
-      removeService: (id) =>
-        set((state) => ({
-          services: state.services.filter((s) => s.id !== id),
-        })),
+export const useHighEndServiceStore = create<HighEndServiceStore>((set, get) => ({
+  services: DEFAULT_HIGH_END_SERVICES,
 
-      updateService: (id, updates) =>
-        set((state) => ({
-          services: state.services.map((s) =>
-            s.id === id ? { ...s, ...updates } : s
-          ),
-        })),
-    }),
-    { name: "prime-detailers-high-end-services" }
-  )
-);
+  hydrateFromBootstrap: (services) =>
+    set({ services: services.length > 0 ? services : DEFAULT_HIGH_END_SERVICES }),
+
+  addService: (service) => {
+    set((state) => ({
+      services: [...state.services, { ...service, id: `hes-${Date.now()}` }],
+    }));
+    scheduleHighEndSync(get);
+  },
+
+  removeService: (id) => {
+    set((state) => ({
+      services: state.services.filter((s) => s.id !== id),
+    }));
+    scheduleHighEndSync(get);
+  },
+
+  updateService: (id, updates) => {
+    set((state) => ({
+      services: state.services.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+    }));
+    scheduleHighEndSync(get);
+  },
+}));

@@ -92,7 +92,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const itemClass = "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer aria-selected:bg-accent";
 
   useEffect(() => {
-    if (!open) setSearch("");
+    if (!open) queueMicrotask(() => setSearch(""));
   }, [open]);
 
   const visibleNavPages = useMemo(

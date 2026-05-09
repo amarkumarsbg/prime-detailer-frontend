@@ -115,7 +115,10 @@ export function AnalyticsReportsDashboard() {
   const averageRating = useDashboardStatsStore((s) => s.stats?.averageRating ?? 0);
 
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
-  const start = useMemo(() => rangeStartDays(days), [days, tick]);
+  const start = useMemo(() => {
+    void tick;
+    return rangeStartDays(days);
+  }, [days, tick]);
 
   const scopedJobs = useMemo(() => {
     if (!currentBranch || isAllBranchesScope(currentBranch)) return jobCards;

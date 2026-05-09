@@ -93,6 +93,7 @@ const ARRAY_COLLECTIONS = [
   "followUps",
   "serviceCategories",
   "notifications",
+  "pickupDropRequests",
 ] as const;
 
 const SINGLETON_COLLECTIONS = [
@@ -101,6 +102,12 @@ const SINGLETON_COLLECTIONS = [
   "cashBank",
   "payroll",
   "membership",
+  "appSettings",
+  "referralProgram",
+  "balanceSheetManual",
+  "highEndServices",
+  "reportSchedules",
+  "vehicleCatalog",
 ] as const;
 const SINGLETON_ENTITY_ID = "default";
 

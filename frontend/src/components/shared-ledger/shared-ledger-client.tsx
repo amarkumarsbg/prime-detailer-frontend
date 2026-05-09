@@ -361,8 +361,10 @@ export function SharedLedgerClient() {
   useEffect(() => {
     if (selectedId != null && filteredParties.some((p) => p.id === selectedId)) return;
     const first = filteredParties[0];
-    if (first) setSelectedId(first.id);
-    else setSelectedId(null);
+    queueMicrotask(() => {
+      if (first) setSelectedId(first.id);
+      else setSelectedId(null);
+    });
   }, [filteredParties, selectedId]);
 
   return (

@@ -56,7 +56,7 @@ export function ProfitLossReport() {
 
   useEffect(() => {
     try {
-      setFavourite(localStorage.getItem(FAV_KEY) === "1");
+      queueMicrotask(() => setFavourite(localStorage.getItem(FAV_KEY) === "1"));
     } catch {
       /* ignore */
     }
