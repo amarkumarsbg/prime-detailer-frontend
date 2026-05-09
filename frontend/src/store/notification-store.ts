@@ -12,6 +12,7 @@ export type NotificationType =
   | "vehicle_added"
   | "reminder"
   | "whatsapp_sent"
+  | "email_sent"
   | "system";
 
 export interface Notification {

@@ -10,6 +10,7 @@ import {
   Banknote,
   Smartphone,
   MessageCircle,
+  Mail,
 } from "lucide-react";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import {
   openWhatsAppComposer,
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
+import { sendInvoiceEmail, isResendNotConfiguredError } from "@/lib/invoice-email-send";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
@@ -276,6 +278,87 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleInvoiceEmail = async () => {
+    if (!invoice) return;
+    const toEmail = invoiceCustomer?.email?.trim();
+    if (!toEmail) {
+      toast.error("No customer email", {
+        description: "Add an email on the customer profile, then try again.",
+      });
+      return;
+    }
+    const html = buildTaxInvoicePrintHtml({
+      invoice,
+      jobCard: jobCard ?? null,
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
+      customerEmail: toEmail,
+      customerAddress: invoiceCustomer?.address ?? "",
+      vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
+      business: {
+        businessName,
+        businessTagline,
+        businessAddress,
+        businessPhone,
+        businessWhatsApp,
+        businessEmail,
+        businessWebsite,
+        gstin,
+        companyPan,
+        bankName,
+        bankBranch,
+        bankAccountNumber,
+        bankIfsc,
+        bankUpi,
+      },
+      payments,
+      totalPaid,
+      remainingBalance,
+      referralCode: invoiceCustomer?.referralCode,
+      referralRewardAmount,
+      newCustomerDiscount,
+    });
+    const subject = `Tax invoice ${invoice.invoiceNumber} — ${businessName}`;
+    const text = buildInvoiceWhatsAppMessage(invoice, {
+      businessName,
+      remainingBalance,
+    });
+    const notify = () => {
+      useNotificationStore.getState().addNotification({
+        type: "email_sent",
+        title: "Invoice emailed",
+        message: `${invoice.invoiceNumber} → ${toEmail}`,
+        href: `/billing/${invoice.id}`,
+      });
+    };
+    const logSent = () => {
+      pushActivityLog({
+        action: "EMAIL_SENT",
+        entityType: "INVOICE",
+        entityId: invoice.id,
+        entityLabel: invoice.invoiceNumber,
+        details: `Invoice ${invoice.invoiceNumber} emailed to ${invoice.customerName} (${toEmail})`,
+      });
+    };
+    try {
+      await sendInvoiceEmail({ to: toEmail, subject, html, text });
+      toast.success("Invoice emailed", { description: toEmail });
+      notify();
+      logSent();
+    } catch (err) {
+      if (isResendNotConfiguredError(err)) {
+        toast.error("Email not configured", {
+          description:
+            "Set RESEND_API_KEY on the API server (same as password reset). Optionally set MAIL_FROM.",
+        });
+        return;
+      }
+      toast.error("Email failed", {
+        description: err instanceof ApiError ? err.message : "Could not send",
+      });
+    }
+  };
+
   if (!invoice) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
@@ -315,6 +398,10 @@ export default function InvoiceDetailPage() {
               <Button variant="outline" size="sm" type="button" onClick={() => void handleInvoiceWhatsApp()}>
                 <MessageCircle className="w-4 h-4 mr-2" />
                 WhatsApp
+              </Button>
+              <Button variant="outline" size="sm" type="button" onClick={() => void handleInvoiceEmail()}>
+                <Mail className="w-4 h-4 mr-2" />
+                Email
               </Button>
               <Button variant="outline" size="sm" onClick={handlePrint}>
                 <Printer className="w-4 h-4 mr-2" />

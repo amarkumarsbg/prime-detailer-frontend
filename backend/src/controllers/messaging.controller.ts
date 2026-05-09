@@ -8,6 +8,7 @@ import {
   sendWhatsAppMessage,
   toTwilioWhatsAppAddress,
 } from "../services/twilio-sms.service.js";
+import { isResendConfigured, sendViaResend } from "../services/resend-send.js";
 
 const postWhatsAppSchema = z
   .object({
@@ -30,6 +31,50 @@ const postWhatsAppSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg, path: ["message"] });
     }
   });
+
+const postTransactionalEmailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1).max(200),
+  html: z.string().min(1).max(600_000),
+  text: z.string().max(50_000).optional(),
+});
+
+/** Authenticated transactional email (Resend) — e.g. tax invoice HTML from the billing UI. */
+export async function postTransactionalEmail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = postTransactionalEmailSchema.parse(req.body);
+    if (!isResendConfigured()) {
+      res.status(503).json({
+        data: null,
+        error: {
+          message:
+            "Email is not configured. Set RESEND_API_KEY on the API server (same as password reset). Optionally set MAIL_FROM to your verified domain sender.",
+          code: "RESEND_NOT_CONFIGURED",
+        },
+      });
+      return;
+    }
+    const out = await sendViaResend({
+      to: [body.to],
+      subject: body.subject,
+      html: body.html,
+      text: body.text,
+    });
+    if (!out.ok) {
+      res.status(502).json({
+        data: null,
+        error: {
+          message: out.detail,
+          code: "RESEND_SEND_FAILED",
+        },
+      });
+      return;
+    }
+    res.json({ data: { ok: true as const }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
 
 export async function postWhatsApp(req: Request, res: Response, next: NextFunction) {
   try {
