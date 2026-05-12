@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useReferralSettingsStore,
   type ReferralRewardMode,
@@ -22,11 +23,13 @@ import {
 import {
   Gift,
   IndianRupee,
+  BookOpen,
   RefreshCw,
   Save,
   UserPlus,
   Users,
   Link2,
+  SlidersHorizontal,
 } from "lucide-react";
 
 /** Primary-tinted surfaces (aligned with theme) */
@@ -119,7 +122,7 @@ export default function ReferralsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Referrals"
-        description="Configure referral rewards for referrers and new customers"
+        description="Configure rewards under Referral rules — program toggle, referrer and new-customer amounts, and job minimums."
         actions={
           <Button type="button" variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4" />
@@ -179,6 +182,24 @@ export default function ReferralsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Tabs defaultValue="rules" className="space-y-4">
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1 sm:w-auto">
+          <TabsTrigger value="rules" className="gap-2 data-[state=active]:shadow-sm">
+            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+            Referral rules
+          </TabsTrigger>
+          <TabsTrigger value="guide" className="gap-2 data-[state=active]:shadow-sm">
+            <BookOpen className="h-3.5 w-3.5 shrink-0" />
+            How it works
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="rules" className="space-y-4 mt-0 outline-none focus-visible:outline-none">
+          <p className="text-sm text-muted-foreground -mt-1">
+            Changes save to the server as you edit. Use <strong>Save referral rules</strong> to confirm,
+            or <strong>Reset</strong> to restore defaults.
+          </p>
 
       <Card className={cardSurface}>
         <CardContent className="flex flex-col gap-4 px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-7">
@@ -355,7 +376,9 @@ export default function ReferralsPage() {
           Save referral rules
         </Button>
       </div>
+        </TabsContent>
 
+        <TabsContent value="guide" className="mt-0 outline-none focus-visible:outline-none">
       <Card className={cardSurface}>
         <CardHeader className={headerBlock}>
           <div className="flex items-start gap-3">
@@ -385,6 +408,8 @@ export default function ReferralsPage() {
           </ul>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

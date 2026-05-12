@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -52,7 +53,7 @@ import {
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
-import { ApiError } from "@/lib/api-client";
+import { ApiError, apiPost } from "@/lib/api-client";
 import { notifyQuotationConvertedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import {
   findVehicleByNormalizedReg,
@@ -79,7 +80,12 @@ import {
   ClipboardList,
   Eye,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
+
+function quotationCanConvertToJob(status: QuotationStatus): boolean {
+  return status !== "CONVERTED" && status !== "REJECTED";
+}
 
 const TAB_VALUES: (QuotationStatus | "ALL")[] = [
   "ALL",
@@ -122,12 +128,12 @@ function getServicePrice(
 }
 
 export default function QuotationsPage() {
+  const router = useRouter();
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
-  const addJobCard = useJobCardStore((s) => s.addJobCard);
   const getNextJobNumber = useJobCardStore((s) => s.getNextJobNumber);
   const quotationList = useQuotationStore((s) => s.quotations);
   const addQuotation = useQuotationStore((s) => s.addQuotation);
@@ -139,6 +145,7 @@ export default function QuotationsPage() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
+  const [convertingQuotationId, setConvertingQuotationId] = useState<string | null>(null);
 
   // New quotation form state
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
@@ -426,9 +433,17 @@ export default function QuotationsPage() {
     }
   };
 
-  const handleConvertToJobCard = (q: Quotation, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (q.status === "CONVERTED") return;
+  const handleConvertToJobCard = async (q: Quotation, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!quotationCanConvertToJob(q.status)) return;
+    if (q.services.length === 0) {
+      toast.error("Add at least one service", {
+        description: "This quotation has no line items to carry over to a job card.",
+      });
+      return;
+    }
+
+    setConvertingQuotationId(q.id);
 
     const jobId = `jc-q-${Date.now().toString(36)}`;
     const jobNumber = getNextJobNumber();
@@ -469,23 +484,42 @@ export default function QuotationsPage() {
       incentivePercent,
       incentiveAmount,
       termsAndConditions: q.termsAndConditions,
+      notes: q.notes,
       quotationId: q.id,
       createdBy: authUser?.id ?? "usr-004",
       createdAt: now,
       updatedAt: now,
     };
 
-    addJobCard(newJob);
-
     const patch: Partial<Quotation> = {
       status: "CONVERTED",
       convertedToJobCardId: jobId,
       updatedAt: now,
     };
-    updateQuotation(q.id, patch);
-    setSelectedQuotation((sel) =>
-      sel?.id === q.id ? { ...sel, ...patch } : sel
-    );
+
+    const updatedQuotation: Quotation = { ...q, ...patch };
+
+    try {
+      await apiPost("/api/quotations/convert-to-job", {
+        jobCard: newJob,
+        quotation: updatedQuotation,
+      });
+    } catch {
+      toast.error("Could not create job card", {
+        description: "Check that the API server is running and try again.",
+      });
+      setConvertingQuotationId(null);
+      return;
+    }
+
+    useJobCardStore.setState((s) => ({
+      jobCards: [newJob, ...s.jobCards.filter((jc) => jc.id !== newJob.id)],
+    }));
+    useQuotationStore.setState((s) => ({
+      quotations: s.quotations.map((x) => (x.id === q.id ? updatedQuotation : x)),
+    }));
+
+    setSelectedQuotation((sel) => (sel?.id === q.id ? updatedQuotation : sel));
 
     pushActivityLog({
       action: "STATUS_CHANGED",
@@ -503,10 +537,13 @@ export default function QuotationsPage() {
     });
 
     toast.success("Converted to Job Card", {
-      description: `${q.quotationNumber} → ${jobNumber}. Open Job Cards to continue.`,
+      description: `${q.quotationNumber} → ${jobNumber}`,
     });
 
     notifyQuotationConvertedWhatsApp(q, jobNumber, jobId, businessName);
+    setDetailsDialogOpen(false);
+    router.push(`/job-cards/${jobId}`);
+    setConvertingQuotationId(null);
   };
 
   const handleViewDetails = (q: Quotation, e: React.MouseEvent) => {
@@ -588,30 +625,33 @@ export default function QuotationsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={(e) => handleViewDetails(item, e)}
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
-              </DropdownMenuItem>
-              {item.status !== "CONVERTED" && item.status !== "REJECTED" && (
-                <>
                   <DropdownMenuItem
-                    onClick={(e) => handleSendWhatsApp(item, e)}
+                    onClick={(e) => handleViewDetails(item, e)}
                   >
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    Send via WhatsApp
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Details
                   </DropdownMenuItem>
-                  {(item.status === "APPROVED" || item.status === "SENT") && (
-                    <DropdownMenuItem
-                      onClick={(e) => handleConvertToJobCard(item, e)}
-                    >
-                      <ClipboardList className="mr-2 h-4 w-4" />
-                      Convert to Job Card
-                    </DropdownMenuItem>
+                  {quotationCanConvertToJob(item.status) && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={(e) => handleSendWhatsApp(item, e)}
+                      >
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                        Send via WhatsApp
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={convertingQuotationId === item.id}
+                        onClick={(e) => void handleConvertToJobCard(item, e)}
+                      >
+                        {convertingQuotationId === item.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <ClipboardList className="mr-2 h-4 w-4" />
+                        )}
+                        Convert to Job Card
+                      </DropdownMenuItem>
+                    </>
                   )}
-                </>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1084,16 +1124,43 @@ export default function QuotationsPage() {
                   <span>{formatCurrency(selectedQuotation.grandTotal)}</span>
                 </div>
               </div>
-              {selectedQuotation.convertedToJobCardId && (
-                <div className="pt-2">
-                  <Link href={`/job-cards/${selectedQuotation.convertedToJobCardId}`}>
-                    <Button variant="outline" size="sm">
-                      View Job Card
-                    </Button>
-                  </Link>
-                </div>
-              )}
             </div>
+          )}
+          {selectedQuotation && (
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+              {selectedQuotation.convertedToJobCardId ? (
+                <Button variant="default" asChild className="w-full sm:w-auto">
+                  <Link href={`/job-cards/${selectedQuotation.convertedToJobCardId}`}>
+                    View Job Card
+                  </Link>
+                </Button>
+              ) : quotationCanConvertToJob(selectedQuotation.status) ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={(e) => void handleSendWhatsApp(selectedQuotation, e)}
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Send via WhatsApp
+                  </Button>
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    disabled={convertingQuotationId === selectedQuotation.id}
+                    onClick={() => void handleConvertToJobCard(selectedQuotation)}
+                  >
+                    {convertingQuotationId === selectedQuotation.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ClipboardList className="mr-2 h-4 w-4" />
+                    )}
+                    Convert to Job Card
+                  </Button>
+                </>
+              ) : null}
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>

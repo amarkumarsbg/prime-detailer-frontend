@@ -1473,6 +1473,30 @@
         "durationMinutes": 40,
         "gstApplicable": true,
         "gstPercent": 18
+      },
+      {
+        "id": "srv-a06",
+        "name": "Clay bar treatment",
+        "description": "Seed add-on 6 — paint decontamination clay bar pass.",
+        "defaultPrice": 749,
+        "segmentPricing": {
+          "HATCHBACK": 749,
+          "SEDAN": 861,
+          "SUV": 1011,
+          "LUXURY": 1348,
+          "MUV": 936,
+          "COMPACT_SUV": 959,
+          "BIKE": 412
+        },
+        "category": "cat-003",
+        "isAddon": true,
+        "scope": "GLOBAL",
+        "isActive": true,
+        "isHighEnd": false,
+        "incentivePercent": 6,
+        "durationMinutes": 45,
+        "gstApplicable": true,
+        "gstPercent": 18
       }
     ],
     "parts": [

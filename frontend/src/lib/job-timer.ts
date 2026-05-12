@@ -1,9 +1,38 @@
 import type { JobCard, ServiceItem, ServiceTimerDeliverySnapshot } from "@/types";
 
-/** Sum of per-line durations; falls back to 30 when nothing defined */
+/** Sum of per-line catalog durations (no fallback). */
+export function sumCatalogServiceMinutes(services: ServiceItem[]): number {
+  return services.reduce((acc, s) => acc + (s.durationMinutes ?? 0), 0);
+}
+
+/** Sum of planned minutes for selected high-end programs (from job card). */
+export function sumHighEndProgramAllocatedMinutes(
+  highEndServiceIds: string[] | undefined,
+  highEndCompletionMinutesByServiceId: Record<string, number> | undefined
+): number {
+  let sum = 0;
+  for (const id of highEndServiceIds ?? []) {
+    const m = highEndCompletionMinutesByServiceId?.[id];
+    if (m != null && Number.isFinite(m) && m > 0) sum += m;
+  }
+  return sum;
+}
+
+/** Catalog + high-end planned minutes; falls back to 30 when nothing is defined. */
+export function totalAllocatedMinutesForJob(
+  services: ServiceItem[],
+  highEndServiceIds?: string[],
+  highEndCompletionMinutesByServiceId?: Record<string, number>
+): number {
+  const catalog = sumCatalogServiceMinutes(services);
+  const he = sumHighEndProgramAllocatedMinutes(highEndServiceIds, highEndCompletionMinutesByServiceId);
+  const total = catalog + he;
+  return total > 0 ? total : 30;
+}
+
+/** Catalog line durations only; same 30-minute fallback as {@link totalAllocatedMinutesForJob} with no high-end rows. */
 export function sumServiceAllocatedMinutes(services: ServiceItem[]): number {
-  const sum = services.reduce((acc, s) => acc + (s.durationMinutes ?? 0), 0);
-  return sum > 0 ? sum : 30;
+  return totalAllocatedMinutesForJob(services);
 }
 
 /** Initial buffer pool: proportional with sensible clamp */
@@ -15,7 +44,11 @@ export function seedBufferMinutes(allocatedMinutes: number): number {
 /** Fields to persist when the service timer starts (In Service + mechanic). */
 export function initialServiceTimerPatch(
   services: ServiceItem[],
-  nowIso: string
+  nowIso: string,
+  opts?: {
+    highEndServiceIds?: string[];
+    highEndCompletionMinutesByServiceId?: Record<string, number>;
+  }
 ): Pick<
   JobCard,
   | "serviceTimerStartedAt"
@@ -26,7 +59,11 @@ export function initialServiceTimerPatch(
   | "timerPausedAt"
   | "totalPausedMs"
 > {
-  const allocated = sumServiceAllocatedMinutes(services);
+  const allocated = totalAllocatedMinutesForJob(
+    services,
+    opts?.highEndServiceIds,
+    opts?.highEndCompletionMinutesByServiceId
+  );
   const buf = seedBufferMinutes(allocated);
   return {
     serviceTimerStartedAt: nowIso,

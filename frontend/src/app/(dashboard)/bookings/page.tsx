@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -20,9 +21,19 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useAppointmentStore } from "@/store/appointment-store";
+import { useVehicleStore } from "@/store/vehicle-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { isAllBranchesScope } from "@/lib/all-branches";
+import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
+import { pushActivityLog } from "@/lib/activity-log-helper";
+import {
+  buildJobCardFromAppointment,
+  findCatalogServiceForAppointment,
+  resolveJobBranchId,
+} from "@/lib/job-from-appointment";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { JobCard, JobCardStatus } from "@/types";
+import type { Appointment, JobCard, JobCardStatus } from "@/types";
 import {
   Plus,
   RefreshCw,
@@ -33,7 +44,55 @@ import {
   Clock,
   LayoutList,
   Search,
+  Loader2,
+  CalendarRange,
 } from "lucide-react";
+
+function compactRegForSearch(s: string): string {
+  return normalizeRegistrationNumber(s).replace(/-/g, "").toLowerCase();
+}
+
+/** Parse `<input type="date">` value (yyyy-mm-dd) at local noon then clamp — avoids UTC drift from `new Date("yyyy-mm-dd")`. */
+function parseHtmlDateLocal(value: string): Date | null {
+  const v = value.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const dt = new Date(y, mo, d, 12, 0, 0, 0);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo || dt.getDate() !== d) return null;
+  return dt;
+}
+
+function startOfDayLocal(d: Date): number {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  return x.getTime();
+}
+
+function endOfDayLocal(d: Date): number {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  return x.getTime();
+}
+
+function bookingMatchesSearch(jc: JobCard, queryRaw: string, branchName?: string): boolean {
+  const q = queryRaw.trim().toLowerCase();
+  if (!q) return true;
+  const qDigits = queryRaw.replace(/\D/g, "");
+  const phoneDigits = jc.customerPhone.replace(/\D/g, "");
+  const regCompact = compactRegForSearch(jc.vehicleRegNumber);
+  const qCompact = compactRegForSearch(queryRaw);
+  const bn = branchName?.trim().toLowerCase() ?? "";
+  return (
+    jc.jobNumber.toLowerCase().includes(q) ||
+    jc.customerName.toLowerCase().includes(q) ||
+    (qDigits.length > 0 && phoneDigits.includes(qDigits)) ||
+    (qCompact.length > 0 && regCompact.includes(qCompact)) ||
+    jc.vehicleRegNumber.toLowerCase().includes(q) ||
+    (bn.length > 0 && bn.includes(q)) ||
+    (jc.services ?? []).some((s) => s.name.toLowerCase().includes(q))
+  );
+}
 
 const STATUS_OPTIONS: { value: JobCardStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "All Statuses" },
@@ -46,27 +105,23 @@ const STATUS_OPTIONS: { value: JobCardStatus | "ALL"; label: string }[] = [
   { value: "CANCELLED", label: "Cancelled" },
 ];
 
-function startOfDayIso(d: Date): number {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x.getTime();
-}
-
-function endOfDayIso(d: Date): number {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x.getTime();
-}
-
 export default function BookingsPage() {
   const router = useRouter();
-  const { jobCards } = useJobCardStore();
+  const { jobCards, addJobCard, getNextJobNumber } = useJobCardStore();
   const invoices = useInvoiceStore((s) => s.invoices);
   const currentBranch = useAuthStore((s) => s.currentBranch);
+  const authUser = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
+  const appointments = useAppointmentStore((s) => s.appointments);
+  const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
+  const vehicles = useVehicleStore((s) => s.vehicles);
+  const catalog = useServiceCatalogStore((s) => s.catalog);
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [creatingFromAppointmentId, setCreatingFromAppointmentId] = useState<string | null>(
+    null
+  );
   const [statusFilter, setStatusFilter] = useState<JobCardStatus | "ALL">("ALL");
   const [branchFilterId, setBranchFilterId] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -88,38 +143,103 @@ export default function BookingsPage() {
       list = list.filter((jc) => jc.status === statusFilter);
     }
     if (dateFrom.trim()) {
-      const t = startOfDayIso(new Date(dateFrom));
-      if (!Number.isNaN(t)) list = list.filter((jc) => new Date(jc.createdAt).getTime() >= t);
+      const parsed = parseHtmlDateLocal(dateFrom);
+      if (parsed) {
+        const t = startOfDayLocal(parsed);
+        list = list.filter((jc) => new Date(jc.createdAt).getTime() >= t);
+      }
     }
     if (dateTo.trim()) {
-      const t = endOfDayIso(new Date(dateTo));
-      if (!Number.isNaN(t)) list = list.filter((jc) => new Date(jc.createdAt).getTime() <= t);
+      const parsed = parseHtmlDateLocal(dateTo);
+      if (parsed) {
+        const t = endOfDayLocal(parsed);
+        list = list.filter((jc) => new Date(jc.createdAt).getTime() <= t);
+      }
     }
     return list;
   }, [headerScoped, showBranchPicker, branchFilterId, statusFilter, dateFrom, dateTo]);
 
+  const branchNameById = useMemo(
+    () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
+    [branches]
+  );
+
   const searchFilteredBookings = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
     if (!q) return filteredBookings;
-    return filteredBookings.filter(
-      (jc) =>
-        jc.jobNumber.toLowerCase().includes(q) ||
-        jc.customerName.toLowerCase().includes(q) ||
-        jc.customerPhone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
-        jc.vehicleRegNumber.toLowerCase().includes(q) ||
-        (jc.services ?? []).some((s) => s.name.toLowerCase().includes(q))
+    return filteredBookings.filter((jc) =>
+      bookingMatchesSearch(jc, q, branchNameById[jc.branchId])
     );
-  }, [filteredBookings, searchQuery]);
+  }, [filteredBookings, searchQuery, branchNameById]);
 
   const invoiceByJobId = useMemo(
     () => Object.fromEntries(invoices.map((inv) => [inv.jobCardId, inv])),
     [invoices]
   );
 
-  const branchNameById = useMemo(
-    () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
-          [branches]
-  );
+  const confirmedAppointmentsNeedingJob = useMemo(() => {
+    return appointments
+      .filter((a) => a.status === "CONFIRMED" && !a.jobCardId)
+      .sort((a, b) => {
+        const da = `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`);
+        if (da !== 0) return da;
+        return a.bookingId.localeCompare(b.bookingId);
+      });
+  }, [appointments]);
+
+  const createJobFromAppointment = async (apt: Appointment) => {
+    if (apt.status !== "CONFIRMED" || apt.jobCardId) return;
+    setCreatingFromAppointmentId(apt.id);
+    try {
+      const jobId = `jc-apt-${Date.now().toString(36)}`;
+      const jobNumber = getNextJobNumber();
+      const branchId = resolveJobBranchId(currentBranch, branches);
+      const vehicle = vehicles.find((v) => v.id === apt.vehicleId);
+      const job = buildJobCardFromAppointment({
+        apt,
+        jobId,
+        jobNumber,
+        branchId,
+        vehicle,
+        catalog,
+        createdBy: authUser?.id ?? "usr-004",
+      });
+      await addJobCard(job);
+      await updateAppointment(apt.id, { jobCardId: job.id, status: "IN_PROGRESS" });
+
+      if (!findCatalogServiceForAppointment(catalog, apt.serviceType)) {
+        toast.info("Custom service line", {
+          description: `No catalog match for "${apt.serviceType}" — check prices on the job card.`,
+        });
+      }
+
+      pushActivityLog({
+        action: "CREATED",
+        entityType: "JOB_CARD",
+        entityId: job.id,
+        entityLabel: job.jobNumber,
+        details: `${job.jobNumber} created from appointment ${apt.bookingId}`,
+      });
+      pushActivityLog({
+        action: "STATUS_CHANGED",
+        entityType: "APPOINTMENT",
+        entityId: apt.id,
+        entityLabel: apt.bookingId,
+        details: `Linked to job ${job.jobNumber}`,
+      });
+
+      toast.success("Job card created", {
+        description: `${apt.bookingId} → ${job.jobNumber}`,
+      });
+      router.push(`/job-cards/${job.id}`);
+    } catch {
+      toast.error("Could not create job card", {
+        description: "Check that the API server is running and try again.",
+      });
+    } finally {
+      setCreatingFromAppointmentId(null);
+    }
+  };
 
   const kpis = useMemo(() => {
     let totalRevenue = 0;
@@ -128,7 +248,7 @@ export default function BookingsPage() {
     let invoiced = 0;
     let unbilled = 0;
 
-    for (const jc of filteredBookings) {
+    for (const jc of searchFilteredBookings) {
       const inv = invoiceByJobId[jc.id];
       if (inv) {
         invoiced++;
@@ -150,7 +270,7 @@ export default function BookingsPage() {
       invoiced,
       unbilled,
     };
-  }, [filteredBookings, invoiceByJobId]);
+  }, [searchFilteredBookings, invoiceByJobId]);
 
   const columns = useMemo(
     () => [
@@ -258,7 +378,7 @@ export default function BookingsPage() {
     <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       <PageHeader
         title="Bookings"
-        description="Manage customer bookings — walk-ins become job cards. Filter, review totals, and open a job."
+        description="Walk-ins and calendar appointments: confirm an appointment, then create a job card here. Filter job cards, review totals, and open jobs."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -299,7 +419,8 @@ export default function BookingsPage() {
               {formatCurrency(kpis.totalRevenue)}
             </p>
             <p className="text-xs text-muted-foreground mt-auto pt-2 leading-snug">
-              {kpis.totalBookings} booking{kpis.totalBookings !== 1 ? "s" : ""} · {kpis.invoiced} invoiced
+              {kpis.totalBookings} booking{kpis.totalBookings !== 1 ? "s" : ""} in view · {kpis.invoiced}{" "}
+              invoiced
             </p>
           </CardContent>
         </Card>
@@ -361,10 +482,96 @@ export default function BookingsPage() {
             <p className="text-xl sm:text-2xl font-bold tabular-nums mt-4 text-cyan-800 dark:text-cyan-300">
               {kpis.totalBookings}
             </p>
-            <p className="text-xs text-muted-foreground mt-auto pt-2 leading-snug">Matching current filters</p>
+            <p className="text-xs text-muted-foreground mt-auto pt-2 leading-snug">
+              Matching search &amp; filters (status, branch, dates)
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="min-w-0 border-border/80 border-dashed shadow-sm bg-muted/20">
+        <CardHeader className="pb-3">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <CalendarRange className="size-4" aria-hidden />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="text-base">Confirmed appointments</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                After you confirm a booking on{" "}
+                <Link href="/appointments" className="text-primary underline-offset-4 hover:underline">
+                  Appointments
+                </Link>
+                , it appears here until you start a job card.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {confirmedAppointmentsNeedingJob.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No confirmed appointments waiting for a job. Confirm a scheduled booking to see it
+              here.
+            </p>
+          ) : (
+            <div className="rounded-lg border border-border bg-background overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40 text-left">
+                    <th className="p-3 font-medium">Booking</th>
+                    <th className="p-3 font-medium whitespace-nowrap">Date &amp; time</th>
+                    <th className="p-3 font-medium">Customer</th>
+                    <th className="p-3 font-medium">Vehicle</th>
+                    <th className="p-3 font-medium hidden md:table-cell">Service</th>
+                    <th className="p-3 font-medium text-right w-[1%]">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmedAppointmentsNeedingJob.map((apt) => (
+                    <tr key={apt.id} className="border-b border-border/80 last:border-0">
+                      <td className="p-3 font-mono text-xs font-semibold text-primary whitespace-nowrap">
+                        {apt.bookingId}
+                      </td>
+                      <td className="p-3 text-muted-foreground whitespace-nowrap">
+                        {apt.date} · {apt.time}
+                      </td>
+                      <td className="p-3">
+                        <div className="font-medium">{apt.customerName}</div>
+                        <div className="text-xs text-muted-foreground">{apt.customerPhone}</div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-mono text-xs">{apt.vehicleRegNumber}</div>
+                        <div className="text-xs text-muted-foreground line-clamp-1">
+                          {apt.vehicleMakeModel}
+                        </div>
+                      </td>
+                      <td className="p-3 text-muted-foreground hidden md:table-cell max-w-[12rem] truncate">
+                        {apt.serviceType}
+                      </td>
+                      <td className="p-3 text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="whitespace-nowrap"
+                          disabled={creatingFromAppointmentId === apt.id}
+                          onClick={() => void createJobFromAppointment(apt)}
+                        >
+                          {creatingFromAppointmentId === apt.id ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                          ) : (
+                            <Plus className="w-3.5 h-3.5 mr-1.5" />
+                          )}
+                          Create job card
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="min-w-0 border-border/80 shadow-sm">
         <CardContent className="min-w-0 pt-6 space-y-4">
@@ -447,12 +654,8 @@ export default function BookingsPage() {
               columns={columns}
               hideSearch
               searchPlaceholder="Search by name, phone, registration, or job ID…"
-              searchMatch={(jc, q) =>
-                jc.jobNumber.toLowerCase().includes(q) ||
-                jc.customerName.toLowerCase().includes(q) ||
-                jc.customerPhone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
-                jc.vehicleRegNumber.toLowerCase().includes(q) ||
-                (jc.services ?? []).some((s) => s.name.toLowerCase().includes(q))
+              searchMatch={(jc, qLower) =>
+                bookingMatchesSearch(jc, qLower, branchNameById[jc.branchId])
               }
               pageSize={10}
               onRowClick={(jc) => router.push(`/job-cards/${jc.id}`)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
@@ -8,7 +8,7 @@ import { DataTable } from "@/components/shared/data-table";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
 import { Plus, LayoutGrid, List } from "lucide-react";
 
@@ -51,6 +52,28 @@ const KANBAN_COLUMNS: JobCardStatus[] = [
   "READY",
   "DELIVERED",
 ];
+
+function compactRegForSearch(s: string): string {
+  return normalizeRegistrationNumber(s).replace(/-/g, "").toLowerCase();
+}
+
+function jobCardMatchesSearch(jc: JobCard, queryRaw: string): boolean {
+  const q = queryRaw.trim().toLowerCase();
+  if (!q) return true;
+  const qDigits = queryRaw.replace(/\D/g, "");
+  const phoneDigits = jc.customerPhone.replace(/\D/g, "");
+  const regCompact = compactRegForSearch(jc.vehicleRegNumber);
+  const qCompact = compactRegForSearch(queryRaw);
+  return (
+    jc.jobNumber.toLowerCase().includes(q) ||
+    jc.customerName.toLowerCase().includes(q) ||
+    (qDigits.length > 0 && phoneDigits.includes(qDigits)) ||
+    (qCompact.length > 0 && regCompact.includes(qCompact)) ||
+    jc.vehicleRegNumber.toLowerCase().includes(q) ||
+    (jc.vehicleMakeModel?.toLowerCase().includes(q) ?? false) ||
+    (jc.services ?? []).some((s) => s.name.toLowerCase().includes(q))
+  );
+}
 
 const KANBAN_COLORS: Record<JobCardStatus, string> = {
   RECEIVED: "border-t-blue-500",
@@ -96,71 +119,81 @@ export default function JobCardsPage() {
     return map;
   }, [jobCardsForView]);
 
-  const columns = [
-    {
-      key: "jobNumber",
-      label: "Job Number",
-      render: (item: JobCard) => (
-        <span className="font-mono font-medium">{item.jobNumber}</span>
-      ),
-      className: "font-mono",
-    },
-    {
-      key: "customer",
-      label: "Customer",
-      render: (item: JobCard) => (
-        <div>
-          <div className="font-medium">{item.customerName}</div>
-          <div className="text-xs text-muted-foreground">{item.customerPhone}</div>
-        </div>
-      ),
-    },
-    {
-      key: "vehicle",
-      label: "Vehicle",
-      render: (item: JobCard) => (
-        <div>
-          <div className="font-medium">{item.vehicleRegNumber}</div>
-          <div className="text-xs text-muted-foreground">
-            {item.vehicleMakeModel}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "mechanic",
-      label: "Mechanic",
-      render: (item: JobCard) => (
-        <span className="text-muted-foreground">
-          {item.mechanicName ?? "—"}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (item: JobCard) => <JobCardStatusBadge status={item.status} />,
-    },
-    {
-      key: "deliveryTiming",
-      label: "Delivery",
-      render: (item: JobCard) =>
-        item.status === "DELIVERED" ? (
-          <span className="text-muted-foreground" title="Delivered">
-            {formatDateTime(item.actualDelivery ?? item.updatedAt)}
-          </span>
-        ) : (
-          <span className="text-muted-foreground" title="Expected">
-            {formatDate(item.expectedDelivery)}
-          </span>
+  const filteredJobCardsForListTab = useMemo(() => {
+    if (activeTab === "ALL") return jobCardsForView;
+    return jobCardsForView.filter((jc) => jc.status === activeTab);
+  }, [jobCardsForView, activeTab]);
+
+  const columns = useMemo(
+    () => [
+      {
+        key: "jobNumber",
+        label: "Job number",
+        className: "align-top whitespace-nowrap w-[1%]",
+        render: (item: JobCard) => (
+          <span className="font-mono text-xs font-semibold text-primary">{item.jobNumber}</span>
         ),
-    },
-    {
-      key: "createdAt",
-      label: "Created",
-      render: (item: JobCard) => formatDate(item.createdAt),
-    },
-  ];
+      },
+      {
+        key: "customerName",
+        label: "Customer",
+        className: "align-top min-w-[10rem] max-w-[14rem]",
+        render: (item: JobCard) => (
+          <div className="space-y-0.5">
+            <div className="font-medium leading-snug">{item.customerName}</div>
+            <div className="text-xs text-muted-foreground whitespace-nowrap">{item.customerPhone}</div>
+          </div>
+        ),
+      },
+      {
+        key: "vehicleRegNumber",
+        label: "Vehicle",
+        className: "align-top min-w-[9rem] max-w-[16rem]",
+        render: (item: JobCard) => (
+          <div className="space-y-0.5">
+            <div className="font-mono text-xs font-medium leading-snug">{item.vehicleRegNumber}</div>
+            <div className="text-xs text-muted-foreground line-clamp-2">{item.vehicleMakeModel}</div>
+          </div>
+        ),
+      },
+      {
+        key: "mechanicName",
+        label: "Mechanic",
+        className: "align-top whitespace-nowrap text-muted-foreground max-w-[8rem]",
+        render: (item: JobCard) => (
+          <span className="line-clamp-2">{item.mechanicName ?? "—"}</span>
+        ),
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "align-top whitespace-nowrap w-[1%]",
+        render: (item: JobCard) => (
+          <JobCardStatusBadge status={item.status} className="whitespace-nowrap" />
+        ),
+      },
+      {
+        key: "expectedDelivery",
+        label: "Delivery",
+        className: "align-top whitespace-nowrap text-muted-foreground",
+        render: (item: JobCard) =>
+          item.status === "DELIVERED" ? (
+            <span title="Delivered">{formatDateTime(item.actualDelivery ?? item.updatedAt)}</span>
+          ) : (
+            <span title="Expected">{formatDate(item.expectedDelivery)}</span>
+          ),
+      },
+      {
+        key: "createdAt",
+        label: "Created",
+        className: "align-top whitespace-nowrap text-muted-foreground",
+        render: (item: JobCard) => formatDate(item.createdAt),
+      },
+    ],
+    []
+  );
+
+  const searchMatchJobCard = useCallback((jc: JobCard, qLower: string) => jobCardMatchesSearch(jc, qLower), []);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -220,61 +253,53 @@ export default function JobCardsPage() {
               Open a row for full detail, photos, and status updates.
             </p>
           </CardHeader>
-          <CardContent className="pt-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="flex-wrap h-auto gap-1 w-full justify-start bg-muted/50 p-1 mb-0">
+          <CardContent className="pt-6 min-w-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
+              <TabsList className="flex flex-wrap h-auto gap-1 w-full justify-start bg-muted/50 p-1">
                 {TAB_STATUSES.map((status) => (
-                  <TabsTrigger key={status} value={status} className="data-[state=active]:shadow-sm">
+                  <TabsTrigger
+                    key={status}
+                    value={status}
+                    className="shrink-0 data-[state=active]:shadow-sm"
+                  >
                     {TAB_LABELS[status]} ({counts[status] ?? 0})
                   </TabsTrigger>
                 ))}
               </TabsList>
 
-              {TAB_STATUSES.map((status) => (
-                <TabsContent key={status} value={status} className="mt-6 focus-visible:outline-none">
-                  <DataTable<JobCard>
-                    data={
-                      status === "ALL"
-                        ? jobCardsForView
-                        : jobCardsForView.filter((jc) => jc.status === status)
-                    }
-                    columns={columns}
-                    searchPlaceholder="Search by job, customer, vehicle, or service name..."
-                    searchMatch={(jc, q) =>
-                      jc.jobNumber.toLowerCase().includes(q) ||
-                      jc.customerName.toLowerCase().includes(q) ||
-                      jc.customerPhone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
-                      jc.vehicleRegNumber.toLowerCase().includes(q) ||
-                      (jc.vehicleMakeModel?.toLowerCase().includes(q) ?? false) ||
-                      (jc.services ?? []).some((s) => s.name.toLowerCase().includes(q))
-                    }
-                    pageSize={10}
-                    onRowClick={(item) => router.push(`/job-cards/${item.id}`)}
-                    renderMobileCard={(jc) => (
-                      <>
-                        <div className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</div>
-                        <p className="text-sm font-medium leading-tight mt-1.5">{jc.customerName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{jc.customerPhone}</p>
-                        <p className="text-sm font-medium leading-tight mt-2">{jc.vehicleRegNumber}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{jc.vehicleMakeModel}</p>
-                        <div className="mt-3 pt-3 border-t border-border space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs text-muted-foreground truncate min-w-0">
-                              {jc.mechanicName ?? "Unassigned"}
-                            </span>
-                            <JobCardStatusBadge status={jc.status} />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {jc.status === "DELIVERED"
-                              ? formatDateTime(jc.actualDelivery ?? jc.updatedAt)
-                              : formatDate(jc.expectedDelivery)}
-                          </p>
+              <div className="mt-6 min-w-0 space-y-4" aria-live="polite">
+                <DataTable<JobCard>
+                  key={activeTab}
+                  data={filteredJobCardsForListTab}
+                  columns={columns}
+                  searchPlaceholder="Search by job, customer, vehicle, or service…"
+                  searchMatch={searchMatchJobCard}
+                  pageSize={10}
+                  onRowClick={(item) => router.push(`/job-cards/${item.id}`)}
+                  renderMobileCard={(jc) => (
+                    <>
+                      <div className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</div>
+                      <p className="text-sm font-medium leading-tight mt-1.5">{jc.customerName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{jc.customerPhone}</p>
+                      <p className="text-sm font-medium leading-tight mt-2">{jc.vehicleRegNumber}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{jc.vehicleMakeModel}</p>
+                      <div className="mt-3 pt-3 border-t border-border space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground truncate min-w-0">
+                            {jc.mechanicName ?? "Unassigned"}
+                          </span>
+                          <JobCardStatusBadge status={jc.status} />
                         </div>
-                      </>
-                    )}
-                  />
-                </TabsContent>
-              ))}
+                        <p className="text-xs text-muted-foreground">
+                          {jc.status === "DELIVERED"
+                            ? formatDateTime(jc.actualDelivery ?? jc.updatedAt)
+                            : formatDate(jc.expectedDelivery)}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                />
+              </div>
             </Tabs>
           </CardContent>
         </Card>

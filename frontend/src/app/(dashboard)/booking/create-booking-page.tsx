@@ -72,6 +72,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
@@ -87,6 +88,12 @@ import {
   normalizeRegistrationNumber,
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
+import {
+  isDatetimeLocalInPast,
+  localDatetimeLocalInputMin,
+  localTodayDateInputMin,
+  localTimeInputMinNow,
+} from "@/lib/booking-calendar-validation";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import {
   defaultManualFirstFollowUpMonths,
@@ -106,6 +113,43 @@ import type {
 } from "@/types";
 
 const GST_RATE = 0.18;
+
+/** When booking opts into pickup, mirror into Pickup & Drop operations list. */
+function queuePickupDropFromBooking(params: {
+  job: Pick<
+    JobCard,
+    | "id"
+    | "jobNumber"
+    | "branchId"
+    | "customerName"
+    | "customerPhone"
+    | "vehicleMakeModel"
+    | "vehicleRegNumber"
+    | "expectedDelivery"
+  >;
+  customerAddress: string;
+  branches: { id: string; name: string; address: string }[];
+}) {
+  const { job, customerAddress, branches } = params;
+  const br = branches.find((b) => b.id === job.branchId);
+  const workshop = br ? `${br.name} — ${br.address}` : job.branchId;
+  const address =
+    customerAddress.trim() ||
+    `Pickup address pending — confirm with customer · Workshop: ${workshop}`;
+  usePickupDropStore.getState().addRequest({
+    jobCardId: job.id,
+    jobNumber: job.jobNumber,
+    branchId: job.branchId,
+    customerName: job.customerName,
+    vehicleMakeModel: job.vehicleMakeModel,
+    vehicleRegNumber: job.vehicleRegNumber,
+    customerPhone: job.customerPhone,
+    address,
+    scheduledTime: job.expectedDelivery,
+    type: "PICKUP",
+    notes: "Created from booking wizard",
+  });
+}
 /** Must match seeded `serviceCatalog` main rows (`srv-001` … `srv-005` in prisma/seed). */
 const TRENDING_IDS = ["srv-001", "srv-002", "srv-003", "srv-004", "srv-005"];
 /** Quick-pick add-ons in the optional section (`srv-a01` … `srv-a05` in seed). */
@@ -318,6 +362,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment | "">("");
   const [bookingWhen, setBookingWhen] = useState(() => datetimeLocalValue(new Date()));
+  const bookingScheduleDateMin = localTodayDateInputMin();
+  const bookingScheduleSplit = splitDatetimeLocal(bookingWhen);
+  const bookingScheduleTimeMin =
+    bookingScheduleSplit.date === bookingScheduleDateMin
+      ? localTimeInputMinNow()
+      : undefined;
   const [selectedMainIds, setSelectedMainIds] = useState<string[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [mechanicId, setMechanicId] = useState("");
@@ -1081,6 +1131,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       toast.error("Select at least one service, add-on, or high-end program.");
       return;
     }
+    if (isWalkIn && isDatetimeLocalInPast(bookingWhen)) {
+      toast.error("Booking cannot be in the past", {
+        description: "Choose today with a future time, or a later date.",
+      });
+      return;
+    }
 
     const now = new Date().toISOString();
     const jobNumber = getNextJobNumber();
@@ -1354,6 +1410,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       };
       addJobCard(walkInJob);
 
+      if (pickupRequired) {
+        queuePickupDropFromBooking({
+          job: walkInJob,
+          customerAddress,
+          branches,
+        });
+      }
+
       if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
         const sub = getActiveMembership(custId, resolvedVehicleId);
         if (sub) {
@@ -1376,7 +1440,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         details: `Walk-in booking ${jobNumber} — ${customerName} (${totalPayable} incl. GST)`,
       });
 
-      toast.success("Booking created", { description: jobNumber });
+      toast.success("Booking created", {
+        description: pickupRequired ? `${jobNumber} · Pickup queued under Pickup & Drop` : jobNumber,
+      });
       void sendJobCardCreatedWhatsApp(walkInJob);
       navigateToCreatedJobCard(id);
       return;
@@ -1437,6 +1503,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     };
     addJobCard(newJobCard);
 
+    if (pickupRequired) {
+      queuePickupDropFromBooking({
+        job: newJobCard,
+        customerAddress,
+        branches,
+      });
+    }
+
     if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
       const sub = getActiveMembership(custId, resolvedVehicleId);
       if (sub) {
@@ -1476,7 +1550,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     checkInJobIdRef.current = id;
     setCheckInOpen(true);
     toast.message("Job card created", {
-      description: "Complete vehicle check-in with before photos to open the job.",
+      description: pickupRequired
+        ? "Complete vehicle check-in with before photos to open the job. Pickup request is on Pickup & Drop."
+        : "Complete vehicle check-in with before photos to open the job.",
     });
   };
 
@@ -1575,7 +1651,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     ];
     if (highEndServices.length > 0) s.push("highEndServices");
     s.push("addons");
-    if (!isJobCard) s.push("pickupDrop");
+    s.push("pickupDrop");
     s.push("mechanic");
     if (isJobCard) {
       s.push("notesAndJobDetails", "jobSummary");
@@ -2730,10 +2806,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     <Input
                       id="schedule-booking-date"
                       type="date"
+                      min={bookingScheduleDateMin}
                       value={splitDatetimeLocal(bookingWhen).date}
                       onChange={(e) => {
                         const { time } = splitDatetimeLocal(bookingWhen);
-                        setBookingWhen(joinDatetimeLocal(e.target.value, time));
+                        let next = joinDatetimeLocal(e.target.value, time);
+                        if (
+                          e.target.value === bookingScheduleDateMin &&
+                          next &&
+                          isDatetimeLocalInPast(next)
+                        ) {
+                          next = joinDatetimeLocal(e.target.value, localTimeInputMinNow());
+                        }
+                        setBookingWhen(next);
                       }}
                       required
                       className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
@@ -2746,11 +2831,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     <Input
                       id="schedule-booking-time"
                       type="time"
+                      min={bookingScheduleTimeMin}
                       value={splitDatetimeLocal(bookingWhen).time}
                       onChange={(e) => {
                         let { date } = splitDatetimeLocal(bookingWhen);
                         if (!date) date = datetimeLocalValue(new Date()).slice(0, 10);
-                        setBookingWhen(joinDatetimeLocal(date, e.target.value));
+                        if (date < bookingScheduleDateMin) {
+                          date = bookingScheduleDateMin;
+                        }
+                        let next = joinDatetimeLocal(date, e.target.value);
+                        if (date === bookingScheduleDateMin && next && isDatetimeLocalInPast(next)) {
+                          next = joinDatetimeLocal(date, localTimeInputMinNow());
+                        }
+                        setBookingWhen(next);
                       }}
                       required
                       className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
@@ -2762,8 +2855,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     id="schedule-booking-when"
                     ref={scheduleDateInputRef}
                     type="datetime-local"
+                    min={localDatetimeLocalInputMin()}
                     value={bookingWhen}
-                    onChange={(e) => setBookingWhen(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v) {
+                        setBookingWhen(v);
+                        return;
+                      }
+                      if (!isDatetimeLocalInPast(v)) {
+                        setBookingWhen(v);
+                      } else {
+                        setBookingWhen(localDatetimeLocalInputMin());
+                      }
+                    }}
                     required
                     className="h-10 pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:bottom-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
                   />

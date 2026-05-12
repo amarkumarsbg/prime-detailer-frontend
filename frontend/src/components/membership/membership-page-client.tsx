@@ -522,104 +522,106 @@ export function MembershipPageClient() {
       </Tabs>
 
       <Dialog open={pkgDialogOpen} onOpenChange={setPkgDialogOpen}>
-        <DialogContent className="max-h-[90vh] sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(90vh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="shrink-0 space-y-1.5 px-6 pt-6 text-left">
             <DialogTitle>{editingPackage ? "Edit package" : "New package"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="pkg-name">Name</Label>
-              <Input id="pkg-name" value={formName} onChange={(e) => setFormName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Tier</Label>
-              <Select value={formTier} onValueChange={(v) => setFormTier(v as MembershipTier)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIER_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pkg-price">Price (₹)</Label>
-              <Input
-                id="pkg-price"
-                inputMode="decimal"
-                value={formPrice}
-                onChange={(e) => setFormPrice(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label>Included services</Label>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {formServiceIds.size} selected
-                </span>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-2 [scrollbar-gutter:stable]">
+            <div className="grid gap-4 pb-2">
+              <div className="space-y-2">
+                <Label htmlFor="pkg-name">Name</Label>
+                <Input id="pkg-name" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                New washes or services are created on the{" "}
-                <Link href="/services" className="font-medium text-primary underline underline-offset-2">
-                  Services
-                </Link>{" "}
-                page. Only <strong>active</strong> catalog items appear below; search to find them quickly.
-              </p>
-              {orphanedSelectedIds.length > 0 && (
-                <p className="text-xs text-amber-800 dark:text-amber-200 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900 dark:bg-amber-950/50">
-                  This package still references IDs not in your current catalog:{" "}
-                  {orphanedSelectedIds.join(", ")}. Re-add matching services or remove them from the package.
-                </p>
-              )}
-              <Input
-                placeholder="Search services by name or category…"
-                value={serviceFilter}
-                onChange={(e) => setServiceFilter(e.target.value)}
-                className="h-9"
-                aria-label="Filter services list"
-              />
-              <ScrollArea className="h-[200px] rounded-md border border-border p-3">
-                <div className="space-y-3 pr-3">
-                  {filteredActiveServices.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">
-                      No active services match.{" "}
-                      <Link href="/services" className="text-primary underline">
-                            Open Services
-                      </Link>
-                    </p>
-                  ) : (
-                    filteredActiveServices.map((s) => (
-                      <label
-                        key={s.id}
-                        className="flex cursor-pointer items-start gap-2 text-sm leading-tight"
-                      >
-                        <Checkbox
-                          checked={formServiceIds.has(s.id)}
-                          onCheckedChange={(checked) => {
-                            setFormServiceIds((prev) => {
-                              const next = new Set(prev);
-                              if (checked === true) next.add(s.id);
-                              else next.delete(s.id);
-                              return next;
-                            });
-                          }}
-                        />
-                        <span>
-                          <span className="font-medium">{s.name}</span>
-                          <span className="block text-xs text-muted-foreground">{s.category}</span>
-                        </span>
-                      </label>
-                    ))
-                  )}
+              <div className="space-y-2">
+                <Label>Tier</Label>
+                <Select value={formTier} onValueChange={(v) => setFormTier(v as MembershipTier)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIER_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pkg-price">Price (₹)</Label>
+                <Input
+                  id="pkg-price"
+                  inputMode="decimal"
+                  value={formPrice}
+                  onChange={(e) => setFormPrice(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Included services</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formServiceIds.size} selected
+                  </span>
                 </div>
-              </ScrollArea>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  New washes or services are created on the{" "}
+                  <Link href="/services" className="font-medium text-primary underline underline-offset-2">
+                    Services
+                  </Link>{" "}
+                  page. Only <strong>active</strong> catalog items appear below; search to find them quickly.
+                </p>
+                {orphanedSelectedIds.length > 0 && (
+                  <p className="text-xs text-amber-800 dark:text-amber-200 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900 dark:bg-amber-950/50">
+                    This package still references IDs not in your current catalog:{" "}
+                    {orphanedSelectedIds.join(", ")}. Re-add matching services or remove them from the package.
+                  </p>
+                )}
+                <Input
+                  placeholder="Search services by name or category…"
+                  value={serviceFilter}
+                  onChange={(e) => setServiceFilter(e.target.value)}
+                  className="h-9"
+                  aria-label="Filter services list"
+                />
+                <ScrollArea className="h-[200px] rounded-md border border-border p-3">
+                  <div className="space-y-3 pr-3">
+                    {filteredActiveServices.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">
+                        No active services match.{" "}
+                        <Link href="/services" className="text-primary underline">
+                          Open Services
+                        </Link>
+                      </p>
+                    ) : (
+                      filteredActiveServices.map((s) => (
+                        <label
+                          key={s.id}
+                          className="flex cursor-pointer items-start gap-2 text-sm leading-tight"
+                        >
+                          <Checkbox
+                            checked={formServiceIds.has(s.id)}
+                            onCheckedChange={(checked) => {
+                              setFormServiceIds((prev) => {
+                                const next = new Set(prev);
+                                if (checked === true) next.add(s.id);
+                                else next.delete(s.id);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span>
+                            <span className="font-medium">{s.name}</span>
+                            <span className="block text-xs text-muted-foreground">{s.category}</span>
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="shrink-0 gap-2 border-t border-border bg-background px-6 py-4 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setPkgDialogOpen(false)}>
               Close
             </Button>

@@ -2,6 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { KPICard } from "@/components/shared/kpi-card";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -41,7 +49,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { StaggerGrid } from "@/components/motion/stagger-grid";
 import {
@@ -116,6 +124,8 @@ export default function DashboardPage() {
     useDashboardStatsStore((s) => s.stats) ?? EMPTY_DASHBOARD_STATS;
   const serviceReminders = useReminderStore((s) => s.reminders);
   const businessName = useSettingsStore((s) => s.businessName);
+
+  const [recentBookingPreview, setRecentBookingPreview] = useState<JobCard | null>(null);
 
   const viewingLabel = useMemo(() => {
     if (!currentBranch || isAllBranchesScope(currentBranch)) return "All branches";
@@ -875,7 +885,11 @@ export default function DashboardPage() {
                 <p className="font-medium mt-1.5 leading-tight">{jc.customerName}</p>
                 <p className="text-xs text-muted-foreground mt-1">{jc.services[0]?.name ?? "—"}</p>
                 <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                  <dt className="text-muted-foreground">Booked</dt>
+                  <dt className="text-muted-foreground">Booking date</dt>
+                  <dd className="text-foreground">
+                    {jc.expectedDelivery ? formatDate(jc.expectedDelivery) : "—"}
+                  </dd>
+                  <dt className="text-muted-foreground">Booked on</dt>
                   <dd className="text-foreground">{formatDate(jc.createdAt)}</dd>
                   <dt className="text-muted-foreground">Price</dt>
                   <dd className="text-foreground tabular-nums font-medium">{formatCurrency(jc.estimatedAmount)}</dd>
@@ -886,13 +900,19 @@ export default function DashboardPage() {
                   <Button variant="outline" size="sm" className="h-8" asChild>
                     <Link href={`/job-cards/${jc.id}`}>
                       <ClipboardList className="w-3.5 h-3.5 mr-1.5" />
-                      Open
+                      Job card
                     </Link>
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                    <Link href={`/job-cards/${jc.id}`} aria-label="View job card">
-                      <Eye className="w-4 h-4" />
-                    </Link>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    title="Quick preview"
+                    aria-label="Quick preview booking"
+                    onClick={() => setRecentBookingPreview(jc)}
+                  >
+                    <Eye className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -922,7 +942,7 @@ export default function DashboardPage() {
                       {jc.services[0]?.name ?? "—"}
                     </td>
                     <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
-                      {formatDate(jc.createdAt)}
+                      {jc.expectedDelivery ? formatDate(jc.expectedDelivery) : "—"}
                     </td>
                     <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
                       {formatDate(jc.createdAt)}
@@ -938,15 +958,21 @@ export default function DashboardPage() {
                     </td>
                     <td className="px-3 py-3.5 align-middle text-center">
                       <div className="inline-flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Open job card">
                           <Link href={`/job-cards/${jc.id}`} aria-label="Open job card">
                             <ClipboardList className="w-4 h-4" />
                           </Link>
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                          <Link href={`/job-cards/${jc.id}`} aria-label="View job card">
-                            <Eye className="w-4 h-4" />
-                          </Link>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Quick preview"
+                          aria-label="Quick preview booking"
+                          onClick={() => setRecentBookingPreview(jc)}
+                        >
+                          <Eye className="w-4 h-4" />
                         </Button>
                       </div>
                     </td>
@@ -957,6 +983,67 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={recentBookingPreview !== null}
+        onOpenChange={(open) => {
+          if (!open) setRecentBookingPreview(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          {recentBookingPreview ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-mono text-base">
+                  {recentBookingPreview.jobNumber}
+                </DialogTitle>
+                <DialogDescription className="text-left space-y-0.5">
+                  <span className="block font-medium text-foreground">
+                    {recentBookingPreview.customerName}
+                  </span>
+                  <span className="block text-sm">
+                    {recentBookingPreview.vehicleRegNumber} · {recentBookingPreview.vehicleMakeModel}
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <JobCardStatusBadge status={recentBookingPreview.status} />
+                </div>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
+                  <dt className="text-muted-foreground">Service</dt>
+                  <dd>{recentBookingPreview.services[0]?.name ?? "—"}</dd>
+                  <dt className="text-muted-foreground">Booking date</dt>
+                  <dd>
+                    {recentBookingPreview.expectedDelivery
+                      ? formatDate(recentBookingPreview.expectedDelivery)
+                      : "—"}
+                  </dd>
+                  <dt className="text-muted-foreground">Booked on</dt>
+                  <dd>{formatDate(recentBookingPreview.createdAt)}</dd>
+                  <dt className="text-muted-foreground">Estimate</dt>
+                  <dd className="tabular-nums font-medium">
+                    {formatCurrency(recentBookingPreview.estimatedAmount)}
+                  </dd>
+                  <dt className="text-muted-foreground">Branch</dt>
+                  <dd>
+                    {branchNameById[recentBookingPreview.branchId] ??
+                      recentBookingPreview.branchId}
+                  </dd>
+                </dl>
+              </div>
+              <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" asChild className="w-full sm:w-auto">
+                  <Link href={`/customers/${recentBookingPreview.customerId}`}>Customer profile</Link>
+                </Button>
+                <Button asChild className="w-full sm:w-auto">
+                  <Link href={`/job-cards/${recentBookingPreview.id}`}>Open job card</Link>
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

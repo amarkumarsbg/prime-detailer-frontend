@@ -51,11 +51,22 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
   updateReminder: async (id, updates) => {
     const prev = get().reminders.find((r) => r.id === id);
     if (!prev) return;
+    if (updates.status === "COMPLETED" && prev.status === "COMPLETED") return;
+    if (updates.status === "DISMISSED" && prev.status === "DISMISSED") return;
+
     const next = { ...prev, ...updates };
-    await putCollectionDocument("serviceReminders", id, next);
     set((state) => ({
       reminders: state.reminders.map((r) => (r.id === id ? next : r)),
     }));
+
+    try {
+      await putCollectionDocument("serviceReminders", id, next);
+    } catch {
+      set((state) => ({
+        reminders: state.reminders.map((r) => (r.id === id ? prev : r)),
+      }));
+      throw new Error("Failed to sync reminder");
+    }
   },
 
   deleteReminder: async (id) => {

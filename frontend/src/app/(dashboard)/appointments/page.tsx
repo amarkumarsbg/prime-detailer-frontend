@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import {
   format,
+  startOfDay,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
@@ -67,6 +68,11 @@ import {
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import { notifyAppointmentScheduledWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import {
+  isAppointmentSlotInPast,
+  localTodayDateInputMin,
+  localTimeInputMinNow,
+} from "@/lib/booking-calendar-validation";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -121,6 +127,9 @@ export default function AppointmentsPage() {
   const [formTime, setFormTime] = useState("09:00");
   const [formNotes, setFormNotes] = useState("");
 
+  const minCalendarDate = localTodayDateInputMin();
+  const timeInputMin = formDate === minCalendarDate ? localTimeInputMinNow() : undefined;
+
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
 
@@ -151,9 +160,17 @@ export default function AppointmentsPage() {
   const handleAppointmentDialogChange = (open: boolean) => {
     setDialogOpen(open);
     if (open) {
-      const d = selectedDate ?? new Date();
-      setFormDate(format(d, "yyyy-MM-dd"));
-      setFormTime("09:00");
+      const today = startOfDay(new Date());
+      const raw = selectedDate ?? new Date();
+      const pickedDay = startOfDay(raw);
+      const isPastDay = pickedDay < today;
+      const effectiveDate = isPastDay ? new Date() : raw;
+      setFormDate(format(effectiveDate, "yyyy-MM-dd"));
+      if (isPastDay || isToday(effectiveDate)) {
+        setFormTime(localTimeInputMinNow());
+      } else {
+        setFormTime("09:00");
+      }
     } else {
       resetAppointmentForm();
     }
@@ -168,6 +185,12 @@ export default function AppointmentsPage() {
     }
     if (!formDate || !formTime) {
       toast.error("Please set date and time");
+      return;
+    }
+    if (isAppointmentSlotInPast(formDate, formTime)) {
+      toast.error("Cannot schedule in the past", {
+        description: "Choose today with a future time, or a later date.",
+      });
       return;
     }
 
@@ -686,8 +709,21 @@ export default function AppointmentsPage() {
                       id="apt-date"
                       type="date"
                       required
+                      min={minCalendarDate}
                       value={formDate}
-                      onChange={(e) => setFormDate(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v < minCalendarDate) {
+                          setFormDate(minCalendarDate);
+                          setFormTime(localTimeInputMinNow());
+                          return;
+                        }
+                        setFormDate(v);
+                        if (v === minCalendarDate) {
+                          const nowT = localTimeInputMinNow();
+                          setFormTime((prev) => (prev < nowT ? nowT : prev));
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
@@ -696,6 +732,7 @@ export default function AppointmentsPage() {
                       id="apt-time"
                       type="time"
                       required
+                      min={timeInputMin}
                       value={formTime}
                       onChange={(e) => setFormTime(e.target.value)}
                     />

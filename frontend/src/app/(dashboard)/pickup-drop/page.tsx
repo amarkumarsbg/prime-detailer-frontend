@@ -40,6 +40,10 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import {
+  isDatetimeLocalInPast,
+  localDatetimeLocalInputMin,
+} from "@/lib/booking-calendar-validation";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 
 function customerPhoneFromPickupRequest(r: PickupDropRequest): string | undefined {
@@ -238,6 +242,12 @@ export default function PickupDropPage() {
     const scheduled = new Date(newScheduledLocal);
     if (Number.isNaN(scheduled.getTime())) {
       toast.error("Invalid date and time.");
+      return;
+    }
+    if (isDatetimeLocalInPast(newScheduledLocal)) {
+      toast.error("Scheduled time cannot be in the past.", {
+        description: "Choose a future date and time.",
+      });
       return;
     }
 
@@ -604,8 +614,20 @@ export default function PickupDropPage() {
                   <Input
                     id="pd-new-when"
                     type="datetime-local"
+                    min={localDatetimeLocalInputMin()}
                     value={newScheduledLocal}
-                    onChange={(e) => setNewScheduledLocal(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v) {
+                        setNewScheduledLocal(v);
+                        return;
+                      }
+                      if (!isDatetimeLocalInPast(v)) {
+                        setNewScheduledLocal(v);
+                      } else {
+                        setNewScheduledLocal(localDatetimeLocalInputMin());
+                      }
+                    }}
                     className="border-input"
                   />
                 </div>

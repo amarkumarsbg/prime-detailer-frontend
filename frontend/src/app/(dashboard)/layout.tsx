@@ -8,6 +8,7 @@ import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ScrollToTopButton } from "@/components/layout/scroll-to-top-button";
+import { AppDataSync } from "@/components/layout/app-data-sync";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -105,6 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Button>
             </div>
           ) : null}
+          <AppDataSync />
           {children}
         </main>
         <ScrollToTopButton scrollContainerRef={mainScrollRef} />

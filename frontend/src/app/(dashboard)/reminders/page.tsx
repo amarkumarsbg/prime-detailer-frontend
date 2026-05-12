@@ -139,13 +139,23 @@ export default function RemindersPage() {
   }, [reminders, activeTab, activeFilter]);
 
   const handleMarkComplete = (id: string) => {
-    updateReminder(id, { status: "COMPLETED" as ReminderStatus });
+    const current = useReminderStore.getState().reminders.find((r) => r.id === id);
+    if (!current || current.status === "COMPLETED") return;
+
     toast.success("Reminder marked as completed");
+    void updateReminder(id, { status: "COMPLETED" as ReminderStatus }).catch(() => {
+      toast.error("Could not save reminder", { description: "Please try again." });
+    });
   };
 
   const handleDismiss = (id: string) => {
-    updateReminder(id, { status: "DISMISSED" as ReminderStatus });
+    const current = useReminderStore.getState().reminders.find((r) => r.id === id);
+    if (!current || current.status === "DISMISSED") return;
+
     toast.info("Reminder dismissed");
+    void updateReminder(id, { status: "DISMISSED" as ReminderStatus }).catch(() => {
+      toast.error("Could not dismiss reminder", { description: "Please try again." });
+    });
   };
 
   const handleSendWhatsAppReminder = async (reminder: ServiceReminder) => {

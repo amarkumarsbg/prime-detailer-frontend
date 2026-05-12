@@ -341,7 +341,13 @@ export interface JobCard {
   qualityCheckCompleted?: boolean;
   mechanicSwitchLog?: MechanicSwitchLog[];
   quotationId?: string;
+  /** When the job was created from a calendar appointment */
+  appointmentId?: string;
+  /** Human booking ref (e.g. BK-2026-0001) — copy of Appointment.bookingId */
+  appointmentBookingRef?: string;
   highEndServiceIds?: string[];
+  /** Tasks tab: checklist completion per high-end program id (catalog lines use `services[].isCompleted`). */
+  highEndServiceCompletedById?: Record<string, boolean>;
   /** For each high-end service id, months until the first maintenance reminder (preset from reminderIntervals or a custom value). */
   highEndFirstFollowUpMonthsByServiceId?: Record<string, number>;
   /** Planned time to complete (minutes) per high-end program on this job. */
@@ -560,6 +566,8 @@ export interface Appointment {
   date: string;
   time: string;
   status: AppointmentStatus;
+  /** Set when staff creates a job card from this confirmed booking */
+  jobCardId?: string;
   notes?: string;
   whatsappSent: boolean;
   createdAt: string;

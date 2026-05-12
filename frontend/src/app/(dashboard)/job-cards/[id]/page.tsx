@@ -145,6 +145,17 @@ function formatHighEndIntervalMonths(m: number): string {
   return m >= 12 ? `${m / 12}yr` : `${m}mo`;
 }
 
+type TaskChecklistRow =
+  | { kind: "catalog"; service: ServiceItem }
+  | {
+      kind: "highEnd";
+      hesId: string;
+      name: string;
+      price: number;
+      durationMinutes?: number;
+      completed: boolean;
+    };
+
 export default function JobCardDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -260,6 +271,9 @@ export default function JobCardDetailPage() {
   const [detailTab, setDetailTab] = useState("overview");
   const [highEndFollowUpById, setHighEndFollowUpById] = useState<Record<string, number>>({});
   const [highEndCompletionById, setHighEndCompletionById] = useState<Record<string, number>>({});
+  const [highEndChecklistDoneById, setHighEndChecklistDoneById] = useState<Record<string, boolean>>(
+    () => jobCard?.highEndServiceCompletedById ?? {}
+  );
 
   const persistHighEndCompletion = useCallback(
     (next: Record<string, number>) => {
@@ -563,6 +577,7 @@ export default function JobCardDetailPage() {
     }
     setHighEndFollowUpById(followUpNext);
     setHighEndCompletionById({ ...(jobCard.highEndCompletionMinutesByServiceId ?? {}) });
+    setHighEndChecklistDoneById({ ...(jobCard.highEndServiceCompletedById ?? {}) });
   }, [id, jobCard, highEndServiceConfigs]);
 
   useEffect(() => {
@@ -572,7 +587,10 @@ export default function JobCardDetailPage() {
     if (!jobCard.mechanicId) return;
     const nowIso = new Date().toISOString();
     updateJobCard(jobCard.id, {
-      ...initialServiceTimerPatch(jobCard.services, nowIso),
+      ...initialServiceTimerPatch(jobCard.services, nowIso, {
+        highEndServiceIds: jobCard.highEndServiceIds,
+        highEndCompletionMinutesByServiceId: jobCard.highEndCompletionMinutesByServiceId,
+      }),
       updatedAt: nowIso,
     });
   }, [jobCard, updateJobCard]);
@@ -1544,6 +1562,14 @@ export default function JobCardDetailPage() {
                       <Button variant="outline" size="sm" type="button">
                         <FileText className="w-4 h-4 mr-1.5" />
                         Quotation
+                      </Button>
+                    </Link>
+                  )}
+                  {jobCard.appointmentBookingRef && (
+                    <Link href="/appointments">
+                      <Button variant="outline" size="sm" type="button">
+                        <CalendarDays className="w-4 h-4 mr-1.5" />
+                        {jobCard.appointmentBookingRef}
                       </Button>
                     </Link>
                   )}
