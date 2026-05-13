@@ -1,6 +1,16 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import { BRANCH_MUTATION_ROLES } from "../lib/rbac.js";
+import type { UserRole } from "@prisma/client";
 import { listBranchesApi, upsertBranchApi, patchBranchApi } from "../services/branch-api.service.js";
+
+function forbidden(res: Response, message: string) {
+  res.status(403).json({ data: null, error: { message } });
+}
+
+function canMutateBranch(role: UserRole | undefined): boolean {
+  return role !== undefined && (BRANCH_MUTATION_ROLES as readonly string[]).includes(role);
+}
 
 function paramId(req: Request): string {
   const raw = req.params.id;
@@ -34,6 +44,10 @@ export async function getBranches(_req: Request, res: Response, next: NextFuncti
 
 export async function postBranch(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!canMutateBranch(req.auth?.role)) {
+      forbidden(res, "You do not have permission to create branches.");
+      return;
+    }
     const body = branchSchema.parse(req.body);
     const branch = await upsertBranchApi(body);
     res.status(201).json({ data: { branch }, error: null });
@@ -46,6 +60,10 @@ const patchBranchSchema = branchSchema.partial().omit({ id: true });
 
 export async function putBranch(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!canMutateBranch(req.auth?.role)) {
+      forbidden(res, "You do not have permission to update branches.");
+      return;
+    }
     const id = paramId(req);
     const body = patchBranchSchema.parse(req.body);
     const branch = await patchBranchApi(id, body);

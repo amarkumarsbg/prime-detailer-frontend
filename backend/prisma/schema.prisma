@@ -57,6 +57,7 @@ model User {
   name                 String
   email                String   @unique
   phone                String
+  employeeCode         String?  @unique
   role                 UserRole
   branchId             String
   branch               Branch   @relation(fields: [branchId], references: [id])
@@ -69,6 +70,12 @@ model User {
   birthday             String?
   anniversary          String?
   passwordHash         String
+  /** When true, client should force a password change before using the app (set for auto-generated onboarding passwords). */
+  mustChangePassword   Boolean  @default(false)
+  /** Staff user id (`User.id`) of the admin who last set the initial/onboarding password, when tracked. */
+  passwordCreatedBy    String?
+  /** Last time the login password hash was replaced (create, reset, or authenticated change). */
+  passwordUpdatedAt    DateTime?
   /** SHA-256 hex of opaque reset token; cleared after reset or superseded by new request */
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?

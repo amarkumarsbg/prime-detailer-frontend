@@ -1,6 +1,36 @@
+import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { User as PrismaUser } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+
+function pickChar(set: string): string {
+  return set[randomInt(0, set.length)]!;
+}
+
+/** Meets application password policy (mixed case, digit, symbol, length ≥ 8). */
+export function generateTemporaryPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const special = "#@$%&*!?+-";
+  const all = upper + lower + digits + special;
+  const targetLen = 10;
+  const chars: string[] = [
+    pickChar(upper),
+    pickChar(lower),
+    pickChar(digits),
+    pickChar(special),
+  ];
+  while (chars.length < targetLen) chars.push(pickChar(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    const a = chars[i]!;
+    const b = chars[j]!;
+    chars[i] = b;
+    chars[j] = a;
+  }
+  return chars.join("");
+}
 
 export function toApiUser(u: PrismaUser) {
   return {
@@ -18,6 +48,9 @@ export function toApiUser(u: PrismaUser) {
     totalIncentiveEarned: u.totalIncentiveEarned ?? undefined,
     birthday: u.birthday ?? undefined,
     anniversary: u.anniversary ?? undefined,
+    mustChangePassword: u.mustChangePassword === true ? true : undefined,
+    passwordCreatedBy: u.passwordCreatedBy ?? undefined,
+    passwordUpdatedAt: u.passwordUpdatedAt?.toISOString(),
   };
 }
 
@@ -42,8 +75,13 @@ export async function createUserApi(input: {
   totalIncentiveEarned?: number | null;
   birthday?: string | null;
   anniversary?: string | null;
-}) {
-  const passwordHash = await bcrypt.hash(input.password ?? "password", 10);
+  /** Creator `User.id` when provisioned by an authenticated admin. */
+  createdById?: string | null;
+}): Promise<{ user: ReturnType<typeof toApiUser>; temporaryPassword?: string }> {
+  const useExplicitPassword = input.password !== undefined && input.password.trim() !== "";
+  const plainPassword = useExplicitPassword ? input.password!.trim() : generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+  const now = new Date();
   const row = await prisma.user.create({
     data: {
       id: input.id,
@@ -53,6 +91,9 @@ export async function createUserApi(input: {
       role: input.role,
       branchId: input.branchId,
       passwordHash,
+      mustChangePassword: !useExplicitPassword,
+      passwordCreatedBy: input.createdById ?? null,
+      passwordUpdatedAt: now,
       avatar: input.avatar ?? null,
       isActive: input.isActive ?? true,
       emailVerified: input.emailVerified ?? false,
@@ -63,7 +104,10 @@ export async function createUserApi(input: {
       anniversary: input.anniversary ?? null,
     },
   });
-  return toApiUser(row);
+  return {
+    user: toApiUser(row),
+    ...(!useExplicitPassword ? { temporaryPassword: plainPassword } : {}),
+  };
 }
 
 export async function updateUserApi(

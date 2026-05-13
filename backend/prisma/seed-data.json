@@ -34,8 +34,8 @@
   "staff": [
     {
       "id": "usr-admin",
-      "name": "Administrator",
-      "email": "admin@local.dev",
+      "name": "Super Admin",
+      "email": "superadmin@company.com",
       "phone": "+1000000000",
       "role": "SUPER_ADMIN",
       "branchId": "br-main",

@@ -93,6 +93,12 @@ export interface User {
   birthday?: string;
   /** Employment start or work anniversary, ISO yyyy-mm-dd */
   anniversary?: string;
+  /** Server sets true until the user completes an authenticated password change (onboarding). */
+  mustChangePassword?: boolean;
+  /** ISO timestamp when login password was last changed (server audit). */
+  passwordUpdatedAt?: string;
+  /** Staff user id who provisioned this account password (server audit). */
+  passwordCreatedBy?: string;
 }
 
 export type PayrollRecordStatus = "PENDING" | "PROCESSING" | "PAID";

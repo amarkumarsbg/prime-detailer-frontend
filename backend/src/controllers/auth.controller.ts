@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import type { Branch, User } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { authenticateUser, registerUser, signAuthToken } from "../services/auth.service.js";
+import { authenticateUser, signAuthToken } from "../services/auth.service.js";
 import {
   consumeLoginOtpIfValid,
   findActiveUserByTenDigitPhone,
@@ -27,17 +28,11 @@ import {
   clearPasswordResetForUser,
   isPasswordResetTokenPending,
 } from "../services/password-reset.service.js";
+import { strongPasswordSchema } from "../lib/password-policy.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-});
-
-const registerSchema = z.object({
-  name: z.string().min(1).max(120),
-  email: z.string().email(),
-  phone: z.string().min(5).max(32),
-  password: z.string().min(6),
 });
 
 const otpSendSchema = z.object({
@@ -55,7 +50,12 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(24),
-  password: z.string().min(6),
+  password: strongPasswordSchema,
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: strongPasswordSchema,
 });
 
 const resetTokenQuerySchema = z.object({
@@ -110,6 +110,7 @@ function authSuccessResponse(user: User, branch: Branch | null) {
     role: user.role,
     branchId: user.branchId,
     name: user.name,
+    mustChangePassword: user.mustChangePassword === true,
   });
   return {
     accessToken: token,
@@ -128,6 +129,7 @@ function authSuccessResponse(user: User, branch: Branch | null) {
       totalIncentiveEarned: user.totalIncentiveEarned ?? undefined,
       birthday: user.birthday ?? undefined,
       anniversary: user.anniversary ?? undefined,
+      ...(user.mustChangePassword === true ? { mustChangePassword: true as const } : {}),
     },
     branch: branch
       ? {
@@ -258,24 +260,6 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function register(req: Request, res: Response, next: NextFunction) {
-  try {
-    const body = registerSchema.parse(req.body);
-    const result = await registerUser(body);
-    if (!result.ok) {
-      res
-        .status(409)
-        .json({ data: null, error: { message: "An account with this email already exists" } });
-      return;
-    }
-    const user = result.user;
-    const branch = await prisma.branch.findUnique({ where: { id: user.branchId } });
-    res.status(201).json({ data: authSuccessResponse(user, branch), error: null });
-  } catch (e) {
-    next(e);
-  }
-}
-
 /**
  * Opaque success if the email is unknown. Issues a time-limited reset token and sends email via Resend when configured.
  * In development without Resend, prints the reset URL in the API terminal.
@@ -350,7 +334,7 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
       }
     } else if (!isProduction) {
       console.warn(
-        `[auth/forgot-password] No active User has email "${normalized}" — no reset mail sent (API still returns generic success). Seed/demo accounts often use admin@local.dev or *@prime-detailers.test. Sign up first if you're using a new Gmail address on this database.`
+        `[auth/forgot-password] No active User has email "${normalized}" — no reset mail sent (API still returns generic success). Seed/demo accounts often use superadmin@company.com or *@prime-detailers.test. Ask your Super Admin if you need a new account.`
       );
     }
 
@@ -369,6 +353,36 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
       },
       error: null,
     });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function changePassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const body = changePasswordSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.auth.id } });
+    if (!user?.isActive) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ data: null, error: { message: "Current password is incorrect." } });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(body.newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, mustChangePassword: false, passwordUpdatedAt: new Date() },
+    });
+    const refreshed = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const branch = await prisma.branch.findUnique({ where: { id: refreshed.branchId } });
+    res.json({ data: authSuccessResponse(refreshed, branch), error: null });
   } catch (e) {
     next(e);
   }
@@ -426,6 +440,7 @@ export async function me(req: Request, res: Response) {
         totalIncentiveEarned: user.totalIncentiveEarned ?? undefined,
         birthday: user.birthday ?? undefined,
         anniversary: user.anniversary ?? undefined,
+        ...(user.mustChangePassword === true ? { mustChangePassword: true as const } : {}),
       },
       branch: branch
         ? {

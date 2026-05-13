@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { validateStrongPassword } from "../lib/password-policy.js";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 
@@ -79,7 +80,10 @@ export async function consumePasswordResetToken(
   plainToken: string,
   newPassword: string
 ): Promise<ConsumeResetPasswordResult> {
-  if (!plainToken.trim() || newPassword.length < 6) {
+  if (!plainToken.trim()) {
+    return { ok: false, reason: "INVALID" };
+  }
+  if (validateStrongPassword(newPassword) !== null) {
     return { ok: false, reason: "INVALID" };
   }
   const tokenHash = hashPasswordResetToken(plainToken);
@@ -101,10 +105,13 @@ export async function consumePasswordResetToken(
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
+  const passwordUpdatedAt = new Date();
   await prisma.$executeRaw(
     Prisma.sql`
       UPDATE "User"
       SET "passwordHash" = ${passwordHash},
+          "mustChangePassword" = false,
+          "passwordUpdatedAt" = ${passwordUpdatedAt},
           "passwordResetTokenHash" = NULL,
           "passwordResetExpiresAt" = NULL
       WHERE id = ${user.id}

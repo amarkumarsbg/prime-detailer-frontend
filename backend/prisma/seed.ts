@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -296,6 +296,62 @@ async function main() {
 
   const allowedBranchIds = branches.map((b) => b.id);
   const fallbackBranchId = allowedBranchIds[0] ?? "br-main";
+
+  const superEmail = (process.env.SUPER_ADMIN_EMAIL ?? "superadmin@company.com").trim().toLowerCase();
+  const superPassword = process.env.SUPER_ADMIN_PASSWORD ?? "ChangeMe!SuperAdmin1";
+  const superBranchRaw = process.env.SUPER_ADMIN_BRANCH_ID?.trim();
+  const superBranchId =
+    superBranchRaw && allowedBranchIds.includes(superBranchRaw) ? superBranchRaw : fallbackBranchId;
+  const superHash = await bcrypt.hash(superPassword, 10);
+
+  const emailConflict = await prisma.user.findFirst({
+    where: { email: superEmail, NOT: { id: "usr-admin" } },
+    select: { id: true },
+  });
+  if (emailConflict) {
+    const freedEmail = `${emailConflict.id}-archived-${Date.now()}@seed.local`;
+    await prisma.user.update({
+      where: { id: emailConflict.id },
+      data: { email: freedEmail },
+    });
+    console.warn(
+      `[seed] Email "${superEmail}" was already used by ${emailConflict.id}; moved that account to ${freedEmail} so bootstrap Super Admin can use it.`
+    );
+  }
+
+  const bootstrapNow = new Date();
+
+  await prisma.user.upsert({
+    where: { id: "usr-admin" },
+    create: {
+      id: "usr-admin",
+      name: "Super Admin",
+      email: superEmail,
+      phone: "+919999999999",
+      role: "SUPER_ADMIN",
+      branchId: superBranchId,
+      passwordHash: superHash,
+      mustChangePassword: false,
+      isActive: true,
+      emailVerified: true,
+      attendancePin: "1000",
+      totalJobsCompleted: 120,
+      totalIncentiveEarned: 45000,
+      passwordUpdatedAt: bootstrapNow,
+    } as Prisma.UserUncheckedCreateInput,
+    update: {
+      name: "Super Admin",
+      email: superEmail,
+      phone: "+919999999999",
+      branchId: superBranchId,
+      passwordHash: superHash,
+      role: "SUPER_ADMIN",
+      mustChangePassword: false,
+      isActive: true,
+      passwordUpdatedAt: bootstrapNow,
+    } as Prisma.UserUncheckedUpdateInput,
+  });
+
   if (allowedBranchIds.length > 0) {
     await prisma.user.updateMany({
       where: { branchId: { notIn: allowedBranchIds } },

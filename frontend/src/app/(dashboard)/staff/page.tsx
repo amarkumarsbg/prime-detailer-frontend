@@ -17,7 +17,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getInitials } from "@/lib/utils";
-import { getAssignableStaffRoles, canManageStaffUsers, roleDisplayLabel } from "@/lib/rbac";
+import { getAssignableStaffRoles, canManageStaffUsers, canCreateStaffAccounts, roleDisplayLabel } from "@/lib/rbac";
+import { validateStrongPassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 import {
   Dialog,
   DialogContent,
@@ -389,24 +390,29 @@ export default function StaffPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!canManageStaffUsers(authRole)) {
-      toast.error("You don't have permission to add staff.");
+    if (!canCreateStaffAccounts(authRole)) {
+      toast.error("Only Super Admin or Admin can create user accounts.");
       return;
     }
     const name = newName.trim();
     const email = newEmail.trim();
     const phone = newPhone.trim();
-    if (!name || !email) {
-      toast.error("Please enter name and email.");
+    if (!name || !email || !phone) {
+      toast.error("Please enter name, email, and mobile.");
       return;
     }
-    if (newPassword !== newPasswordConfirm) {
+    const pwd = newPassword.trim();
+    const pwdConfirm = newPasswordConfirm.trim();
+    if (pwd !== pwdConfirm) {
       toast.error("Passwords do not match.");
       return;
     }
-    if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters.");
-      return;
+    if (pwd) {
+      const strength = validateStrongPassword(pwd);
+      if (strength) {
+        toast.error(strength);
+        return;
+      }
     }
     if (!assignableRoles.includes(newRole)) {
       toast.error("You cannot assign that role.");
@@ -419,17 +425,25 @@ export default function StaffPage() {
     }
     const branchId = branchLocked && authUser?.branchId ? authUser.branchId : newBranchId;
     try {
-      await addStaff({
+      const { temporaryPassword, credentialsEmailSent } = await addStaff({
         name,
         email,
         phone,
         role: newRole,
         branchId,
         isActive: newIsActive,
+        ...(pwd ? { password: pwd } : {}),
         ...(newBirthday.trim() ? { birthday: newBirthday.trim() } : {}),
         ...(newAnniversary.trim() ? { anniversary: newAnniversary.trim() } : {}),
       });
-      toast.success("User created successfully.");
+      if (temporaryPassword) {
+        toast.success("User created.", {
+          description: `${credentialsEmailSent ? "Credentials emailed. " : ""}Temporary password (copy now — not stored): ${temporaryPassword}`,
+          duration: credentialsEmailSent ? 20_000 : 45_000,
+        });
+      } else {
+        toast.success("User created successfully.");
+      }
       resetAddForm();
       setDialogOpen(false);
     } catch {
@@ -441,7 +455,7 @@ export default function StaffPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Users Management"
-        description="Manage staff, customers, and role-based access. Super admins and admins can manage branches in Settings."
+        description="Directory and attendance PINs for staff. Super Admin and Admin can create accounts (no public signup)."
         actions={
           <div className="flex flex-wrap gap-2">
             {mainTab === "customers" ? (
@@ -452,7 +466,7 @@ export default function StaffPage() {
                 </Link>
               </Button>
             ) : (
-              canManageStaffUsers(authRole) && (
+              canCreateStaffAccounts(authRole) && (
                 <Dialog
                   open={dialogOpen}
                   onOpenChange={(open) => {
@@ -470,7 +484,7 @@ export default function StaffPage() {
                     <DialogHeader>
                       <DialogTitle>Add New User</DialogTitle>
                       <DialogDescription>
-                        Create credentials and assign a role. Branch managers can only add users to their own branch.
+                        Assign role and branch. Leave password blank for an auto-generated temporary password (also emailed when Resend is configured).
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4 mt-2">
@@ -499,7 +513,7 @@ export default function StaffPage() {
                           />
                         </div>
                         <div className="space-y-2 sm:col-span-2">
-                          <Label htmlFor="phone">Phone (optional)</Label>
+                          <Label htmlFor="phone">Mobile</Label>
                           <Input
                             id="phone"
                             placeholder="+91-9876543210"
@@ -507,16 +521,19 @@ export default function StaffPage() {
                             onChange={(e) => setNewPhone(e.target.value)}
                             inputMode="tel"
                             autoComplete="tel"
+                            required
                           />
                         </div>
+                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                          Optional manual password — {PASSWORD_POLICY_HINT} Leave both fields blank to generate a compliant temporary password automatically.
+                        </p>
                         <div className="space-y-2">
                           <Label htmlFor="new-password">Password</Label>
                           <div className="relative">
                             <Input
                               id="new-password"
                               type={showAddUserPassword ? "text" : "password"}
-                              placeholder="Create a password"
-                              required
+                              placeholder="Leave blank to auto-generate"
                               value={newPassword}
                               onChange={(e) => setNewPassword(e.target.value)}
                               className="pr-10"
@@ -542,8 +559,7 @@ export default function StaffPage() {
                             <Input
                               id="new-password-confirm"
                               type={showAddUserPassword ? "text" : "password"}
-                              placeholder="Repeat password"
-                              required
+                              placeholder="Repeat if setting manually"
                               value={newPasswordConfirm}
                               onChange={(e) => setNewPasswordConfirm(e.target.value)}
                               className="pr-10"

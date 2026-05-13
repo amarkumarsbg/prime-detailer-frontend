@@ -10,7 +10,12 @@ export function canManageOrgBranches(role: UserRole | undefined): boolean {
   return role === "SUPER_ADMIN" || role === "ADMIN";
 }
 
-/** Can open Staff / Users management and add non-customer users. */
+/** Super Admin and Admin may onboard accounts (public signup is disabled). */
+export function canCreateStaffAccounts(role: UserRole | undefined): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+/** Can open Staff / Users directory (view and edit existing profiles where permitted). */
 export function canManageStaffUsers(role: UserRole | undefined): boolean {
   return (
     role === "SUPER_ADMIN" ||

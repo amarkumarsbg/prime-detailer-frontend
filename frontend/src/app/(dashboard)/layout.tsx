@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword === true);
   const router = useRouter();
   const [authReady, setAuthReady] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -46,6 +47,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [authReady, sessionChecked, isAuthenticated, router]);
 
+  useEffect(() => {
+    if (!authReady || !sessionChecked || !isAuthenticated) return;
+    if (!mustChangePassword) return;
+    void router.replace("/change-password");
+  }, [authReady, sessionChecked, isAuthenticated, mustChangePassword, router]);
+
   const runBootstrap = useAppBootstrapStore((s) => s.run);
   const resetBootstrap = useAppBootstrapStore((s) => s.reset);
   const bootstrapError = useAppBootstrapStore((s) => s.error);
@@ -72,6 +79,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [bootstrapError]);
 
   if (!authReady || !sessionChecked || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (mustChangePassword) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />

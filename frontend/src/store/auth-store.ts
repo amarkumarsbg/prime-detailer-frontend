@@ -6,8 +6,6 @@ import type { User, Branch } from "@/types";
 import { ALL_BRANCHES_BRANCH } from "@/lib/all-branches";
 import { buildApiUrl } from "@/lib/api-base";
 
-type SignupResult = { ok: true } | { ok: false; message: string };
-
 export type SendLoginOtpResult =
   | {
       ok: true;
@@ -27,12 +25,6 @@ interface AuthState {
   sendLoginOtp: (phone: string) => Promise<SendLoginOtpResult>;
   verifyLoginOtp: (phone: string, code: string) => Promise<boolean>;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (input: {
-    name: string;
-    email: string;
-    phone: string;
-    password: string;
-  }) => Promise<SignupResult>;
   logout: () => void;
   setBranch: (branch: Branch) => void;
 }
@@ -188,51 +180,6 @@ export const useAuthStore = create<AuthState>()(
           return true;
         } catch {
           return false;
-        }
-      },
-
-      signup: async ({ name, email, phone, password }) => {
-        const emailTrim = email.trim();
-        if (!name.trim() || !emailTrim || !phone.trim() || !password) {
-          return { ok: false, message: "Please fill in all fields" };
-        }
-        try {
-          const res = await fetch(buildApiUrl("/api/auth/register"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: name.trim(),
-              email: emailTrim,
-              phone: phone.trim(),
-              password,
-            }),
-          });
-          const body = (await res.json()) as {
-            data: {
-              accessToken: string;
-              user: User;
-              branch: Branch | null;
-            } | null;
-            error: { message?: string } | null;
-          };
-          if (!res.ok || body.error || !body.data) {
-            return {
-              ok: false,
-              message: body.error?.message ?? "Could not create account",
-            };
-          }
-          const { accessToken, user, branch } = body.data;
-          const canOrgWide = canOrgWideRole(user.role);
-          const homeBranch = branch ?? null;
-          set({
-            accessToken,
-            user,
-            currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
-            isAuthenticated: true,
-          });
-          return { ok: true };
-        } catch {
-          return { ok: false, message: "Network error — is the API running?" };
         }
       },
 

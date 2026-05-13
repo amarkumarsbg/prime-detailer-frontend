@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buildApiUrl } from "@/lib/api-base";
+import { PASSWORD_POLICY_HINT, validateStrongPassword } from "@/lib/password-policy";
 import {
   Wrench,
   ArrowLeft,
@@ -71,8 +72,9 @@ function ResetPasswordForm() {
       setError("This link is missing a reset token. Open the link from your email again.");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    const pwErr = validateStrongPassword(password);
+    if (pwErr) {
+      setError(pwErr);
       return;
     }
     if (password !== confirm) {
@@ -225,6 +227,7 @@ function ResetPasswordForm() {
 
           {token && (linkState === "active" || linkState === "error") ? (
             <form onSubmit={handleSubmit} className="space-y-5">
+            <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
             <div className="space-y-2">
               <Label htmlFor="new-password" className="text-sm font-medium">
                 New password
@@ -238,7 +241,7 @@ function ResetPasswordForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                   className="h-11 rounded-xl bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 px-4 pr-11 transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
                 <button
@@ -265,7 +268,7 @@ function ResetPasswordForm() {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                   className="h-11 rounded-xl bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 px-4 pr-11 transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
                 <button

@@ -25,6 +25,8 @@ interface AddStaffInput {
   isActive?: boolean;
   birthday?: string;
   anniversary?: string;
+  /** Omit for server-generated temporary password (recommended). */
+  password?: string;
 }
 
 export type UpdateStaffResult =
@@ -33,7 +35,10 @@ export type UpdateStaffResult =
 
 interface StaffStoreState {
   staff: User[];
-  addStaff: (input: AddStaffInput) => Promise<void>;
+  addStaff: (input: AddStaffInput) => Promise<{
+    temporaryPassword?: string;
+    credentialsEmailSent?: boolean;
+  }>;
   updateStaff: (
     id: string,
     updates: Partial<
@@ -81,7 +86,12 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
     const birthday = input.birthday?.trim();
     const anniversary = input.anniversary?.trim();
     const id = nextStaffId(list);
-    const { user } = await apiPost<{ user: User }>("/api/users", {
+    const pwd = input.password?.trim();
+    const { user, temporaryPassword, credentialsEmailSent } = await apiPost<{
+      user: User;
+      temporaryPassword?: string;
+      credentialsEmailSent?: boolean;
+    }>("/api/users", {
       id,
       name: input.name.trim(),
       email: input.email.trim(),
@@ -92,8 +102,10 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       attendancePin: allocateAttendancePin(() => get().staff),
       birthday: birthday || null,
       anniversary: anniversary || null,
+      ...(pwd ? { password: pwd } : {}),
     });
     set({ staff: [user, ...list] });
+    return { temporaryPassword, credentialsEmailSent };
   },
 
   updateStaff: async (id, updates) => {

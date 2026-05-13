@@ -42,8 +42,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const success = await verifyLoginOtp(mobile, digits);
-      if (success) window.location.assign("/dashboard");
-      else setError("Invalid or expired OTP, or the server could not be reached.");
+      if (success) {
+        const mustChange = useAuthStore.getState().user?.mustChangePassword === true;
+        window.location.assign(mustChange ? "/change-password" : "/dashboard");
+      } else setError("Invalid or expired OTP, or the server could not be reached.");
     } finally {
       setLoading(false);
       verifyOtpLock.current = false;
@@ -95,7 +97,8 @@ export default function LoginPage() {
       const success = await login(email, password);
       setLoading(false);
       if (success) {
-        window.location.assign("/dashboard");
+        const mustChange = useAuthStore.getState().user?.mustChangePassword === true;
+        window.location.assign(mustChange ? "/change-password" : "/dashboard");
       } else {
         setError("Invalid email or password");
       }
@@ -413,13 +416,9 @@ export default function LoginPage() {
           )}
 
           <p className="text-center text-sm text-muted-foreground mt-8">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/signup"
-              className="text-primary font-medium hover:text-primary/80 transition-colors"
-            >
-              Sign up
-            </Link>
+            Need access? Ask your <span className="font-medium text-foreground">Super Admin</span> or{" "}
+            <span className="font-medium text-foreground">Admin</span> to create your account in{" "}
+            <span className="font-medium text-foreground">Users Management</span>.
           </p>
 
           <p className="text-center text-xs text-muted-foreground/60 mt-6 lg:hidden">
