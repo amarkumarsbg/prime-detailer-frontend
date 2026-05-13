@@ -3,11 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  /** Runtime queries (use Neon pooler URL when applicable). */
-  url       = env("DATABASE_URL")
-  /** Migrations / introspection — use Neon *direct* (non-pooler) URL to avoid P1002 advisory lock timeouts. Local Docker: same as DATABASE_URL. */
-  directUrl = env("DIRECT_DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
