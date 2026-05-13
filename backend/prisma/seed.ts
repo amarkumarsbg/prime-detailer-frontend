@@ -113,6 +113,17 @@ const SINGLETON_ENTITY_ID = "default";
 
 const prisma = new PrismaClient();
 
+/**
+ * OTP login sends 10 digits; API matches `digitsOnly(user.phone).endsWith(ten)`.
+ * Accept 10-digit India mobile or full international digits.
+ */
+function normalizeSuperAdminPhone(raw: string | undefined): string {
+  const digits = (raw ?? "").trim().replace(/\D/g, "");
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length >= 11) return `+${digits}`;
+  return "+919999999999";
+}
+
 async function main() {
   const passwordHash = await bcrypt.hash("password", 10);
 
@@ -303,6 +314,7 @@ async function main() {
   const superBranchId =
     superBranchRaw && allowedBranchIds.includes(superBranchRaw) ? superBranchRaw : fallbackBranchId;
   const superHash = await bcrypt.hash(superPassword, 10);
+  const superPhone = normalizeSuperAdminPhone(process.env.SUPER_ADMIN_PHONE);
 
   const emailConflict = await prisma.user.findFirst({
     where: { email: superEmail, NOT: { id: "usr-admin" } },
@@ -327,7 +339,7 @@ async function main() {
       id: "usr-admin",
       name: "Super Admin",
       email: superEmail,
-      phone: "+919999999999",
+      phone: superPhone,
       role: "SUPER_ADMIN",
       branchId: superBranchId,
       passwordHash: superHash,
@@ -342,7 +354,7 @@ async function main() {
     update: {
       name: "Super Admin",
       email: superEmail,
-      phone: "+919999999999",
+      phone: superPhone,
       branchId: superBranchId,
       passwordHash: superHash,
       role: "SUPER_ADMIN",
