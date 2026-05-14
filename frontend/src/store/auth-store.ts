@@ -15,11 +15,19 @@ export type SendLoginOtpResult =
     }
   | { ok: false; message: string };
 
+ export type AuthSessionPayload = {
+   accessToken: string;
+   user: User;
+   branch: Branch | null;
+ };
+
 interface AuthState {
   user: User | null;
   currentBranch: Branch | null;
   isAuthenticated: boolean;
   accessToken: string | null;
+  /** Updates persisted session after `/api/auth/*` responses that issue a fresh JWT. */
+  applyAuthPayload: (data: AuthSessionPayload) => void;
   /** Validates JWT with `/api/auth/me` or clears session */
   ensureValidSession: () => Promise<void>;
   sendLoginOtp: (phone: string) => Promise<SendLoginOtpResult>;
@@ -42,6 +50,17 @@ export const useAuthStore = create<AuthState>()(
       currentBranch: null,
       isAuthenticated: false,
       accessToken: null,
+
+      applyAuthPayload: (data) => {
+        const canOrgWide = canOrgWideRole(data.user.role);
+        const homeBranch = data.branch ?? null;
+        set({
+          accessToken: data.accessToken,
+          user: data.user,
+          currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+          isAuthenticated: true,
+        });
+      },
 
       ensureValidSession: async () => {
         const token = get().accessToken;

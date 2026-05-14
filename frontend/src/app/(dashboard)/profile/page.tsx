@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import type { Branch, User } from "@/types";
+import { apiPatch, apiPost, apiPostForm, ApiError } from "@/lib/api-client";
+import { PASSWORD_POLICY_HINT, validateStrongPassword } from "@/lib/password-policy";
+import { toast } from "sonner";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { getInitials } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -24,12 +29,17 @@ import {
   Save,
 } from "lucide-react";
 
+type AuthSessionResponse = { accessToken: string; user: User; branch: Branch | null };
+
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
 export default function ProfilePage() {
-  const { user, currentBranch } = useAuthStore();
+  const { user, currentBranch, applyAuthPayload } = useAuthStore();
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user?.name ?? "");
-  const [email, setEmail] = useState(user?.email ?? "");
-  const [phone, setPhone] = useState(user?.phone ?? "");
+
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -43,23 +53,63 @@ export default function ProfilePage() {
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!user) return;
+    setName(user.name);
+  }, [user?.id, user?.name]);
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file (JPEG, PNG, WebP, or GIF).");
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      toast.error("Photo must be 5 MB or smaller.");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("avatar", file);
+    setAvatarUploading(true);
+    try {
+      const payload = await apiPostForm<AuthSessionResponse>("/api/auth/me/avatar", fd);
+      applyAuthPayload(payload);
+      toast.success("Profile photo updated");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not upload photo.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setProfileSaving(false);
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 3000);
+    setProfileSaved(false);
+    try {
+      const payload = await apiPatch<AuthSessionResponse>("/api/auth/me", {
+        name: name.trim(),
+      });
+      applyAuthPayload(payload);
+      setProfileSaved(true);
+      toast.success("Profile updated");
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not save profile.");
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError("");
 
-    if (newPassword.length < 6) {
-      setPasswordError("New password must be at least 6 characters");
+    const strengthMsg = validateStrongPassword(newPassword);
+    if (strengthMsg) {
+      setPasswordError(strengthMsg);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -68,14 +118,30 @@ export default function ProfilePage() {
     }
 
     setPasswordSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setPasswordSaving(false);
-    setPasswordSaved(true);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setTimeout(() => setPasswordSaved(false), 3000);
+    try {
+      const payload = await apiPost<AuthSessionResponse>("/api/auth/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      applyAuthPayload(payload);
+      setPasswordSaved(true);
+      toast.success("Password updated");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordSaved(false), 3000);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Could not update password.";
+      setPasswordError(msg);
+      toast.error(msg);
+    } finally {
+      setPasswordSaving(false);
+    }
   };
+
+  if (!user) return null;
+
+  const avatarSrc = resolveUploadsPublicUrl(user.avatar);
 
   const infoItems = [
     { icon: Mail, label: "Email", value: user.email },
@@ -95,14 +161,41 @@ export default function ProfilePage() {
         </div>
         <CardContent className="relative px-4 sm:px-6 pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12">
+            <input
+              ref={avatarFileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={handleAvatarFileChange}
+            />
             <div className="relative group">
-              <Avatar className="w-24 h-24 border-4 border-background shadow-lg">
-                <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
-                  {getInitials(user.name)}
-                </AvatarFallback>
-              </Avatar>
-              <button className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                <Camera className="w-5 h-5 text-white" />
+              <button
+                type="button"
+                disabled={avatarUploading}
+                onClick={() => avatarFileInputRef.current?.click()}
+                className="relative rounded-full border-0 bg-transparent p-0 cursor-pointer disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={avatarUploading ? "Uploading photo" : "Change profile photo"}
+              >
+                <Avatar className="w-24 h-24 border-4 border-background shadow-lg pointer-events-none">
+                  {avatarSrc ? (
+                    <AvatarImage src={avatarSrc} alt="" className="object-cover" key={avatarSrc} />
+                  ) : null}
+                  <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
+                    {getInitials(user.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <span
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  aria-hidden
+                >
+                  {avatarUploading ? (
+                    <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
+                </span>
               </button>
             </div>
             <div className="sm:pb-1 flex-1">
@@ -156,6 +249,9 @@ export default function ProfilePage() {
                     onChange={(e) => setName(e.target.value)}
                     className="h-10 rounded-lg"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Change your photo by clicking your picture at the top (JPEG, PNG, WebP, or GIF, max 5 MB).
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -163,9 +259,9 @@ export default function ProfilePage() {
                   <Input
                     id="profileEmail"
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-10 rounded-lg"
+                    value={user.email}
+                    disabled
+                    className="h-10 rounded-lg bg-muted"
                   />
                 </div>
 
@@ -174,10 +270,13 @@ export default function ProfilePage() {
                   <Input
                     id="profilePhone"
                     type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="h-10 rounded-lg"
+                    value={user.phone}
+                    disabled
+                    className="h-10 rounded-lg bg-muted"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Email and phone can only be changed by an administrator.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -290,8 +389,10 @@ export default function ProfilePage() {
                 {newPassword.length > 0 && (
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
                     {[
-                      { label: "At least 6 characters", met: newPassword.length >= 6 },
-                      { label: "Contains a number", met: /\d/.test(newPassword) },
+                      {
+                        label: "Policy requirements",
+                        met: validateStrongPassword(newPassword) === null,
+                      },
                       { label: "Passwords match", met: confirmPassword.length > 0 && newPassword === confirmPassword },
                     ].map((check) => (
                       <div key={check.label} className="flex items-center gap-1.5 text-xs">
@@ -303,6 +404,7 @@ export default function ProfilePage() {
                     ))}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
 
                 {passwordError && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">

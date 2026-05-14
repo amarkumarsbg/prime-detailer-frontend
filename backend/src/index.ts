@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "node:path";
 import compression from "compression";
 import express from "express";
 import cors from "cors";
@@ -15,6 +16,7 @@ import { errorHandler } from "./middleware/error-handler.js";
 import { isTwilioSmsEnabled, isTwilioWhatsAppEnabled } from "./services/twilio-sms.service.js";
 import { isPasswordResetEmailConfigured } from "./services/password-reset-email.service.js";
 import { messagingRouter } from "./routes/messaging.routes.js";
+import { jobCardUploadRouter } from "./routes/job-card-upload.routes.js";
 
 import { prisma } from "./lib/prisma.js";
 
@@ -29,6 +31,9 @@ app.use(
   })
 );
 app.use(express.json());
+
+const uploadsRoot = path.join(process.cwd(), "uploads");
+app.use("/uploads", express.static(uploadsRoot, { maxAge: 7 * 24 * 60 * 60 * 1000 }));
 
 app.get("/", (_req, res) => {
   res.json({
@@ -54,6 +59,7 @@ app.get("/health/db", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/job-cards", jobCardUploadRouter);
 app.use("/api/customers", customerRouter);
 app.use("/api/bootstrap", bootstrapRouter);
 app.use("/api/collections", collectionRouter);

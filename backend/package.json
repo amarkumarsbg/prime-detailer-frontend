@@ -12,12 +12,15 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
+    "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
     "@prisma/client": "^6.19.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
@@ -31,12 +34,14 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
     "prisma": "^6.19.0",
     "twilio": "^5.13.1",
     "typescript": "^5.9.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/multer": "^2.1.0",
     "tsx": "^4.20.5"
   }
 }

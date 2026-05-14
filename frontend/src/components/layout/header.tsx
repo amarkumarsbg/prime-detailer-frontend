@@ -8,8 +8,9 @@ import { useNotificationStore } from "@/store/notification-store";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { getInitials } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -105,6 +106,7 @@ export function Header() {
 
   if (!user) return null;
 
+  const avatarSrc = resolveUploadsPublicUrl(user.avatar);
   const count = unreadCount();
 
   return (
@@ -213,6 +215,9 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 sm:gap-3 rounded-lg px-2 py-1.5 hover:bg-accent transition-colors ml-1">
                 <Avatar className="w-8 h-8">
+                  {avatarSrc ? (
+                    <AvatarImage src={avatarSrc} alt="" className="object-cover" key={avatarSrc} />
+                  ) : null}
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                     {getInitials(user.name)}
                   </AvatarFallback>

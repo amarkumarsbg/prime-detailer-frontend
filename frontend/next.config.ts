@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
         source: "/backend-api/:path*",
         destination: `${backendProxyTarget}/api/:path*`,
       },
+      {
+        source: "/backend-uploads/:path*",
+        destination: `${backendProxyTarget}/uploads/:path*`,
+      },
     ];
   },
 };

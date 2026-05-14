@@ -72,6 +72,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
+import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
 import { buildJobCardCustomerWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
   sendCustomerWhatsApp,
@@ -484,43 +486,38 @@ export default function JobCardDetailPage() {
 
   const displayPhotos = useMemo(() => {
     const photos = jobCard?.inspectionPhotos ?? [];
-    const placeholder = "https://images.unsplash.com/photo-1489824904134-891ab64532f1?w=400&h=300&fit=crop";
-    if (photos.length > 0) {
-      return photos.map((p: InspectionPhoto) => ({
+    const photoTime = (p: InspectionPhoto) => {
+      const ms = Date.parse(p.uploadedAt);
+      return Number.isFinite(ms) ? ms : 0;
+    };
+    const beforeSorted = photos.filter((p) => p.type === "BEFORE").sort((a, b) => photoTime(a) - photoTime(b));
+    const afterSorted = photos.filter((p) => p.type === "AFTER").sort((a, b) => photoTime(a) - photoTime(b));
+    const ordered = [...beforeSorted, ...afterSorted];
+    return ordered.map((p: InspectionPhoto) => {
+      const raw = p.url;
+      const url =
+        raw.startsWith("blob:") ? raw : (resolveUploadsPublicUrl(raw) ?? raw);
+      return {
         id: p.id,
-        url: p.url.startsWith("http") ? p.url : placeholder,
+        url,
         type: p.type,
         label: p.caption ?? "Photo",
-      }));
-    }
-    return [];
+      };
+    });
   }, [jobCard]);
 
-  const [inspectionPhotos, setInspectionPhotos] = useState<
-    { id: string; url: string; type: "BEFORE" | "AFTER"; label: string }[]
-  >([]);
+  const canDeleteInspectionPhotos =
+    currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED";
 
-  /** Server-persisted photos plus local session adds (so After uploads work when Before photos already exist). */
-  const photosToShow = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { id: string; url: string; type: "BEFORE" | "AFTER"; label: string }[] = [];
-    for (const p of [...displayPhotos, ...inspectionPhotos]) {
-      if (!seen.has(p.id)) {
-        seen.add(p.id);
-        out.push(p);
-      }
-    }
-    return out;
-  }, [displayPhotos, inspectionPhotos]);
-  const detailPhotoCount = photosToShow.length;
+  const detailPhotoCount = displayPhotos.length;
 
   const hasBeforePhoto = useMemo(
-    () => photosToShow.some((p) => p.type === "BEFORE"),
-    [photosToShow]
+    () => displayPhotos.some((p) => p.type === "BEFORE"),
+    [displayPhotos]
   );
   const hasAfterPhoto = useMemo(
-    () => photosToShow.some((p) => p.type === "AFTER"),
-    [photosToShow]
+    () => displayPhotos.some((p) => p.type === "AFTER"),
+    [displayPhotos]
   );
 
   /** Before photos: only while job is before QC (inspection / in service). */
@@ -557,7 +554,6 @@ export default function JobCardDetailPage() {
 
     if (idChanged) {
       setNotes(jobCard.notes ?? "");
-      setInspectionPhotos([]);
       setPhotoTab(normalized === "READY" || normalized === "DELIVERED" ? "AFTER" : "BEFORE");
       const adv = jobCard.highEndAdvanceAmountInr;
       setHighEndAdvAmount(adv != null && adv > 0 ? String(adv) : "");
@@ -603,63 +599,104 @@ export default function JobCardDetailPage() {
     if (photoTab === "COMPARE" && !canCompare) queueMicrotask(() => setPhotoTab("BEFORE"));
   }, [photoTab, canCompare]);
 
-  const appendInspectionPhotosFromFiles = (files: FileList | null, type: "BEFORE" | "AFTER"): boolean => {
-    if (!files || files.length === 0) return false;
-    if (type === "BEFORE" && !canUploadBefore) {
-      toast.error("Before photos can only be uploaded during inspection / in service");
-      return false;
-    }
-    if (type === "AFTER" && !canUploadAfter) {
-      toast.error("Mark quality check complete first, then upload After photos");
-      return false;
-    }
+  const appendInspectionPhotosFromFiles = useCallback(
+    async (files: FileList | null, type: "BEFORE" | "AFTER"): Promise<boolean> => {
+      if (!files || files.length === 0) return false;
+      if (!jobCard) return false;
+      if (type === "BEFORE" && !canUploadBefore) {
+        toast.error("Before photos can only be uploaded during inspection / in service");
+        return false;
+      }
+      if (type === "AFTER" && !canUploadAfter) {
+        toast.error("Mark quality check complete first, then upload After photos");
+        return false;
+      }
 
-    Array.from(files).forEach((file) => {
-      const url = URL.createObjectURL(file);
-      const name = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-      setInspectionPhotos((prev) => [
-        ...prev,
-        {
-          id: `ph-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          url,
-          type,
-          label: name,
-        },
-      ]);
-    });
+      const uploadUserId = useAuthStore.getState().user?.id ?? "USR-001";
+      const jcNow = useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id);
+      const base = [...(jcNow?.inspectionPhotos ?? [])];
+      const added: InspectionPhoto[] = [];
 
-    toast.success(`${files.length} photo${files.length > 1 ? "s" : ""} added`);
-    return true;
-  };
+      try {
+        for (const file of Array.from(files)) {
+          const photoId = `ph-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+          const url = await uploadJobInspectionPhoto(jobCard.id, type, file, photoId);
+          const rawCaption = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
+          const baseLabel = rawCaption || "Photo";
+          const storedCaption =
+            type === "BEFORE"
+              ? baseLabel.toLowerCase() === "photo"
+                ? "Inspection"
+                : `Inspection · ${baseLabel}`
+              : baseLabel;
+          added.push({
+            id: photoId,
+            type,
+            url,
+            caption: storedCaption,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: uploadUserId,
+          });
+        }
+        await updateJobCard(jobCard.id, {
+          inspectionPhotos: [...base, ...added],
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Upload failed";
+        toast.error(msg);
+        return false;
+      }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      toast.success(`${files.length} photo${files.length > 1 ? "s" : ""} saved`);
+      return true;
+    },
+    [jobCard, updateJobCard, canUploadBefore, canUploadAfter]
+  );
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (photoTab === "COMPARE") {
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    appendInspectionPhotosFromFiles(e.target.files, photoTab);
+    await appendInspectionPhotosFromFiles(e.target.files, photoTab);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handlePhotoTabCameraFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoTabCameraFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (photoTab === "COMPARE") {
       if (photoTabCameraInputRef.current) photoTabCameraInputRef.current.value = "";
       return;
     }
-    appendInspectionPhotosFromFiles(e.target.files, photoTab);
+    await appendInspectionPhotosFromFiles(e.target.files, photoTab);
     if (photoTabCameraInputRef.current) photoTabCameraInputRef.current.value = "";
   };
 
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
-  const handleRemovePhoto = (photoId: string) => {
-    if (!inspectionPhotos.some((p) => p.id === photoId)) return;
-    setInspectionPhotos((prev) => prev.filter((p) => p.id !== photoId));
-    if (viewingPhoto === photoId) setViewingPhoto(null);
-  };
+  const handleRemovePhoto = useCallback(
+    async (photoId: string) => {
+      if (!jobCard || !canDeleteInspectionPhotos) return;
+      const jc = useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id);
+      const next = (jc?.inspectionPhotos ?? []).filter((p) => p.id !== photoId);
+      try {
+        await updateJobCard(jobCard.id, {
+          inspectionPhotos: next,
+          updatedAt: new Date().toISOString(),
+        });
+        setViewingPhoto((cur) => (cur === photoId ? null : cur));
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Could not remove photo";
+        toast.error(msg);
+      }
+    },
+    [jobCard, canDeleteInspectionPhotos, updateJobCard]
+  );
 
-  const viewingPhotoData = viewingPhoto ? photosToShow.find((p) => p.id === viewingPhoto) : null;
-  const filteredPhotos = photosToShow.filter((p) => p.type === photoTab);
+  const viewingPhotoData = viewingPhoto ? displayPhotos.find((p) => p.id === viewingPhoto) : null;
+  const filteredPhotos = displayPhotos.filter((p) => p.type === photoTab);
   const viewingIndex = viewingPhoto ? filteredPhotos.findIndex((p) => p.id === viewingPhoto) : -1;
 
   const navigatePhoto = (dir: -1 | 1) => {
@@ -667,31 +704,6 @@ export default function JobCardDetailPage() {
     if (nextIdx >= 0 && nextIdx < filteredPhotos.length) {
       setViewingPhoto(filteredPhotos[nextIdx].id);
     }
-  };
-
-  const [dragId, setDragId] = useState<string | null>(null);
-
-  const handleDragStart = (photoId: string) => {
-    setDragId(photoId);
-  };
-
-  const handleDragOver = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (!dragId || dragId === targetId || displayPhotos.length > 0) return;
-
-    setInspectionPhotos((prev) => {
-      const items = [...prev];
-      const dragIdx = items.findIndex((p) => p.id === dragId);
-      const targetIdx = items.findIndex((p) => p.id === targetId);
-      if (dragIdx === -1 || targetIdx === -1) return prev;
-      const [dragged] = items.splice(dragIdx, 1);
-      items.splice(targetIdx, 0, dragged);
-      return items;
-    });
-  };
-
-  const handleDragEnd = () => {
-    setDragId(null);
   };
 
   const currentStatusIndex = useMemo(() => {
@@ -2110,7 +2122,12 @@ export default function JobCardDetailPage() {
             {["RECEIVED", "INSPECTION", "AWAITING_SERVICE"].includes(currentStatus) && (
               <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                 <Camera className="w-3 h-3 shrink-0" />
-                Upload at least one &quot;Before&quot; photo before leaving Inspection. &quot;After&quot; photos unlock after QC is completed.
+                <span>
+                  <strong className="font-semibold">Before</strong> photos include vehicle check-in (right after creating the job)
+                  and any you add here during inspection / in service. You still need at least one Before before moving to In Service.
+                  <strong className="font-semibold"> After</strong> unlocks once QC is marked complete.{" "}
+                  <strong className="font-semibold">Compare</strong> shows Before vs After side by side (paired row-by-row in time order).
+                </span>
               </p>
             )}
             {currentStatus === "AWAITING_SERVICE" && totalCount > 0 && completedCount < totalCount && (
@@ -2134,7 +2151,7 @@ export default function JobCardDetailPage() {
             {(currentStatus === "READY" || currentStatus === "DELIVERED") && (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 <Check className="w-3 h-3 shrink-0" />
-                Both before &amp; after photos are available. Use Compare to view side by side.
+                Compare pairs Before (check-in + inspection) with After row by row, oldest first on each side.
               </p>
             )}
           </div>
@@ -2158,7 +2175,7 @@ export default function JobCardDetailPage() {
               <p className="text-xs mt-1">Upload both before and after photos to compare</p>
             </div>
           ) : photoTab === "COMPARE" ? (
-            <CompareView photos={photosToShow} />
+            <CompareView photos={displayPhotos} />
           ) : (
             <>
               {/* Inputs live outside the grid so sr-only positioning does not fight grid layout */}
@@ -2184,11 +2201,7 @@ export default function JobCardDetailPage() {
                 {filteredPhotos.map((photo) => (
                   <div
                     key={photo.id}
-                    draggable={displayPhotos.length === 0}
-                    onDragStart={displayPhotos.length === 0 ? () => handleDragStart(photo.id) : undefined}
-                    onDragOver={displayPhotos.length === 0 ? (e) => handleDragOver(e, photo.id) : undefined}
-                    onDragEnd={handleDragEnd}
-                    className={`rounded-xl border border-border overflow-hidden bg-card transition-all ${dragId === photo.id ? "opacity-50 scale-95 ring-2 ring-primary" : "hover:shadow-lg"}`}
+                    className="rounded-xl border border-border overflow-hidden bg-card transition-all hover:shadow-lg"
                   >
                     <div className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2201,9 +2214,9 @@ export default function JobCardDetailPage() {
                       >
                         Preview
                       </button>
-                      {inspectionPhotos.some((p) => p.id === photo.id) && (
+                      {canDeleteInspectionPhotos && (
                         <button
-                          onClick={() => handleRemovePhoto(photo.id)}
+                          onClick={() => void handleRemovePhoto(photo.id)}
                           className="text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors"
                         >
                           Delete
@@ -2283,9 +2296,9 @@ export default function JobCardDetailPage() {
                   <p className="text-white text-sm font-medium">{viewingPhotoData.label}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-white/60 text-xs">{viewingIndex + 1} / {filteredPhotos.length}</span>
-                    {inspectionPhotos.some((p) => p.id === viewingPhotoData.id) && (
+                    {canDeleteInspectionPhotos && (
                       <button
-                        onClick={() => handleRemovePhoto(viewingPhotoData.id)}
+                        onClick={() => void handleRemovePhoto(viewingPhotoData.id)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/80 text-white text-xs font-medium hover:bg-red-600 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -2511,8 +2524,8 @@ export default function JobCardDetailPage() {
                     accept="image/*"
                     capture="environment"
                     className="sr-only"
-                    onChange={(e) => {
-                      appendInspectionPhotosFromFiles(e.target.files, "BEFORE");
+                    onChange={async (e) => {
+                      await appendInspectionPhotosFromFiles(e.target.files, "BEFORE");
                       if (beforePhotoModalCameraRef.current) beforePhotoModalCameraRef.current.value = "";
                     }}
                   />
@@ -2530,8 +2543,8 @@ export default function JobCardDetailPage() {
                     accept="image/*"
                     multiple
                     className="sr-only"
-                    onChange={(e) => {
-                      appendInspectionPhotosFromFiles(e.target.files, "BEFORE");
+                    onChange={async (e) => {
+                      await appendInspectionPhotosFromFiles(e.target.files, "BEFORE");
                       if (beforePhotoModalInputRef.current) beforePhotoModalInputRef.current.value = "";
                     }}
                   />
@@ -2556,9 +2569,9 @@ export default function JobCardDetailPage() {
                 </>
               )}
             </div>
-            {photosToShow.filter((p) => p.type === "BEFORE").length > 0 ? (
+            {displayPhotos.filter((p) => p.type === "BEFORE").length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
-                {photosToShow
+                {displayPhotos
                   .filter((p) => p.type === "BEFORE")
                   .map((photo) => (
                     <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
@@ -2566,11 +2579,11 @@ export default function JobCardDetailPage() {
                       <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
                       <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
                         <span className="truncate font-medium">{photo.label}</span>
-                        {inspectionPhotos.some((p) => p.id === photo.id) && (
+                        {canDeleteInspectionPhotos && (
                           <button
                             type="button"
                             className="text-destructive font-medium shrink-0"
-                            onClick={() => handleRemovePhoto(photo.id)}
+                            onClick={() => void handleRemovePhoto(photo.id)}
                           >
                             Remove
                           </button>
@@ -2590,7 +2603,7 @@ export default function JobCardDetailPage() {
             <Button
               type="button"
               onClick={() => {
-                if (!photosToShow.some((p) => p.type === "BEFORE")) {
+                if (!displayPhotos.some((p) => p.type === "BEFORE")) {
                   toast.error("Add at least one Before photo first");
                   return;
                 }
@@ -2633,8 +2646,8 @@ export default function JobCardDetailPage() {
                     accept="image/*"
                     capture="environment"
                     className="sr-only"
-                    onChange={(e) => {
-                      appendInspectionPhotosFromFiles(e.target.files, "AFTER");
+                    onChange={async (e) => {
+                      await appendInspectionPhotosFromFiles(e.target.files, "AFTER");
                       if (afterPhotoModalCameraRef.current) afterPhotoModalCameraRef.current.value = "";
                     }}
                   />
@@ -2652,8 +2665,8 @@ export default function JobCardDetailPage() {
                     accept="image/*"
                     multiple
                     className="sr-only"
-                    onChange={(e) => {
-                      appendInspectionPhotosFromFiles(e.target.files, "AFTER");
+                    onChange={async (e) => {
+                      await appendInspectionPhotosFromFiles(e.target.files, "AFTER");
                       if (afterPhotoModalInputRef.current) afterPhotoModalInputRef.current.value = "";
                     }}
                   />
@@ -2683,9 +2696,9 @@ export default function JobCardDetailPage() {
                 After uploads are locked until quality check is completed.
               </p>
             )}
-            {photosToShow.filter((p) => p.type === "AFTER").length > 0 ? (
+            {displayPhotos.filter((p) => p.type === "AFTER").length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
-                {photosToShow
+                {displayPhotos
                   .filter((p) => p.type === "AFTER")
                   .map((photo) => (
                     <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
@@ -2693,11 +2706,11 @@ export default function JobCardDetailPage() {
                       <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
                       <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
                         <span className="truncate font-medium">{photo.label}</span>
-                        {inspectionPhotos.some((p) => p.id === photo.id) && (
+                        {canDeleteInspectionPhotos && (
                           <button
                             type="button"
                             className="text-destructive font-medium shrink-0"
-                            onClick={() => handleRemovePhoto(photo.id)}
+                            onClick={() => void handleRemovePhoto(photo.id)}
                           >
                             Remove
                           </button>
@@ -2719,7 +2732,7 @@ export default function JobCardDetailPage() {
             <Button
               type="button"
               onClick={() => {
-                if (!photosToShow.some((p) => p.type === "AFTER")) {
+                if (!displayPhotos.some((p) => p.type === "AFTER")) {
                   toast.error("Add at least one After photo first");
                   return;
                 }
@@ -2995,11 +3008,17 @@ function CompareView({ photos }: { photos: { id: string; url: string; type: "BEF
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
             Before
           </span>
+          <p className="text-[11px] text-muted-foreground mt-1.5 px-1 leading-snug">
+            Check-in and inspection photos both appear here (oldest first).
+          </p>
         </div>
         <div className="text-center">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
             After
           </span>
+          <p className="text-[11px] text-muted-foreground mt-1.5 px-1 leading-snug">
+            Paired with Before by row: 1↔1, 2↔2…
+          </p>
         </div>
       </div>
       {Array.from({ length: maxLen }).map((_, i) => (

@@ -9,6 +9,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
 import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -438,8 +439,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInNotesBase, setCheckInNotesBase] = useState("");
   const [checkInDamages, setCheckInDamages] = useState("");
   const [checkInNotesExtra, setCheckInNotesExtra] = useState("");
-  const [checkInPhotos, setCheckInPhotos] = useState<{ id: string; url: string; label: string }[]>([]);
+  const [checkInPhotos, setCheckInPhotos] = useState<
+    { id: string; file: File; previewUrl: string; label: string }[]
+  >([]);
   const [checkInPhotoError, setCheckInPhotoError] = useState(false);
+  const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const checkInFileRef = useRef<HTMLInputElement>(null);
   const checkInCameraRef = useRef<HTMLInputElement>(null);
   const checkInJobIdRef = useRef<string | null>(null);
@@ -1557,6 +1561,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   };
 
   const dismissCheckIn = () => {
+    setCheckInPhotos((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      return [];
+    });
     const jid = checkInJobIdRef.current;
     checkInJobIdRef.current = null;
     setCheckInOpen(false);
@@ -1567,24 +1575,41 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
-    Array.from(files).forEach((file) => {
-      const url = URL.createObjectURL(file);
-      const name = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Choose image files only.");
+        continue;
+      }
+      if (file.size > INSPECTION_PHOTO_MAX_BYTES) {
+        toast.error("Each photo must be 10 MB or smaller.");
+        continue;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      const label = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ") || "Photo";
       setCheckInPhotos((prev) => [
         ...prev,
-        { id: `ph-ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, url, label: name || "Photo" },
+        {
+          id: `ph-ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          file,
+          previewUrl,
+          label,
+        },
       ]);
-    });
+    }
     setCheckInPhotoError(false);
     if (checkInFileRef.current) checkInFileRef.current.value = "";
     if (checkInCameraRef.current) checkInCameraRef.current.value = "";
   };
 
   const removeCheckInPhoto = (photoId: string) => {
-    setCheckInPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    setCheckInPhotos((prev) => {
+      const hit = prev.find((p) => p.id === photoId);
+      if (hit) URL.revokeObjectURL(hit.previewUrl);
+      return prev.filter((p) => p.id !== photoId);
+    });
   };
 
-  const handleCheckInSubmit = () => {
+  const handleCheckInSubmit = async () => {
     if (!checkInJob) return;
     if (checkInPhotos.length === 0) {
       setCheckInPhotoError(true);
@@ -1604,26 +1629,48 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       mergedNotes = mergedNotes ? `${mergedNotes}\n\nCheck-in notes: ${extra}` : `Check-in notes: ${extra}`;
     }
     const nowIso = new Date().toISOString();
-    const photos: InspectionPhoto[] = checkInPhotos.map((p) => ({
-      id: p.id,
-      type: "BEFORE" as const,
-      url: p.url,
-      caption: p.label,
-      uploadedAt: nowIso,
-      uploadedBy: user?.id ?? "USR-001",
-    }));
-    updateJobCard(checkInJob.id, {
-      inspectionPhotos: photos,
-      reportedIssues: reported,
-      notes: mergedNotes || undefined,
-      updatedAt: nowIso,
-    });
+    const uploadUserId = user?.id ?? "USR-001";
+    const jcExisting = useJobCardStore.getState().jobCards.find((j) => j.id === checkInJob.id);
+    const existingPhotos = [...(jcExisting?.inspectionPhotos ?? [])];
+    const uploaded: InspectionPhoto[] = [];
+
+    setCheckInSubmitting(true);
+    try {
+      for (const p of checkInPhotos) {
+        const url = await uploadJobInspectionPhoto(checkInJob.id, "BEFORE", p.file, p.id);
+        uploaded.push({
+          id: p.id,
+          type: "BEFORE",
+          url,
+          caption: p.label.trim() ? `Check-in · ${p.label.trim()}` : "Check-in",
+          uploadedAt: nowIso,
+          uploadedBy: uploadUserId,
+        });
+      }
+      await updateJobCard(checkInJob.id, {
+        inspectionPhotos: [...existingPhotos, ...uploaded],
+        reportedIssues: reported,
+        notes: mergedNotes || undefined,
+        updatedAt: nowIso,
+      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Could not upload photos";
+      toast.error(msg);
+      setCheckInSubmitting(false);
+      return;
+    }
+
+    checkInPhotos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    setCheckInPhotos([]);
+    setCheckInSubmitting(false);
+
     pushActivityLog({
       action: "UPDATED",
       entityType: "JOB_CARD",
       entityId: checkInJob.id,
       entityLabel: checkInJob.jobNumber,
-      details: `Vehicle check-in — ${checkInPhotos.length} before photo(s)`,
+      details: `Vehicle check-in — ${uploaded.length} before photo(s)`,
     });
     toast.success("Vehicle checked in", { description: `${checkInJob.jobNumber} is ready for the workshop.` });
     const jid = checkInJob.id;
@@ -4287,6 +4334,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   size="icon"
                   className="shrink-0 -mr-1"
                   aria-label="Close"
+                  disabled={checkInSubmitting}
                   onClick={() => dismissCheckIn()}
                 >
                   <X className="h-4 w-4" />
@@ -4353,7 +4401,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       <div key={p.id} className="relative group w-20 h-20 rounded-md overflow-hidden border bg-muted">
                         {/* Preview uses blob/object URLs — next/image unsupported without config */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.url} alt="" className="w-full h-full object-cover" />
+                        <img src={p.previewUrl} alt="" className="w-full h-full object-cover" />
                         <button
                           type="button"
                           className="absolute top-0.5 right-0.5 rounded-full bg-background/90 p-0.5 shadow border opacity-90 hover:opacity-100"
@@ -4392,10 +4440,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </div>
 
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20 shrink-0">
-              <Button type="button" variant="outline" onClick={() => dismissCheckIn()}>
+              <Button type="button" variant="outline" disabled={checkInSubmitting} onClick={() => dismissCheckIn()}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleCheckInSubmit}>
+              <Button type="button" disabled={checkInSubmitting} onClick={() => void handleCheckInSubmit()}>
                 Check In Vehicle
               </Button>
             </div>

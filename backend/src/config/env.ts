@@ -57,6 +57,19 @@ const schema = z.object({
   RESEND_API_KEY: z.string().optional(),
   /** From address Resend recognizes, e.g. `Prime Detailers <onboarding@resend.dev>` */
   MAIL_FROM: z.string().optional(),
+
+  /** S3-compatible bucket for public files (avatars + job-card photos under `avatars/`, `job-cards/`). Omit S3_* to use local `uploads/`. */
+  S3_BUCKET: z.string().optional(),
+  /** AWS region, or `auto` for Cloudflare R2. Default `us-east-1` when no custom endpoint. */
+  S3_REGION: z.string().optional(),
+  /** R2 / MinIO API endpoint, e.g. `https://<accountid>.r2.cloudflarestorage.com` */
+  S3_ENDPOINT: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  /** Public base URL for objects (R2 dev URL, CloudFront, or `https://bucket.s3.region.amazonaws.com`) — no trailing slash. */
+  S3_PUBLIC_BASE_URL: z.string().optional(),
+  /** With custom `S3_ENDPOINT`, path-style addressing is usually required. Set `false` only if your provider needs virtual-hosted style. */
+  S3_FORCE_PATH_STYLE: z.string().optional(),
 });
 
 export const env = schema.parse({
@@ -73,4 +86,11 @@ export const env = schema.parse({
   TWILIO_TO_NUMBER_PREFIX: trimOpt(process.env.TWILIO_TO_NUMBER_PREFIX),
   RESEND_API_KEY: trimOpt(process.env.RESEND_API_KEY),
   MAIL_FROM: trimOpt(process.env.MAIL_FROM),
+  S3_BUCKET: trimOpt(process.env.S3_BUCKET),
+  S3_REGION: trimOpt(process.env.S3_REGION),
+  S3_ENDPOINT: trimOpt(process.env.S3_ENDPOINT),
+  S3_ACCESS_KEY_ID: trimOpt(process.env.S3_ACCESS_KEY_ID),
+  S3_SECRET_ACCESS_KEY: trimOpt(process.env.S3_SECRET_ACCESS_KEY),
+  S3_PUBLIC_BASE_URL: trimOpt(process.env.S3_PUBLIC_BASE_URL),
+  S3_FORCE_PATH_STYLE: trimOpt(process.env.S3_FORCE_PATH_STYLE),
 });

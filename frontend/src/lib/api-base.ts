@@ -26,3 +26,29 @@ export function buildApiUrl(apiPath: string): string {
   }
   return `http://127.0.0.1:4000${path}`;
 }
+
+const ABS_URL_RE = /^https?:\/\//i;
+
+/**
+ * Stored user avatar paths from the API (`/uploads/avatars/...`) must be turned into a URL the browser can load.
+ * Absolute URLs are returned as-is (legacy rows). Matches {@link buildApiUrl} host logic including `/backend-uploads` in dev.
+ */
+export function resolveUploadsPublicUrl(stored: string | undefined | null): string | undefined {
+  if (stored == null || stored.trim() === "") return undefined;
+  const s = stored.trim();
+  if (ABS_URL_RE.test(s)) return s;
+  const path = s.startsWith("/") ? s : `/${s}`;
+  const raw = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
+  const envBase = raw?.replace(/\/api$/i, "") ?? "";
+  if (envBase) {
+    return `${envBase}${path}`;
+  }
+  if (typeof window !== "undefined") {
+    if (process.env.NODE_ENV === "production") {
+      return undefined;
+    }
+    const rest = path.replace(/^\/uploads\/?/, "");
+    return `/backend-uploads/${rest}`;
+  }
+  return `http://127.0.0.1:4000${path}`;
+}

@@ -29,6 +29,8 @@ import {
   isPasswordResetTokenPending,
 } from "../services/password-reset.service.js";
 import { strongPasswordSchema } from "../lib/password-policy.js";
+import { updateUserApi } from "../services/user-api.service.js";
+import { persistAvatarFile } from "../services/object-storage.service.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -56,6 +58,12 @@ const resetPasswordSchema = z.object({
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: strongPasswordSchema,
+});
+
+const patchMeSchema = z.object({
+  name: z.string().min(1),
+  /** Omit to leave unchanged; `null` or empty clears avatar in DB. */
+  avatar: z.union([z.string().max(4096), z.null()]).optional(),
 });
 
 const resetTokenQuerySchema = z.object({
@@ -407,6 +415,79 @@ export async function completePasswordReset(req: Request, res: Response, next: N
       },
       error: null,
     });
+  } catch (e) {
+    next(e);
+  }
+}
+
+/** Authenticated user updates own display name and avatar only (not email / phone / role / branch). */
+export async function patchMe(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const body = patchMeSchema.parse(req.body);
+    const patch: Parameters<typeof updateUserApi>[1] = {
+      name: body.name.trim(),
+    };
+    if (body.avatar !== undefined) {
+      patch.avatar =
+        body.avatar === null || body.avatar.trim() === ""
+          ? null
+          : body.avatar.trim();
+    }
+    const updated = await updateUserApi(req.auth.id, patch);
+    if (!updated) {
+      res.status(400).json({
+        data: null,
+        error: {
+          message: "Could not update profile.",
+        },
+      });
+      return;
+    }
+    const row = await prisma.user.findUnique({ where: { id: req.auth.id } });
+    if (!row?.isActive) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const branch = await prisma.branch.findUnique({ where: { id: row.branchId } });
+    res.json({ data: authSuccessResponse(row, branch), error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function uploadMyAvatar(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const file = req.file;
+    if (!file?.buffer) {
+      res.status(400).json({ data: null, error: { message: "No image file provided." } });
+      return;
+    }
+    /** Cloud (S3/R2): absolute URL. Local fallback: `/uploads/avatars/...`. */
+    const avatarUrl = await persistAvatarFile({
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      userId: req.auth.id,
+    });
+    const updated = await updateUserApi(req.auth.id, { avatar: avatarUrl });
+    if (!updated) {
+      res.status(400).json({ data: null, error: { message: "Could not save avatar." } });
+      return;
+    }
+    const row = await prisma.user.findUnique({ where: { id: req.auth.id } });
+    if (!row?.isActive) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const branch = await prisma.branch.findUnique({ where: { id: row.branchId } });
+    res.json({ data: authSuccessResponse(row, branch), error: null });
   } catch (e) {
     next(e);
   }

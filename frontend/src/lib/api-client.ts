@@ -67,6 +67,19 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return parseResponse<T>(res);
 }
 
+/** POST multipart body (do not set Content-Type; browser sets boundary). */
+export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  const token = useAuthStore.getState().accessToken;
+  const h: Record<string, string> = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  const res = await fetch(buildApiUrl(path), {
+    method: "POST",
+    headers: h,
+    body: form,
+  });
+  return parseResponse<T>(res);
+}
+
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(buildApiUrl(path), {
     method: "PUT",
