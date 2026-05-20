@@ -6,6 +6,11 @@ import {
 
 export type InvoicePdfOpts = TaxInvoiceDocumentOpts;
 
+/** Keep email payloads under API limits while staying readable on A4. */
+const HTML2CANVAS_SCALE = 1;
+const MAX_CAPTURE_WIDTH_PX = 900;
+const JPEG_QUALITY = 0.72;
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -24,6 +29,21 @@ function waitForLayout(): Promise<void> {
       requestAnimationFrame(() => resolve());
     });
   });
+}
+
+/** Downscale raster capture so base64 PDF fits API / Resend limits. */
+function downscaleCanvas(source: HTMLCanvasElement, maxWidth: number): HTMLCanvasElement {
+  if (source.width <= maxWidth) return source;
+  const ratio = maxWidth / source.width;
+  const scaled = document.createElement("canvas");
+  scaled.width = maxWidth;
+  scaled.height = Math.max(1, Math.floor(source.height * ratio));
+  const ctx = scaled.getContext("2d");
+  if (!ctx) return source;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, scaled.width, scaled.height);
+  ctx.drawImage(source, 0, 0, scaled.width, scaled.height);
+  return scaled;
 }
 
 /**
@@ -77,12 +97,12 @@ async function renderTaxInvoiceHtmlToPdf(html: string): Promise<jsPDF> {
     await waitForLayout();
     await new Promise((r) => setTimeout(r, 150));
 
-    const captureWidth = Math.max(host.scrollWidth, 800);
+    const captureWidth = Math.min(Math.max(host.scrollWidth, 800), 800);
     const captureHeight = host.scrollHeight;
 
     const { default: html2canvas } = await import("html2canvas");
-    const canvas = await html2canvas(host, {
-      scale: 2,
+    const rawCanvas = await html2canvas(host, {
+      scale: HTML2CANVAS_SCALE,
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
@@ -96,25 +116,41 @@ async function renderTaxInvoiceHtmlToPdf(html: string): Promise<jsPDF> {
       y: 0,
     });
 
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const canvas = downscaleCanvas(rawCanvas, MAX_CAPTURE_WIDTH_PX);
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 10;
     const contentWidth = pageWidth - margin * 2;
     const imgHeight = (canvas.height * contentWidth) / canvas.width;
-    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+    const imgData = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
     const pageContentHeight = pageHeight - margin * 2;
 
     let heightLeft = imgHeight;
     let position = 0;
 
-    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight);
+    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight, undefined, "FAST");
     heightLeft -= pageContentHeight;
 
     while (heightLeft > 0) {
       position -= pageContentHeight;
       pdf.addPage();
-      pdf.addImage(imgData, "JPEG", margin, position + margin, contentWidth, imgHeight);
+      pdf.addImage(
+        imgData,
+        "JPEG",
+        margin,
+        position + margin,
+        contentWidth,
+        imgHeight,
+        undefined,
+        "FAST"
+      );
       heightLeft -= pageContentHeight;
     }
 

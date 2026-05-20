@@ -30,7 +30,9 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+/** Invoice email attaches base64 PDFs; default 100kb limit causes "request entity too large". */
+app.use(express.json({ limit: "12mb" }));
+app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 
 const uploadsRoot = path.join(process.cwd(), "uploads");
 app.use("/uploads", express.static(uploadsRoot, { maxAge: 7 * 24 * 60 * 60 * 1000 }));

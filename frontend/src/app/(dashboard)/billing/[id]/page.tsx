@@ -387,6 +387,12 @@ export default function InvoiceDetailPage() {
         });
         return;
       }
+      if (err instanceof ApiError && err.code === "PAYLOAD_TOO_LARGE") {
+        toast.error("Invoice PDF too large", {
+          description: err.message,
+        });
+        return;
+      }
       toast.error("Email failed", {
         description: err instanceof ApiError ? err.message : "Could not send",
       });
