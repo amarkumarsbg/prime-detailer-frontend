@@ -8,8 +8,12 @@ services:
     plan: free
     rootDir: backend
     # Include devDependencies so prisma CLI + typescript are available (NODE_ENV=production skips them otherwise).
-    buildCommand: npm ci --include=dev && npm run db:generate && npm run build
-    startCommand: npx prisma migrate deploy && npm start
+    # Migrate once at build (not on every start) so rolling deploys don't fight for the same Postgres advisory lock.
+    buildCommand: npm ci --include=dev && npm run db:generate && npx prisma migrate deploy && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Neon pooled URLs can't hold pg_advisory_lock; safe here because migrate runs only once per build.
+      - key: PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK
+        value: "1"
