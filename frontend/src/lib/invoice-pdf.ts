@@ -18,43 +18,82 @@ function invoicePdfFilename(invoiceNumber: string): string {
   return `Tax-Invoice-${safe}.pdf`;
 }
 
-/** Renders the same HTML as Print into a multi-page A4 PDF. */
+function waitForLayout(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+/**
+ * Renders print HTML in the main document (not an iframe) so html2canvas
+ * does not throw "document is not attached to a window".
+ */
 async function renderTaxInvoiceHtmlToPdf(html: string): Promise<jsPDF> {
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  Object.assign(iframe.style, {
+  if (typeof document === "undefined" || !document.body) {
+    throw new Error("Invoice PDF can only be generated in the browser");
+  }
+
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const styleText = Array.from(parsed.querySelectorAll("style"))
+    .map((el) => el.textContent ?? "")
+    .join("\n");
+
+  const host = document.createElement("div");
+  host.setAttribute("data-invoice-pdf-host", "true");
+  host.setAttribute("aria-hidden", "true");
+  Object.assign(host.style, {
     position: "fixed",
-    left: "-12000px",
+    left: "-10000px",
     top: "0",
     width: "800px",
-    height: "0",
-    border: "none",
-    visibility: "hidden",
+    maxWidth: "800px",
+    background: "#ffffff",
+    color: "#171717",
+    zIndex: "2147483646",
+    pointerEvents: "none",
+    overflow: "visible",
   });
-  document.body.appendChild(iframe);
+
+  if (styleText.trim()) {
+    const styleEl = document.createElement("style");
+    styleEl.textContent = styleText;
+    host.appendChild(styleEl);
+  }
+
+  const surface = document.createElement("div");
+  const wrap = parsed.body.querySelector(".wrap");
+  if (wrap) {
+    surface.appendChild(wrap.cloneNode(true));
+  } else {
+    surface.innerHTML = parsed.body.innerHTML;
+  }
+  host.appendChild(surface);
+
+  document.body.appendChild(host);
 
   try {
-    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-    if (!doc) throw new Error("Could not render invoice PDF");
+    await waitForLayout();
+    await new Promise((r) => setTimeout(r, 150));
 
-    iframe.srcdoc = html;
-    await new Promise<void>((resolve) => {
-      iframe.onload = () => resolve();
-      setTimeout(resolve, 500);
-    });
-
-    const body = doc.body;
-    if (!body) throw new Error("Invoice document body missing");
+    const captureWidth = Math.max(host.scrollWidth, 800);
+    const captureHeight = host.scrollHeight;
 
     const { default: html2canvas } = await import("html2canvas");
-    const canvas = await html2canvas(body, {
+    const canvas = await html2canvas(host, {
       scale: 2,
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
-      windowWidth: 800,
-      width: body.scrollWidth,
-      height: body.scrollHeight,
+      width: captureWidth,
+      height: captureHeight,
+      windowWidth: captureWidth,
+      windowHeight: captureHeight,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
     });
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -81,7 +120,7 @@ async function renderTaxInvoiceHtmlToPdf(html: string): Promise<jsPDF> {
 
     return pdf;
   } finally {
-    document.body.removeChild(iframe);
+    host.remove();
   }
 }
 
