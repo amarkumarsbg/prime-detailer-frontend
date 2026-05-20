@@ -1307,7 +1307,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       const share =
         catalogSubtotalExclGst > 0 ? base / catalogSubtotalExclGst : 1 / selectedCatalogItems.length;
       const discounted =
-        Math.round(base - discountAmount * share + Number.EPSILON * 100) / 100;
+        Math.round((base - discountAmount * share + Number.EPSILON) * 100) / 100;
       return {
         id: `si-${id}-${s.id}`,
         jobCardId: id,

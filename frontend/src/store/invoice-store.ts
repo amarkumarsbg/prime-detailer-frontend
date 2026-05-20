@@ -62,7 +62,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     };
     const payments = [...inv.payments, newPayment];
     const status = computeInvoiceStatus(inv, payments);
-    const next = { ...inv, payments, status };
+    const next = { ...inv, payments, status, storedPdf: undefined };
     await putCollectionDocument("invoices", invoiceId, next);
     set((state) => ({
       invoices: state.invoices.map((i) => (i.id === invoiceId ? next : i)),

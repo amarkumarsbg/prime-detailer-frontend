@@ -1,9 +1,34 @@
-import type { Invoice, InvoiceLineItem, InvoiceStatus, JobCard, Payment } from "@/types";
+import type { Invoice, InvoiceLineItem, InvoiceStatus, JobCard, Payment, ServiceItem } from "@/types";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 
 const TAX_RATE = 0.18;
+
+function highEndSubtotalExclGst(job: JobCard): number {
+  const hesCatalog = useHighEndServiceStore.getState().services;
+  let sum = 0;
+  for (const hesId of job.highEndServiceIds ?? []) {
+    const cfg = hesCatalog.find((h) => h.id === hesId);
+    sum += cfg?.estimateAmountInr ?? 0;
+  }
+  return sum;
+}
+
+/** Align stored line prices with job estimate (fixes legacy ÷100 coupon rounding bug). */
+function normalizedServicePrices(job: JobCard): ServiceItem[] {
+  const hesSubtotal = highEndSubtotalExclGst(job);
+  const catalogTarget = Math.max(0, job.estimatedAmount - hesSubtotal);
+  const rawSubtotal = job.services.reduce((s, x) => s + x.price, 0);
+  if (rawSubtotal <= 0 || Math.abs(rawSubtotal - catalogTarget) < 0.01) {
+    return job.services;
+  }
+  const factor = catalogTarget / rawSubtotal;
+  return job.services.map((s) => {
+    const price = Math.round(s.price * factor * 100) / 100;
+    return { ...s, price: Math.max(0, price) };
+  });
+}
 
 const DEFAULT_TERMS =
   "Payment is due within 7 days of invoice date. Late payments may incur interest charges. All work is guaranteed for 30 days on parts replaced.";
@@ -22,8 +47,9 @@ export function buildInvoiceFromJobCard(
   invoiceId: string
 ): Invoice {
   const hesCatalog = useHighEndServiceStore.getState().services;
+  const services = normalizedServicePrices(job);
 
-  const catalogLines: InvoiceLineItem[] = job.services.map((s, i) => ({
+  const catalogLines: InvoiceLineItem[] = services.map((s, i) => ({
     id: `li-${invoiceId}-svc-${i}`,
     description: s.name,
     type: "SERVICE" as const,

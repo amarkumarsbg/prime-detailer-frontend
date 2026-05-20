@@ -4,6 +4,7 @@ const backendProxyTarget =
   process.env.BACKEND_PROXY_TARGET?.replace(/\/$/, "") ?? "http://127.0.0.1:4000";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],
   async redirects() {
     return [
       { source: "/signup", destination: "/login", permanent: true },

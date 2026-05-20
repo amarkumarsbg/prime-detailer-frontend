@@ -439,6 +439,15 @@ export interface Payment {
   paidAt: string;
 }
 
+/** Print-quality PDF cached on the invoice row (AppJsonRow) for fast email attachment. */
+export interface InvoiceStoredPdf {
+  filename: string;
+  contentBase64: string;
+  /** Matches invoice totals/line items; regenerated when invoice changes. */
+  cacheKey: string;
+  generatedAt: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -464,6 +473,8 @@ export interface Invoice {
   createdAt: string;
   /** When set, inventory was already deducted for this invoice (idempotency). */
   inventoryDeductedAt?: string;
+  /** Saved tax-invoice PDF (base64) — avoids regenerating Chrome PDF on every email. */
+  storedPdf?: InvoiceStoredPdf;
 }
 
 export interface DashboardStats {

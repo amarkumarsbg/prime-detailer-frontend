@@ -1,177 +1,147 @@
-import jsPDF from "jspdf";
 import {
   buildTaxInvoicePrintHtml,
   type TaxInvoiceDocumentOpts,
 } from "@/lib/tax-invoice-format";
+import { sendInvoiceEmail } from "@/lib/invoice-email-send";
+import {
+  getStoredPdfAttachment,
+  persistInvoicePdf,
+} from "@/lib/invoice-pdf-storage";
 
 export type InvoicePdfOpts = TaxInvoiceDocumentOpts;
 
-/** Keep email payloads under API limits while staying readable on A4. */
-const HTML2CANVAS_SCALE = 1;
-const MAX_CAPTURE_WIDTH_PX = 900;
-const JPEG_QUALITY = 0.72;
+type ClientPdfEntry = { content: string; filename: string };
+const clientPdfCache = new Map<string, ClientPdfEntry>();
+const prefetchInflight = new Map<string, Promise<ClientPdfEntry | null>>();
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-function invoicePdfFilename(invoiceNumber: string): string {
+export function invoicePdfFilename(invoiceNumber: string): string {
   const safe = invoiceNumber.replace(/[^\w.-]+/g, "_").slice(0, 48);
   return `Tax-Invoice-${safe}.pdf`;
 }
 
-function waitForLayout(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve());
-    });
-  });
+/** Stable key so repeat emails reuse the cached PDF when the invoice unchanged. */
+export function buildInvoicePdfCacheKey(opts: InvoicePdfOpts): string {
+  const inv = opts.invoice;
+  const lines = inv.lineItems.map((l) => `${l.id}:${l.total}:${l.unitPrice}`).join(",");
+  const pays = inv.payments.map((p) => `${p.id}:${p.amount}`).join(",");
+  return `${inv.id}:${inv.grandTotal}:${inv.subtotal}:${inv.taxAmount}:${inv.status}:${lines}:${pays}`;
 }
 
-/** Downscale raster capture so base64 PDF fits API / Resend limits. */
-function downscaleCanvas(source: HTMLCanvasElement, maxWidth: number): HTMLCanvasElement {
-  if (source.width <= maxWidth) return source;
-  const ratio = maxWidth / source.width;
-  const scaled = document.createElement("canvas");
-  scaled.width = maxWidth;
-  scaled.height = Math.max(1, Math.floor(source.height * ratio));
-  const ctx = scaled.getContext("2d");
-  if (!ctx) return source;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, scaled.width, scaled.height);
-  ctx.drawImage(source, 0, 0, scaled.width, scaled.height);
-  return scaled;
+function buildPrintHtml(opts: InvoicePdfOpts): string {
+  return buildTaxInvoicePrintHtml(opts, { includePrintScript: false });
 }
 
-/**
- * Renders print HTML in the main document (not an iframe) so html2canvas
- * does not throw "document is not attached to a window".
- */
-async function renderTaxInvoiceHtmlToPdf(html: string): Promise<jsPDF> {
-  if (typeof document === "undefined" || !document.body) {
-    throw new Error("Invoice PDF can only be generated in the browser");
-  }
+/** Fire-and-forget: warm Chrome + build PDF while user views the invoice. */
+export function warmInvoicePdfEngine(): void {
+  void fetch("/api/invoice/warm").catch(() => undefined);
+}
 
-  const parsed = new DOMParser().parseFromString(html, "text/html");
-  const styleText = Array.from(parsed.querySelectorAll("style"))
-    .map((el) => el.textContent ?? "")
-    .join("\n");
-
-  const host = document.createElement("div");
-  host.setAttribute("data-invoice-pdf-host", "true");
-  host.setAttribute("aria-hidden", "true");
-  Object.assign(host.style, {
-    position: "fixed",
-    left: "-10000px",
-    top: "0",
-    width: "800px",
-    maxWidth: "800px",
-    background: "#ffffff",
-    color: "#171717",
-    zIndex: "2147483646",
-    pointerEvents: "none",
-    overflow: "visible",
+async function fetchPrintQualityPdfBase64(
+  html: string,
+  cacheKey: string
+): Promise<string> {
+  const res = await fetch("/api/invoice/pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ html, cacheKey }),
   });
 
-  if (styleText.trim()) {
-    const styleEl = document.createElement("style");
-    styleEl.textContent = styleText;
-    host.appendChild(styleEl);
-  }
-
-  const surface = document.createElement("div");
-  const wrap = parsed.body.querySelector(".wrap");
-  if (wrap) {
-    surface.appendChild(wrap.cloneNode(true));
-  } else {
-    surface.innerHTML = parsed.body.innerHTML;
-  }
-  host.appendChild(surface);
-
-  document.body.appendChild(host);
-
+  let payload: { content?: string; error?: string };
   try {
-    await waitForLayout();
-    await new Promise((r) => setTimeout(r, 150));
+    payload = (await res.json()) as { content?: string; error?: string };
+  } catch {
+    throw new Error(`PDF generation failed (${res.status})`);
+  }
 
-    const captureWidth = Math.min(Math.max(host.scrollWidth, 800), 800);
-    const captureHeight = host.scrollHeight;
+  if (!res.ok || !payload.content) {
+    throw new Error(payload.error ?? `PDF generation failed (${res.status})`);
+  }
 
-    const { default: html2canvas } = await import("html2canvas");
-    const rawCanvas = await html2canvas(host, {
-      scale: HTML2CANVAS_SCALE,
-      useCORS: true,
-      logging: false,
-      backgroundColor: "#ffffff",
-      width: captureWidth,
-      height: captureHeight,
-      windowWidth: captureWidth,
-      windowHeight: captureHeight,
-      scrollX: 0,
-      scrollY: 0,
-      x: 0,
-      y: 0,
+  return payload.content;
+}
+
+async function savePdfToDatabase(
+  opts: InvoicePdfOpts,
+  cacheKey: string,
+  filename: string,
+  content: string
+): Promise<void> {
+  clientPdfCache.set(cacheKey, { content, filename });
+  try {
+    await persistInvoicePdf(opts.invoice.id, {
+      filename,
+      contentBase64: content,
+      cacheKey,
     });
-
-    const canvas = downscaleCanvas(rawCanvas, MAX_CAPTURE_WIDTH_PX);
-
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-      compress: true,
-    });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const contentWidth = pageWidth - margin * 2;
-    const imgHeight = (canvas.height * contentWidth) / canvas.width;
-    const imgData = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-    const pageContentHeight = pageHeight - margin * 2;
-
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, "JPEG", margin, margin, contentWidth, imgHeight, undefined, "FAST");
-    heightLeft -= pageContentHeight;
-
-    while (heightLeft > 0) {
-      position -= pageContentHeight;
-      pdf.addPage();
-      pdf.addImage(
-        imgData,
-        "JPEG",
-        margin,
-        position + margin,
-        contentWidth,
-        imgHeight,
-        undefined,
-        "FAST"
-      );
-      heightLeft -= pageContentHeight;
-    }
-
-    return pdf;
-  } finally {
-    host.remove();
+  } catch (e) {
+    console.warn("[invoice-pdf] could not persist PDF to database", e);
   }
 }
 
+/** Prefetch PDF and save to database (call when invoice page loads). */
+export function prefetchInvoicePdf(opts: InvoicePdfOpts): void {
+  const cacheKey = buildInvoicePdfCacheKey(opts);
+  const stored = getStoredPdfAttachment(opts.invoice, cacheKey);
+  if (stored) {
+    clientPdfCache.set(cacheKey, stored);
+    return;
+  }
+  if (clientPdfCache.has(cacheKey) || prefetchInflight.has(cacheKey)) return;
+
+  const html = buildPrintHtml(opts);
+  const filename = invoicePdfFilename(opts.invoice.invoiceNumber);
+
+  const task = fetchPrintQualityPdfBase64(html, cacheKey)
+    .then(async (content) => {
+      const entry = { content, filename };
+      await savePdfToDatabase(opts, cacheKey, filename, content);
+      return entry;
+    })
+    .catch(() => null)
+    .finally(() => {
+      prefetchInflight.delete(cacheKey);
+    });
+
+  prefetchInflight.set(cacheKey, task);
+}
+
+/** Resolve PDF: database → memory → generate and save. */
+export async function ensureInvoicePdfAttachment(opts: InvoicePdfOpts): Promise<{
+  filename: string;
+  content: string;
+}> {
+  const cacheKey = buildInvoicePdfCacheKey(opts);
+  const filename = invoicePdfFilename(opts.invoice.invoiceNumber);
+
+  const fromDb = getStoredPdfAttachment(opts.invoice, cacheKey);
+  if (fromDb) {
+    clientPdfCache.set(cacheKey, fromDb);
+    return fromDb;
+  }
+
+  const mem = clientPdfCache.get(cacheKey);
+  if (mem) return mem;
+
+  const inflight = prefetchInflight.get(cacheKey);
+  if (inflight) {
+    const entry = await inflight;
+    if (entry) return entry;
+  }
+
+  const html = buildPrintHtml(opts);
+  const content = await fetchPrintQualityPdfBase64(html, cacheKey);
+  await savePdfToDatabase(opts, cacheKey, filename, content);
+  return { filename, content };
+}
+
 /**
- * PDF attachment for customer email — same layout as Print / on-screen tax invoice.
+ * PDF attachment for download — same layout and engine as Print → Save as PDF.
  */
 export async function buildInvoicePdfAttachment(opts: InvoicePdfOpts): Promise<{
   filename: string;
   content: string;
 }> {
-  const html = buildTaxInvoicePrintHtml(opts, { includePrintScript: false });
-  const pdf = await renderTaxInvoiceHtmlToPdf(html);
-  const filename = invoicePdfFilename(opts.invoice.invoiceNumber);
-  const content = arrayBufferToBase64(pdf.output("arraybuffer"));
-  return { filename, content };
+  return ensureInvoicePdfAttachment(opts);
 }
 
 export async function downloadInvoicePdf(opts: InvoicePdfOpts): Promise<void> {
@@ -186,4 +156,26 @@ export async function downloadInvoicePdf(opts: InvoicePdfOpts): Promise<void> {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Email invoice: uses PDF from database when available (fastest), else generates once and saves.
+ */
+export async function sendInvoiceEmailWithPdf(params: {
+  pdfOpts: InvoicePdfOpts;
+  to: string;
+  subject: string;
+  emailHtml: string;
+  text?: string;
+}): Promise<void> {
+  const attachment = await ensureInvoicePdfAttachment(params.pdfOpts);
+  await sendInvoiceEmail({
+    to: params.to,
+    subject: params.subject,
+    html: params.emailHtml,
+    text: params.text,
+    attachments: [
+      { filename: attachment.filename, content: attachment.content },
+    ],
+  });
 }

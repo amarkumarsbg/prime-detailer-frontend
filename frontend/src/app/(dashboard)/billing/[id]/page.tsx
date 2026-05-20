@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -47,11 +47,16 @@ import {
   openWhatsAppComposer,
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
-import { sendInvoiceEmail, isResendNotConfiguredError } from "@/lib/invoice-email-send";
+import { isResendNotConfiguredError } from "@/lib/invoice-email-send";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
-import { buildInvoicePdfAttachment } from "@/lib/invoice-pdf";
+import {
+  prefetchInvoicePdf,
+  sendInvoiceEmailWithPdf,
+  warmInvoicePdfEngine,
+  type InvoicePdfOpts,
+} from "@/lib/invoice-pdf";
 import {
   additionalDiscountTotal,
   buildInvoiceEmailHtml,
@@ -139,6 +144,69 @@ export default function InvoiceDetailPage() {
     [payments]
   );
   const remainingBalance = invoice ? invoice.grandTotal - totalPaid : 0;
+
+  const invoicePdfOpts = useMemo((): InvoicePdfOpts | null => {
+    if (!invoice) return null;
+    return {
+      invoice,
+      jobCard: jobCard ?? null,
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
+      customerEmail: invoiceCustomer?.email?.trim() ?? "",
+      customerAddress: invoiceCustomer?.address ?? "",
+      vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
+      business: {
+        businessName,
+        businessTagline,
+        businessAddress,
+        businessPhone,
+        businessWhatsApp,
+        businessEmail,
+        businessWebsite,
+        gstin,
+        companyPan,
+        bankName,
+        bankBranch,
+        bankAccountNumber,
+        bankIfsc,
+        bankUpi,
+      },
+      payments,
+      totalPaid,
+      remainingBalance,
+      referralCode: invoiceCustomer?.referralCode,
+      referralRewardAmount,
+      newCustomerDiscount,
+    };
+  }, [
+    invoice,
+    jobCard,
+    invoiceCustomer,
+    payments,
+    totalPaid,
+    remainingBalance,
+    businessName,
+    businessTagline,
+    businessAddress,
+    businessPhone,
+    businessWhatsApp,
+    businessEmail,
+    businessWebsite,
+    gstin,
+    companyPan,
+    bankName,
+    bankBranch,
+    bankAccountNumber,
+    bankIfsc,
+    bankUpi,
+    referralRewardAmount,
+    newCustomerDiscount,
+  ]);
+
+  useEffect(() => {
+    warmInvoicePdfEngine();
+    if (invoicePdfOpts) prefetchInvoicePdf(invoicePdfOpts);
+  }, [invoicePdfOpts]);
 
   const openRecordDialog = () => {
     setPaymentAmount(remainingBalance > 0 ? String(remainingBalance) : "");
@@ -282,7 +350,7 @@ export default function InvoiceDetailPage() {
   };
 
   const handleInvoiceEmail = async () => {
-    if (!invoice) return;
+    if (!invoice || !invoicePdfOpts) return;
     const toEmail = invoiceCustomer?.email?.trim();
     if (!toEmail) {
       toast.error("No customer email", {
@@ -290,64 +358,30 @@ export default function InvoiceDetailPage() {
       });
       return;
     }
-    const pdfOpts = {
-      invoice,
-      jobCard: jobCard ?? null,
-      customerName: invoice.customerName,
-      customerPhone: invoice.customerPhone,
+    const latestInvoice =
+      useInvoiceStore.getState().invoices.find((i) => i.id === invoice.id) ?? invoice;
+    const pdfOpts: InvoicePdfOpts = {
+      ...invoicePdfOpts!,
+      invoice: latestInvoice,
       customerEmail: toEmail,
-      customerAddress: invoiceCustomer?.address ?? "",
-      vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
-      business: {
-        businessName,
-        businessTagline,
-        businessAddress,
-        businessPhone,
-        businessWhatsApp,
-        businessEmail,
-        businessWebsite,
-        gstin,
-        companyPan,
-        bankName,
-        bankBranch,
-        bankAccountNumber,
-        bankIfsc,
-        bankUpi,
-      },
-      payments,
-      totalPaid,
-      remainingBalance,
-      referralCode: invoiceCustomer?.referralCode,
-      referralRewardAmount,
-      newCustomerDiscount,
     };
-    const pdfToast = toast.loading("Preparing invoice PDF…");
-    let attachment: { filename: string; content: string };
-    try {
-      attachment = await buildInvoicePdfAttachment(pdfOpts);
-    } catch (e) {
-      toast.dismiss(pdfToast);
-      toast.error("Could not build invoice PDF", {
-        description: e instanceof Error ? e.message : "Try Print and save as PDF instead.",
-      });
-      return;
-    }
-    toast.dismiss(pdfToast);
-    const html = buildInvoiceEmailHtml({
+    const attachmentFilename = `Tax-Invoice-${invoice.invoiceNumber.replace(/[^\w.-]+/g, "_").slice(0, 48)}.pdf`;
+    const emailHtml = buildInvoiceEmailHtml({
       customerName: invoice.customerName,
       invoiceNumber: invoice.invoiceNumber,
       businessName,
       grandTotal: invoice.grandTotal,
       remainingBalance,
       vehicleRegNumber: invoice.vehicleRegNumber,
-      attachmentFilename: attachment.filename,
+      attachmentFilename,
     });
     const subject = `Tax invoice ${invoice.invoiceNumber} — ${businessName}`;
     const text = [
       buildInvoiceWhatsAppMessage(invoice, { businessName, remainingBalance }),
       "",
-      `Your tax invoice is attached as ${attachment.filename}. Open the PDF to view or download the full invoice.`,
+      `Your tax invoice is attached as ${attachmentFilename}. Open the PDF to view or download the full invoice.`,
     ].join("\n");
+    const pdfToast = toast.loading("Sending invoice email…");
     const notify = () => {
       useNotificationStore.getState().addNotification({
         type: "email_sent",
@@ -367,19 +401,21 @@ export default function InvoiceDetailPage() {
       });
     };
     try {
-      await sendInvoiceEmail({
+      await sendInvoiceEmailWithPdf({
+        pdfOpts,
         to: toEmail,
         subject,
-        html,
+        emailHtml,
         text,
-        attachments: [attachment],
       });
+      toast.dismiss(pdfToast);
       toast.success("Invoice emailed", {
-        description: `${toEmail} — PDF attached (${attachment.filename})`,
+        description: `${toEmail} — PDF attached (${attachmentFilename})`,
       });
       notify();
       logSent();
     } catch (err) {
+      toast.dismiss(pdfToast);
       if (isResendNotConfiguredError(err)) {
         toast.error("Email not configured", {
           description:
@@ -439,7 +475,18 @@ export default function InvoiceDetailPage() {
                 <MessageCircle className="w-4 h-4 mr-2" />
                 WhatsApp
               </Button>
-              <Button variant="outline" size="sm" type="button" onClick={() => void handleInvoiceEmail()}>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onMouseEnter={() => {
+                  if (invoicePdfOpts) prefetchInvoicePdf(invoicePdfOpts);
+                }}
+                onFocus={() => {
+                  if (invoicePdfOpts) prefetchInvoicePdf(invoicePdfOpts);
+                }}
+                onClick={() => void handleInvoiceEmail()}
+              >
                 <Mail className="w-4 h-4 mr-2" />
                 Email
               </Button>
