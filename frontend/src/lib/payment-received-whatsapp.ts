@@ -9,6 +9,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { ApiError } from "@/lib/api-client";
 import { useNotificationStore } from "@/store/notification-store";
+import { useJobCardStore } from "@/store/job-card-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 
 /**
@@ -40,6 +41,9 @@ export async function notifyCustomerPaymentRecordedWhatsApp(params: {
   );
 
   const billingHref = `/billing/${params.invoice.id}`;
+  const branchId = useJobCardStore
+    .getState()
+    .jobCards.find((j) => j.id === params.invoice.jobCardId)?.branchId;
   const notify = (channel: "api" | "composer") => {
     useNotificationStore.getState().addNotification({
       type: "whatsapp_sent",
@@ -49,6 +53,7 @@ export async function notifyCustomerPaymentRecordedWhatsApp(params: {
           : "Payment — WhatsApp composer",
       message: `${params.invoice.invoiceNumber} → ${phone}`,
       href: billingHref,
+      branchId,
     });
   };
 

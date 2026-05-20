@@ -1050,6 +1050,7 @@ export default function JobCardDetailPage() {
             ? `${jobCard.jobNumber} — message sent to ${phone}.`
             : `${jobCard.jobNumber} — finish sending in WhatsApp (${phone}); API sender not configured.`,
         href: `/job-cards/${jobCard.id}`,
+        branchId: jobCard.branchId,
       });
     };
     try {

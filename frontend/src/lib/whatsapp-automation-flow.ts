@@ -16,6 +16,7 @@ export async function executeCustomerWhatsAppAutomation(opts: {
   /** Staff notification summary line */
   notificationSummary: string;
   href?: string;
+  branchId?: string;
   activityLog?: {
     entityType: ActivityEntityType;
     entityId: string;
@@ -36,6 +37,7 @@ export async function executeCustomerWhatsAppAutomation(opts: {
       title: channel === "api" ? opts.titles.api : opts.titles.composer,
       message: opts.notificationSummary,
       href: opts.href,
+      branchId: opts.branchId,
     });
   };
 

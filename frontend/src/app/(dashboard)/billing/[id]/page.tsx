@@ -51,8 +51,10 @@ import { sendInvoiceEmail, isResendNotConfiguredError } from "@/lib/invoice-emai
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
+import { buildInvoicePdfAttachment } from "@/lib/invoice-pdf";
 import {
   additionalDiscountTotal,
+  buildInvoiceEmailHtml,
   buildTaxInvoicePrintHtml,
   DEFAULT_SERVICE_HSN,
   gstHalfPercentLabel,
@@ -246,6 +248,7 @@ export default function InvoiceDetailPage() {
         title: channel === "api" ? "Invoice shared via WhatsApp" : "Invoice — WhatsApp composer",
         message: `${invoice.invoiceNumber} → ${phone}`,
         href: `/billing/${invoice.id}`,
+        branchId: jobCard?.branchId,
       });
     };
     const logSent = () => {
@@ -287,7 +290,7 @@ export default function InvoiceDetailPage() {
       });
       return;
     }
-    const html = buildTaxInvoicePrintHtml({
+    const pdfOpts = {
       invoice,
       jobCard: jobCard ?? null,
       customerName: invoice.customerName,
@@ -314,21 +317,30 @@ export default function InvoiceDetailPage() {
       payments,
       totalPaid,
       remainingBalance,
-      referralCode: invoiceCustomer?.referralCode,
-      referralRewardAmount,
-      newCustomerDiscount,
+    };
+    const attachment = buildInvoicePdfAttachment(pdfOpts);
+    const html = buildInvoiceEmailHtml({
+      customerName: invoice.customerName,
+      invoiceNumber: invoice.invoiceNumber,
+      businessName,
+      grandTotal: invoice.grandTotal,
+      remainingBalance,
+      vehicleRegNumber: invoice.vehicleRegNumber,
+      attachmentFilename: attachment.filename,
     });
     const subject = `Tax invoice ${invoice.invoiceNumber} — ${businessName}`;
-    const text = buildInvoiceWhatsAppMessage(invoice, {
-      businessName,
-      remainingBalance,
-    });
+    const text = [
+      buildInvoiceWhatsAppMessage(invoice, { businessName, remainingBalance }),
+      "",
+      `Your tax invoice is attached as ${attachment.filename}. Open the PDF to view or download the full invoice.`,
+    ].join("\n");
     const notify = () => {
       useNotificationStore.getState().addNotification({
         type: "email_sent",
         title: "Invoice emailed",
         message: `${invoice.invoiceNumber} → ${toEmail}`,
         href: `/billing/${invoice.id}`,
+        branchId: jobCard?.branchId,
       });
     };
     const logSent = () => {
@@ -337,12 +349,20 @@ export default function InvoiceDetailPage() {
         entityType: "INVOICE",
         entityId: invoice.id,
         entityLabel: invoice.invoiceNumber,
-        details: `Invoice ${invoice.invoiceNumber} emailed to ${invoice.customerName} (${toEmail})`,
+        details: `Invoice ${invoice.invoiceNumber} emailed to ${invoice.customerName} (${toEmail}) with PDF attachment`,
       });
     };
     try {
-      await sendInvoiceEmail({ to: toEmail, subject, html, text });
-      toast.success("Invoice emailed", { description: toEmail });
+      await sendInvoiceEmail({
+        to: toEmail,
+        subject,
+        html,
+        text,
+        attachments: [attachment],
+      });
+      toast.success("Invoice emailed", {
+        description: `${toEmail} — PDF attached (${attachment.filename})`,
+      });
       notify();
       logSent();
     } catch (err) {

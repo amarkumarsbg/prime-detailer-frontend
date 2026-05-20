@@ -1,11 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  selectUnreadNotificationCount,
-  useNotificationStore,
-  type NotificationType,
-} from "@/store/notification-store";
+import { useNotificationStore, type NotificationType } from "@/store/notification-store";
+import { useScopedNotifications } from "@/hooks/use-scoped-data";
+import { useBranchScope } from "@/lib/branch-scope";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,10 +51,10 @@ interface NotificationPanelProps {
 
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
   const router = useRouter();
-  const notifications = useNotificationStore((s) => s.notifications);
-  const unreadCount = useNotificationStore(selectUnreadNotificationCount);
+  const { viewingLabel } = useBranchScope();
+  const notifications = useScopedNotifications();
+  const unreadCount = notifications.filter((n) => !n.read).length;
   const markAsRead = useNotificationStore((s) => s.markAsRead);
-  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
   const dismiss = useNotificationStore((s) => s.dismiss);
 
   const handleClick = (id: string, href?: string) => {
@@ -84,12 +82,21 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
             variant="ghost"
             size="sm"
             className="text-xs h-7 px-2"
-            onClick={markAllAsRead}
+            onClick={() => {
+              for (const n of notifications) {
+                if (!n.read) markAsRead(n.id);
+              }
+            }}
           >
             Mark all read
           </Button>
         )}
       </div>
+      {viewingLabel !== "All branches" && (
+        <p className="px-4 pb-2 text-[11px] text-muted-foreground border-b border-border">
+          Showing alerts for {viewingLabel}
+        </p>
+      )}
 
       {/* Notification list */}
       <ScrollArea className="h-[320px] sm:h-[400px]">
@@ -97,7 +104,11 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <BellOff className="w-10 h-10 text-muted-foreground/40 mb-3" />
             <p className="text-sm font-medium text-muted-foreground">No notifications</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">You&apos;re all caught up!</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              {viewingLabel !== "All branches"
+                ? `Nothing for ${viewingLabel} yet.`
+                : "You're all caught up!"}
+            </p>
           </div>
         ) : (
           <div>

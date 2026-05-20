@@ -292,6 +292,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           channel === "api" ? "Job created — WhatsApp sent" : "Job created — WhatsApp composer",
         message: `${job.jobNumber} → ${phone}`,
         href: `/job-cards/${job.id}`,
+        branchId: job.branchId,
       });
     };
     try {

@@ -306,6 +306,7 @@ export default function PickupDropPage() {
         title: channel === "api" ? "Pickup/Drop update via WhatsApp" : "Pickup/Drop — WhatsApp composer",
         message: `${r.jobNumber} → ${phone}`,
         href: "/pickup-drop",
+        branchId: r.branchId,
       });
     };
     try {

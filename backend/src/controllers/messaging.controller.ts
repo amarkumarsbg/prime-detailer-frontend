@@ -32,11 +32,18 @@ const postWhatsAppSchema = z
     }
   });
 
+const emailAttachmentSchema = z.object({
+  filename: z.string().min(1).max(200),
+  /** Base64-encoded PDF (or other file) for Resend `attachments`. */
+  content: z.string().min(1).max(8_000_000),
+});
+
 const postTransactionalEmailSchema = z.object({
   to: z.string().email(),
   subject: z.string().min(1).max(200),
   html: z.string().min(1).max(600_000),
   text: z.string().max(50_000).optional(),
+  attachments: z.array(emailAttachmentSchema).max(5).optional(),
 });
 
 /** Authenticated transactional email (Resend) — e.g. tax invoice HTML from the billing UI. */
@@ -59,6 +66,7 @@ export async function postTransactionalEmail(req: Request, res: Response, next: 
       subject: body.subject,
       html: body.html,
       text: body.text,
+      attachments: body.attachments,
     });
     if (!out.ok) {
       res.status(502).json({

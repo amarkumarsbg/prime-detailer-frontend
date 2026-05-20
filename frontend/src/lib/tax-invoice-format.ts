@@ -324,3 +324,40 @@ table.inv .b { font-weight: 700; color: #171717; }
 <script>window.onload=function(){window.print();}</script>
 </body></html>`;
 }
+
+/** Short HTML body for customer email — full invoice is attached as PDF. */
+export function buildInvoiceEmailHtml(opts: {
+  customerName: string;
+  invoiceNumber: string;
+  businessName: string;
+  grandTotal: number;
+  remainingBalance: number;
+  vehicleRegNumber: string;
+  attachmentFilename: string;
+}): string {
+  const {
+    customerName,
+    invoiceNumber,
+    businessName,
+    grandTotal,
+    remainingBalance,
+    vehicleRegNumber,
+    attachmentFilename,
+  } = opts;
+  const balanceNote =
+    remainingBalance > 0
+      ? `<p style="margin:0 0 12px;color:#404040;">Balance due: <strong>${formatCurrency(remainingBalance)}</strong></p>`
+      : `<p style="margin:0 0 12px;color:#166534;">This invoice is paid in full. Thank you!</p>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Segoe UI,system-ui,sans-serif;font-size:14px;color:#171717;line-height:1.5;margin:0;padding:24px;">
+<p style="margin:0 0 12px;">Dear ${escapeHtml(customerName)},</p>
+<p style="margin:0 0 12px;color:#404040;">Please find your tax invoice <strong>${escapeHtml(invoiceNumber)}</strong> from <strong>${escapeHtml(businessName)}</strong> attached to this email.</p>
+<p style="margin:0 0 8px;color:#404040;">Vehicle: <strong>${escapeHtml(vehicleRegNumber)}</strong></p>
+<p style="margin:0 0 8px;color:#404040;">Grand total: <strong>${formatCurrency(grandTotal)}</strong></p>
+${balanceNote}
+<p style="margin:0 0 16px;padding:12px 14px;background:#f5f5f5;border:1px solid #e5e5e5;border-radius:6px;color:#262626;">
+  <strong>Download your invoice:</strong> Open the attachment <strong>${escapeHtml(attachmentFilename)}</strong> to view, save, or print the full tax invoice (line items, GST, and bank details).
+</p>
+<p style="margin:0;color:#737373;font-size:12px;">If you have questions, reply to this email or contact ${escapeHtml(businessName)}.</p>
+</body></html>`;
+}

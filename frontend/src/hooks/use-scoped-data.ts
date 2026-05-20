@@ -10,6 +10,7 @@ import { useReminderStore } from "@/store/reminder-store";
 import { useActivityLogStore } from "@/store/activity-log-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useFollowUpStore } from "@/store/follow-up-store";
+import { useNotificationStore } from "@/store/notification-store";
 import {
   applyInvoiceBranchFilters,
   buildJobBranchMap,
@@ -21,6 +22,10 @@ import {
   filterActivityByBranch,
   useBranchScope,
 } from "@/lib/branch-scope";
+import {
+  buildNotificationBranchContext,
+  filterNotificationsByBranch,
+} from "@/lib/notification-branch-scope";
 
 /** Job cards scoped to the header branch (or all when org-wide). */
 export function useScopedJobCards() {
@@ -113,6 +118,26 @@ export function useScopedFollowUps() {
   return useMemo(
     () => filterFollowUpsByBranch(followUps, jobCards, selectedBranchId),
     [followUps, jobCards, selectedBranchId]
+  );
+}
+
+/** Notifications filtered by header branch (All branches = full list). */
+export function useScopedNotifications() {
+  const notifications = useNotificationStore((s) => s.notifications);
+  const jobCards = useJobCardStore((s) => s.jobCards);
+  const invoices = useInvoiceStore((s) => s.invoices);
+  const expenses = useExpenseStore((s) => s.expenses);
+  const pickupRequests = usePickupDropStore((s) => s.requests);
+  const { selectedBranchId } = useBranchScope();
+
+  const ctx = useMemo(
+    () => buildNotificationBranchContext(jobCards, invoices, expenses, pickupRequests),
+    [jobCards, invoices, expenses, pickupRequests]
+  );
+
+  return useMemo(
+    () => filterNotificationsByBranch(notifications, selectedBranchId, ctx),
+    [notifications, selectedBranchId, ctx]
   );
 }
 

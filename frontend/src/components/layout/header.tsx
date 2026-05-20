@@ -4,10 +4,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useSidebarStore } from "@/store/sidebar-store";
-import {
-  selectUnreadNotificationCount,
-  useNotificationStore,
-} from "@/store/notification-store";
+import { useScopedNotifications } from "@/hooks/use-scoped-data";
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
 import { canOrgWideRole } from "@/lib/branch-selection";
@@ -50,7 +47,8 @@ export function Header() {
   const branchesFromStore = useBranchStore((s) => s.branches);
   const businessName = useSettingsStore((s) => s.businessName);
   const toggleMobileOpen = useSidebarStore((s) => s.toggleMobileOpen);
-  const unreadCount = useNotificationStore(selectUnreadNotificationCount);
+  const scopedNotifications = useScopedNotifications();
+  const unreadCount = scopedNotifications.filter((n) => !n.read).length;
   const bootstrapRefresh = useAppBootstrapStore((s) => s.refresh);
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();

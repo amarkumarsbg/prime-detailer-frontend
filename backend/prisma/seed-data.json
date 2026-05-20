@@ -1794,43 +1794,49 @@
       {
         "id": "notif-001",
         "type": "job_created",
-        "title": "Notification 1",
-        "message": "Seed notification message 1 for testing.",
+        "title": "Delhi — new job card",
+        "message": "JC-2026-101 received at Delhi.",
         "read": false,
-        "href": "/job-cards",
+        "href": "/job-cards/jc-001",
+        "branchId": "br-main",
         "createdAt": "2026-04-10T08:00:00.000Z"
       },
       {
         "id": "notif-002",
         "type": "job_status",
-        "title": "Notification 2",
-        "message": "Seed notification message 2 for testing.",
+        "title": "Noida — status update",
+        "message": "JC-2026-102 moved to in progress at Noida.",
         "read": false,
+        "href": "/job-cards/jc-002",
+        "branchId": "br-002",
         "createdAt": "2026-04-11T08:00:00.000Z"
       },
       {
         "id": "notif-003",
         "type": "payment_received",
-        "title": "Notification 3",
-        "message": "Seed notification message 3 for testing.",
+        "title": "Delhi — payment received",
+        "message": "INV-2026-301 paid in full (Delhi).",
         "read": false,
-        "href": "/finance",
+        "href": "/billing/inv-001",
+        "branchId": "br-main",
         "createdAt": "2026-04-12T08:00:00.000Z"
       },
       {
         "id": "notif-004",
         "type": "reminder",
-        "title": "Notification 4",
-        "message": "Seed notification message 4 for testing.",
+        "title": "Noida — service reminder",
+        "message": "Follow-up due for a Noida customer vehicle.",
         "read": false,
+        "branchId": "br-002",
         "createdAt": "2026-04-13T08:00:00.000Z"
       },
       {
         "id": "notif-005",
         "type": "customer_new",
-        "title": "Notification 5",
-        "message": "Seed notification message 5 for testing.",
+        "title": "Delhi — new customer",
+        "message": "Walk-in registered at Delhi branch.",
         "read": true,
+        "branchId": "br-main",
         "createdAt": "2026-04-14T08:00:00.000Z"
       }
     ],

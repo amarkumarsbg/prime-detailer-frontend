@@ -3,12 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import {
-  selectUnreadNotificationCount,
-  useNotificationStore,
-  type Notification,
-  type NotificationType,
-} from "@/store/notification-store";
+import { useNotificationStore, type Notification, type NotificationType } from "@/store/notification-store";
+import { useScopedNotifications } from "@/hooks/use-scoped-data";
+import { useBranchScope } from "@/lib/branch-scope";
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,9 +121,10 @@ function NotificationItem({
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const notifications = useNotificationStore((s) => s.notifications);
-  const unreadCount = useNotificationStore(selectUnreadNotificationCount);
-  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const { viewingLabel } = useBranchScope();
+  const notifications = useScopedNotifications();
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
   const bootstrapRefresh = useAppBootstrapStore((s) => s.refresh);
   const [tab, setTab] = useState("all");
 
@@ -149,10 +147,22 @@ export default function NotificationsPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Notifications"
-        description={`You have ${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`}
+        description={
+          viewingLabel !== "All branches"
+            ? `${unreadCount} unread for ${viewingLabel}. Switch to All branches in the header to see org-wide alerts.`
+            : `You have ${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
+        }
         actions={
           unreadCount > 0 ? (
-            <Button variant="outline" size="sm" onClick={markAllAsRead}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                for (const n of notifications) {
+                  if (!n.read) markAsRead(n.id);
+                }
+              }}
+            >
               <CheckCheck className="w-4 h-4 mr-2" />
               Mark all read
             </Button>

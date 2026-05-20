@@ -1,10 +1,16 @@
 import { apiPost, ApiError } from "./api-client";
 
+export type InvoiceEmailAttachment = {
+  filename: string;
+  content: string;
+};
+
 export async function sendInvoiceEmail(params: {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: InvoiceEmailAttachment[];
 }): Promise<void> {
   await apiPost<{ ok: true }>("/api/messaging/email", params);
 }

@@ -27,12 +27,26 @@ function isResendDomainUnverifiedError(detail: string): boolean {
   return d.includes("domain is not verified") || d.includes("verify your domain");
 }
 
+export type ResendAttachment = {
+  filename: string;
+  /** Base64-encoded file content (Resend API). */
+  content: string;
+};
+
 async function sendResendOnce(
   key: string,
   from: string,
-  params: { to: string[]; subject: string; html: string; text?: string }
+  params: {
+    to: string[];
+    subject: string;
+    html: string;
+    text?: string;
+    attachments?: ResendAttachment[];
+  }
 ): Promise<ResendSendResult> {
   try {
+    const attachments =
+      params.attachments?.filter((a) => a.filename.trim() && a.content.trim()) ?? [];
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -45,6 +59,7 @@ async function sendResendOnce(
         subject: params.subject,
         html: params.html,
         ...(params.text?.trim() ? { text: params.text.trim() } : {}),
+        ...(attachments.length > 0 ? { attachments } : {}),
       }),
     });
     if (!res.ok) {
@@ -71,6 +86,7 @@ export async function sendViaResend(params: {
   subject: string;
   html: string;
   text?: string;
+  attachments?: ResendAttachment[];
 }): Promise<ResendSendResult> {
   const key = env.RESEND_API_KEY;
   if (!key) return { ok: false, detail: "RESEND_API_KEY is not set" };

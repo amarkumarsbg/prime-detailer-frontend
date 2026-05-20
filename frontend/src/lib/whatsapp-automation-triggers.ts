@@ -17,6 +17,12 @@ import {
   buildHighEndAdvanceReceiptWhatsAppMessage,
 } from "@/lib/whatsapp-customer-messages";
 import { executeCustomerWhatsAppAutomation } from "@/lib/whatsapp-automation-flow";
+import { useJobCardStore } from "@/store/job-card-store";
+
+function branchIdForJobCardId(jobCardId: string | undefined): string | undefined {
+  if (!jobCardId) return undefined;
+  return useJobCardStore.getState().jobCards.find((j) => j.id === jobCardId)?.branchId;
+}
 
 export function notifyJobReadyWhatsApp(job: JobCard, businessName: string): void {
   const phone = job.customerPhone?.trim();
@@ -31,6 +37,7 @@ export function notifyJobReadyWhatsApp(job: JobCard, businessName: string): void
     },
     notificationSummary: `${job.jobNumber} → ${phone}`,
     href: `/job-cards/${job.id}`,
+    branchId: job.branchId,
     activityLog: {
       entityType: "JOB_CARD",
       entityId: job.id,
@@ -53,6 +60,7 @@ export function notifyJobDeliveredWhatsApp(job: JobCard, businessName: string): 
     },
     notificationSummary: `${job.jobNumber} → ${phone}`,
     href: `/job-cards/${job.id}`,
+    branchId: job.branchId,
     activityLog: {
       entityType: "JOB_CARD",
       entityId: job.id,
@@ -80,6 +88,7 @@ export function notifyInvoiceCreatedWhatsApp(inv: Invoice, businessName: string)
     },
     notificationSummary: `${inv.invoiceNumber} → ${phone}`,
     href: `/billing/${inv.id}`,
+    branchId: branchIdForJobCardId(inv.jobCardId),
     activityLog: {
       entityType: "INVOICE",
       entityId: inv.id,
@@ -105,6 +114,7 @@ export function notifyAppointmentScheduledWhatsApp(
     },
     notificationSummary: `${apt.bookingId} → ${phone}`,
     href: "/appointments",
+    branchId: branchIdForJobCardId(apt.jobCardId),
     activityLog: {
       entityType: "APPOINTMENT",
       entityId: apt.id,
@@ -132,6 +142,7 @@ export function notifyQuotationConvertedWhatsApp(
     },
     notificationSummary: `${q.quotationNumber} → ${jobNumber} → ${phone}`,
     href: `/job-cards/${jobId}`,
+    branchId: branchIdForJobCardId(jobId),
     activityLog: {
       entityType: "QUOTATION",
       entityId: q.id,
@@ -204,6 +215,7 @@ export function notifyHighEndAdvanceRecordedWhatsApp(
     },
     notificationSummary: `${job.jobNumber} → ${phone}`,
     href: `/job-cards/${job.id}`,
+    branchId: job.branchId,
     activityLog: {
       entityType: "JOB_CARD",
       entityId: job.id,

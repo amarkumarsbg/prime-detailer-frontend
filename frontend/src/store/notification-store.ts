@@ -22,6 +22,8 @@ export interface Notification {
   message: string;
   read: boolean;
   href?: string;
+  /** When set, notification is scoped to this branch in the header selector. */
+  branchId?: string;
   createdAt: string;
 }
 
