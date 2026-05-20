@@ -66,7 +66,7 @@ export interface TaxInvoiceBusinessBlock {
   bankUpi: string;
 }
 
-export function buildTaxInvoicePrintHtml(opts: {
+export type TaxInvoiceDocumentOpts = {
   invoice: Invoice;
   jobCard: JobCard | null;
   customerName: string;
@@ -85,7 +85,12 @@ export function buildTaxInvoicePrintHtml(opts: {
   referralCode?: string;
   referralRewardAmount?: number;
   newCustomerDiscount?: number;
-}): string {
+};
+
+export function buildTaxInvoicePrintHtml(
+  opts: TaxInvoiceDocumentOpts,
+  options?: { includePrintScript?: boolean }
+): string {
   const {
     invoice,
     jobCard,
@@ -321,7 +326,7 @@ table.inv .b { font-weight: 700; color: #171717; }
 
   <div class="disclaimer"><strong>DISCLAIMER & TERMS</strong><br><br>${termsHtml}${notesHtml}</div>
 </div>
-<script>window.onload=function(){window.print();}</script>
+${options?.includePrintScript !== false ? '<script>window.onload=function(){window.print();}</script>' : ""}
 </body></html>`;
 }
 

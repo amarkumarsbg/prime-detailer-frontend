@@ -317,8 +317,22 @@ export default function InvoiceDetailPage() {
       payments,
       totalPaid,
       remainingBalance,
+      referralCode: invoiceCustomer?.referralCode,
+      referralRewardAmount,
+      newCustomerDiscount,
     };
-    const attachment = buildInvoicePdfAttachment(pdfOpts);
+    const pdfToast = toast.loading("Preparing invoice PDF…");
+    let attachment: { filename: string; content: string };
+    try {
+      attachment = await buildInvoicePdfAttachment(pdfOpts);
+    } catch (e) {
+      toast.dismiss(pdfToast);
+      toast.error("Could not build invoice PDF", {
+        description: e instanceof Error ? e.message : "Try Print and save as PDF instead.",
+      });
+      return;
+    }
+    toast.dismiss(pdfToast);
     const html = buildInvoiceEmailHtml({
       customerName: invoice.customerName,
       invoiceNumber: invoice.invoiceNumber,
