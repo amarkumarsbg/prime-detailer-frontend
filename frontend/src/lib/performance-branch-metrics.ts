@@ -56,6 +56,24 @@ export function shortBranchChartLabel(name: string, max = 15): string {
   return `${t.slice(0, max - 1)}…`;
 }
 
+export function emptyBranchPerformanceMetrics(
+  branchId: string,
+  branchName: string
+): BranchPerformanceMetrics {
+  return {
+    branchId,
+    branchName,
+    chartLabel: shortBranchChartLabel(branchName),
+    jobCount: 0,
+    deliveredCount: 0,
+    totalJobValue: 0,
+    totalRewards: 0,
+    onTimeAmongDelivered: 0,
+    onTimeRatePct: 0,
+    efficiencyPct: 0,
+  };
+}
+
 function isOnTimeDelivery(jc: JobCard): boolean {
   const expected = new Date(jc.expectedDelivery).getTime();
   const actualRaw = jc.actualDelivery ?? jc.updatedAt;

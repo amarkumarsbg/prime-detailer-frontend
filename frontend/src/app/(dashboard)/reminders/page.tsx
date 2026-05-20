@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useReminderStore } from "@/store/reminder-store";
+import { useBranchScope } from "@/lib/branch-scope";
+import { useScopedReminders } from "@/hooks/use-scoped-data";
 import { useSettingsStore } from "@/store/settings-store";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
@@ -110,7 +112,8 @@ function DueBadge({ dueDate }: { dueDate: string }) {
 }
 
 export default function RemindersPage() {
-  const reminders = useReminderStore((s) => s.reminders);
+  const reminders = useScopedReminders();
+  const { viewingLabel } = useBranchScope();
   const updateReminder = useReminderStore((s) => s.updateReminder);
   const whatsappReminderEnabled = useSettingsStore((s) => s.whatsappReminderEnabled);
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
@@ -208,7 +211,10 @@ export default function RemindersPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader title="Service Reminders" />
+      <PageHeader
+        title="Service Reminders"
+        description={`Service due dates and follow-ups for ${viewingLabel}.`}
+      />
 
       {activeFilter === DASHBOARD_FILTER.DUE_SOON && (
         <FilterBanner

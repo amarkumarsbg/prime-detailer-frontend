@@ -5,14 +5,14 @@ import { ReportPageChrome } from "@/components/reports/report-page-chrome";
 import { ReportTableEmpty } from "@/components/reports/report-table-empty";
 import { buildSalesHsnLineRows } from "@/lib/reports/gst-sales-hsn-lines";
 import { formatDate, formatInrFull } from "@/lib/utils";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import { toast } from "sonner";
 
 const FAV_KEY = "prime-detailer-gst-sales-hsn-favourite";
 
 export function GstSalesHsnReport() {
   const [period, setPeriod] = useState("week");
-  const invoices = useInvoiceStore((s) => s.invoices);
+  const invoices = useScopedInvoices();
 
   const rows = useMemo(() => buildSalesHsnLineRows(invoices, period), [invoices, period]);
 

@@ -21,6 +21,12 @@ import { useExpenseStore } from "@/store/expense-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  applyBranchFilters,
+  invoiceBranchId,
+  resolveBranchScopeLabel,
+  useBranchScope,
+} from "@/lib/branch-scope";
 import type { Invoice, PaymentMethod } from "@/types";
 import {
   Building2,
@@ -37,10 +43,6 @@ import {
 } from "lucide-react";
 
 const GST_RATE_EST = 0.18;
-
-function invoiceBranchId(invoice: Invoice, jobBranch: Map<string, string>): string | undefined {
-  return jobBranch.get(invoice.jobCardId);
-}
 
 function sumPayments(
   invoices: Invoice[],
@@ -61,6 +63,7 @@ export default function AccountingPage() {
   const expenses = useExpenseStore((s) => s.expenses);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
 
   const jobBranch = useMemo(
     () => new Map(jobCards.map((j) => [j.id, j.branchId])),
@@ -76,18 +79,32 @@ export default function AccountingPage() {
     }
   }, [branchScoped, user?.branchId]);
 
+  useEffect(() => {
+    if (!showBranchPicker) {
+      queueMicrotask(() => setBranchFilter("all"));
+    }
+  }, [showBranchPicker, selectedBranchId]);
+
   const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      const bid = invoiceBranchId(inv, jobBranch);
-      if (!bid) return false;
-      if (branchFilter === "all") return true;
-      return bid === branchFilter;
-    });
-  }, [invoices, jobBranch, branchFilter]);
+    const withBranch = invoices.filter((inv) => !!invoiceBranchId(inv, jobBranch));
+    return applyBranchFilters(
+      withBranch,
+      (inv) => invoiceBranchId(inv, jobBranch),
+      selectedBranchId,
+      showBranchPicker,
+      branchFilter
+    );
+  }, [invoices, jobBranch, selectedBranchId, showBranchPicker, branchFilter]);
 
   const filteredExpenses = useMemo(() => {
-    return expenses.filter((e) => branchFilter === "all" || e.branchId === branchFilter);
-  }, [expenses, branchFilter]);
+    return applyBranchFilters(
+      expenses,
+      (e) => e.branchId,
+      selectedBranchId,
+      showBranchPicker,
+      branchFilter
+    );
+  }, [expenses, selectedBranchId, showBranchPicker, branchFilter]);
 
   const pl = useMemo(() => {
     const recognized = filteredInvoices.filter((i) => i.status !== "DRAFT");
@@ -136,10 +153,10 @@ export default function AccountingPage() {
     return { totalSales, taxCollected, inputTaxEst, netPayable };
   }, [filteredInvoices, filteredExpenses]);
 
-  const scopeLabel =
-    branchFilter === "all"
-      ? "All branches"
-      : branches.find((b) => b.id === branchFilter)?.name ?? branchFilter;
+  const scopeLabel = useMemo(
+    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, branchFilter, branches),
+    [showBranchPicker, viewingLabel, branchFilter, branches]
+  );
 
   const demoExport = (kind: "pdf" | "excel") => {
     toast.success(kind === "pdf" ? "Export PDF queued (demo)." : "Export Excel queued (demo).");
@@ -171,28 +188,35 @@ export default function AccountingPage() {
       />
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-        <div className="flex items-center gap-2 min-w-[200px]">
-          <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
-          <Select
-            value={branchFilter}
-            onValueChange={setBranchFilter}
-            disabled={branchScoped}
-          >
-            <SelectTrigger className="w-full sm:w-[220px]">
-              <SelectValue placeholder="Branch" />
-            </SelectTrigger>
-            <SelectContent>
-              {!branchScoped && <SelectItem value="all">All branches</SelectItem>}
-              {branches
-                .filter((b) => b.isActive)
-                .map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {showBranchPicker ? (
+          <div className="flex items-center gap-2 min-w-[200px]">
+            <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+            <Select
+              value={branchFilter}
+              onValueChange={setBranchFilter}
+              disabled={branchScoped}
+            >
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {!branchScoped && <SelectItem value="all">All branches</SelectItem>}
+                {branches
+                  .filter((b) => b.isActive)
+                  .map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 min-w-[200px] text-sm">
+            <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className="font-medium">{viewingLabel}</span>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           Showing: <span className="font-medium text-foreground">{scopeLabel}</span>
         </p>

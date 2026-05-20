@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
+import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import {
   isOverdueJobCard,
   isTodaysBookingsJob,
@@ -88,19 +89,29 @@ const KANBAN_COLORS: Record<JobCardStatus, string> = {
 export default function JobCardsPage() {
   const router = useRouter();
   const { jobCards } = useJobCardStore();
+  const { selectedBranchId } = useBranchScope();
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
+  const branchScopedJobCards = useMemo(
+    () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
+    [jobCards, selectedBranchId]
+  );
+
   const jobCardsForView = useMemo(() => {
-    if (activeFilter === DASHBOARD_FILTER.OVERDUE) return jobCards.filter(isOverdueJobCard);
-    if (activeFilter === DASHBOARD_FILTER.TODAYS_BOOKINGS) return jobCards.filter(isTodaysBookingsJob);
-    if (activeFilter === DASHBOARD_FILTER.READY_FOR_DELIVERY) {
-      return jobCards.filter(isReadyForDeliveryJob);
+    if (activeFilter === DASHBOARD_FILTER.OVERDUE) {
+      return branchScopedJobCards.filter(isOverdueJobCard);
     }
-    return jobCards;
-  }, [jobCards, activeFilter]);
+    if (activeFilter === DASHBOARD_FILTER.TODAYS_BOOKINGS) {
+      return branchScopedJobCards.filter(isTodaysBookingsJob);
+    }
+    if (activeFilter === DASHBOARD_FILTER.READY_FOR_DELIVERY) {
+      return branchScopedJobCards.filter(isReadyForDeliveryJob);
+    }
+    return branchScopedJobCards;
+  }, [branchScopedJobCards, activeFilter]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: jobCardsForView.length };

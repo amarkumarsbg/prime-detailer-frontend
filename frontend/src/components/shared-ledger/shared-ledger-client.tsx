@@ -47,6 +47,8 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useExpenseStore } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useBranchScope } from "@/lib/branch-scope";
+import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { useSettingsStore } from "@/store/settings-store";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { pushActivityLog } from "@/lib/activity-log-helper";
@@ -126,9 +128,10 @@ function inRange(isoDate: string, days: number | null): boolean {
 export function SharedLedgerClient() {
   const router = useRouter();
   const customers = useCustomerStore((s) => s.customers);
-  const invoices = useInvoiceStore((s) => s.invoices);
+  const invoices = useScopedInvoices();
   const recordInvoicePayment = useInvoiceStore((s) => s.recordPayment);
-  const expenses = useExpenseStore((s) => s.expenses);
+  const expenses = useScopedExpenses();
+  const { viewingLabel } = useBranchScope();
   const updateExpense = useExpenseStore((s) => s.updateExpense);
   const vendorDirectory = useExpenseStore((s) => s.vendorDirectory);
   const vendorSuggestions = useExpenseStore((s) => s.vendorSuggestions);
@@ -377,7 +380,7 @@ export function SharedLedgerClient() {
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Shared Ledger</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Receivables from customers and payables to suppliers — demo view wired to invoices &
+              Receivables and payables for {viewingLabel} — wired to branch-scoped invoices and
               expenses.
             </p>
           </div>

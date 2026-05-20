@@ -5,7 +5,7 @@ export function isSuperAdmin(role: UserRole | undefined): boolean {
   return role === "SUPER_ADMIN";
 }
 
-/** Can create / edit / deactivate branches in Settings. */
+/** Can create / edit / deactivate branches on the Locations page. */
 export function canManageOrgBranches(role: UserRole | undefined): boolean {
   return role === "SUPER_ADMIN" || role === "ADMIN";
 }

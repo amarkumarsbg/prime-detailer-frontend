@@ -14,10 +14,15 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
-import { useAuthStore } from "@/store/auth-store";
+import { useInvoiceStore } from "@/store/invoice-store";
+import { useExpenseStore } from "@/store/expense-store";
 import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
 import { useReminderStore } from "@/store/reminder-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
+import {
+  computeBranchScopedDashboardStats,
+  filterRemindersByBranch,
+  useBranchScope,
+} from "@/lib/branch-scope";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { getStockStatus } from "@/lib/inventory-units";
@@ -117,30 +122,40 @@ export default function DashboardPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const branches = useBranchStore((s) => s.branches);
   const { jobCards } = useJobCardStore();
-  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const invoices = useInvoiceStore((s) => s.invoices);
+  const expenses = useExpenseStore((s) => s.expenses);
+  const { selectedBranchId, viewingLabel } = useBranchScope();
   const parts = useInventoryStore((s) => s.parts);
   const customers = useCustomerStore((s) => s.customers);
-  const stats =
+  const rawStats =
     useDashboardStatsStore((s) => s.stats) ?? EMPTY_DASHBOARD_STATS;
   const serviceReminders = useReminderStore((s) => s.reminders);
   const businessName = useSettingsStore((s) => s.businessName);
 
   const [recentBookingPreview, setRecentBookingPreview] = useState<JobCard | null>(null);
 
-  const viewingLabel = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return "All branches";
-    return currentBranch.name;
-  }, [currentBranch]);
-
-  const selectedBranchId = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return null;
-    return currentBranch.id;
-  }, [currentBranch]);
-
   const scopedJobCards = useMemo(() => {
     if (!selectedBranchId) return jobCards;
     return jobCards.filter((jc) => jc.branchId === selectedBranchId);
   }, [jobCards, selectedBranchId]);
+
+  const stats = useMemo(
+    () =>
+      computeBranchScopedDashboardStats(
+        jobCards,
+        invoices,
+        expenses,
+        customers,
+        selectedBranchId,
+        rawStats
+      ),
+    [jobCards, invoices, expenses, customers, selectedBranchId, rawStats]
+  );
+
+  const scopedReminders = useMemo(
+    () => filterRemindersByBranch(serviceReminders, jobCards, selectedBranchId),
+    [serviceReminders, jobCards, selectedBranchId]
+  );
 
   const todaysBookingsLive = useMemo(
     () => scopedJobCards.filter(isTodaysBookingsJob),
@@ -302,7 +317,7 @@ export default function DashboardPage() {
       });
     }
 
-    const overdueReminders = serviceReminders.filter(
+    const overdueReminders = scopedReminders.filter(
       (r) => r.status === "OVERDUE" || r.status === "DUE"
     );
     if (overdueReminders.length > 0) {
@@ -335,7 +350,7 @@ export default function DashboardPage() {
     stats.inactiveCustomers,
     scopedJobCards,
     parts,
-    serviceReminders,
+    scopedReminders,
   ]);
 
   const branchNameById = useMemo(

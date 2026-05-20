@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import {
+  selectUnreadNotificationCount,
   useNotificationStore,
   type Notification,
   type NotificationType,
 } from "@/store/notification-store";
+import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -122,8 +124,15 @@ function NotificationItem({
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { notifications, markAllAsRead, unreadCount } = useNotificationStore();
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadCount = useNotificationStore(selectUnreadNotificationCount);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const bootstrapRefresh = useAppBootstrapStore((s) => s.refresh);
   const [tab, setTab] = useState("all");
+
+  useEffect(() => {
+    void bootstrapRefresh();
+  }, [bootstrapRefresh]);
 
   const filtered = tab === "all"
     ? notifications
@@ -140,9 +149,9 @@ export default function NotificationsPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Notifications"
-        description={`You have ${unreadCount()} unread notification${unreadCount() !== 1 ? "s" : ""}`}
+        description={`You have ${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`}
         actions={
-          unreadCount() > 0 ? (
+          unreadCount > 0 ? (
             <Button variant="outline" size="sm" onClick={markAllAsRead}>
               <CheckCheck className="w-4 h-4 mr-2" />
               Mark all read
@@ -157,10 +166,10 @@ export default function NotificationsPage() {
             All ({notifications.length})
           </TabsTrigger>
           <TabsTrigger value="unread">
-            Unread ({unreadCount()})
+            Unread ({unreadCount})
           </TabsTrigger>
           <TabsTrigger value="read">
-            Read ({notifications.length - unreadCount()})
+            Read ({notifications.length - unreadCount})
           </TabsTrigger>
         </TabsList>
 

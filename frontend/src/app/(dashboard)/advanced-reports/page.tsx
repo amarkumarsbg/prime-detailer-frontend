@@ -30,9 +30,9 @@ import {
   downloadSimpleTablePdf,
 } from "@/lib/advanced-report-pdf";
 import { useAdvancedReportSchedulesStore } from "@/store/advanced-report-schedules-store";
-import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedInvoices, useScopedJobCards } from "@/hooks/use-scoped-data";
+import { useBranchScope } from "@/lib/branch-scope";
 import { useSettingsStore } from "@/store/settings-store";
 import {
   BarChart3,
@@ -92,9 +92,10 @@ const FREQUENCIES = [
 
 export default function AdvancedReportsPage() {
   const [mainView, setMainView] = useState<MainView>("generate");
-  const jobCards = useJobCardStore((s) => s.jobCards);
+  const jobCards = useScopedJobCards();
   const customers = useCustomerStore((s) => s.customers);
-  const invoices = useInvoiceStore((s) => s.invoices);
+  const invoices = useScopedInvoices();
+  const { viewingLabel } = useBranchScope();
   const businessName = useSettingsStore((s) => s.businessName);
   const schedules = useAdvancedReportSchedulesStore((s) => s.schedules);
   const addSchedule = useAdvancedReportSchedulesStore((s) => s.addSchedule);

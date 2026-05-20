@@ -43,6 +43,8 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useQuotationStore } from "@/store/quotation-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useBranchStore } from "@/store/branch-store";
+import { resolveJobBranchId } from "@/lib/job-from-appointment";
 import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency } from "@/lib/utils";
@@ -140,6 +142,8 @@ export default function QuotationsPage() {
   const updateQuotation = useQuotationStore((s) => s.updateQuotation);
   const getNextQuotationNumber = useQuotationStore((s) => s.getNextQuotationNumber);
   const authUser = useAuthStore((s) => s.user);
+  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const branches = useBranchStore((s) => s.branches);
   const businessName = useSettingsStore((s) => s.businessName);
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [newDialogOpen, setNewDialogOpen] = useState(false);
@@ -468,7 +472,7 @@ export default function QuotationsPage() {
     const newJob: JobCard = {
       id: jobId,
       jobNumber,
-      branchId: "br-main",
+      branchId: resolveJobBranchId(currentBranch, branches),
       customerId: q.customerId,
       customerName: q.customerName,
       customerPhone: q.customerPhone,

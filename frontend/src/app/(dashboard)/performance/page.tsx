@@ -17,12 +17,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency, getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
+import { useBranchScope } from "@/lib/branch-scope";
+import { useScopedJobCards } from "@/hooks/use-scoped-data";
 import {
   aggregateBranchPerformance,
+  emptyBranchPerformanceMetrics,
   getPerformanceRange,
   performancePeriodLabel,
   type PerformancePeriod,
@@ -102,20 +103,10 @@ export default function PerformancePage() {
   const [leaderboardMetric, setLeaderboardMetric] =
     useState<LeaderboardSortMetric>("paid");
   const [expandedJobDetailId, setExpandedJobDetailId] = useState<string | null>(null);
-  const jobCards = useJobCardStore((s) => s.jobCards);
+  const scopedJobCards = useScopedJobCards();
   const branches = useBranchStore((s) => s.branches);
-  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const { selectedBranchId, viewingLabel } = useBranchScope();
   const user = useAuthStore((s) => s.user);
-
-  const selectedBranchId = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return null;
-    return currentBranch.id;
-  }, [currentBranch]);
-
-  const scopedJobCards = useMemo(() => {
-    if (!selectedBranchId) return jobCards;
-    return jobCards.filter((jc) => jc.branchId === selectedBranchId);
-  }, [jobCards, selectedBranchId]);
 
   const range = useMemo(() => getPerformanceRange(period), [period]);
 
@@ -129,11 +120,24 @@ export default function PerformancePage() {
     if (live.length > 0) {
       return { branchRows: live, usingDemo: false };
     }
+    if (selectedBranchId) {
+      const branchName =
+        branches.find((b) => b.id === selectedBranchId)?.name ?? "Branch";
+      return {
+        branchRows: [emptyBranchPerformanceMetrics(selectedBranchId, branchName)],
+        usingDemo: false,
+      };
+    }
     return {
-      branchRows: getDemoBranchPerformance(branches, selectedBranchId),
+      branchRows: getDemoBranchPerformance(branches, null),
       usingDemo: true,
     };
   }, [scopedJobCards, branches, range.start, range.end, selectedBranchId]);
+
+  const hasScopedJobData = useMemo(
+    () => branchRows.some((r) => r.jobCount > 0),
+    [branchRows]
+  );
 
   const jobsCompletedChartData = useMemo(
     () =>
@@ -214,7 +218,7 @@ export default function PerformancePage() {
   }, [branchRows, totalJobValueAll, totalRewardsAll, totalCompletedJobs]);
 
   const highlights = useMemo(() => {
-    if (branchRows.length === 0) return null;
+    if (!hasScopedJobData || branchRows.length === 0) return null;
     const topValue = branchRows.reduce((a, b) =>
       a.totalJobValue >= b.totalJobValue ? a : b
     );
@@ -222,7 +226,7 @@ export default function PerformancePage() {
       a.efficiencyPct >= b.efficiencyPct ? a : b
     );
     return { topValue, topEff, totalRewards: totalRewardsAll };
-  }, [branchRows, totalRewardsAll]);
+  }, [branchRows, totalRewardsAll, hasScopedJobData]);
 
   const rangeDescription = `${format(range.start, "d MMM yyyy")} – ${format(range.end, "d MMM yyyy")}`;
   const periodSubtitle =
@@ -230,10 +234,11 @@ export default function PerformancePage() {
       ? "This monthly"
       : `${performancePeriodLabel(period).toLowerCase()}`;
 
-  const scopeNote =
-    selectedBranchId && currentBranch && !isAllBranchesScope(currentBranch)
-      ? `Showing ${currentBranch.name} only. Choose “All branches” in the header to compare.`
-      : null;
+  const scopeNote = selectedBranchId
+    ? hasScopedJobData
+      ? `Showing ${viewingLabel} only. Choose “All branches” in the header to compare.`
+      : `No job activity for ${viewingLabel} in this period.`
+    : null;
 
   const tooltipBase = {
     background: "var(--popover)",
@@ -249,7 +254,11 @@ export default function PerformancePage() {
 
   const handleRefresh = () => {
     toast.success("Performance data refreshed", {
-      description: usingDemo ? "Still showing sample data — no jobs in this period." : "Totals updated from job cards.",
+      description: usingDemo
+        ? "Still showing sample data — choose All branches or add jobs in this period."
+        : hasScopedJobData
+          ? "Totals updated from job cards."
+          : "No jobs in this period for the selected scope.",
     });
   };
 
@@ -275,6 +284,7 @@ export default function PerformancePage() {
   );
 
   const floorManagersDemo = useMemo(() => {
+    if (selectedBranchId && !hasScopedJobData) return [];
     const b = branches;
     const n = (i: number) => b[i]?.name ?? `Branch ${i + 1}`;
     return [
@@ -282,12 +292,12 @@ export default function PerformancePage() {
         name: `Floor Manager — ${n(0)}`,
         email: "floor.manager.1@demo.prime",
         branch: n(0),
-        jobs: branchRows[0]?.deliveredCount ?? 24,
-        revenue: branchRows[0]?.totalJobValue ?? 892000,
-        rewards: branchRows[0]?.totalRewards ?? 13600,
-        eff: branchRows[0]?.efficiencyPct ?? 88,
+        jobs: branchRows[0]?.deliveredCount ?? 0,
+        revenue: branchRows[0]?.totalJobValue ?? 0,
+        rewards: branchRows[0]?.totalRewards ?? 0,
+        eff: branchRows[0]?.efficiencyPct ?? 0,
         teams: 2,
-        onTime: branchRows[0]?.onTimeRatePct ?? 91,
+        onTime: branchRows[0]?.onTimeRatePct ?? 0,
       },
       ...(branchRows.length > 1
         ? [
@@ -295,17 +305,17 @@ export default function PerformancePage() {
               name: `Floor Manager — ${n(1)}`,
               email: "floor.manager.2@demo.prime",
               branch: n(1),
-              jobs: branchRows[1]?.deliveredCount ?? 18,
-              revenue: branchRows[1]?.totalJobValue ?? 620000,
-              rewards: branchRows[1]?.totalRewards ?? 9800,
-              eff: branchRows[1]?.efficiencyPct ?? 86,
+              jobs: branchRows[1]?.deliveredCount ?? 0,
+              revenue: branchRows[1]?.totalJobValue ?? 0,
+              rewards: branchRows[1]?.totalRewards ?? 0,
+              eff: branchRows[1]?.efficiencyPct ?? 0,
               teams: 1,
-              onTime: branchRows[1]?.onTimeRatePct ?? 89,
+              onTime: branchRows[1]?.onTimeRatePct ?? 0,
             },
           ]
         : []),
     ];
-  }, [branches, branchRows]);
+  }, [branches, branchRows, selectedBranchId, hasScopedJobData]);
 
   const supervisorLeaderboardRows = useMemo(
     () =>
@@ -412,9 +422,14 @@ export default function PerformancePage() {
     );
 
   const jobDetailDemo = useMemo(() => {
-    const b0 = branches[0]?.name ?? "Main branch";
-    const b1 = branches[1]?.name ?? b0;
-    return [
+    if (selectedBranchId && !hasScopedJobData) return [];
+
+    const scopedBranchName = selectedBranchId
+      ? branches.find((b) => b.id === selectedBranchId)?.name
+      : undefined;
+    const b0 = scopedBranchName ?? branches[0]?.name ?? "Main branch";
+    const b1 = branches.find((b) => b.name !== b0)?.name ?? b0;
+    const rows = [
       {
         id: "#258",
         date: "03 Apr 2026, 06:34 am",
@@ -557,7 +572,11 @@ export default function PerformancePage() {
         },
       },
     ];
-  }, [branches]);
+    if (scopedBranchName) {
+      return rows.filter((j) => j.branch === scopedBranchName);
+    }
+    return rows;
+  }, [branches, selectedBranchId, hasScopedJobData]);
 
   const jobDetailsSummary = useMemo(() => {
     const n = jobDetailDemo.length;
@@ -644,6 +663,20 @@ export default function PerformancePage() {
           </Button>
         </div>
       </div>
+
+      {selectedBranchId && !hasScopedJobData && !usingDemo && (
+        <div
+          role="status"
+          className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+        >
+          No job cards for{" "}
+          <span className="font-medium text-foreground">
+            {viewingLabel !== "All branches" ? viewingLabel : "this branch"}
+          </span>{" "}
+          in {performancePeriodLabel(period).toLowerCase()} ({rangeDescription}). Metrics show zero
+          until jobs are created for this site.
+        </div>
+      )}
 
       <Tabs defaultValue="analytics" className="w-full">
         <TabsList className="h-auto w-full flex flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl bg-muted/70 p-1.5 scrollbar-none">
@@ -821,6 +854,11 @@ export default function PerformancePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
+              {floorManagersDemo.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  No floor manager activity for this branch in the selected period.
+                </p>
+              ) : (
               <table className="w-full text-sm min-w-[800px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase text-muted-foreground">
@@ -875,12 +913,18 @@ export default function PerformancePage() {
                   ))}
                 </tbody>
               </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="supervisors" className="mt-4 space-y-4">
-          {branchRows.slice(0, 2).map((r, i) => (
+          {!hasScopedJobData && selectedBranchId ? (
+            <p className="text-sm text-muted-foreground py-6 text-center rounded-lg border border-dashed">
+              No supervisor team data for this branch in the selected period.
+            </p>
+          ) : (
+          branchRows.slice(0, 2).map((r, i) => (
             <Card key={r.branchId}>
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <CardTitle className="text-base leading-snug">
@@ -911,8 +955,9 @@ export default function PerformancePage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-          {branchRows.length === 0 && (
+          ))
+          )}
+          {branchRows.length === 0 && hasScopedJobData && (
             <p className="text-sm text-muted-foreground">No supervisor rows for this scope.</p>
           )}
         </TabsContent>
@@ -1273,6 +1318,11 @@ export default function PerformancePage() {
               </p>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
+              {jobDetailDemo.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  No jobs to show for this branch in the selected period.
+                </p>
+              ) : (
               <table className="w-full text-sm min-w-[960px]">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -1512,6 +1562,7 @@ export default function PerformancePage() {
                   })}
                 </tbody>
               </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1567,7 +1618,9 @@ export default function PerformancePage() {
               <CardDescription>Job-wise distribution (demo)</CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground py-8 text-center">
-              No paid jobs with qualifying rewards in this slice — tiers above are illustrative.
+              {hasScopedJobData
+                ? "No paid jobs with qualifying rewards in this slice — tiers above are illustrative."
+                : "No reward-eligible jobs for this branch in the selected period."}
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,5 +1,6 @@
 import type { Branch } from "@/types";
 import {
+  emptyBranchPerformanceMetrics,
   shortBranchChartLabel,
   type BranchPerformanceMetrics,
 } from "@/lib/performance-branch-metrics";
@@ -52,21 +53,7 @@ export function getDemoBranchPerformance(
   if (selectedBranchId) {
     const match = all.find((r) => r.branchId === selectedBranchId);
     if (match) return [match];
-    const label = resolveName(selectedBranchId, "Branch");
-    return [
-      {
-        branchId: selectedBranchId,
-        branchName: label,
-        chartLabel: shortBranchChartLabel(label),
-        jobCount: 24,
-        deliveredCount: 21,
-        totalJobValue: 892_000,
-        totalRewards: 13_600,
-        onTimeAmongDelivered: 19,
-        onTimeRatePct: 90.5,
-        efficiencyPct: 87.5,
-      },
-    ];
+    return [emptyBranchPerformanceMetrics(selectedBranchId, resolveName(selectedBranchId, "Branch"))];
   }
 
   let list =

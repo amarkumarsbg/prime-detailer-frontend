@@ -1,12 +1,18 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import {
+  applyBranchFilters,
+  resolveBranchScopeLabel,
+  useBranchScope,
+} from "@/lib/branch-scope";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStaffStore } from "@/store/staff-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useCustomerStore } from "@/store/customer-store";
+import { useJobCardStore } from "@/store/job-card-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
@@ -17,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getInitials } from "@/lib/utils";
+import { getStaffJobStats } from "@/lib/staff-job-stats";
 import { getAssignableStaffRoles, canManageStaffUsers, canCreateStaffAccounts, roleDisplayLabel } from "@/lib/rbac";
 import { validateStrongPassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 import {
@@ -112,6 +119,7 @@ export default function StaffPage() {
   const authRole = useAuthStore((s) => s.user?.role);
   const authUser = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
   const defaultBranchId = branches.find((b) => b.isActive)?.id ?? branches[0]?.id ?? "br-main";
   const branchLocked =
     authRole === "BRANCH_MANAGER" || authRole === "MANAGER";
@@ -120,6 +128,7 @@ export default function StaffPage() {
   const staff = useStaffStore((s) => s.staff);
   const addStaff = useStaffStore((s) => s.addStaff);
   const customers = useCustomerStore((s) => s.customers);
+  const jobCards = useJobCardStore((s) => s.jobCards);
 
   const [mainTab, setMainTab] = useState<"staff" | "customers">("staff");
   const [filterBranch, setFilterBranch] = useState<string>("all");
@@ -160,6 +169,37 @@ export default function StaffPage() {
     });
   }, [branches, defaultBranchId, branchLocked, authUser?.branchId]);
 
+  useEffect(() => {
+    if (!showBranchPicker) {
+      queueMicrotask(() => setFilterBranch("all"));
+    }
+  }, [showBranchPicker, selectedBranchId]);
+
+  const branchScopedStaff = useMemo(
+    () =>
+      applyBranchFilters(
+        staff,
+        (s) => s.branchId,
+        selectedBranchId,
+        showBranchPicker,
+        filterBranch
+      ),
+    [staff, selectedBranchId, showBranchPicker, filterBranch]
+  );
+
+  const branchScopeLabel = useMemo(
+    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, filterBranch, branches),
+    [showBranchPicker, viewingLabel, filterBranch, branches]
+  );
+
+  const staffJobStatsById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getStaffJobStats>>();
+    for (const s of staff) {
+      map.set(s.id, getStaffJobStats(jobCards, s.id));
+    }
+    return map;
+  }, [staff, jobCards]);
+
   const resetAddForm = () => {
     setNewName("");
     setNewEmail("");
@@ -175,28 +215,40 @@ export default function StaffPage() {
   };
 
   const filteredStaff = useMemo(() => {
-    return staff.filter((s) => {
-      if (filterBranch !== "all" && s.branchId !== filterBranch) return false;
+    return branchScopedStaff.filter((s) => {
       if (filterRole !== "ALL" && s.role !== filterRole) return false;
       if (filterStatus === "ACTIVE" && !s.isActive) return false;
       if (filterStatus === "INACTIVE" && s.isActive) return false;
       return true;
     });
-  }, [staff, filterBranch, filterRole, filterStatus]);
+  }, [branchScopedStaff, filterRole, filterStatus]);
 
   const staffStats = useMemo(() => {
-    const total = staff.length;
-    const active = staff.filter((s) => s.isActive).length;
-    const verified = staff.filter((s) => s.emailVerified).length;
+    const total = branchScopedStaff.length;
+    const active = branchScopedStaff.filter((s) => s.isActive).length;
+    const verified = branchScopedStaff.filter((s) => s.emailVerified).length;
     return { total, active, inactive: total - active, verified };
-  }, [staff]);
+  }, [branchScopedStaff]);
+
+  const branchScopedCustomers = useMemo(() => {
+    if (!selectedBranchId && (!showBranchPicker || filterBranch === "all")) {
+      return customers;
+    }
+    const branchId =
+      selectedBranchId ?? (filterBranch !== "all" ? filterBranch : null);
+    if (!branchId) return customers;
+    const customerIds = new Set(
+      jobCards.filter((jc) => jc.branchId === branchId).map((jc) => jc.customerId)
+    );
+    return customers.filter((c) => customerIds.has(c.id));
+  }, [customers, jobCards, selectedBranchId, showBranchPicker, filterBranch]);
 
   const customerStats = useMemo(() => {
-    const total = customers.length;
-    const inactive = customers.filter((c) => c.isInactive).length;
-    const verified = customers.filter((c) => c.emailVerified).length;
+    const total = branchScopedCustomers.length;
+    const inactive = branchScopedCustomers.filter((c) => c.isInactive).length;
+    const verified = branchScopedCustomers.filter((c) => c.emailVerified).length;
     return { total, active: total - inactive, inactive, verified };
-  }, [customers]);
+  }, [branchScopedCustomers]);
 
   const columns = useMemo(
     () => [
@@ -274,38 +326,46 @@ export default function StaffPage() {
           </span>
         ),
       },
-      ...(staff.some((s) => s.totalJobsCompleted != null || s.totalIncentiveEarned != null)
-        ? [
-            {
-              key: "totalJobsCompleted",
-              label: "Jobs",
-              className: "hidden lg:table-cell",
-              render: (item: User) =>
-                item.totalJobsCompleted != null ? (
-                  <span className="inline-flex items-center gap-1 text-sm">
-                    <ClipboardList className="w-3.5 h-3.5 text-muted-foreground" />
-                    {item.totalJobsCompleted}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                ),
-            },
-            {
-              key: "totalIncentiveEarned",
-              label: "Incentive",
-              className: "hidden xl:table-cell",
-              render: (item: User) =>
-                item.totalIncentiveEarned != null ? (
-                  <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                    <IndianRupee className="w-3.5 h-3.5" />
-                    {item.totalIncentiveEarned.toLocaleString("en-IN")}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                ),
-            },
-          ]
-        : []),
+      {
+        key: "jobs",
+        label: "Jobs",
+        className: "hidden lg:table-cell",
+        render: (item: User) => {
+          const stats = staffJobStatsById.get(item.id);
+          if (!stats || stats.total === 0) {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          return (
+            <span className="text-sm tabular-nums">
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                {stats.completed}
+              </span>
+              <span className="text-muted-foreground"> done · </span>
+              <span className="text-amber-700 dark:text-amber-400 font-medium">
+                {stats.active}
+              </span>
+              <span className="text-muted-foreground"> ongoing</span>
+            </span>
+          );
+        },
+      },
+      {
+        key: "incentive",
+        label: "Incentive",
+        className: "hidden xl:table-cell",
+        render: (item: User) => {
+          const earned = staffJobStatsById.get(item.id)?.totalIncentiveEarned ?? 0;
+          if (earned <= 0) {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          return (
+            <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+              <IndianRupee className="w-3.5 h-3.5" />
+              {earned.toLocaleString("en-IN")}
+            </span>
+          );
+        },
+      },
       {
         key: "actions",
         label: "Actions",
@@ -334,7 +394,7 @@ export default function StaffPage() {
         ),
       },
     ],
-    [staff, branches]
+    [staff, branches, staffJobStatsById]
   );
 
   const customerColumns = useMemo(
@@ -722,22 +782,29 @@ export default function StaffPage() {
           <Card>
             <CardContent className="p-4 flex flex-col gap-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Filter by branch</Label>
-                  <Select value={filterBranch} onValueChange={setFilterBranch}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All branches</SelectItem>
-                      {branches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {showBranchPicker ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Filter by branch</Label>
+                    <Select value={filterBranch} onValueChange={setFilterBranch}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All branches</SelectItem>
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Branch</Label>
+                    <p className="text-sm font-medium h-10 flex items-center">{viewingLabel}</p>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label className="text-xs">Filter by role</Label>
                   <Select
@@ -791,6 +858,16 @@ export default function StaffPage() {
                   </Select>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Showing staff for:{" "}
+                <span className="font-medium text-foreground">{branchScopeLabel}</span>
+                {showBranchPicker && filterBranch === "all" ? (
+                  <span>
+                    {" "}
+                    — pick a branch in this filter or use the header switcher to narrow the list.
+                  </span>
+                ) : null}
+              </p>
             </CardContent>
           </Card>
 
@@ -841,7 +918,7 @@ export default function StaffPage() {
             </Card>
           </div>
           <DataTable
-            data={customers}
+            data={branchScopedCustomers}
             columns={customerColumns}
             searchPlaceholder="Search customers…"
             searchKeys={["name", "email", "phone", "id"]}

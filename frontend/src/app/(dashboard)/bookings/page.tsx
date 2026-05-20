@@ -21,10 +21,10 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import {
@@ -112,6 +112,7 @@ export default function BookingsPage() {
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const authUser = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId, showBranchPicker } = useBranchScope();
   const appointments = useAppointmentStore((s) => s.appointments);
   const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
   const vehicles = useVehicleStore((s) => s.vehicles);
@@ -127,12 +128,10 @@ export default function BookingsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const headerScoped = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return jobCards;
-    return jobCards.filter((jc) => jc.branchId === currentBranch.id);
-  }, [jobCards, currentBranch]);
-
-  const showBranchPicker = !currentBranch || isAllBranchesScope(currentBranch);
+  const headerScoped = useMemo(
+    () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
+    [jobCards, selectedBranchId]
+  );
 
   const filteredBookings = useMemo(() => {
     let list = headerScoped;

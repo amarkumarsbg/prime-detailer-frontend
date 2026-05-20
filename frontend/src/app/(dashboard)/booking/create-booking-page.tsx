@@ -80,7 +80,7 @@ import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
+import { useBranchScope } from "@/lib/branch-scope";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   INDIAN_VEHICLE_REG_HINT,
@@ -343,7 +343,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     [membershipPackagesAll]
   );
   const user = useAuthStore((s) => s.user);
-  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
+  const branchLocked = !showBranchPicker;
   const branches = useBranchStore((s) => s.branches);
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
   const staff = useStaffStore((s) => s.staff);
@@ -464,14 +465,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const compactCustomerStep = useBookingWizard;
 
   useEffect(() => {
-    if (branchId) return;
-    if (currentBranch && !isAllBranchesScope(currentBranch)) {
-      setBranchId(currentBranch.id);
+    if (branchLocked && selectedBranchId) {
+      setBranchId(selectedBranchId);
       return;
     }
-    if (user?.branchId) setBranchId(user.branchId);
-    else if (activeBranches[0]) setBranchId(activeBranches[0].id);
-  }, [branchId, currentBranch, user?.branchId, activeBranches]);
+    if (branchId) return;
+    if (user?.branchId && activeBranches.some((b) => b.id === user.branchId)) {
+      setBranchId(user.branchId);
+    } else if (activeBranches[0]) {
+      setBranchId(activeBranches[0].id);
+    }
+  }, [branchLocked, selectedBranchId, branchId, user?.branchId, activeBranches]);
 
   useEffect(() => {
     if (!isJobCard) return;
@@ -2013,7 +2017,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <Building2 className="w-4 h-4" />
             Select branch *
           </Label>
-          <Select value={branchId} onValueChange={setBranchId} required>
+          <Select
+            value={branchId}
+            onValueChange={setBranchId}
+            required
+            disabled={branchLocked}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Please select a branch" />
             </SelectTrigger>
@@ -2025,11 +2034,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               ))}
             </SelectContent>
           </Select>
-          {!branchId && (
+          {branchLocked ? (
+            <p className="text-xs text-muted-foreground">
+              Branch is set to{" "}
+              <span className="font-medium text-foreground">{viewingLabel}</span> from the header
+              selector.
+            </p>
+          ) : !branchId ? (
             <p className="text-xs text-destructive">
               Please select a branch to create the {isJobCard ? "job card" : "booking"}.
             </p>
-          )}
+          ) : null}
         </div>
       </CardContent>
       <CardFooter
@@ -4218,7 +4233,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   )}
                 </div>
               </div>
-              {jobCreateStep >= jobWizardStepCount - 1 && (
+              {jobCreateStep >= jobWizardStepCount - 1 && !branchLocked && !branchId && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
                   Select branch in the summary above, then tap Create.
                 </p>

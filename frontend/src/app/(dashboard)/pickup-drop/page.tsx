@@ -26,8 +26,7 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
-import { useAuthStore } from "@/store/auth-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
+import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { cn, formatDateTime } from "@/lib/utils";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { Plus, RefreshCw, Truck } from "lucide-react";
@@ -123,7 +122,7 @@ export default function PickupDropPage() {
   const { requests, addRequest } = usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
-  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const { selectedBranchId, viewingLabel } = useBranchScope();
 
   const [statusFilter, setStatusFilter] = useState<PickupDropStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<PickupDropType | "ALL">("ALL");
@@ -140,36 +139,44 @@ export default function PickupDropPage() {
   const [driverId, setDriverId] = useState<string>("unassigned");
   const [notes, setNotes] = useState("");
 
-  const scopedJobCards = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return jobCards;
-    return jobCards.filter((jc) => jc.branchId === currentBranch.id);
-  }, [jobCards, currentBranch]);
+  const scopedJobCards = useMemo(
+    () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
+    [jobCards, selectedBranchId]
+  );
+
+  const scopedRequests = useMemo(
+    () => filterByBranchId(requests, (r) => r.branchId, selectedBranchId),
+    [requests, selectedBranchId]
+  );
 
   const scopedBranches = useMemo(() => {
     const active = branches.filter((b) => b.isActive);
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return active;
-    return active.filter((b) => b.id === currentBranch.id);
-  }, [branches, currentBranch]);
+    if (!selectedBranchId) return active;
+    return active.filter((b) => b.id === selectedBranchId);
+  }, [branches, selectedBranchId]);
 
   const drivers = useMemo(
     () =>
       staff.filter(
-        (u) => u.isActive && u.role === "MECHANIC" && (!currentBranch || isAllBranchesScope(currentBranch) || u.branchId === currentBranch.id)
+        (u) =>
+          u.isActive &&
+          u.role === "MECHANIC" &&
+          (!selectedBranchId || u.branchId === selectedBranchId)
       ),
-    [staff, currentBranch]
+    [staff, selectedBranchId]
   );
 
   const filtered = useMemo(() => {
-    let list = requests;
+    let list = scopedRequests;
     if (statusFilter !== "ALL") list = list.filter((r) => r.status === statusFilter);
     if (typeFilter !== "ALL") list = list.filter((r) => r.type === typeFilter);
     return [...list].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [requests, statusFilter, typeFilter]);
+  }, [scopedRequests, statusFilter, typeFilter]);
 
   const kpis = useMemo(() => {
-    const all = requests;
+    const all = scopedRequests;
     return {
       total: all.length,
       pending: all.filter((r) => r.status === "PENDING").length,
@@ -177,7 +184,7 @@ export default function PickupDropPage() {
       inService: all.filter((r) => r.status === "IN_SERVICE").length,
       delivered: all.filter((r) => r.status === "DELIVERED").length,
     };
-  }, [requests]);
+  }, [scopedRequests]);
 
   const resetForm = () => {
     setCreateMode("existing");
@@ -324,7 +331,7 @@ export default function PickupDropPage() {
     <div>
       <PageHeader
         title="Pickup & Drop Management"
-        description="Manage vehicle pickup and delivery services"
+        description={`Manage vehicle pickup and delivery for ${viewingLabel}.`}
         actions={
           <>
             <Button variant="outline" className="gap-2" onClick={() => router.refresh()}>

@@ -12,13 +12,7 @@ import { toast } from "sonner";
 import { buildApiUrl } from "@/lib/api-base";
 import { PASSWORD_POLICY_HINT, validateStrongPassword } from "@/lib/password-policy";
 import type { Branch, User } from "@/types";
-import { ALL_BRANCHES_BRANCH } from "@/lib/all-branches";
-
-function pickDashboardBranch(user: User, branch: Branch | null): Branch | null {
-  const orgWide =
-    user.role === "SUPER_ADMIN" || user.role === "ADMIN" || user.role === "MANAGER";
-  return orgWide ? ALL_BRANCHES_BRANCH : branch;
-}
+import { defaultBranchForUser } from "@/lib/branch-selection";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -104,7 +98,7 @@ export default function ChangePasswordPage() {
       useAuthStore.setState({
         accessToken: nextToken,
         user,
-        currentBranch: pickDashboardBranch(user, branch),
+        currentBranch: defaultBranchForUser(user, branch),
         isAuthenticated: true,
       });
       toast.success("Password updated.");

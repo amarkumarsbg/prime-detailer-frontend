@@ -3,7 +3,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User, Branch } from "@/types";
-import { ALL_BRANCHES_BRANCH } from "@/lib/all-branches";
+import { isAllBranchesScope } from "@/lib/all-branches";
+import {
+  canOrgWideRole,
+  defaultBranchForUser,
+} from "@/lib/branch-selection";
 import { buildApiUrl } from "@/lib/api-base";
 
 export type SendLoginOtpResult =
@@ -37,10 +41,14 @@ interface AuthState {
   setBranch: (branch: Branch) => void;
 }
 
-function canOrgWideRole(role: User["role"]): boolean {
-  return (
-    role === "SUPER_ADMIN" || role === "ADMIN" || role === "MANAGER"
-  );
+function preserveOrgWideBranch(
+  user: User,
+  homeBranch: Branch | null,
+  persisted: Branch | null
+): Branch | null {
+  if (!canOrgWideRole(user.role)) return homeBranch;
+  if (persisted && !isAllBranchesScope(persisted)) return persisted;
+  return defaultBranchForUser(user, homeBranch);
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -52,12 +60,15 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
 
       applyAuthPayload: (data) => {
-        const canOrgWide = canOrgWideRole(data.user.role);
         const homeBranch = data.branch ?? null;
         set({
           accessToken: data.accessToken,
           user: data.user,
-          currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+          currentBranch: preserveOrgWideBranch(
+            data.user,
+            homeBranch,
+            get().currentBranch
+          ),
           isAuthenticated: true,
         });
       },
@@ -78,11 +89,14 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
           const { user, branch } = body.data;
-          const canOrgWide = canOrgWideRole(user.role);
           const homeBranch = branch ?? null;
           set({
             user,
-            currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+            currentBranch: preserveOrgWideBranch(
+              user,
+              homeBranch,
+              get().currentBranch
+            ),
             isAuthenticated: true,
           });
         } catch {
@@ -153,12 +167,11 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
           const { accessToken, user, branch } = body.data;
-          const canOrgWide = canOrgWideRole(user.role);
           const homeBranch = branch ?? null;
           set({
             accessToken,
             user,
-            currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+            currentBranch: defaultBranchForUser(user, homeBranch),
             isAuthenticated: true,
           });
           return true;
@@ -188,12 +201,11 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
           const { accessToken, user, branch } = body.data;
-          const canOrgWide = canOrgWideRole(user.role);
           const homeBranch = branch ?? null;
           set({
             accessToken,
             user,
-            currentBranch: canOrgWide ? ALL_BRANCHES_BRANCH : homeBranch,
+            currentBranch: defaultBranchForUser(user, homeBranch),
             isAuthenticated: true,
           });
           return true;

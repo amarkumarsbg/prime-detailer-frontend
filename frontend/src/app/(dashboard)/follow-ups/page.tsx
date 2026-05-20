@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { useFollowUpStore } from "@/store/follow-up-store";
+import { useBranchScope } from "@/lib/branch-scope";
+import { useScopedFollowUps } from "@/hooks/use-scoped-data";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import { buildFollowUpWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
@@ -29,7 +31,8 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "suc
 };
 
 export default function FollowUpsPage() {
-  const followUps = useFollowUpStore((s) => s.followUps);
+  const followUps = useScopedFollowUps();
+  const { viewingLabel } = useBranchScope();
 
   const handleFollowUpWhatsApp = async (fu: FollowUp) => {
     const phone = fu.customerPhone?.trim();
@@ -70,7 +73,7 @@ export default function FollowUpsPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Follow-ups"
-        description="Inactive customers and follow-up tasks"
+        description={`Inactive customers and follow-up tasks for ${viewingLabel}.`}
       />
 
       <Card>

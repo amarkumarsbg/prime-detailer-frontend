@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAttendanceStore } from "@/store/attendance-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useBranchStore } from "@/store/branch-store";
 import { AttendanceQrPanel } from "@/components/attendance/attendance-qr-panel";
 import { format } from "date-fns";
 import { roleDisplayLabel } from "@/lib/rbac";
@@ -29,7 +30,7 @@ import {
 } from "lucide-react";
 import { getShiftStatusDisplay } from "@/lib/attendance-display";
 import { canViewStaffAttendanceDashboard } from "@/lib/attendance-access";
-import { resolveSessionBranchId } from "@/lib/all-branches";
+import { useBranchScope } from "@/lib/branch-scope";
 
 function formatDuration(minutes?: number): string {
   if (minutes == null) return "—";
@@ -47,11 +48,20 @@ function formatDateOptionLabel(isoDate: string): string {
 export default function AttendancePage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId, viewingLabel } = useBranchScope();
   const attendanceRecords = useAttendanceStore((s) => s.records);
   const staff = useStaffStore((s) => s.staff);
 
-  const branchId = resolveSessionBranchId(currentBranch, user?.branchId);
+  const qrDefaultBranchId = useMemo(() => {
+    if (selectedBranchId) return selectedBranchId;
+    return (
+      user?.branchId ??
+      branches.find((b) => b.isActive)?.id ??
+      branches[0]?.id ??
+      "br-main"
+    );
+  }, [selectedBranchId, user?.branchId, branches]);
 
   useEffect(() => {
     if (user && !canViewStaffAttendanceDashboard(user.role)) {
@@ -72,22 +82,28 @@ export default function AttendancePage() {
     return dates;
   }, []);
 
-  const staffForBranch = useMemo(
-    () => staff.filter((s) => s.branchId === branchId),
-    [staff, branchId]
-  );
+  const staffForBranch = useMemo(() => {
+    if (!selectedBranchId) return staff;
+    return staff.filter((s) => s.branchId === selectedBranchId);
+  }, [staff, selectedBranchId]);
 
   const recordsForDate = useMemo(() => {
-    const list = attendanceRecords.filter(
-      (r) => r.date === selectedDate && r.branchId === branchId
-    );
+    const list = attendanceRecords.filter((r) => {
+      if (r.date !== selectedDate) return false;
+      if (!selectedBranchId) return true;
+      return r.branchId === selectedBranchId;
+    });
     return [...list].sort((a, b) => a.staffName.localeCompare(b.staffName));
-  }, [attendanceRecords, selectedDate, branchId]);
+  }, [attendanceRecords, selectedDate, selectedBranchId]);
 
   const todayRecords = useMemo(
     () =>
-      attendanceRecords.filter((r) => r.date === today && r.branchId === branchId),
-    [attendanceRecords, today, branchId]
+      attendanceRecords.filter((r) => {
+        if (r.date !== today) return false;
+        if (!selectedBranchId) return true;
+        return r.branchId === selectedBranchId;
+      }),
+    [attendanceRecords, today, selectedBranchId]
   );
 
   const kpis = useMemo(() => {
@@ -152,12 +168,11 @@ export default function AttendancePage() {
     start.setDate(start.getDate() - 6);
     const startStr = format(start, "yyyy-MM-dd");
     const endStr = format(end, "yyyy-MM-dd");
-    const periodRecords = attendanceRecords.filter(
-      (r) =>
-        r.branchId === branchId &&
-        r.date <= endStr &&
-        r.date >= startStr
-    );
+    const periodRecords = attendanceRecords.filter((r) => {
+      if (r.date > endStr || r.date < startStr) return false;
+      if (!selectedBranchId) return true;
+      return r.branchId === selectedBranchId;
+    });
     return staffForBranch.map((s) => {
       const staffRecords = periodRecords.filter((r) => r.staffId === s.id);
       const present = staffRecords.filter((r) => r.status === "PRESENT").length;
@@ -186,7 +201,7 @@ export default function AttendancePage() {
         avgHours,
       };
     });
-  }, [selectedDate, attendanceRecords, branchId, staffForBranch]);
+  }, [selectedDate, attendanceRecords, selectedBranchId, staffForBranch]);
 
   if (!user) {
     return null;
@@ -205,7 +220,7 @@ export default function AttendancePage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <PageHeader
           title="Staff Attendance"
-          description="Managers and admins only — QR + PIN punch, check-in/out, and hours"
+          description={`Managers and admins only — QR + PIN punch, check-in/out, and hours. Viewing: ${viewingLabel}.`}
         />
         <Badge variant="success" className="w-fit shrink-0">
           Live
@@ -248,7 +263,7 @@ export default function AttendancePage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <AttendanceQrPanel defaultBranchId={branchId} />
+            <AttendanceQrPanel defaultBranchId={qrDefaultBranchId} />
 
             <Card className="lg:col-span-2">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">

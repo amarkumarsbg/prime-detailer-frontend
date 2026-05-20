@@ -4,8 +4,13 @@ import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useSidebarStore } from "@/store/sidebar-store";
-import { useNotificationStore } from "@/store/notification-store";
+import {
+  selectUnreadNotificationCount,
+  useNotificationStore,
+} from "@/store/notification-store";
+import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
+import { canOrgWideRole } from "@/lib/branch-selection";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
@@ -45,7 +50,8 @@ export function Header() {
   const branchesFromStore = useBranchStore((s) => s.branches);
   const businessName = useSettingsStore((s) => s.businessName);
   const toggleMobileOpen = useSidebarStore((s) => s.toggleMobileOpen);
-  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const unreadCount = useNotificationStore(selectUnreadNotificationCount);
+  const bootstrapRefresh = useAppBootstrapStore((s) => s.refresh);
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -74,11 +80,7 @@ export function Header() {
   };
 
   const canSelectOrgWide = useMemo(
-    () =>
-      !!user &&
-      (user.role === "SUPER_ADMIN" ||
-        user.role === "ADMIN" ||
-        user.role === "MANAGER"),
+    () => !!user && canOrgWideRole(user.role),
     [user]
   );
 
@@ -107,7 +109,7 @@ export function Header() {
   if (!user) return null;
 
   const avatarSrc = resolveUploadsPublicUrl(user.avatar);
-  const count = unreadCount();
+  const count = unreadCount;
 
   return (
     <header

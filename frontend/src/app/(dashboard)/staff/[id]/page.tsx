@@ -41,6 +41,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getStaffJobStats } from "@/lib/staff-job-stats";
 import type { UpdatePinResult } from "@/store/staff-store";
 import type { User, UserRole } from "@/types";
 
@@ -177,7 +179,12 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
 
   const canEditAttendancePin = canEditStaff;
 
-  if (!member) {
+  const jobStats = useMemo(
+    () => (member ? getStaffJobStats(jobCards, member.id) : null),
+    [jobCards, member]
+  );
+
+  if (!member || !jobStats) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-muted-foreground">Staff member not found</p>
@@ -189,7 +196,6 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const branch = branches.find((b) => b.id === member.branchId);
-  const assignedJobs = jobCards.filter((j) => j.mechanicId === member.id);
 
   const handleCancelEditProfile = () => {
     setEditingProfile(false);
@@ -229,8 +235,26 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditingProfile(false);
   };
 
-  const completedJobs = assignedJobs.filter((j) => j.status === "DELIVERED");
-  const activeJobs = assignedJobs.filter((j) => !["DELIVERED", "CANCELLED"].includes(j.status));
+  const renderJobRow = (job: (typeof jobStats.activeJobs)[number]) => (
+    <div
+      key={job.id}
+      className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
+      onClick={() => router.push(`/job-cards/${job.id}`)}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-sm">{job.jobNumber}</p>
+        <p className="text-xs text-muted-foreground">
+          {job.customerName} &middot; {job.vehicleRegNumber}
+        </p>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-xs text-muted-foreground hidden sm:inline">
+          {formatDate(job.createdAt)}
+        </span>
+        <JobCardStatusBadge status={job.status} />
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -384,8 +408,8 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
               <ClipboardList className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{assignedJobs.length}</p>
-              <p className="text-sm text-muted-foreground">Total Jobs</p>
+              <p className="text-2xl font-bold">{jobStats.total}</p>
+              <p className="text-sm text-muted-foreground">Total assigned</p>
             </div>
           </CardContent>
         </Card>
@@ -395,8 +419,8 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
               <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{member.totalJobsCompleted ?? completedJobs.length}</p>
-              <p className="text-sm text-muted-foreground">Completed</p>
+              <p className="text-2xl font-bold">{jobStats.completed}</p>
+              <p className="text-sm text-muted-foreground">Completed (delivered)</p>
             </div>
           </CardContent>
         </Card>
@@ -406,12 +430,12 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
               <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{activeJobs.length}</p>
-              <p className="text-sm text-muted-foreground">Active Jobs</p>
+              <p className="text-2xl font-bold">{jobStats.active}</p>
+              <p className="text-sm text-muted-foreground">Ongoing</p>
             </div>
           </CardContent>
         </Card>
-        {(member.totalIncentiveEarned != null && member.totalIncentiveEarned > 0) && (
+        {jobStats.totalIncentiveEarned > 0 && (
           <Card>
             <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
               <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30">
@@ -419,9 +443,9 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <div>
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(member.totalIncentiveEarned)}
+                  {formatCurrency(jobStats.totalIncentiveEarned)}
                 </p>
-                <p className="text-sm text-muted-foreground">Incentive Earned</p>
+                <p className="text-sm text-muted-foreground">Incentive (delivered jobs)</p>
               </div>
             </CardContent>
           </Card>
@@ -436,30 +460,54 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {assignedJobs.length > 0 && (
+      {jobStats.total > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Assigned Job Cards</CardTitle>
+            <CardTitle>Job history</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {jobStats.completed} completed · {jobStats.active} ongoing
+              {jobStats.cancelled > 0 ? ` · ${jobStats.cancelled} cancelled` : ""} — from assigned job cards
+            </p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {assignedJobs.slice(0, 10).map((job) => (
-                <div
-                  key={job.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
-                  onClick={() => router.push(`/job-cards/${job.id}`)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">{job.jobNumber}</p>
-                    <p className="text-xs text-muted-foreground">{job.customerName} &middot; {job.vehicleRegNumber}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground hidden sm:inline">{formatDate(job.createdAt)}</span>
-                    <JobCardStatusBadge status={job.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Tabs defaultValue="ongoing">
+              <TabsList>
+                <TabsTrigger value="ongoing">
+                  Ongoing ({jobStats.active})
+                </TabsTrigger>
+                <TabsTrigger value="completed">
+                  Completed ({jobStats.completed})
+                </TabsTrigger>
+                {jobStats.cancelled > 0 && (
+                  <TabsTrigger value="cancelled">
+                    Cancelled ({jobStats.cancelled})
+                  </TabsTrigger>
+                )}
+              </TabsList>
+              <TabsContent value="ongoing" className="mt-4">
+                {jobStats.activeJobs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No ongoing jobs assigned to this staff member.
+                  </p>
+                ) : (
+                  <div className="space-y-3">{jobStats.activeJobs.map(renderJobRow)}</div>
+                )}
+              </TabsContent>
+              <TabsContent value="completed" className="mt-4">
+                {jobStats.completedJobs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No delivered jobs yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3">{jobStats.completedJobs.map(renderJobRow)}</div>
+                )}
+              </TabsContent>
+              {jobStats.cancelled > 0 && (
+                <TabsContent value="cancelled" className="mt-4">
+                  <div className="space-y-3">{jobStats.cancelledJobs.map(renderJobRow)}</div>
+                </TabsContent>
+              )}
+            </Tabs>
           </CardContent>
         </Card>
       )}

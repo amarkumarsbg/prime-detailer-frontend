@@ -5,14 +5,14 @@ import { ReportPageChrome } from "@/components/reports/report-page-chrome";
 import { ReportTableEmpty } from "@/components/reports/report-table-empty";
 import { buildHsnWiseSalesSummaryRows } from "@/lib/reports/hsn-wise-summary-from-invoices";
 import { formatInrFull } from "@/lib/utils";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import { toast } from "sonner";
 
 const FAV_KEY = "prime-detailer-hsn-wise-sales-favourite";
 
 export function HsnWiseSalesSummaryReport() {
   const [period, setPeriod] = useState("week");
-  const invoices = useInvoiceStore((s) => s.invoices);
+  const invoices = useScopedInvoices();
 
   const rows = useMemo(
     () => buildHsnWiseSalesSummaryRows(invoices, period),

@@ -23,7 +23,6 @@ import { useSettingsStore } from "@/store/settings-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import type { VehicleSegment } from "@/types";
-import { BranchesSettings } from "@/components/settings/branches-settings";
 import {
   Building2,
   Receipt,
@@ -181,7 +180,6 @@ export default function SettingsPage() {
       <Tabs defaultValue="business" className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="branches">Branches</TabsTrigger>
           <TabsTrigger value="tax">Tax & Billing</TabsTrigger>
           <TabsTrigger value="rewards">Rewards</TabsTrigger>
           <TabsTrigger value="terms">Terms & Conditions</TabsTrigger>
@@ -233,10 +231,6 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="branches">
-          <BranchesSettings />
         </TabsContent>
 
         <TabsContent value="tax" className="space-y-4">

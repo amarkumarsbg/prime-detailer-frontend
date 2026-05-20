@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { useStaffStore } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
+import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
+import { getStaffJobStats } from "@/lib/staff-job-stats";
 import { getInitials } from "@/lib/utils";
 import type { JobCard } from "@/types";
 import {
@@ -38,40 +40,56 @@ interface MechanicStats {
 export default function MechanicsPage() {
   const staff = useStaffStore((s) => s.staff);
   const jobCards = useJobCardStore((s) => s.jobCards);
-  const mechanics = useMemo(
-    () => staff.filter((s) => s.role === "MECHANIC"),
-    [staff]
+  const { selectedBranchId, viewingLabel } = useBranchScope();
+
+  const mechanics = useMemo(() => {
+    const list = staff.filter((s) => s.role === "MECHANIC");
+    return filterByBranchId(list, (s) => s.branchId, selectedBranchId);
+  }, [staff, selectedBranchId]);
+
+  const scopedJobCards = useMemo(
+    () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
+    [jobCards, selectedBranchId]
   );
 
   const mechanicStats = useMemo<MechanicStats[]>(() => {
-    return mechanics.map((mech) => {
-      const allJobs = jobCards.filter((jc) => jc.mechanicId === mech.id);
-      const completed = allJobs.filter((jc) => jc.status === "DELIVERED");
-      const active = allJobs.filter((jc) => !["DELIVERED", "CANCELLED"].includes(jc.status));
-      const overdue = active.filter((jc) => new Date(jc.expectedDelivery) < new Date());
+    return mechanics
+      .map((mech) => {
+        const stats = getStaffJobStats(scopedJobCards, mech.id);
+        const overdue = stats.activeJobs.filter(
+          (jc) => new Date(jc.expectedDelivery) < new Date()
+        );
 
-      const completionDays = completed.map((jc) => {
-        const start = new Date(jc.createdAt).getTime();
-        const end = jc.actualDelivery ? new Date(jc.actualDelivery).getTime() : new Date(jc.updatedAt).getTime();
-        return (end - start) / (1000 * 60 * 60 * 24);
-      });
-      const avgDays = completionDays.length > 0 ? completionDays.reduce((a, b) => a + b, 0) / completionDays.length : 0;
-      const totalIncentiveEarned = completed.reduce((sum, jc) => sum + (jc.incentiveAmount ?? 0), 0);
+        const completionDays = stats.completedJobs.map((jc) => {
+          const start = new Date(jc.createdAt).getTime();
+          const end = jc.actualDelivery
+            ? new Date(jc.actualDelivery).getTime()
+            : new Date(jc.updatedAt).getTime();
+          return (end - start) / (1000 * 60 * 60 * 24);
+        });
+        const avgDays =
+          completionDays.length > 0
+            ? completionDays.reduce((a, b) => a + b, 0) / completionDays.length
+            : 0;
 
-      return {
-        id: mech.id,
-        name: mech.name,
-        totalJobs: allJobs.length,
-        completedJobs: completed.length,
-        activeJobs: active.length,
-        overdueJobs: overdue.length,
-        avgCompletionDays: Math.round(avgDays * 10) / 10,
-        totalIncentiveEarned,
-        currentLoad: active,
-        completionRate: allJobs.length > 0 ? Math.round((completed.length / allJobs.length) * 100) : 0,
-      };
-    }).sort((a, b) => b.totalJobs - a.totalJobs);
-  }, [mechanics, jobCards]);
+        return {
+          id: mech.id,
+          name: mech.name,
+          totalJobs: stats.total,
+          completedJobs: stats.completed,
+          activeJobs: stats.active,
+          overdueJobs: overdue.length,
+          avgCompletionDays: Math.round(avgDays * 10) / 10,
+          totalIncentiveEarned: stats.totalIncentiveEarned,
+          currentLoad: stats.activeJobs,
+          completionRate:
+            stats.total > 0
+              ? Math.round((stats.completed / stats.total) * 100)
+              : 0,
+        };
+      })
+      .sort((a, b) => b.totalJobs - a.totalJobs);
+  }, [mechanics, scopedJobCards]);
 
   const totalActive = mechanicStats.reduce((s, m) => s + m.activeJobs, 0);
   const totalCompleted = mechanicStats.reduce((s, m) => s + m.completedJobs, 0);
@@ -79,7 +97,14 @@ export default function MechanicsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader title="Mechanic Performance" />
+      <PageHeader
+        title="Mechanic Performance"
+        description={
+          selectedBranchId
+            ? `Jobs and stats for ${viewingLabel} only. Change branch in the header to view another site.`
+            : "All branches. Pick a branch in the header to scope mechanics and jobs."
+        }
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
@@ -143,7 +168,9 @@ export default function MechanicsPage() {
                     <Link href={`/staff/${mech.id}`} className="font-semibold hover:text-primary transition-colors">
                       {mech.name}
                     </Link>
-                    <p className="text-xs text-muted-foreground">{mech.totalJobs} total jobs</p>
+                    <p className="text-xs text-muted-foreground">
+                      {mech.completedJobs} completed · {mech.activeJobs} ongoing
+                    </p>
                   </div>
                 </div>
 

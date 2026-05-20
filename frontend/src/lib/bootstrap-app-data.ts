@@ -1,4 +1,6 @@
 import { apiGet } from "./api-client";
+import { reconcileCurrentBranch } from "./branch-selection";
+import { useAuthStore } from "@/store/auth-store";
 import type {
   ActivityLog,
   Appointment,
@@ -88,6 +90,26 @@ export async function bootstrapAppData(): Promise<void> {
   const c = data.collections;
 
   useBranchStore.setState({ branches: data.branches });
+
+  const auth = useAuthStore.getState();
+  if (auth.user) {
+    const nextBranch = reconcileCurrentBranch(
+      auth.user,
+      auth.user.branchId
+        ? (data.branches.find((b) => b.id === auth.user!.branchId) ?? null)
+        : null,
+      auth.currentBranch,
+      data.branches
+    );
+    if (
+      nextBranch &&
+      (nextBranch.id !== auth.currentBranch?.id ||
+        nextBranch.name !== auth.currentBranch?.name)
+    ) {
+      auth.setBranch(nextBranch);
+    }
+  }
+
   useStaffStore.setState({ staff: data.users });
   useVehicleStore.setState({ vehicles: data.vehicles });
   useCustomerStore.setState({
@@ -164,9 +186,9 @@ export async function bootstrapAppData(): Promise<void> {
     categories: (c.serviceCategories as ServiceCategoryRecord[]) ?? [],
   });
 
-  useNotificationStore.setState({
-    notifications: (c.notifications as Notification[]) ?? [],
-  });
+  useNotificationStore
+    .getState()
+    .hydrateFromBootstrap((c.notifications as Notification[]) ?? []);
 
   const pickupDrop = c.pickupDropRequests as PickupDropRequest[] | undefined;
   usePickupDropStore

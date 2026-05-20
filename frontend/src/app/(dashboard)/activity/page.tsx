@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useActivityLogStore } from "@/store/activity-log-store";
+import { useBranchScope } from "@/lib/branch-scope";
+import { useScopedActivityLogs } from "@/hooks/use-scoped-data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -113,7 +114,8 @@ const ENTITY_LABELS: Record<ActivityEntityType, string> = {
 
 export default function ActivityPage() {
   const router = useRouter();
-  const logs = useActivityLogStore((s) => s.logs);
+  const logs = useScopedActivityLogs();
+  const { viewingLabel } = useBranchScope();
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [actionFilter, setActionFilter] = useState<string>("all");
 
@@ -149,7 +151,7 @@ export default function ActivityPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Activity Log"
-        description="Track all actions across the system"
+        description={`Track actions for ${viewingLabel}. Job, invoice, and expense events respect branch scope.`}
       />
 
       <div className="flex flex-col gap-3 sm:flex-row">

@@ -48,9 +48,8 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useInventoryStore } from "@/store/inventory-store";
-import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
+import { filterInvoicesByBranch, useBranchScope } from "@/lib/branch-scope";
 import { getStockStatus } from "@/lib/inventory-units";
 import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
 import {
@@ -110,7 +109,7 @@ export function AnalyticsReportsDashboard() {
   const jobCards = useJobCardStore((s) => s.jobCards);
   const customers = useCustomerStore((s) => s.customers);
   const parts = useInventoryStore((s) => s.parts);
-  const currentBranch = useAuthStore((s) => s.currentBranch);
+  const { selectedBranchId, viewingLabel } = useBranchScope();
   const branches = useBranchStore((s) => s.branches);
   const averageRating = useDashboardStatsStore((s) => s.stats?.averageRating ?? 0);
 
@@ -120,21 +119,20 @@ export function AnalyticsReportsDashboard() {
     return rangeStartDays(days);
   }, [days, tick]);
 
-  const scopedJobs = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return jobCards;
-    return jobCards.filter((j) => j.branchId === currentBranch.id);
-  }, [jobCards, currentBranch]);
+  const scopedJobs = useMemo(
+    () =>
+      selectedBranchId
+        ? jobCards.filter((j) => j.branchId === selectedBranchId)
+        : jobCards,
+    [jobCards, selectedBranchId]
+  );
 
-  const scopedInvoices = useMemo(() => {
-    if (!currentBranch || isAllBranchesScope(currentBranch)) return invoices;
-    const jobIds = new Set(scopedJobs.map((j) => j.id));
-    return invoices.filter((inv) => jobIds.has(inv.jobCardId));
-  }, [invoices, currentBranch, scopedJobs]);
+  const scopedInvoices = useMemo(
+    () => filterInvoicesByBranch(invoices, jobCards, selectedBranchId),
+    [invoices, jobCards, selectedBranchId]
+  );
 
-  const scopeLabel =
-    !currentBranch || isAllBranchesScope(currentBranch)
-      ? "All branches"
-      : branches.find((b) => b.id === currentBranch.id)?.name ?? currentBranch.name;
+  const scopeLabel = viewingLabel;
 
   const metrics = useMemo(() => {
     const revDaily = revenueByDay(scopedInvoices, start);

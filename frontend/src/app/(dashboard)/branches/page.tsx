@@ -16,8 +16,18 @@ import {
 } from "@/components/ui/dialog";
 import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
+import { useJobCardStore } from "@/store/job-card-store";
+import { useExpenseStore } from "@/store/expense-store";
+import { usePickupDropStore } from "@/store/pickup-drop-store";
+import { usePayrollStore } from "@/store/payroll-store";
+import { useAttendanceStore } from "@/store/attendance-store";
 import { useAuthStore } from "@/store/auth-store";
 import { canManageOrgBranches } from "@/lib/rbac";
+import {
+  canDeleteBranch,
+  getBranchDeletionBlockers,
+  type BranchDeletionBlocker,
+} from "@/lib/branch-deletion";
 import type { Branch } from "@/types";
 import {
   BranchFormDialog,
@@ -30,6 +40,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  PowerOff,
   RefreshCw,
   Trash2,
   Users,
@@ -43,18 +54,50 @@ export default function BranchesPage() {
   const addBranch = useBranchStore((s) => s.addBranch);
   const updateBranch = useBranchStore((s) => s.updateBranch);
   const deactivateBranch = useBranchStore((s) => s.deactivateBranch);
+  const deleteBranch = useBranchStore((s) => s.deleteBranch);
   const staff = useStaffStore((s) => s.staff);
+  const jobCards = useJobCardStore((s) => s.jobCards);
+  const expenses = useExpenseStore((s) => s.expenses);
+  const pickupDropRequests = usePickupDropStore((s) => s.requests);
+  const payrollRecords = usePayrollStore((s) => s.payrollRecords);
+  const attendanceRecords = useAttendanceStore((s) => s.records);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"add" | "edit">("add");
   const [editing, setEditing] = useState<Branch | null>(null);
   const [viewing, setViewing] = useState<Branch | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Branch | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
+
+  const deletionContext = useMemo(
+    () => ({
+      staff,
+      jobCards,
+      expenses,
+      pickupDropRequests,
+      payrollRecords,
+      attendanceRecords,
+      totalBranches: branches.length,
+    }),
+    [
+      staff,
+      jobCards,
+      expenses,
+      pickupDropRequests,
+      payrollRecords,
+      attendanceRecords,
+      branches.length,
+    ]
+  );
+
+  const deleteBlockersForTarget = useMemo((): BranchDeletionBlocker[] => {
+    if (!deleteTarget) return [];
+    return getBranchDeletionBlockers(deleteTarget.id, deletionContext);
+  }, [deleteTarget, deletionContext]);
 
   const staffCountByBranch = useMemo(() => {
     const m = new Map<string, number>();
     for (const u of staff) {
-      if (!u.isActive) continue;
       m.set(u.branchId, (m.get(u.branchId) ?? 0) + 1);
     }
     return m;
@@ -168,51 +211,75 @@ export default function BranchesPage() {
     {
       key: "actions",
       label: "Actions",
-      className: "text-right w-[140px]",
-      render: (b: Branch) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            aria-label="View"
-            onClick={() => setViewing(b)}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          {canEdit && (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Edit"
-                onClick={() => {
-                  setEditing(b);
-                  setFormMode("edit");
-                  setFormOpen(true);
-                }}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              {b.isActive && (
+      className: "text-right w-[168px]",
+      render: (b: Branch) => {
+        const deletable = canDeleteBranch(b.id, deletionContext);
+        return (
+          <div className="flex justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="View"
+              onClick={() => setViewing(b)}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            {canEdit && (
+              <>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  aria-label="Deactivate"
-                  onClick={() => setDeactivateTarget(b)}
+                  className="h-8 w-8"
+                  aria-label="Edit"
+                  onClick={() => {
+                    setEditing(b);
+                    setFormMode("edit");
+                    setFormOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                {b.isActive && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    aria-label="Deactivate"
+                    title="Mark inactive"
+                    onClick={() => setDeactivateTarget(b)}
+                  >
+                    <PowerOff className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8",
+                    deletable
+                      ? "text-destructive hover:text-destructive"
+                      : "text-muted-foreground/40 cursor-not-allowed"
+                  )}
+                  aria-label="Delete permanently"
+                  title={
+                    deletable
+                      ? "Delete permanently"
+                      : "Cannot delete — site has employees or work history"
+                  }
+                  onClick={() => setDeleteTarget(b)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
-              )}
-            </>
-          )}
-        </div>
-      ),
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -344,7 +411,8 @@ export default function BranchesPage() {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {deactivateTarget?.name} will be marked inactive. Staff assignments are unchanged; you can
-            re-enable later by editing the site.
+            re-enable later by editing the site, or delete it permanently once it has no employees or
+            work history.
           </p>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setDeactivateTarget(null)}>
@@ -367,6 +435,71 @@ export default function BranchesPage() {
             >
               Deactivate
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {deleteBlockersForTarget.length === 0 ? "Delete site permanently?" : "Cannot delete site"}
+            </DialogTitle>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="space-y-3 text-sm">
+              {deleteBlockersForTarget.length === 0 ? (
+                <>
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">{deleteTarget.name}</span> will be
+                    removed permanently. This cannot be undone.
+                  </p>
+                  {deleteTarget.isActive && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                      This site is still active. Deleting it is only allowed because it has no
+                      employees or work history.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">{deleteTarget.name}</span> cannot be
+                    deleted until the following are cleared or reassigned:
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                    {deleteBlockersForTarget.map((blocker) => (
+                      <li key={blocker.kind}>{blocker.message}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+              {deleteBlockersForTarget.length === 0 ? "Cancel" : "Close"}
+            </Button>
+            {deleteBlockersForTarget.length === 0 && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={async () => {
+                  if (!deleteTarget) return;
+                  try {
+                    await deleteBranch(deleteTarget.id);
+                    toast.success("Site deleted permanently");
+                    setDeleteTarget(null);
+                  } catch (e) {
+                    const msg =
+                      e instanceof Error ? e.message : "Could not delete. Is the API running?";
+                    toast.error(msg);
+                  }
+                }}
+              >
+                Delete permanently
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

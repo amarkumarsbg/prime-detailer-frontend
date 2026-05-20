@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ReportPageChrome } from "@/components/reports/report-page-chrome";
 import { computeGstr3bOutwardFromInvoices } from "@/lib/reports/gstr3b-from-invoices";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import { toast } from "sonner";
 
 const FAV_KEY = "prime-detailer-gstr3b-favourite";
@@ -26,7 +26,7 @@ const ROWS_31 = [
 
 export function Gstr3bReport() {
   const [period, setPeriod] = useState("week");
-  const invoices = useInvoiceStore((s) => s.invoices);
+  const invoices = useScopedInvoices();
 
   const outward = useMemo(
     () => computeGstr3bOutwardFromInvoices(invoices, period),

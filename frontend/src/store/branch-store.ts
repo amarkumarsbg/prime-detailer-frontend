@@ -2,7 +2,9 @@
 
 import { create } from "zustand";
 import type { Branch } from "@/types";
-import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
+import { ALL_BRANCHES_BRANCH } from "@/lib/all-branches";
+import { useAuthStore } from "@/store/auth-store";
 
 function nextBranchId(list: Branch[]): string {
   const nums = list
@@ -20,6 +22,7 @@ interface BranchStore {
   addBranch: (input: Omit<Branch, "id"> & { id?: string }) => Promise<Branch>;
   updateBranch: (id: string, updates: Partial<Omit<Branch, "id">>) => Promise<boolean>;
   deactivateBranch: (id: string) => Promise<void>;
+  deleteBranch: (id: string) => Promise<void>;
   resetToSeed: () => Promise<void>;
 }
 
@@ -81,5 +84,17 @@ export const useBranchStore = create<BranchStore>((set, get) => ({
 
   deactivateBranch: async (id) => {
     await get().updateBranch(id, { isActive: false });
+  },
+
+  deleteBranch: async (id) => {
+    await apiDelete<{ ok: true }>(`/api/branches/${id}`);
+    const list = get().branches.filter((b) => b.id !== id);
+    set({ branches: list });
+
+    const auth = useAuthStore.getState();
+    if (auth.currentBranch?.id === id) {
+      const nextActive = list.find((b) => b.isActive) ?? list[0];
+      auth.setBranch(nextActive ?? ALL_BRANCHES_BRANCH);
+    }
   },
 }));

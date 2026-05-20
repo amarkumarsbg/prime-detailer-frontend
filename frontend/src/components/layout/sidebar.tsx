@@ -26,6 +26,7 @@ import {
   Truck,
   BarChart3,
   Banknote,
+  Receipt,
   History,
   Bell,
   Settings,
@@ -96,6 +97,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "Finance",
     items: [
+      { label: "Invoices", href: "/billing", icon: Receipt },
       {
         label: "Reports",
         href: "/reports",

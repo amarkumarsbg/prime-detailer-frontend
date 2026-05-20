@@ -16,8 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useExpenseStore } from "@/store/expense-store";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { useSettingsStore } from "@/store/settings-store";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -48,8 +47,8 @@ function fmtCell(amount: number | null): string {
 
 export function ProfitLossReport() {
   const businessName = useSettingsStore((s) => s.businessName);
-  const invoices = useInvoiceStore((s) => s.invoices);
-  const expenses = useExpenseStore((s) => s.expenses);
+  const invoices = useScopedInvoices();
+  const expenses = useScopedExpenses();
 
   const [favourite, setFavourite] = useState(false);
   const [period, setPeriod] = useState("week");

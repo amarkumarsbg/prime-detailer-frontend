@@ -31,8 +31,7 @@ import {
   type BalanceSheetManualCategory,
   useBalanceSheetLedgerStore,
 } from "@/store/balance-sheet-ledger-store";
-import { useExpenseStore } from "@/store/expense-store";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import type { Invoice } from "@/types";
 import { formatDateTime, formatInrFull } from "@/lib/utils";
 import { ArrowLeft, FileSpreadsheet, Info, Mail, Star } from "lucide-react";
@@ -157,8 +156,8 @@ function SimpleLine({ label, amount }: { label: string; amount: number }) {
 }
 
 export function BalanceSheetReport() {
-  const invoices = useInvoiceStore((s) => s.invoices);
-  const expenses = useExpenseStore((s) => s.expenses);
+  const invoices = useScopedInvoices();
+  const expenses = useScopedExpenses();
   const accounts = useCashBankStore((s) => s.accounts);
 
   const entries = useBalanceSheetLedgerStore((s) => s.entries);

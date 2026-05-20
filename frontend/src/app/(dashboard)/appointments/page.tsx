@@ -7,9 +7,9 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useSettingsStore } from "@/store/settings-store";
-import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
-import { isAllBranchesScope } from "@/lib/all-branches";
+import { useBranchScope } from "@/lib/branch-scope";
+import { useScopedAppointments } from "@/hooks/use-scoped-data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,14 +99,14 @@ export default function AppointmentsPage() {
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const staff = useStaffStore((s) => s.staff);
-  const appointments = useAppointmentStore((s) => s.appointments);
+  const appointments = useScopedAppointments();
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
+  const { viewingLabel } = useBranchScope();
   const businessPhone = useSettingsStore((s) => s.businessPhone);
   const businessEmail = useSettingsStore((s) => s.businessEmail);
   const businessAddress = useSettingsStore((s) => s.businessAddress);
   const businessWebsite = useSettingsStore((s) => s.businessWebsite);
-  const currentBranch = useAuthStore((s) => s.currentBranch);
   const branches = useBranchStore((s) => s.branches);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -325,9 +325,9 @@ export default function AppointmentsPage() {
       : undefined;
     notifyAppointmentScheduledWhatsApp(newApt, {
       branchName:
-        currentBranch && !isAllBranchesScope(currentBranch)
-          ? currentBranch.name
-          : branches[0]?.name ?? "Main workshop",
+        viewingLabel !== "All branches"
+          ? viewingLabel
+          : branches.find((b) => b.isActive)?.name ?? "Main workshop",
       address: businessAddress,
       phone: businessPhone,
       email: businessEmail,
@@ -348,9 +348,9 @@ export default function AppointmentsPage() {
   };
 
   const branchLabel = useMemo(() => {
-    if (currentBranch && !isAllBranchesScope(currentBranch)) return currentBranch.name;
+    if (viewingLabel !== "All branches") return viewingLabel;
     return branches[0]?.name ?? "Main workshop";
-  }, [currentBranch, branches]);
+  }, [viewingLabel, branches]);
 
   const termsUrl = useMemo(() => {
     const w = businessWebsite?.trim();
@@ -457,7 +457,7 @@ export default function AppointmentsPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Appointments"
-        description="Manage bookings and the service calendar — calendar for the month view, list for upcoming work."
+        description={`Manage bookings and the service calendar for ${viewingLabel}.`}
         actions={
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <Dialog open={dialogOpen} onOpenChange={handleAppointmentDialogChange}>

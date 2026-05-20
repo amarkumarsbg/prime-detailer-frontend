@@ -8,12 +8,27 @@ import { DataTable } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { notifyInvoiceCreatedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { useInvoiceStore } from "@/store/invoice-store";
+import { useJobCardStore } from "@/store/job-card-store";
+import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
+import {
+  applyInvoiceBranchFilters,
+  resolveBranchScopeLabel,
+  useBranchPageFilter,
+} from "@/lib/branch-scope";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isPendingPaymentInvoice } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
@@ -80,11 +95,37 @@ export default function BillingPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState<string>("all");
   const invoices = useInvoiceStore((s) => s.invoices);
+  const jobCards = useJobCardStore((s) => s.jobCards);
+  const branches = useBranchStore((s) => s.branches);
+  const {
+    selectedBranchId,
+    showBranchPicker,
+    viewingLabel,
+    pageBranchFilter,
+    setPageBranchFilter,
+  } = useBranchPageFilter();
+
+  const branchScopedInvoices = useMemo(
+    () =>
+      applyInvoiceBranchFilters(
+        invoices,
+        jobCards,
+        selectedBranchId,
+        showBranchPicker,
+        pageBranchFilter
+      ),
+    [invoices, jobCards, selectedBranchId, showBranchPicker, pageBranchFilter]
+  );
+
+  const branchScopeLabel = useMemo(
+    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, pageBranchFilter, branches),
+    [showBranchPicker, viewingLabel, pageBranchFilter, branches]
+  );
 
   const invoicesForView = useMemo(() => {
-    if (activeFilter !== DASHBOARD_FILTER.PENDING_PAYMENT) return invoices;
-    return invoices.filter(isPendingPaymentInvoice);
-  }, [invoices, activeFilter]);
+    if (activeFilter !== DASHBOARD_FILTER.PENDING_PAYMENT) return branchScopedInvoices;
+    return branchScopedInvoices.filter(isPendingPaymentInvoice);
+  }, [branchScopedInvoices, activeFilter]);
 
   const tabCounts = useMemo(() => {
     const c: Record<string, number> = { all: invoicesForView.length };
@@ -124,16 +165,16 @@ export default function BillingPage() {
   const allTableData = useMemo(() => toTableRows(invoicesForView), [invoicesForView]);
 
   const kpis = useMemo(() => {
-    const paidInvoices = invoices.filter((i) => i.status === "PAID");
+    const paidInvoices = branchScopedInvoices.filter((i) => i.status === "PAID");
     const totalRevenue = paidInvoices.reduce((sum, i) => sum + i.grandTotal, 0);
-    const outstanding = invoices
+    const outstanding = branchScopedInvoices
       .filter((i) => i.status === "ISSUED" || i.status === "PARTIALLY_PAID")
       .reduce((sum, i) => {
         const paid = i.payments.reduce((p, pay) => p + pay.amount, 0);
         return sum + (i.grandTotal - paid);
       }, 0);
     const now = new Date();
-    const thisMonth = invoices.filter((inv) => {
+    const thisMonth = branchScopedInvoices.filter((inv) => {
       const d = new Date(inv.createdAt);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
@@ -146,7 +187,7 @@ export default function BillingPage() {
       thisMonth,
       avgValue,
     };
-  }, [invoices]);
+  }, [branchScopedInvoices]);
 
   const columns = [
     {
@@ -247,8 +288,40 @@ export default function BillingPage() {
       </Suspense>
       <PageHeader
         title="Billing & Invoices"
-        description="View and manage invoices, payments, and billing history"
+        description={`View and manage invoices for ${branchScopeLabel}.`}
       />
+
+      <Card>
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-end gap-3">
+          {showBranchPicker ? (
+            <div className="space-y-1.5 min-w-[200px]">
+              <Label className="text-xs">Filter by branch</Label>
+              <Select value={pageBranchFilter} onValueChange={setPageBranchFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All branches</SelectItem>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Branch</Label>
+              <p className="text-sm font-medium h-10 flex items-center">{viewingLabel}</p>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground sm:ml-auto sm:pb-2">
+            Showing invoices for:{" "}
+            <span className="font-medium text-foreground">{branchScopeLabel}</span>
+          </p>
+        </CardContent>
+      </Card>
 
       {activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT && (
         <FilterBanner

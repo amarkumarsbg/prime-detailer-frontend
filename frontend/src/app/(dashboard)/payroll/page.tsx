@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +20,11 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { useStaffStore } from "@/store/staff-store";
 import { usePayrollStore } from "@/store/payroll-store";
 import { useBranchStore } from "@/store/branch-store";
+import {
+  applyBranchFilters,
+  resolveBranchScopeLabel,
+  useBranchScope,
+} from "@/lib/branch-scope";
 import { roleDisplayLabel } from "@/lib/rbac";
 import type { ExperienceBand, PayrollRecordStatus, SalaryStructure, UserRole } from "@/types";
 import {
@@ -79,6 +84,7 @@ function statusBadge(status: PayrollRecordStatus) {
 
 export default function PayrollPage() {
   const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
   const staff = useStaffStore((s) => s.staff);
   const salaryStructures = usePayrollStore((s) => s.salaryStructures);
   const payrollRecords = usePayrollStore((s) => s.payrollRecords);
@@ -106,18 +112,41 @@ export default function PayrollPage() {
   const [formBonus, setFormBonus] = useState("");
   const [formAbsence, setFormAbsence] = useState("");
 
-  const branchFilterId = branchFilter === "all" ? null : branchFilter;
+  useEffect(() => {
+    if (!showBranchPicker) {
+      queueMicrotask(() => setBranchFilter("all"));
+    }
+  }, [showBranchPicker, selectedBranchId]);
+
+  const branchScopedRecords = useMemo(
+    () =>
+      applyBranchFilters(
+        payrollRecords,
+        (r) => r.branchId,
+        selectedBranchId,
+        showBranchPicker,
+        branchFilter
+      ),
+    [payrollRecords, selectedBranchId, showBranchPicker, branchFilter]
+  );
+
+  const branchScopeLabel = useMemo(
+    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, branchFilter, branches),
+    [showBranchPicker, viewingLabel, branchFilter, branches]
+  );
+
+  const branchFilterId =
+    selectedBranchId ?? (branchFilter === "all" ? null : branchFilter);
 
   const filteredRecords = useMemo(() => {
-    return payrollRecords.filter((r) => {
+    return branchScopedRecords.filter((r) => {
       if (r.periodMonth !== filterMonth || r.periodYear !== filterYear) return false;
-      if (branchFilterId && r.branchId !== branchFilterId) return false;
       if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
       if (search.trim() && !r.employeeName.toLowerCase().includes(search.toLowerCase()))
         return false;
       return true;
     });
-  }, [payrollRecords, filterMonth, filterYear, branchFilterId, statusFilter, search]);
+  }, [branchScopedRecords, filterMonth, filterYear, statusFilter, search]);
 
   const kpis = useMemo(() => {
     const gross = filteredRecords.reduce((s, r) => s + r.grossEarnings, 0);
@@ -229,22 +258,29 @@ export default function PayrollPage() {
                 className="w-full"
               />
             </div>
-            <div className="space-y-1.5 min-w-[180px]">
-              <Label className="text-xs text-muted-foreground">Branch</Label>
-              <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {showBranchPicker ? (
+              <div className="space-y-1.5 min-w-[180px]">
+                <Label className="text-xs text-muted-foreground">Branch</Label>
+                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5 min-w-[180px]">
+                <Label className="text-xs text-muted-foreground">Branch</Label>
+                <p className="text-sm font-medium h-10 flex items-center">{viewingLabel}</p>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" size="sm" disabled>
                 Compare

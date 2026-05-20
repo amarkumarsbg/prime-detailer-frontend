@@ -1,7 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useNotificationStore, type NotificationType } from "@/store/notification-store";
+import {
+  selectUnreadNotificationCount,
+  useNotificationStore,
+  type NotificationType,
+} from "@/store/notification-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,8 +53,11 @@ interface NotificationPanelProps {
 
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
   const router = useRouter();
-  const { notifications, markAsRead, markAllAsRead, dismiss, unreadCount } =
-    useNotificationStore();
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadCount = useNotificationStore(selectUnreadNotificationCount);
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const dismiss = useNotificationStore((s) => s.dismiss);
 
   const handleClick = (id: string, href?: string) => {
     markAsRead(id);
@@ -66,13 +73,13 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-sm">Notifications</h3>
-          {unreadCount() > 0 && (
+          {unreadCount > 0 && (
             <span className="flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
-              {unreadCount()}
+              {unreadCount}
             </span>
           )}
         </div>
-        {unreadCount() > 0 && (
+        {unreadCount > 0 && (
           <Button
             variant="ghost"
             size="sm"

@@ -31,6 +31,11 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useExpenseStore } from "@/store/expense-store";
 import { useBranchStore } from "@/store/branch-store";
+import {
+  applyBranchFilters,
+  resolveBranchScopeLabel,
+  useBranchScope,
+} from "@/lib/branch-scope";
 import type { Expense, ExpensePaymentStatus } from "@/types";
 import {
   Plus,
@@ -131,6 +136,7 @@ function ExpensesPageContent() {
   const customCategories = useExpenseStore((s) => s.customCategories);
   const removeExpense = useExpenseStore((s) => s.removeExpense);
   const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<ExpenseDateFilter>({
@@ -153,6 +159,12 @@ function ExpensesPageContent() {
     });
   }, [highlight]);
 
+  useEffect(() => {
+    if (!showBranchPicker) {
+      queueMicrotask(() => setBranchFilter("all"));
+    }
+  }, [showBranchPicker, selectedBranchId]);
+
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
     for (const e of expenses) set.add(e.category);
@@ -160,15 +172,26 @@ function ExpensesPageContent() {
     return [...set].sort();
   }, [expenses, customCategories]);
 
+  const branchScopedExpenses = useMemo(
+    () =>
+      applyBranchFilters(
+        expenses,
+        (e) => e.branchId,
+        selectedBranchId,
+        showBranchPicker,
+        branchFilter
+      ),
+    [expenses, selectedBranchId, showBranchPicker, branchFilter]
+  );
+
   const scoped = useMemo(() => {
-    return expenses.filter((e) => {
+    return branchScopedExpenses.filter((e) => {
       if (!matchesExpenseDate(e.date, dateFilter)) return false;
-      if (branchFilter !== "all" && e.branchId !== branchFilter) return false;
       if (categoryFilter !== "all" && e.category !== categoryFilter) return false;
       if (statusFilter !== "all" && e.paymentStatus !== statusFilter) return false;
       return true;
     });
-  }, [expenses, dateFilter, branchFilter, categoryFilter, statusFilter]);
+  }, [branchScopedExpenses, dateFilter, categoryFilter, statusFilter]);
 
   const kpis = useMemo(() => {
     const total = scoped.reduce((s, e) => s + e.amount, 0);
@@ -189,10 +212,10 @@ function ExpensesPageContent() {
     [dateFilter]
   );
 
-  const branchSummary =
-    branchFilter === "all"
-      ? "All Branches"
-      : branches.find((b) => b.id === branchFilter)?.name ?? branchFilter;
+  const branchSummary = useMemo(
+    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, branchFilter, branches),
+    [showBranchPicker, viewingLabel, branchFilter, branches]
+  );
 
   const resetFilters = () => {
     setDateFilter({ kind: "preset", preset: "this_month" });
@@ -318,20 +341,27 @@ function ExpensesPageContent() {
             <div className="flex flex-wrap items-center gap-2">
               <ExpenseDateRangePicker value={dateFilter} onChange={setDateFilter} />
 
-              <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <Building2 className="w-4 h-4 mr-2 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {showBranchPicker ? (
+                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <Building2 className="w-4 h-4 mr-2 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex h-10 items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm">
+                  <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
+                  <span className="font-medium">{viewingLabel}</span>
+                </div>
+              )}
 
               <div className="flex items-center gap-1">
                 <Button

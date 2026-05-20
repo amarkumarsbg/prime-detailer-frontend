@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useInvoiceStore } from "@/store/invoice-store";
+import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import type { Invoice, InvoiceStatus } from "@/types";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -121,7 +121,7 @@ function splitGst(inv: Invoice): { cgst: number; sgst: number; igst: number } {
 }
 
 export function SalesSummaryStaffReport() {
-  const invoices = useInvoiceStore((s) => s.invoices);
+  const invoices = useScopedInvoices();
 
   const [favourite, setFavourite] = useState(false);
   const [partyQ, setPartyQ] = useState("");

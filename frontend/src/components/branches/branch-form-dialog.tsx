@@ -14,6 +14,11 @@ import {
 } from "@/components/ui/dialog";
 import type { Branch } from "@/types";
 import { Pencil } from "lucide-react";
+import { toast } from "sonner";
+
+function sanitizeTenDigitPhone(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 10);
+}
 
 
 type Mode = "add" | "edit";
@@ -56,10 +61,10 @@ function branchToForm(b: Branch): BranchFormValues {
     city: b.city ?? "",
     state: b.state ?? "",
     pincode: b.pincode ?? "",
-    phone: b.phone,
+    phone: sanitizeTenDigitPhone(b.phone),
     email: b.email ?? "",
     managerName: b.managerName ?? "",
-    managerPhone: b.managerPhone ?? "",
+    managerPhone: sanitizeTenDigitPhone(b.managerPhone ?? ""),
     isActive: b.isActive,
   };
 }
@@ -87,6 +92,14 @@ export function BranchFormDialog({ open, onOpenChange, mode, branch, onSubmit }:
     e.preventDefault();
     if (!form.name.trim() || !form.code.trim() || !form.address.trim()) return;
     if (!form.city.trim() || !form.state.trim() || !form.pincode.trim() || !form.phone.trim()) return;
+    if (form.phone.length !== 10) {
+      toast.error("Enter a valid 10-digit phone number");
+      return;
+    }
+    if (form.managerPhone.trim() && form.managerPhone.length !== 10) {
+      toast.error("Lead phone must be a valid 10-digit mobile number");
+      return;
+    }
     onSubmit(form);
     onOpenChange(false);
   };
@@ -186,8 +199,13 @@ export function BranchFormDialog({ open, onOpenChange, mode, branch, onSubmit }:
               <Input
                 id="bf-phone"
                 value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: sanitizeTenDigitPhone(e.target.value) }))
+                }
                 required
+                inputMode="tel"
+                maxLength={10}
+                placeholder="10-digit mobile"
               />
             </div>
             <div className="space-y-2">
@@ -219,8 +237,12 @@ export function BranchFormDialog({ open, onOpenChange, mode, branch, onSubmit }:
                 <Input
                   id="bf-mgr-phone"
                   value={form.managerPhone}
-                  onChange={(e) => setForm((f) => ({ ...f, managerPhone: e.target.value }))}
-                  placeholder="Phone"
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, managerPhone: sanitizeTenDigitPhone(e.target.value) }))
+                  }
+                  inputMode="tel"
+                  maxLength={10}
+                  placeholder="10-digit mobile"
                 />
               </div>
             </div>
