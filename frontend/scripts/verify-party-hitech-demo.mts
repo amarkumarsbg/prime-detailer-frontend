@@ -4,13 +4,13 @@ import {
   buildPartySummary,
   buildPartyTransactions,
   partyCurrentBalance,
-} from "../src/lib/party/ledger-math.ts";
+} from "../src/lib/party/ledger-math";
 import {
   HI_TECH_CUSTOMER_ID,
   HI_TECH_INVOICE,
   HI_TECH_PARTY_ID,
-} from "../src/lib/party/party-hitech-demo.ts";
-import type { Party } from "../src/types/party.ts";
+} from "../src/lib/party/party-hitech-demo";
+import type { Party } from "../src/types/party";
 
 const party: Party = {
   id: HI_TECH_PARTY_ID,

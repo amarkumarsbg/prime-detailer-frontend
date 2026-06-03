@@ -60,6 +60,9 @@ export interface Party {
   updatedAt: string;
 }
 
+/** Party list entry when balance is included from GET /api/parties?balance=true */
+export type PartyWithBalance = Party & { balance: number };
+
 export type PartyTransactionRow = {
   id: string;
   at: string;

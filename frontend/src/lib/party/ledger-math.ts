@@ -6,6 +6,7 @@ import type {
   PartyLedgerSummary,
   PartyStatementLine,
   PartyTransactionRow,
+  PartyWithBalance,
 } from "@/types/party";
 import {
   paymentInDetailPath,
@@ -71,6 +72,17 @@ export function partyCurrentBalance(
       : exps.reduce((s, e) => s + expenseOutstanding(e), 0);
   const open = signedOpeningBalance(party);
   return Math.round((open + docBal) * 100) / 100;
+}
+
+/** Prefer API balance when present; otherwise compute from scoped invoices/expenses. */
+export function partyDisplayBalance(
+  party: Party,
+  invoices: Invoice[],
+  expenses: Expense[]
+): number {
+  const apiBalance = (party as PartyWithBalance).balance;
+  if (typeof apiBalance === "number") return apiBalance;
+  return partyCurrentBalance(party, invoices, expenses);
 }
 
 export function buildPartyTransactions(

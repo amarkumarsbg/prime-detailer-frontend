@@ -278,7 +278,7 @@ export default function BillingPage() {
   ];
 
   const handleRowClick = (item: Record<string, unknown>) => {
-    router.push(`/billing/invoices/${encodeURIComponent(item.id)}`);
+    router.push(`/billing/invoices/${encodeURIComponent(String(item.id ?? ""))}`);
   };
 
   return (

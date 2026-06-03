@@ -4,15 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPut, ApiError } from "@/lib/api-client";
 import type { Party, PartyKind, PartyWithBalance } from "@/types/party";
 
+export type { PartyWithBalance };
+
 export function useParties(): {
-  parties: Party[];
+  parties: PartyWithBalance[];
   partiesLoading: boolean;
   partiesError: string | null;
   refreshParties: () => Promise<void>;
   upsertParty: (id: string | null, input: Partial<Party> & { name: string; kind: PartyKind }) => Promise<Party | null>;
   removeParty: (id: string) => Promise<void>;
 } {
-  const [parties, setParties] = useState<Party[]>([]);
+  const [parties, setParties] = useState<PartyWithBalance[]>([]);
   const [partiesLoading, setPartiesLoading] = useState(true);
   const [partiesError, setPartiesError] = useState<string | null>(null);
 
@@ -20,7 +22,7 @@ export function useParties(): {
     setPartiesLoading(true);
     setPartiesError(null);
     try {
-      const data = await apiGet<{ parties: Party[] | PartyWithBalance[] }>("/api/parties?balance=true");
+      const data = await apiGet<{ parties: PartyWithBalance[] }>("/api/parties?balance=true");
       setParties(data.parties);
     } catch (e) {
       const message = e instanceof ApiError ? e.message : "Failed to load parties";

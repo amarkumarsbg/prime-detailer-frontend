@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useParties } from "@/hooks/use-parties";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
-import { partyCurrentBalance, balanceFlow } from "@/lib/party/ledger-math";
+import { partyDisplayBalance, balanceFlow } from "@/lib/party/ledger-math";
 import { formatInrFull, formatInrTable } from "@/lib/utils";
 import { useBranchScope } from "@/lib/branch-scope";
 import { toast } from "sonner";
@@ -95,10 +95,7 @@ export function PartiesPageClient() {
     () =>
       parties.map((p) => ({
         ...p,
-        balance:
-          typeof (p as { balance?: number }).balance === "number"
-            ? (p as { balance: number }).balance
-            : partyCurrentBalance(p, invoices, expenses),
+        balance: partyDisplayBalance(p, invoices, expenses),
       })),
     [parties, invoices, expenses]
   );

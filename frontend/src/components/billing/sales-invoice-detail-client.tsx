@@ -67,7 +67,7 @@ import {
   warmInvoicePdfEngine,
   type InvoicePdfOpts,
 } from "@/lib/invoice-pdf";
-import { buildTaxInvoicePrintHtml } from "@/lib/tax-invoice-format";
+import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml } from "@/lib/tax-invoice-format";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
 import type { PaymentMethod } from "@/types";

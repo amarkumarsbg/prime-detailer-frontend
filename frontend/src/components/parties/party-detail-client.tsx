@@ -36,6 +36,7 @@ import {
   buildPartySummary,
   buildPartyTransactions,
   partyCurrentBalance,
+  partyDisplayBalance,
 } from "@/lib/party/ledger-math";
 import {
   ArrowLeft,
@@ -106,10 +107,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
     () =>
       parties.map((p) => ({
         ...p,
-        balance:
-          typeof (p as { balance?: number }).balance === "number"
-            ? (p as { balance: number }).balance
-            : partyCurrentBalance(p, invoices, expenses),
+        balance: partyDisplayBalance(p, invoices, expenses),
       })),
     [parties, invoices, expenses]
   );
