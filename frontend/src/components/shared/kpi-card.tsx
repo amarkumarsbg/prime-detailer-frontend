@@ -31,19 +31,91 @@ const toneIconClass: Record<KPICardTone, string> = {
 /** Full-card wash: top-left tint → light / card base (accounting-style KPI tiles). */
 const toneSurfaceClass: Record<KPICardTone, string> = {
   emerald:
-    "border-emerald-200/65 bg-gradient-to-br from-emerald-100 via-white to-background shadow-sm shadow-emerald-900/[0.04] dark:border-emerald-800/55 dark:from-emerald-950/45 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-background shadow-sm dark:border-emerald-800 dark:from-emerald-950/40 dark:via-card dark:to-card",
   blue:
-    "border-blue-200/65 bg-gradient-to-br from-blue-100 via-white to-background shadow-sm shadow-blue-900/[0.04] dark:border-blue-800/55 dark:from-blue-950/45 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-blue-200 bg-gradient-to-br from-blue-50/80 via-white to-background shadow-sm dark:border-blue-800 dark:from-blue-950/40 dark:via-card dark:to-card",
   amber:
-    "border-amber-200/65 bg-gradient-to-br from-amber-100 via-white to-background shadow-sm shadow-amber-900/[0.04] dark:border-amber-800/55 dark:from-amber-950/45 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-amber-200 bg-gradient-to-br from-amber-50/80 via-white to-background shadow-sm dark:border-amber-800 dark:from-amber-950/40 dark:via-card dark:to-card",
   violet:
-    "border-violet-200/65 bg-gradient-to-br from-violet-100 via-white to-background shadow-sm shadow-violet-900/[0.04] dark:border-violet-800/55 dark:from-violet-950/45 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-violet-200 bg-gradient-to-br from-violet-50/80 via-white to-background shadow-sm dark:border-violet-800 dark:from-violet-950/40 dark:via-card dark:to-card",
   orange:
-    "border-orange-200/65 bg-gradient-to-br from-orange-100 via-white to-background shadow-sm shadow-orange-900/[0.04] dark:border-orange-800/55 dark:from-orange-950/45 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-orange-200 bg-gradient-to-br from-orange-50/80 via-white to-background shadow-sm dark:border-orange-800 dark:from-orange-950/40 dark:via-card dark:to-card",
   slate:
-    "border-slate-200/70 bg-gradient-to-br from-slate-100 via-white to-background shadow-sm dark:border-slate-700/60 dark:from-slate-900/50 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-slate-200 bg-gradient-to-br from-slate-50/80 via-white to-background shadow-sm dark:border-slate-700 dark:from-slate-900/40 dark:via-card dark:to-card",
   rose:
-    "border-rose-200/65 bg-gradient-to-br from-rose-100 via-white to-background shadow-sm shadow-rose-900/[0.04] dark:border-rose-800/55 dark:from-rose-950/45 dark:via-card dark:to-card dark:shadow-none",
+    "border-2 border-rose-200 bg-gradient-to-br from-rose-50/80 via-white to-background shadow-sm dark:border-rose-800 dark:from-rose-950/40 dark:via-card dark:to-card",
+};
+
+/** Clickable filter chips (Parties): inactive = white card, light gray border. */
+const toneFilterIdleClass: Record<KPICardTone, string> = {
+  emerald: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+  blue: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+  amber: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+  violet: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+  orange: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+  slate: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+  rose: "border border-neutral-200 bg-white shadow-none dark:border-border dark:bg-card",
+};
+
+/** Active filter: pale fill + solid tone border (MyBillBook-style). */
+const toneFilterActiveClass: Record<KPICardTone, string> = {
+  emerald:
+    "border border-emerald-500 bg-emerald-50 shadow-none dark:border-emerald-500 dark:bg-emerald-950/25",
+  blue: "border border-blue-500 bg-blue-50 shadow-none dark:border-blue-500 dark:bg-blue-950/25",
+  amber: "border border-amber-500 bg-amber-50 shadow-none dark:border-amber-500 dark:bg-amber-950/25",
+  violet:
+    "border border-violet-500 bg-violet-50 shadow-none dark:border-violet-500 dark:bg-violet-950/25",
+  orange:
+    "border border-orange-500 bg-orange-50 shadow-none dark:border-orange-500 dark:bg-orange-950/25",
+  slate: "border border-slate-500 bg-slate-50 shadow-none dark:border-slate-500 dark:bg-slate-900/25",
+  rose: "border border-rose-500 bg-rose-50 shadow-none dark:border-rose-500 dark:bg-rose-950/25",
+};
+
+const toneFilterHoverClass: Record<KPICardTone, string> = {
+  emerald: "hover:border-emerald-400 hover:bg-emerald-50/80",
+  blue: "hover:border-blue-400 hover:bg-blue-50/80",
+  amber: "hover:border-amber-400 hover:bg-amber-50/80",
+  violet: "hover:border-violet-400 hover:bg-violet-50/80",
+  orange: "hover:border-orange-400 hover:bg-orange-50/80",
+  slate: "hover:border-slate-400 hover:bg-slate-50/80",
+  rose: "hover:border-rose-400 hover:bg-rose-50/80",
+};
+
+/** Title color on active filter card. */
+const toneFilterActiveTitleClass: Record<KPICardTone, string> = {
+  emerald: "text-emerald-700 dark:text-emerald-400",
+  blue: "text-blue-700 dark:text-blue-400",
+  amber: "text-amber-700 dark:text-amber-400",
+  violet: "text-violet-700 dark:text-violet-400",
+  orange: "text-orange-700 dark:text-orange-400",
+  slate: "text-slate-700 dark:text-slate-300",
+  rose: "text-rose-700 dark:text-rose-400",
+};
+
+/** Title color on idle filter card (colored label like reference). */
+const toneFilterIdleTitleClass: Record<KPICardTone, string> = {
+  emerald: "text-emerald-600 dark:text-emerald-400",
+  blue: "text-blue-600 dark:text-blue-400",
+  amber: "text-amber-600 dark:text-amber-400",
+  violet: "text-violet-600 dark:text-violet-400",
+  orange: "text-orange-600 dark:text-orange-400",
+  slate: "text-muted-foreground",
+  rose: "text-rose-600 dark:text-rose-400",
+};
+
+const toneHoverClass: Record<KPICardTone, string> = {
+  emerald:
+    "hover:border-emerald-400 hover:bg-emerald-200/80 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/70",
+  blue: "hover:border-blue-400 hover:bg-blue-200/80 dark:hover:border-blue-600 dark:hover:bg-blue-950/70",
+  amber:
+    "hover:border-amber-400 hover:bg-amber-200/80 dark:hover:border-amber-600 dark:hover:bg-amber-950/70",
+  violet:
+    "hover:border-violet-400 hover:bg-violet-200/80 dark:hover:border-violet-600 dark:hover:bg-violet-950/70",
+  orange:
+    "hover:border-orange-400 hover:bg-orange-200/80 dark:hover:border-orange-600 dark:hover:bg-orange-950/70",
+  slate:
+    "hover:border-slate-400 hover:bg-slate-200/80 dark:hover:border-slate-600 dark:hover:bg-slate-900/70",
+  rose: "hover:border-rose-400 hover:bg-rose-200/80 dark:hover:border-rose-600 dark:hover:bg-rose-950/70",
 };
 
 interface KPICardProps {
@@ -57,6 +129,16 @@ interface KPICardProps {
   className?: string;
   tone?: KPICardTone;
   variant?: "default" | "featured";
+  /** Shorter card for dense dashboards (e.g. Parties filters). */
+  size?: "default" | "compact";
+  /** When set, the whole card is a button (e.g. filter KPIs on Parties). */
+  onClick?: () => void;
+  /** Highlight when this filter/card is active. */
+  active?: boolean;
+  /** White card + tone hover border without click (e.g. ledger summary). */
+  decorativeHover?: boolean;
+  /** Extra classes on the title (e.g. `whitespace-nowrap`). */
+  titleClassName?: string;
 }
 
 export function KPICard({
@@ -69,31 +151,71 @@ export function KPICard({
   className,
   tone,
   variant = "default",
+  size = "default",
+  onClick,
+  active,
+  decorativeHover = false,
+  titleClassName,
 }: KPICardProps) {
   const isFeatured = variant === "featured";
+  const isCompact = size === "compact";
+  const interactive = Boolean(onClick);
+  const isFilterChip = Boolean(tone) && (interactive || decorativeHover);
 
-  return (
+  const card = (
     <Card
       className={cn(
         "flex h-full min-h-0 flex-col translate-y-0 transform-gpu backface-hidden will-change-transform",
-        "transition-[transform,box-shadow] duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)]",
-        "motion-safe:hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-md",
-        tone ? toneSurfaceClass[tone] : "hover:shadow-md dark:hover:shadow-md",
+        "transition-[box-shadow,border-color,background-color] duration-200",
+        isFilterChip && !active && toneFilterIdleClass[tone!],
+        isFilterChip && active && toneFilterActiveClass[tone!],
+        isFilterChip && !active && toneFilterHoverClass[tone!],
+        !isFilterChip && tone && !active && toneSurfaceClass[tone],
+        !isFilterChip && interactive && tone && !active && toneHoverClass[tone],
+        !isFilterChip && interactive && "hover:shadow-md",
+        !interactive &&
+          !decorativeHover &&
+          "motion-safe:hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-md duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)]",
+        !tone && interactive && "hover:shadow-md dark:hover:shadow-md",
+        !tone && !interactive && "hover:shadow-md dark:hover:shadow-md",
         isFeatured &&
           !tone &&
           "border-emerald-200/70 shadow-sm dark:border-emerald-900/60",
+        active &&
+          !tone &&
+          "border-2 border-primary/40 bg-primary/5 shadow-sm",
         className
       )}
     >
-      {/* Plain div: CardContent forces pt-0 on sm+ and pins content to the top. */}
-      <div className="flex min-h-0 flex-1 flex-col justify-center p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col justify-center",
+          isCompact ? "p-3 sm:p-3.5" : "p-5 sm:p-6"
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center justify-between",
+            isCompact ? "gap-2" : "gap-3"
+          )}
+        >
+          <div className={cn("min-w-0", isCompact ? "space-y-0.5" : "space-y-2")}>
+            <p
+              className={cn(
+                "font-medium",
+                isCompact ? "text-xs" : "text-sm",
+                isFilterChip && active && tone && toneFilterActiveTitleClass[tone],
+                isFilterChip && !active && tone && toneFilterIdleTitleClass[tone],
+                !isFilterChip && "text-muted-foreground",
+                titleClassName
+              )}
+            >
+              {title}
+            </p>
             <p
               className={cn(
                 "font-bold tracking-tight",
-                isFeatured ? "text-3xl" : "text-2xl"
+                isFeatured ? "text-3xl" : isCompact ? "text-xl" : "text-2xl"
               )}
             >
               {value}
@@ -126,17 +248,34 @@ export function KPICard({
           </div>
           <div
             className={cn(
-              "flex shrink-0 items-center justify-center rounded-xl",
-              isFeatured ? "h-12 w-12" : "h-11 w-11",
+              "flex shrink-0 items-center justify-center rounded-lg",
+              isFeatured ? "h-12 w-12" : isCompact ? "h-9 w-9" : "h-11 w-11",
               tone
                 ? toneIconClass[tone]
                 : "bg-primary/10 text-primary"
             )}
           >
-            <Icon className={isFeatured ? "h-6 w-6" : "h-5 w-5"} />
+            <Icon
+              className={
+                isFeatured ? "h-6 w-6" : isCompact ? "h-4 w-4" : "h-5 w-5"
+              }
+            />
           </div>
         </div>
       </div>
     </Card>
+  );
+
+  if (!onClick) return card;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      aria-pressed={active}
+    >
+      {card}
+    </button>
   );
 }

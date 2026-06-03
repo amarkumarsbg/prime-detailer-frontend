@@ -147,6 +147,89 @@ model Attendance {
   @@index([staffId, branchId, date])
 }
 
+enum PartyKind {
+  CUSTOMER
+  SUPPLIER
+}
+
+enum OpeningBalanceSide {
+  TO_COLLECT
+  TO_PAY
+}
+
+/** MyBillBook-style party profile (customer or supplier). */
+model Party {
+  id                 String              @id
+  kind               PartyKind
+  name               String
+  category           String?
+  mobile             String?
+  email              String?
+  gstin              String?
+  pan                String?
+  billingAddress     String?
+  shippingAddress    String?
+  openingBalance     Float               @default(0)
+  openingBalanceSide OpeningBalanceSide?
+  creditPeriodDays   Int?
+  creditLimit        Float?
+  contactPersonName  String?
+  dateOfBirth        String?
+  customerId         String?             @unique
+  vendorKey          String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  shippingAddresses  PartyShippingAddress[]
+  bankAccounts       PartyBankAccount[]
+  customFields       PartyCustomField[]
+
+  @@index([kind])
+  @@index([vendorKey])
+}
+
+model PartyShippingAddress {
+  id        String  @id @default(cuid())
+  partyId   String
+  party     Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  name      String
+  street    String
+  state     String?
+  pincode   String?
+  city      String?
+  isDefault Boolean @default(false)
+
+  @@index([partyId])
+}
+
+model PartyBankAccount {
+  id                String  @id @default(cuid())
+  partyId           String
+  party             Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  accountNumber     String
+  ifsc              String?
+  accountHolderName String?
+  bankName          String?
+  branchName        String?
+  upiId             String?
+
+  @@index([partyId])
+}
+
+model PartyCustomField {
+  id      String @id @default(cuid())
+  partyId String
+  party   Party  @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  key     String
+  value   String
+
+  @@index([partyId])
+}
+
+/** Soft-hide party from list (MyBillBook-style). */
+model PartyHidden {
+  partyId String @id
+}
+
 /** JSON documents keyed by collection name + entity id (e.g. jobCards / jc-001). */
 model AppJsonRow {
   collection String

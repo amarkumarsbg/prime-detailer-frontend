@@ -14,6 +14,7 @@ import {
   BarChart3,
   Search,
   Plus,
+  FileX2,
 } from "lucide-react";
 
 type EmptyStateType =
@@ -28,6 +29,7 @@ type EmptyStateType =
   | "activity"
   | "reports"
   | "search"
+  | "parties-filter"
   | "generic";
 
 const EMPTY_STATE_CONFIG: Record<EmptyStateType, { icon: React.ElementType; title: string; description: string }> = {
@@ -42,6 +44,11 @@ const EMPTY_STATE_CONFIG: Record<EmptyStateType, { icon: React.ElementType; titl
   activity: { icon: History, title: "No activity yet", description: "System activity will be logged here automatically." },
   reports: { icon: BarChart3, title: "No data to report", description: "Reports will populate as you use the system." },
   search: { icon: Search, title: "No results found", description: "Try adjusting your search or filters." },
+  "parties-filter": {
+    icon: FileX2,
+    title: "No parties found for given filters.",
+    description: "Try a different search or clear the To Collect / To Pay filter.",
+  },
   generic: { icon: ClipboardList, title: "Nothing here yet", description: "Data will appear here once available." },
 };
 

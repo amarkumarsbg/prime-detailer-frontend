@@ -238,6 +238,27 @@ async function main() {
     });
   }
 
+  await prisma.party.upsert({
+    where: { id: "c:cust-hitech" },
+    create: {
+      id: "c:cust-hitech",
+      kind: "CUSTOMER",
+      name: "HI TECH CAR SPA & DETAILING",
+      mobile: "+919876543299",
+      email: "hitech@example.test",
+      gstin: "09AABCU9603R1ZM",
+      pan: "AABCU9603R",
+      billingAddress: "Sector 63, Noida, Uttar Pradesh",
+      shippingAddress: "Sector 63, Noida, Uttar Pradesh",
+      customerId: "cust-hitech",
+    },
+    update: {
+      name: "HI TECH CAR SPA & DETAILING",
+      gstin: "09AABCU9603R1ZM",
+      pan: "AABCU9603R",
+    },
+  });
+
   for (const v of vehicles) {
     await prisma.vehicle.upsert({
       where: { id: v.id },

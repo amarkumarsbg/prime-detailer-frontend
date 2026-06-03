@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { normalizeJobCardStatus } from "@/lib/job-card-status";
 import type { JobCardStatus, InvoiceStatus, QuotationStatus } from "@/types";
 
 const JOB_CARD_STATUS_CONFIG: Record<JobCardStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }> = {
@@ -32,10 +33,11 @@ export function JobCardStatusBadge({
   status,
   className,
 }: {
-  status: JobCardStatus;
+  status: JobCardStatus | string;
   className?: string;
 }) {
-  const config = JOB_CARD_STATUS_CONFIG[status];
+  const normalized = normalizeJobCardStatus(status);
+  const config = JOB_CARD_STATUS_CONFIG[normalized];
   return (
     <Badge variant={config.variant} className={className}>
       {config.label}

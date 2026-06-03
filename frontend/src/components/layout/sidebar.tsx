@@ -111,6 +111,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
       },
       {
+        label: "Parties",
+        href: "/parties",
+        icon: Building2,
+        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
+      },
+      {
         label: "Shared Ledger",
         href: "/shared-ledger",
         icon: BookMarked,

@@ -1,0 +1,129 @@
+  const formatShortDate = (iso: string) =>
+    new Intl.DateTimeFormat("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+      .format(new Date(iso))
+      .replace(/ /g, "-");
+
+  return (
+    <div className="space-y-4 print:hidden">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <DetailBackButton fallbackHref="/billing" />
+          <h1 className="text-lg font-semibold">Sales Invoice #{invoice.invoiceNumber}</h1>
+          <InvoiceStatusBadge status={invoice.status} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Download PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="mr-1.5 h-4 w-4" />
+            Print PDF
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Share2 className="mr-1.5 h-4 w-4" />
+                Share
+                <ChevronDown className="ml-1 h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => toast.message("Share", { description: "Coming soon." })}
+              >
+                Copy link
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {(invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID") &&
+            remainingBalance > 0.01 && (
+              <Button size="sm" onClick={openRecordDialog}>
+                Record Payment In
+              </Button>
+            )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_300px] lg:items-start">
+        <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+          {previewHtml ? (
+            <iframe
+              title="Tax invoice preview"
+              className="h-[min(85vh,920px)] w-full border-0"
+              srcDoc={previewHtml}
+            />
+          ) : (
+            <p className="p-8 text-sm text-muted-foreground">Loading preview…</p>
+          )}
+        </div>
+
+        <Card className="border-border shadow-sm lg:sticky lg:top-4">
+          <CardHeader className="border-b border-border py-3">
+            <CardTitle className="text-base font-semibold">Payment History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Invoice Amount</span>
+              <span className="font-semibold tabular-nums">{formatInrTable(invoice.grandTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Initial Amount Received</span>
+              <span className="tabular-nums">{formatInrTable(0)}</span>
+            </div>
+            <Separator />
+            {payments.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No payments recorded yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {payments.map((payment) => (
+                  <div
+                    key={payment.id}
+                    role="link"
+                    tabIndex={0}
+                    className="cursor-pointer rounded-md border border-border p-3 hover:bg-muted/30"
+                    onClick={() =>
+                      router.push(
+                        appendReturnTo(paymentInDetailPath(payment.id), currentReturnPath)
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(
+                          appendReturnTo(paymentInDetailPath(payment.id), currentReturnPath)
+                        );
+                      }
+                    }}
+                  >
+                    <p className="font-medium">Payment In #{paymentDisplayNumber(payment.id)}</p>
+                    <p className="mt-1 font-semibold tabular-nums">{formatInrTable(payment.amount)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{formatShortDate(payment.paidAt)}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {payment.method.toLowerCase()}
+                      {payment.referenceNumber ? ` (${payment.referenceNumber})` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Separator />
+            <div className="flex items-center justify-between gap-2 font-medium">
+              <span>Total Amount Received</span>
+              <span className="tabular-nums">{formatInrTable(totalPaid)}</span>
+            </div>
+            {remainingBalance > 0.01 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">Balance Amount</span>
+                <span className={cn("font-bold tabular-nums text-destructive")}>
+                  {formatInrTable(remainingBalance)}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>

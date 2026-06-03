@@ -76,6 +76,10 @@ import {
   mergeVehicleCatalogPayload,
   useVehicleCatalogStore,
 } from "@/store/vehicle-catalog-store";
+import {
+  ensureHitechPartyProfile,
+  mergeHitechPartyDemoBootstrap,
+} from "@/lib/party/party-hitech-demo";
 
 export type BootstrapPayload = {
   customers: Customer[];
@@ -86,7 +90,8 @@ export type BootstrapPayload = {
 };
 
 export async function bootstrapAppData(): Promise<void> {
-  const data = await apiGet<BootstrapPayload>("/api/bootstrap");
+  const raw = await apiGet<BootstrapPayload>("/api/bootstrap");
+  const data = mergeHitechPartyDemoBootstrap(raw);
   const c = data.collections;
 
   useBranchStore.setState({ branches: data.branches });
@@ -222,4 +227,6 @@ export async function bootstrapAppData(): Promise<void> {
   if (catalogBrands && catalogBrands.length > 0) {
     useVehicleCatalogStore.getState().hydrateFromBootstrap(catalogBrands);
   }
+
+  ensureHitechPartyProfile();
 }

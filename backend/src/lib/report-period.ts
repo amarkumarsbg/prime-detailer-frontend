@@ -1,21 +1,4 @@
-export const REPORT_PERIOD_OPTIONS = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "week", label: "This Week" },
-  { value: "lastWeek", label: "Last Week" },
-  { value: "last7", label: "Last 7 days" },
-  { value: "month", label: "This Month" },
-  { value: "prevMonth", label: "Previous Month" },
-  { value: "last30", label: "Last 30 Days" },
-  { value: "quarter", label: "This Quarter" },
-  { value: "prevQuarter", label: "Previous Quarter" },
-  { value: "fy", label: "Current Fiscal Year" },
-  { value: "prevFy", label: "Previous Fiscal Year" },
-  { value: "last365", label: "Last 365 Days" },
-  { value: "custom", label: "Custom Date Range" },
-] as const;
-
-export type ReportPeriodPreset = (typeof REPORT_PERIOD_OPTIONS)[number]["value"];
+/** Period presets for party ledger (ported from frontend report-period-presets). */
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -29,9 +12,7 @@ function endOfDay(d: Date) {
   return x;
 }
 
-export function parseCustomPeriod(
-  period: string
-): { start: string; end: string } | null {
+export function parseCustomPeriod(period: string): { start: string; end: string } | null {
   if (!period.startsWith("custom:")) return null;
   const parts = period.split(":");
   if (parts.length !== 3) return null;
@@ -40,36 +21,13 @@ export function parseCustomPeriod(
   return { start, end };
 }
 
-export function buildCustomPeriod(start: string, end: string): string {
-  return `custom:${start}:${end}`;
-}
-
-export function formatPeriodLabel(period: string): string {
-  const custom = parseCustomPeriod(period);
-  if (custom) {
-    const fmt = (d: string) =>
-      new Intl.DateTimeFormat("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }).format(new Date(d + "T12:00:00"));
-    return `${fmt(custom.start)} - ${fmt(custom.end)}`;
-  }
-  const opt = REPORT_PERIOD_OPTIONS.find((o) => o.value === period);
-  return opt?.label ?? "Date range";
-}
-
-/** Whether an ISO date string falls in the given preset window (uses local calendar). */
 export function dateInPreset(iso: string, preset: string): boolean {
   const custom = parseCustomPeriod(preset);
   if (custom) {
     const day = iso.slice(0, 10);
     return day >= custom.start && day <= custom.end;
   }
-
-  if (preset === "custom") {
-    return true;
-  }
+  if (preset === "custom") return true;
 
   const t = new Date(iso).getTime();
   const now = new Date();
@@ -154,6 +112,3 @@ export function dateInPreset(iso: string, preset: string): boolean {
   }
   return true;
 }
-
-export const reportSelectItemClass =
-  "cursor-pointer focus:bg-muted/70 focus:text-foreground data-[highlighted]:bg-muted/70 data-[state=checked]:bg-transparent data-[state=checked]:font-medium";

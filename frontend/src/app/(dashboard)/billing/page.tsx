@@ -83,7 +83,7 @@ function BillingFromJobCardEffect() {
       const businessName = useSettingsStore.getState().businessName;
       if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
     }
-    router.replace(`/billing/${result.invoiceId}`);
+    router.replace(`/billing/invoices/${encodeURIComponent(result.invoiceId)}`);
   }, [jobCardId, router]);
 
   return null;
@@ -278,7 +278,7 @@ export default function BillingPage() {
   ];
 
   const handleRowClick = (item: Record<string, unknown>) => {
-    router.push(`/billing/${item.id}`);
+    router.push(`/billing/invoices/${encodeURIComponent(item.id)}`);
   };
 
   return (
