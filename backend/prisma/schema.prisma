@@ -35,6 +35,13 @@ enum FuelType {
   HYBRID
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+}
+
 model Branch {
   id           String   @id
   name         String
@@ -50,6 +57,7 @@ model Branch {
   managerName  String?
   managerPhone String?
   users        User[]
+  attendanceRecords Attendance[]
 }
 
 model User {
@@ -79,6 +87,7 @@ model User {
   /** SHA-256 hex of opaque reset token; cleared after reset or superseded by new request */
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
+  attendanceRecords      Attendance[]
 }
 
 model Customer {
@@ -114,6 +123,28 @@ model Vehicle {
   year               Int
   notes              String?
   previousOwners     Json?
+}
+
+/** Staff attendance punches (check-in / check-out). One row per shift. `date`/`checkIn`/`checkOut` are the staff member's LOCAL calendar values (yyyy-MM-dd / HH:mm) so server timezone never shifts them. */
+model Attendance {
+  id              String           @id @default(cuid())
+  staffId         String
+  staff           User             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffName       String
+  staffRole       UserRole
+  branchId        String
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  date            String
+  checkIn         String?
+  checkOut        String?
+  durationMinutes Int?
+  status          AttendanceStatus
+  qrScanned       Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([branchId, date])
+  @@index([staffId, branchId, date])
 }
 
 /** JSON documents keyed by collection name + entity id (e.g. jobCards / jc-001). */

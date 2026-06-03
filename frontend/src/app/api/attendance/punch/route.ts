@@ -1,65 +1,59 @@
 import { NextResponse } from "next/server";
-import {
-  getServerAttendanceRecords,
-  serverPunch,
-} from "@/lib/server-attendance";
-import type { UserRole } from "@/types";
+import { serverApiUrl } from "@/lib/server-api-base";
 
 export const dynamic = "force-dynamic";
 
-const ROLES: UserRole[] = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "BRANCH_MANAGER",
-  "MANAGER",
-  "SUPERVISOR",
-  "RECEPTIONIST",
-  "MECHANIC",
-];
-
+/** Public proxy: staff punch from their phone (no login). Persists in Postgres via the backend. */
 export async function POST(request: Request) {
+  let body: {
+    staffId?: string;
+    branchId?: string;
+    clientLocalDate?: string;
+    clientLocalTime?: string;
+  };
   try {
-    const body = (await request.json()) as {
-      staffId?: string;
-      branchId?: string;
-      staffName?: string;
-      staffRole?: UserRole;
-      clientLocalDate?: string;
-      clientLocalTime?: string;
-    };
-    const { staffId, branchId, staffName, staffRole, clientLocalDate, clientLocalTime } =
-      body;
-    if (!staffId || !branchId) {
-      return NextResponse.json(
-        { ok: false, error: "MISSING_FIELDS" },
-        { status: 400 }
-      );
-    }
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "INVALID_JSON" }, { status: 400 });
+  }
 
-    const snapshot =
-      staffName && staffRole && ROLES.includes(staffRole)
-        ? { name: staffName, role: staffRole }
-        : undefined;
+  const { staffId, branchId, clientLocalDate, clientLocalTime } = body ?? {};
+  if (!staffId || !branchId) {
+    return NextResponse.json({ ok: false, error: "MISSING_FIELDS" }, { status: 400 });
+  }
 
-    const result = await serverPunch(staffId, branchId, new Date(), snapshot, {
-      clientLocalDate,
-      clientLocalTime,
+  try {
+    const res = await fetch(serverApiUrl("/api/public/attendance/punch"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ staffId, branchId, clientLocalDate, clientLocalTime }),
+      cache: "no-store",
     });
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, error: result.error });
+    const data = (await res.json()) as {
+      data?: {
+        ok: boolean;
+        kind?: "checkIn" | "checkOut";
+        time?: string;
+        record?: unknown;
+      };
+      error?: { code?: string };
+    };
+
+    if (!res.ok || !data.data?.ok) {
+      return NextResponse.json({
+        ok: false,
+        error: data.error?.code ?? "SERVER",
+      });
     }
 
+    const d = data.data;
     return NextResponse.json({
       ok: true,
-      kind: result.kind,
-      time: result.time,
-      record: result.record,
-      records: await getServerAttendanceRecords(),
+      kind: d.kind,
+      time: d.time,
+      record: d.record,
     });
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "INVALID_JSON" },
-      { status: 400 }
-    );
+    return NextResponse.json({ ok: false, error: "NETWORK" }, { status: 502 });
   }
 }

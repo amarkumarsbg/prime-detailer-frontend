@@ -18,6 +18,7 @@ import { isPasswordResetEmailConfigured } from "./services/password-reset-email.
 import { messagingRouter } from "./routes/messaging.routes.js";
 import { jobCardUploadRouter } from "./routes/job-card-upload.routes.js";
 import { publicAttendanceRouter } from "./routes/public-attendance.routes.js";
+import { attendanceRouter } from "./routes/attendance.routes.js";
 
 import { prisma } from "./lib/prisma.js";
 
@@ -72,6 +73,7 @@ app.use("/api/users", userApiRouter);
 app.use("/api/vehicles", vehicleApiRouter);
 app.use("/api/messaging", messagingRouter);
 app.use("/api/public/attendance", publicAttendanceRouter);
+app.use("/api/attendance", attendanceRouter);
 
 app.use(errorHandler);
 

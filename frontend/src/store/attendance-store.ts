@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { format } from "date-fns";
 import type { AttendanceRecord, User } from "@/types";
+import { apiGet, apiDelete } from "@/lib/api-client";
 
 export type PunchResult =
   | { ok: true; kind: "checkIn"; time: string; record: AttendanceRecord }
@@ -25,9 +26,7 @@ export const useAttendanceStore = create<AttendanceStoreState>((set) => ({
 
   sync: async () => {
     try {
-      const res = await fetch("/api/attendance", { cache: "no-store" });
-      if (!res.ok) return false;
-      const data = (await res.json()) as { records: AttendanceRecord[] };
+      const data = await apiGet<{ records: AttendanceRecord[] }>("/api/attendance");
       set({ records: data.records });
       return true;
     } catch {
@@ -37,9 +36,9 @@ export const useAttendanceStore = create<AttendanceStoreState>((set) => ({
 
   resetToSeed: async () => {
     try {
-      const res = await fetch("/api/attendance", { method: "DELETE" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { records: AttendanceRecord[] };
+      const data = await apiDelete<{ ok: boolean; records: AttendanceRecord[] }>(
+        "/api/attendance"
+      );
       set({ records: data.records });
     } catch {
       /* no-op */
