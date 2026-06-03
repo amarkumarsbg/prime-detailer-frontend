@@ -1,129 +1,174 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useBranchStore } from "@/store/branch-store";
 import { useAttendanceStore } from "@/store/attendance-store";
-import { useStaffStore } from "@/store/staff-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { QrCode, LogIn, LogOut, AlertCircle } from "lucide-react";
+import { QrCode, LogIn, LogOut, AlertCircle, Loader2 } from "lucide-react";
+import type { UserRole } from "@/types";
+
+type ResolvedStaff = {
+  id: string;
+  name: string;
+  role: UserRole;
+  branchId: string;
+};
+
+type ContextState =
+  | { status: "loading" }
+  | { status: "ready"; branch: { id: string; name: string } }
+  | { status: "error"; message: string };
 
 export function PunchForm() {
   const searchParams = useSearchParams();
-  const branchId = searchParams.get("branchId") ?? "";
-  const qrToken = searchParams.get("qr");
-  const branches = useBranchStore((s) => s.branches);
-
-  const [pin, setPin] = useState("");
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [lastSuccess, setLastSuccess] = useState<
-    | { kind: "checkIn"; time: string; name: string }
-    | { kind: "checkOut"; time: string; name: string }
-    | null
-  >(null);
+  const branchId = searchParams.get("branchId")?.trim() ?? "";
+  const qrToken = searchParams.get("qr")?.trim() ?? "";
 
   const punch = useAttendanceStore((s) => s.punch);
-  const findByAttendancePin = useStaffStore((s) => s.findByAttendancePin);
 
-  const branch = useMemo(
-    () => branches.find((b) => b.id === branchId),
-    [branches, branchId]
-  );
+  const [ctx, setCtx] = useState<ContextState>({ status: "loading" });
+  const [pin, setPin] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [lastSuccess, setLastSuccess] = useState<
+    { kind: "checkIn" | "checkOut"; time: string; name: string } | null
+  >(null);
 
-  const qrValid =
-    !qrToken || (branch?.qrCodeId != null && branch.qrCodeId === qrToken);
+  useEffect(() => {
+    if (!branchId) {
+      setCtx({
+        status: "error",
+        message: "Missing branch. Scan the QR code at your branch to open this page.",
+      });
+      return;
+    }
 
-  const canSubmit = Boolean(branch && qrValid && pin.trim());
+    let cancelled = false;
+    setCtx({ status: "loading" });
+    const q = new URLSearchParams({ branchId });
+    if (qrToken) q.set("qr", qrToken);
+
+    fetch(`/api/attendance/context?${q.toString()}`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json()) as {
+          ok?: boolean;
+          message?: string;
+          branch?: { id: string; name: string };
+        };
+        if (cancelled) return;
+        if (data.ok && data.branch) {
+          setCtx({ status: "ready", branch: data.branch });
+        } else {
+          setCtx({
+            status: "error",
+            message: data.message ?? "Invalid branch or QR code.",
+          });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCtx({
+          status: "error",
+          message:
+            "Could not reach the server. Check Wi‑Fi and that the app is running.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, qrToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
     setLastSuccess(null);
 
-    if (!branch) {
-      setLocalError("Invalid branch. Use the QR code from your store.");
-      return;
-    }
-    if (!qrValid) {
-      setLocalError("This QR link is not valid for this branch.");
-      return;
-    }
+    if (ctx.status !== "ready") return;
+    if (!pin.trim()) return;
 
-    const staff = findByAttendancePin(pin);
-    if (!staff) {
-      setLocalError("PIN not recognized. Ask your manager if you forgot your PIN.");
-      return;
-    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/attendance/resolve-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin, branchId: ctx.branch.id }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        staff?: ResolvedStaff;
+      };
 
-    const result = await punch({ staff, branchId: branch.id });
-    if (!result.ok) {
-      if (result.error === "NETWORK") {
-        setLocalError("Could not reach the server. Check Wi‑Fi and that the app is running.");
+      if (!data.ok || !data.staff) {
+        setLocalError(data.message ?? "PIN not recognized.");
         return;
       }
-      if (result.error === "SERVER") {
-        setLocalError("Something went wrong. Try again.");
+
+      const staff = data.staff;
+      const result = await punch({
+        staff: {
+          id: staff.id,
+          name: staff.name,
+          email: "",
+          phone: "",
+          role: staff.role,
+          branchId: staff.branchId,
+          isActive: true,
+        },
+        branchId: ctx.branch.id,
+      });
+
+      if (!result.ok) {
+        if (result.error === "WRONG_BRANCH") {
+          setLocalError("You are not assigned to this branch.");
+        } else if (result.error === "INACTIVE") {
+          setLocalError("Your account is inactive. Contact a manager.");
+        } else if (result.error === "NETWORK") {
+          setLocalError(
+            "Could not reach the server. Check Wi‑Fi and that the app is running."
+          );
+        } else {
+          setLocalError("Something went wrong. Try again.");
+        }
         return;
       }
-      if (result.error === "WRONG_BRANCH") {
-        setLocalError("You are not assigned to this branch.");
-      } else {
-        setLocalError("Your account is inactive. Contact a manager.");
-      }
-      return;
-    }
 
-    if (result.kind === "checkIn") {
-      setLastSuccess({
-        kind: "checkIn",
-        time: result.time,
-        name: staff.name,
-      });
-    } else {
-      setLastSuccess({
-        kind: "checkOut",
-        time: result.time,
-        name: staff.name,
-      });
+      setLastSuccess({ kind: result.kind, time: result.time, name: staff.name });
+      setPin("");
+    } catch {
+      setLocalError(
+        "Could not reach the server. Check Wi‑Fi and that the app is running."
+      );
+    } finally {
+      setSubmitting(false);
     }
-    setPin("");
   };
 
-  if (!branchId) {
+  if (ctx.status === "loading") {
+    return (
+      <div className="flex min-h-svh flex-col items-center justify-center gap-3 p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
+        <p className="text-sm text-muted-foreground">Checking branch…</p>
+      </div>
+    );
+  }
+
+  if (ctx.status === "error") {
     return (
       <div className="flex min-h-svh flex-col items-center justify-center gap-4 p-6">
         <AlertCircle className="h-10 w-10 text-destructive" aria-hidden />
         <p className="text-center text-sm text-muted-foreground max-w-sm">
-          Missing branch. Scan the QR code at your branch to open this page.
+          {ctx.message}
         </p>
       </div>
     );
   }
 
-  if (!branch) {
-    return (
-      <div className="flex min-h-svh flex-col items-center justify-center gap-4 p-6">
-        <AlertCircle className="h-10 w-10 text-destructive" aria-hidden />
-        <p className="text-center text-sm text-muted-foreground max-w-sm">
-          Unknown branch. Use the QR code from your store.
-        </p>
-      </div>
-    );
-  }
-
-  if (!qrValid) {
-    return (
-      <div className="flex min-h-svh flex-col items-center justify-center gap-4 p-6">
-        <AlertCircle className="h-10 w-10 text-destructive" aria-hidden />
-        <p className="text-center text-sm text-muted-foreground max-w-sm">
-          This QR link is not valid for this branch.
-        </p>
-      </div>
-    );
-  }
+  const canSubmit = pin.trim().length > 0 && !submitting;
 
   return (
     <div className="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-6 p-6 pb-10">
@@ -132,7 +177,7 @@ export function PunchForm() {
           <QrCode className="h-6 w-6 text-primary" aria-hidden />
         </div>
         <h1 className="text-xl font-semibold tracking-tight">Attendance</h1>
-        <p className="text-sm text-muted-foreground">{branch.name}</p>
+        <p className="text-sm text-muted-foreground">{ctx.branch.name}</p>
       </div>
 
       <Card className="border-border/80 shadow-sm">
@@ -157,6 +202,7 @@ export function PunchForm() {
                 className="text-center text-lg tracking-[0.3em]"
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                disabled={submitting}
               />
             </div>
             {localError && (
@@ -166,7 +212,14 @@ export function PunchForm() {
               </p>
             )}
             <Button type="submit" className="w-full h-12 text-base" disabled={!canSubmit}>
-              Punch
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Punching…
+                </>
+              ) : (
+                "Punch"
+              )}
             </Button>
           </form>
         </CardContent>

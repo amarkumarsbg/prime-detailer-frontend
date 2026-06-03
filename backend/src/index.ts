@@ -17,6 +17,7 @@ import { isTwilioSmsEnabled, isTwilioWhatsAppEnabled } from "./services/twilio-s
 import { isPasswordResetEmailConfigured } from "./services/password-reset-email.service.js";
 import { messagingRouter } from "./routes/messaging.routes.js";
 import { jobCardUploadRouter } from "./routes/job-card-upload.routes.js";
+import { publicAttendanceRouter } from "./routes/public-attendance.routes.js";
 
 import { prisma } from "./lib/prisma.js";
 
@@ -70,6 +71,7 @@ app.use("/api/branches", branchApiRouter);
 app.use("/api/users", userApiRouter);
 app.use("/api/vehicles", vehicleApiRouter);
 app.use("/api/messaging", messagingRouter);
+app.use("/api/public/attendance", publicAttendanceRouter);
 
 app.use(errorHandler);
 
