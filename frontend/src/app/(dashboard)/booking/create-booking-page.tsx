@@ -460,6 +460,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const checkInFileRef = useRef<HTMLInputElement>(null);
   const checkInCameraRef = useRef<HTMLInputElement>(null);
   const checkInJobIdRef = useRef<string | null>(null);
+  const isSubmittingJobRef = useRef(false);
 
   const [jobCreateStep, setJobCreateStep] = useState(0);
   const [isDesktopWide, setIsDesktopWide] = useState(false);
@@ -1146,6 +1147,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingJobRef.current) return;
     if (
       useBookingWizard &&
       wizardSteps.length > 0 &&
@@ -1198,6 +1200,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
     }
 
+    isSubmittingJobRef.current = true;
+    try {
     const now = new Date().toISOString();
     const jobNumber = getNextJobNumber();
     const id = `jc-local-${Date.now()}`;
@@ -1623,6 +1627,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         ? "Complete check-in with before photos. Mark pickup complete on the job card when the driver collects the vehicle."
         : "Complete vehicle check-in with before photos to open the job.",
     });
+    } finally {
+      isSubmittingJobRef.current = false;
+    }
   };
 
   const dismissCheckIn = () => {

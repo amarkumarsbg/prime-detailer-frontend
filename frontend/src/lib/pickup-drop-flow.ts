@@ -46,6 +46,43 @@ export function getLinkedDropRequest(
   return requests.find((r) => r.jobCardId === jobCardId && r.type === "DROP");
 }
 
+export function findPickupDropRequest(
+  jobCardId: string,
+  type: PickupDropType,
+  requests: PickupDropRequest[]
+): PickupDropRequest | undefined {
+  return requests.find((r) => r.jobCardId === jobCardId && r.type === type);
+}
+
+/** Pickup leg is done once the vehicle is at the workshop and the return (drop) trip exists. */
+export function isPickupLegComplete(
+  pickup: PickupDropRequest | undefined,
+  requests: PickupDropRequest[]
+): boolean {
+  if (!pickup || pickup.type !== "PICKUP") return false;
+  if (pickupDropStatusRank(pickup.status) < pickupDropStatusRank("IN_SERVICE")) return false;
+  return Boolean(getLinkedDropRequest(pickup.jobCardId, requests));
+}
+
+/** Hide completed pickup rows when a drop leg exists — avoids duplicate cards for the same job. */
+export function shouldShowPickupDropInList(
+  req: PickupDropRequest,
+  requests: PickupDropRequest[]
+): boolean {
+  if (req.type !== "PICKUP") return true;
+  const pickup = req;
+  if (!isPickupLegComplete(pickup, requests)) return true;
+  return false;
+}
+
+export function pickupDropDisplayLabel(
+  req: PickupDropRequest,
+  requests: PickupDropRequest[]
+): string {
+  if (isPickupLegComplete(req, requests)) return "Pickup complete";
+  return PICKUP_DROP_STATUS_LABEL[req.status];
+}
+
 /** Vehicle must be picked up before any workshop step (inspection, service, etc.). */
 export function pickupBlocksJobAdvance(
   jobCardId: string,

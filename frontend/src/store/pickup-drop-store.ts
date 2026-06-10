@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { postCollectionSnapshot } from "@/lib/collection-sync";
 import {
+  findPickupDropRequest,
   nextPickupDropStatus,
   PICKUP_DROP_STATUS_LABEL,
   validatePickupDropAdvance,
@@ -56,6 +57,9 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
   setRequestsFromBootstrap: (requests) => set({ requests }),
 
   addRequest: (input) => {
+    const existing = findPickupDropRequest(input.jobCardId, input.type, get().requests);
+    if (existing) return existing;
+
     const now = new Date().toISOString();
     const row: PickupDropRequest = {
       id: nextId(get().requests),

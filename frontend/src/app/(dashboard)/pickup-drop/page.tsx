@@ -44,7 +44,11 @@ import {
 } from "@/lib/booking-calendar-validation";
 import { PickupDropRequestCard } from "@/components/pickup-drop/pickup-drop-request-card";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
-import { PICKUP_DROP_STATUS_LABEL, validatePickupDropAdvance } from "@/lib/pickup-drop-flow";
+import {
+  PICKUP_DROP_STATUS_LABEL,
+  shouldShowPickupDropInList,
+  validatePickupDropAdvance,
+} from "@/lib/pickup-drop-flow";
 
 function customerPhoneFromPickupRequest(r: PickupDropRequest): string | undefined {
   const direct = r.customerPhone?.trim();
@@ -127,7 +131,7 @@ export default function PickupDropPage() {
   }, [branches, selectedBranchId]);
 
   const filtered = useMemo(() => {
-    let list = scopedRequests;
+    let list = scopedRequests.filter((r) => shouldShowPickupDropInList(r, scopedRequests));
     if (statusFilter !== "ALL") list = list.filter((r) => r.status === statusFilter);
     if (typeFilter !== "ALL") list = list.filter((r) => r.type === typeFilter);
     return [...list].sort(
@@ -418,6 +422,7 @@ export default function PickupDropPage() {
             <PickupDropRequestCard
               key={r.id}
               request={r}
+              allRequests={scopedRequests}
               branchScoped={!!selectedBranchId}
               hasPhone={!!customerPhoneFromPickupRequest(r)}
               onAssignDriver={handleAssignDriver}

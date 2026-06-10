@@ -17,17 +17,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import { pickupAdvanceActionLabel } from "@/components/pickup-drop/pickup-leg-stepper";
-import { nextPickupDropStatus, PICKUP_DROP_STATUS_LABEL } from "@/lib/pickup-drop-flow";
+import {
+  isPickupLegComplete,
+  nextPickupDropStatus,
+  pickupDropDisplayLabel,
+  PICKUP_DROP_STATUS_LABEL,
+} from "@/lib/pickup-drop-flow";
 import { cn, formatDateTime } from "@/lib/utils";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
-
-const STATUS_LABEL: Record<PickupDropStatus, string> = {
-  PENDING: "Pending",
-  DRIVER_ASSIGNED: "Driver assigned",
-  PICKED_UP: "Picked up",
-  IN_SERVICE: "In service",
-  DELIVERED: "Delivered",
-};
 
 const STATUS_STYLE: Record<PickupDropStatus, string> = {
   PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
@@ -85,21 +82,10 @@ const STATUS_ICON_CONFIG: Record<
   },
 };
 
-function StatusBadge({ status }: { status: PickupDropStatus }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap",
-        STATUS_STYLE[status]
-      )}
-    >
-      {STATUS_LABEL[status]}
-    </span>
-  );
-}
-
 export type PickupDropRequestCardProps = {
   request: PickupDropRequest;
+  /** All requests for the branch — used to label completed pickup legs. */
+  allRequests?: PickupDropRequest[];
   branchScoped: boolean;
   hasPhone: boolean;
   onAssignDriver: (requestId: string, driverId: string, driverName?: string) => void;
@@ -109,6 +95,7 @@ export type PickupDropRequestCardProps = {
 
 export function PickupDropRequestCard({
   request: r,
+  allRequests = [],
   branchScoped,
   hasPhone,
   onAssignDriver,
@@ -116,9 +103,12 @@ export function PickupDropRequestCard({
   onWhatsApp,
 }: PickupDropRequestCardProps) {
   const typeConfig = TYPE_CONFIG[r.type];
-  const statusVisual = STATUS_ICON_CONFIG[r.status];
+  const pickupLegComplete = isPickupLegComplete(r, allRequests);
+  const displayStatus = pickupLegComplete ? "DELIVERED" : r.status;
+  const statusVisual = STATUS_ICON_CONFIG[displayStatus];
   const StatusIcon = statusVisual.icon;
-  const nextStatus = nextPickupDropStatus(r.type, r.status);
+  const statusLabel = pickupDropDisplayLabel(r, allRequests);
+  const nextStatus = pickupLegComplete ? null : nextPickupDropStatus(r.type, r.status);
   const jobHref =
     r.jobCardId && !r.jobCardId.startsWith("new-") ? `/job-cards/${r.jobCardId}` : null;
 
@@ -138,7 +128,7 @@ export function PickupDropRequestCard({
                 "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
                 statusVisual.iconBox
               )}
-              title={STATUS_LABEL[r.status]}
+              title={statusLabel}
             >
               <StatusIcon className="h-5 w-5" />
             </div>
@@ -177,7 +167,14 @@ export function PickupDropRequestCard({
                     )}
                   </div>
                 </div>
-                <StatusBadge status={r.status} />
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap",
+                    STATUS_STYLE[displayStatus]
+                  )}
+                >
+                  {statusLabel}
+                </span>
               </div>
 
               <div className="grid gap-2 text-sm">
