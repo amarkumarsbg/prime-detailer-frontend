@@ -41,7 +41,6 @@ import {
   Phone,
   Plus,
   PowerOff,
-  RefreshCw,
   Trash2,
   Users,
 } from "lucide-react";
@@ -289,26 +288,20 @@ export default function BranchesPage() {
         title="Workshop locations"
         description="Directory of sites, contacts, and operating status"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => toast.message("List refreshed")}>
-              <RefreshCw className="h-4 w-4" />
-              Refresh
+          canEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setFormMode("add");
+                setFormOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Add site
             </Button>
-            {canEdit && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  setEditing(null);
-                  setFormMode("add");
-                  setFormOpen(true);
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                Add site
-              </Button>
-            )}
-          </div>
+          ) : undefined
         }
       />
 

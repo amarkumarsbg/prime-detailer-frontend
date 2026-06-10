@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { ServiceCatalogItem } from "@/types";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
@@ -32,11 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, RefreshCw, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ServicesPage() {
-  const router = useRouter();
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
   const categoryRecords = useServiceCategoryStore((s) => s.categories);
@@ -153,10 +151,6 @@ export default function ServicesPage() {
         description="Manage service packages and add-ons. Packages with the High-end badge qualify for optional advance on job cards (same flag as in Edit)."
         actions={
           <>
-            <Button variant="outline" className="gap-2" onClick={() => router.refresh()}>
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
             <Button
               className="gap-2"
               onClick={() => setAddonDialogOpen(true)}

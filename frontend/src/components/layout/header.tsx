@@ -5,7 +5,6 @@ import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { useScopedNotifications } from "@/hooks/use-scoped-data";
-import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
 import { canOrgWideRole } from "@/lib/branch-selection";
 import { useRouter } from "next/navigation";
@@ -49,7 +48,6 @@ export function Header() {
   const toggleMobileOpen = useSidebarStore((s) => s.toggleMobileOpen);
   const scopedNotifications = useScopedNotifications();
   const unreadCount = scopedNotifications.filter((n) => !n.read).length;
-  const bootstrapRefresh = useAppBootstrapStore((s) => s.refresh);
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);

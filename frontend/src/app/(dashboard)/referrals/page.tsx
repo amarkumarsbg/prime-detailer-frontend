@@ -24,7 +24,6 @@ import {
   Gift,
   IndianRupee,
   BookOpen,
-  RefreshCw,
   Save,
   UserPlus,
   Users,
@@ -105,10 +104,6 @@ export default function ReferralsPage() {
     return `New customer receives ${newCustomerAmount || "0"}% of their first qualifying job`;
   }, [newCustomerRewardMode, newCustomerAmount]);
 
-  const handleRefresh = () => {
-    toast.message("Synced latest configuration");
-  };
-
   const handleSave = () => {
     toast.success("Referral rules saved");
   };
@@ -123,12 +118,6 @@ export default function ReferralsPage() {
       <PageHeader
         title="Referrals"
         description="Configure rewards under Referral rules — program toggle, referrer and new-customer amounts, and job minimums."
-        actions={
-          <Button type="button" variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
-        }
       />
 
       <div className="grid gap-4 sm:grid-cols-3">

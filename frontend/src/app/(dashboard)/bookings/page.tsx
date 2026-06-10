@@ -37,7 +37,6 @@ import { sortByNewest } from "@/lib/sort-by-date";
 import type { Appointment, JobCard, JobCardStatus } from "@/types";
 import {
   Plus,
-  RefreshCw,
   ClipboardList,
   Eye,
   IndianRupee,
@@ -382,16 +381,6 @@ export default function BookingsPage() {
         description="Walk-ins and calendar appointments: confirm an appointment, then create a job card here. Filter job cards, review totals, and open jobs."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => router.refresh()}
-              className="shrink-0"
-            >
-              <RefreshCw className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Refresh</span>
-            </Button>
             <Button size="sm" className="shrink-0" asChild>
               <Link href="/bookings/walk-in">
                 <Plus className="w-4 h-4 mr-2" />

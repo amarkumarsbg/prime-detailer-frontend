@@ -18,7 +18,6 @@ import {
 } from "recharts";
 import {
   Download,
-  RefreshCw,
   IndianRupee,
   Calendar,
   TrendingUp,
@@ -104,7 +103,6 @@ function MotionCard({
 
 export function AnalyticsReportsDashboard() {
   const [range, setRange] = useState<DateRangeKey>("7d");
-  const [tick, setTick] = useState(0);
   const invoices = useInvoiceStore((s) => s.invoices);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const customers = useCustomerStore((s) => s.customers);
@@ -114,10 +112,7 @@ export function AnalyticsReportsDashboard() {
   const averageRating = useDashboardStatsStore((s) => s.stats?.averageRating ?? 0);
 
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
-  const start = useMemo(() => {
-    void tick;
-    return rangeStartDays(days);
-  }, [days, tick]);
+  const start = useMemo(() => rangeStartDays(days), [days]);
 
   const scopedJobs = useMemo(
     () =>
@@ -203,11 +198,6 @@ export function AnalyticsReportsDashboard() {
     toast.success("Report export queued (demo).");
   };
 
-  const onRefresh = () => {
-    setTick((t) => t + 1);
-    toast.success("Analytics refreshed");
-  };
-
   return (
     <div className="relative space-y-6 pb-20">
       <PageHeader
@@ -225,10 +215,6 @@ export function AnalyticsReportsDashboard() {
                 <SelectItem value="90d">Last 90 Days</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={onRefresh}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
             <Button size="sm" onClick={onExport}>
               <Download className="mr-2 h-4 w-4" />
               Export Report

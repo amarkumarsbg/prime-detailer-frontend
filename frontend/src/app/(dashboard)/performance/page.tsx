@@ -61,7 +61,6 @@ import {
   DollarSign,
   LineChart as LineChartIcon,
   Medal,
-  RefreshCw,
   Target,
   Trophy,
   Users,
@@ -251,16 +250,6 @@ export default function PerformancePage() {
     1,
     ...jobsCompletedChartData.map((d) => d.jobsCompleted)
   );
-
-  const handleRefresh = () => {
-    toast.success("Performance data refreshed", {
-      description: usingDemo
-        ? "Still showing sample data — choose All branches or add jobs in this period."
-        : hasScopedJobData
-          ? "Totals updated from job cards."
-          : "No jobs in this period for the selected scope.",
-    });
-  };
 
   const handleRewardCalc = () => {
     toast.message("Reward calculator", {
@@ -651,15 +640,6 @@ export default function PerformancePage() {
           <Button type="button" className="h-9" onClick={handleRewardCalc}>
             <Calculator className="size-4 mr-2" />
             Reward Calc
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9"
-            onClick={handleRefresh}
-          >
-            <RefreshCw className="size-4 mr-2" />
-            Refresh
           </Button>
         </div>
       </div>

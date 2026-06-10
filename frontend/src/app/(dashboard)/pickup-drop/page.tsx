@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +28,7 @@ import { useStaffStore } from "@/store/staff-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { cn, formatDateTime } from "@/lib/utils";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
-import { Plus, RefreshCw, Truck } from "lucide-react";
+import { Plus, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -117,7 +116,6 @@ function StatusBadge({ status }: { status: PickupDropStatus }) {
 }
 
 export default function PickupDropPage() {
-  const router = useRouter();
   const { jobCards } = useJobCardStore();
   const { requests, addRequest } = usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
@@ -335,10 +333,6 @@ export default function PickupDropPage() {
         description={`Manage vehicle pickup and delivery for ${viewingLabel}.`}
         actions={
           <>
-            <Button variant="outline" className="gap-2" onClick={() => router.refresh()}>
-              <RefreshCw className="size-4" />
-              Refresh
-            </Button>
             <Button
               className="gap-2"
               onClick={() => {

@@ -43,7 +43,6 @@ import {
   LineChart,
   PieChart,
   Plus,
-  RefreshCw,
   Trash2,
   UserRound,
   Users,
@@ -137,12 +136,6 @@ export default function AdvancedReportsPage() {
     setScheduleOpen(false);
     resetScheduleForm();
     setMainView("schedules");
-  };
-
-  const handleRefresh = () => {
-    toast.success("Reports refreshed", {
-      description: "Demo: connect to your data source when the backend is ready.",
-    });
   };
 
   const daysFromRange = () => parseInt(revRange, 10) || 30;
@@ -274,10 +267,6 @@ export default function AdvancedReportsPage() {
           >
             Schedules
           </button>
-          <Button type="button" variant="outline" size="sm" className="h-9" onClick={handleRefresh}>
-            <RefreshCw className="size-4 mr-2" />
-            Refresh
-          </Button>
         </div>
       </div>
 
