@@ -4,12 +4,15 @@ import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { compareFieldValues } from "@/lib/sort-by-date";
 
 interface Column<T> {
   key: string;
   label: string;
   render?: (item: T) => React.ReactNode;
   sortable?: boolean;
+  /** When set, used for sorting instead of `item[key]` (e.g. computed delivery date). */
+  sortValue?: (item: T) => string | number;
   className?: string;
 }
 
@@ -31,6 +34,9 @@ interface DataTableProps<T> {
   getRowDomId?: (item: T) => string | undefined;
   /** When set with matching `item.id`, jump to that page and scroll the row into view (use with `getRowDomId`). */
   focusItemId?: string;
+  /** Default column sort (newest-first: key `createdAt` or `date`, dir `desc`). */
+  defaultSortKey?: string;
+  defaultSortDir?: "asc" | "desc";
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,11 +53,15 @@ export function DataTable<T extends Record<string, any>>({
   hideSearch = false,
   getRowDomId,
   focusItemId,
+  defaultSortKey,
+  defaultSortDir = "desc",
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(
+    defaultSortKey ? defaultSortDir : "asc"
+  );
 
   useEffect(() => {
     queueMicrotask(() => setPage(0));
@@ -73,18 +83,13 @@ export function DataTable<T extends Record<string, any>>({
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
-    return [...filtered].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
-      if (typeof aVal === "string" && typeof bVal === "string") {
-        return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      if (typeof aVal === "number" && typeof bVal === "number") {
-        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
-      }
-      return 0;
-    });
-  }, [filtered, sortKey, sortDir]);
+    const col = columns.find((c) => c.key === sortKey);
+    const read = (item: T) =>
+      col?.sortValue ? col.sortValue(item) : item[sortKey];
+    return [...filtered].sort((a, b) =>
+      compareFieldValues(read(a), read(b), sortDir)
+    );
+  }, [filtered, sortKey, sortDir, columns]);
 
   useEffect(() => {
     if (!focusItemId) return;
@@ -116,7 +121,7 @@ export function DataTable<T extends Record<string, any>>({
       setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir("desc");
     }
   };
 

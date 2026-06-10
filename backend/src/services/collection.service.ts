@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { sortCollectionPayloads } from "../lib/sort-collection-payloads.js";
 import {
   isArrayCollection,
   isSingletonCollection,
@@ -14,9 +15,9 @@ export async function listCollectionItems(collection: string): Promise<unknown[]
   }
   const rows = await prisma.appJsonRow.findMany({
     where: { collection },
-    orderBy: { entityId: "asc" },
   });
-  return rows.map((r) => r.payload);
+  const payloads = rows.map((r) => r.payload);
+  return sortCollectionPayloads(collection, payloads);
 }
 
 export async function getCollectionItem(collection: string, entityId: string): Promise<unknown | null> {

@@ -5,6 +5,7 @@ import {
   SINGLETON_COLLECTIONS,
   SINGLETON_ENTITY_ID,
 } from "../constants/json-collections.js";
+import { sortCollectionPayloads } from "../lib/sort-collection-payloads.js";
 import { listBranchesApi } from "./branch-api.service.js";
 import { listUsersApi } from "./user-api.service.js";
 import { listVehiclesApi } from "./vehicle-api.service.js";
@@ -28,8 +29,8 @@ function buildCollectionsFromRows(rows: AppJsonRowLite[]): Record<string, unknow
 
   for (const name of ARRAY_JSON_COLLECTIONS) {
     const list = byCollection.get(name) ?? [];
-    list.sort((a, b) => a.entityId.localeCompare(b.entityId));
-    collections[name] = list.map((r) => r.payload);
+    const payloads = list.map((r) => r.payload);
+    collections[name] = sortCollectionPayloads(name, payloads);
   }
 
   for (const name of SINGLETON_COLLECTIONS) {

@@ -23,15 +23,17 @@ export function PartyListPanel({
   onSelect,
   className,
 }: PartyListPanelProps) {
-  const filtered = parties.filter((p) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.mobile?.toLowerCase().includes(q) ?? false) ||
-      (p.category?.toLowerCase().includes(q) ?? false)
-    );
-  });
+  const filtered = parties
+    .filter((p) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        (p.mobile?.toLowerCase().includes(q) ?? false) ||
+        (p.category?.toLowerCase().includes(q) ?? false)
+      );
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div

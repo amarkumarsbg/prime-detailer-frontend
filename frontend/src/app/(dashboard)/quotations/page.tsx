@@ -48,6 +48,7 @@ import { resolveJobBranchId } from "@/lib/job-from-appointment";
 import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency } from "@/lib/utils";
+import { sortByNewest } from "@/lib/sort-by-date";
 import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
   sendCustomerWhatsApp,
@@ -138,6 +139,10 @@ export default function QuotationsPage() {
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const getNextJobNumber = useJobCardStore((s) => s.getNextJobNumber);
   const quotationList = useQuotationStore((s) => s.quotations);
+  const sortedQuotations = useMemo(
+    () => sortByNewest(quotationList, "createdAt"),
+    [quotationList]
+  );
   const addQuotation = useQuotationStore((s) => s.addQuotation);
   const updateQuotation = useQuotationStore((s) => s.updateQuotation);
   const getNextQuotationNumber = useQuotationStore((s) => s.getNextQuotationNumber);
@@ -755,8 +760,8 @@ export default function QuotationsPage() {
                 <DataTable<Quotation>
                   data={
                     tab === "ALL"
-                      ? quotationList
-                      : quotationList.filter((q) => q.status === tab)
+                      ? sortedQuotations
+                      : sortedQuotations.filter((q) => q.status === tab)
                   }
                   columns={columns}
                   searchPlaceholder="Search by quotation #, customer, or vehicle..."

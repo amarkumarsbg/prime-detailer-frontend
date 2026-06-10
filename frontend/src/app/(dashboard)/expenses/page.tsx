@@ -471,6 +471,8 @@ function ExpensesPageContent() {
         <DataTable
           data={scoped}
           columns={columns}
+          defaultSortKey="date"
+          defaultSortDir="desc"
           focusItemId={highlight || undefined}
           getRowDomId={(item) => `expense-row-${(item as Expense).id}`}
           searchPlaceholder="Search expenses..."

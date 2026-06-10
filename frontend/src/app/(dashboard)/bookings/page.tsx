@@ -33,6 +33,7 @@ import {
   resolveJobBranchId,
 } from "@/lib/job-from-appointment";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { sortByNewest } from "@/lib/sort-by-date";
 import type { Appointment, JobCard, JobCardStatus } from "@/types";
 import {
   Plus,
@@ -155,7 +156,7 @@ export default function BookingsPage() {
         list = list.filter((jc) => new Date(jc.createdAt).getTime() <= t);
       }
     }
-    return list;
+    return sortByNewest(list, "createdAt");
   }, [headerScoped, showBranchPicker, branchFilterId, statusFilter, dateFrom, dateTo]);
 
   const branchNameById = useMemo(
@@ -318,6 +319,7 @@ export default function BookingsPage() {
       {
         key: "createdAt",
         label: "Date",
+        sortable: true,
         render: (jc: JobCard) => (
           <span className="text-muted-foreground whitespace-nowrap">{formatDate(jc.createdAt)}</span>
         ),
@@ -651,6 +653,8 @@ export default function BookingsPage() {
             <DataTable<JobCard>
               data={searchFilteredBookings}
               columns={columns}
+              defaultSortKey="createdAt"
+              defaultSortDir="desc"
               hideSearch
               searchPlaceholder="Search by name, phone, registration, or job ID…"
               searchMatch={(jc, qLower) =>

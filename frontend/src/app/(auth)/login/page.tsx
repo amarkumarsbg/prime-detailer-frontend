@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OtpInput } from "@/components/ui/otp-input";
 import { Label } from "@/components/ui/label";
 import {
   Wrench,
@@ -352,20 +353,11 @@ export default function LoginPage() {
                           Resend OTP
                         </button>
                       </div>
-                      <Input
-                        id="otp"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="Enter 4-digit OTP"
+                      <OtpInput
                         value={otp}
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/\D/g, "").slice(0, 4);
-                          setOtp(v);
-                          if (v.length === 4) void runMobileOtpVerify(v);
-                        }}
-                        required
-                        maxLength={4}
-                        className="h-11 rounded-xl bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 px-4 text-center text-lg tracking-[0.5em] font-mono transition-all focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        onChange={setOtp}
+                        onComplete={(v) => void runMobileOtpVerify(v)}
+                        disabled={loading}
                       />
                     </div>
 

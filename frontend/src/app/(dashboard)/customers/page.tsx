@@ -294,6 +294,8 @@ export default function CustomersPage() {
       <DataTable
         data={tableData}
         columns={columns}
+        defaultSortKey="memberSince"
+        defaultSortDir="desc"
         searchPlaceholder="Search by name, phone, email, or vehicle number..."
         searchKeys={["name", "phone", "email"]}
         searchMatch={(item, q) => {

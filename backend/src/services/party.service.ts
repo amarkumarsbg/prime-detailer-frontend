@@ -275,7 +275,11 @@ export async function listParties(): Promise<Party[]> {
 
   return [...byId.values()]
     .filter((p) => !hidden.has(p.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (byDate !== 0) return byDate;
+      return a.name.localeCompare(b.name);
+    });
 }
 
 export async function listPartiesWithBalance(): Promise<PartyWithBalance[]> {

@@ -268,12 +268,12 @@ export default function BillingPage() {
     {
       key: "createdAt",
       label: "Date",
+      sortable: true,
       render: (item: Record<string, unknown>) => (
         <span className="text-muted-foreground">
           {formatDate(item.createdAt as string)}
         </span>
       ),
-      sortable: true,
     },
   ];
 
@@ -385,6 +385,8 @@ export default function BillingPage() {
                       : toTableRows(invoicesForView.filter((inv) => inv.status === tab.value))
                   }
                   columns={columns}
+                  defaultSortKey="createdAt"
+                  defaultSortDir="desc"
                   searchPlaceholder="Search by invoice number, customer, or vehicle..."
                   searchKeys={[
                     "invoiceNumber",

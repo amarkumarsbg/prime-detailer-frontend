@@ -19,6 +19,8 @@ import {
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { sortByNewest } from "@/lib/sort-by-date";
+import { jobCardDeliveryAt } from "@/lib/job-card-delivery";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
 import { Plus, LayoutGrid, List } from "lucide-react";
@@ -101,17 +103,25 @@ export default function JobCardsPage() {
   );
 
   const jobCardsForView = useMemo(() => {
+    let list = branchScopedJobCards;
     if (activeFilter === DASHBOARD_FILTER.OVERDUE) {
-      return branchScopedJobCards.filter(isOverdueJobCard);
+      list = list.filter(isOverdueJobCard);
+    } else if (activeFilter === DASHBOARD_FILTER.TODAYS_BOOKINGS) {
+      list = list.filter(isTodaysBookingsJob);
+    } else if (activeFilter === DASHBOARD_FILTER.READY_FOR_DELIVERY) {
+      list = list.filter(isReadyForDeliveryJob);
     }
-    if (activeFilter === DASHBOARD_FILTER.TODAYS_BOOKINGS) {
-      return branchScopedJobCards.filter(isTodaysBookingsJob);
-    }
-    if (activeFilter === DASHBOARD_FILTER.READY_FOR_DELIVERY) {
-      return branchScopedJobCards.filter(isReadyForDeliveryJob);
-    }
-    return branchScopedJobCards;
+    return sortByNewest(list, "createdAt");
   }, [branchScopedJobCards, activeFilter]);
+
+  /** Newest delivery / expected date first so the Delivery column reads in order. */
+  const jobCardsForList = useMemo(
+    () =>
+      [...jobCardsForView].sort((a, b) =>
+        new Date(jobCardDeliveryAt(b)).getTime() - new Date(jobCardDeliveryAt(a)).getTime()
+      ),
+    [jobCardsForView]
+  );
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: jobCardsForView.length };
@@ -127,13 +137,16 @@ export default function JobCardsPage() {
     jobCardsForView.forEach((jc) => {
       if (jc.status !== "CANCELLED" && map[jc.status]) map[jc.status].push(jc);
     });
+    KANBAN_COLUMNS.forEach((s) => {
+      map[s] = sortByNewest(map[s] ?? [], "createdAt");
+    });
     return map;
   }, [jobCardsForView]);
 
   const filteredJobCardsForListTab = useMemo(() => {
-    if (activeTab === "ALL") return jobCardsForView;
-    return jobCardsForView.filter((jc) => jc.status === activeTab);
-  }, [jobCardsForView, activeTab]);
+    if (activeTab === "ALL") return jobCardsForList;
+    return jobCardsForList.filter((jc) => jc.status === activeTab);
+  }, [jobCardsForList, activeTab]);
 
   const columns = useMemo(
     () => [
@@ -186,6 +199,8 @@ export default function JobCardsPage() {
       {
         key: "expectedDelivery",
         label: "Delivery",
+        sortable: true,
+        sortValue: (item: JobCard) => jobCardDeliveryAt(item),
         className: "align-top whitespace-nowrap text-muted-foreground",
         render: (item: JobCard) =>
           item.status === "DELIVERED" ? (
@@ -197,6 +212,7 @@ export default function JobCardsPage() {
       {
         key: "createdAt",
         label: "Created",
+        sortable: true,
         className: "align-top whitespace-nowrap text-muted-foreground",
         render: (item: JobCard) => formatDate(item.createdAt),
       },
@@ -283,6 +299,8 @@ export default function JobCardsPage() {
                   key={activeTab}
                   data={filteredJobCardsForListTab}
                   columns={columns}
+                  defaultSortKey="expectedDelivery"
+                  defaultSortDir="desc"
                   searchPlaceholder="Search by job, customer, vehicle, or service…"
                   searchMatch={searchMatchJobCard}
                   pageSize={10}

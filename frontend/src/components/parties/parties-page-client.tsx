@@ -48,7 +48,7 @@ type SearchCategory =
   | "customer"
   | "supplier";
 
-type SortKey = "name" | "balance";
+type SortKey = "name" | "balance" | "createdAt";
 type SortDir = "asc" | "desc";
 
 function matchesSearch(
@@ -89,8 +89,8 @@ export function PartiesPageClient() {
   const [searchCategory, setSearchCategory] = useState<SearchCategory>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | PartyKind>("all");
   const [balanceFilter, setBalanceFilter] = useState<"all" | "collect" | "pay">("all");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const partiesWithBalance = useMemo(
     () =>
@@ -114,6 +114,9 @@ export function PartiesPageClient() {
       const mul = sortDir === "asc" ? 1 : -1;
       if (sortKey === "name") {
         return mul * a.name.localeCompare(b.name);
+      }
+      if (sortKey === "createdAt") {
+        return mul * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
       return mul * (a.balance - b.balance);
     });
@@ -149,7 +152,7 @@ export function PartiesPageClient() {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "balance" ? "desc" : "asc");
+      setSortDir(key === "balance" || key === "createdAt" ? "desc" : "asc");
     }
   };
 
