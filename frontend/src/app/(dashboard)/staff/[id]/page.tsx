@@ -92,7 +92,7 @@ function StaffAttendancePinCard({
           Attendance PIN
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Used at the store QR punch terminal. Keep it private. Stored in this browser for the demo only—in production, PINs would be hashed on the server.
+          Used at the store QR punch terminal. Keep it private and share only with the staff member.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">

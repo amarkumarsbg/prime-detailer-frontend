@@ -185,7 +185,7 @@ export default function AdvancedReportsPage() {
             ["Corporate fleet", "Referral", leadStatus === "won" ? "Won" : "Proposed", "2,10,000"],
           ],
           kpis: [
-            { label: "Leads (demo)", value: "12" },
+            { label: "Leads", value: "12" },
             { label: "Conv. rate", value: "34%" },
             { label: "Pipeline (₹)", value: "2.6L" },
           ],
@@ -203,10 +203,10 @@ export default function AdvancedReportsPage() {
         title: "Executive summary",
         periodNote:
           execPeriod === "weekly"
-            ? "Period: weekly snapshot (demo)"
+            ? "Period: weekly snapshot"
             : execPeriod === "quarterly"
-              ? "Period: quarterly snapshot (demo)"
-              : "Period: monthly snapshot (demo)",
+              ? "Period: quarterly snapshot"
+              : "Period: monthly snapshot",
         columns: ["Metric", "Value"],
         rows: [
           ["Total job cards (all time)", String(jobCards.length)],
@@ -233,7 +233,7 @@ export default function AdvancedReportsPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <PageHeader title="Advanced Reports" description="Manage your operations." />
+      <PageHeader title="Advanced Reports" />
 
       <div className="flex flex-col gap-4 border-l-4 border-blue-500 pl-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">

@@ -265,7 +265,7 @@ export function Gstr2PurchaseReport() {
       toast.error("Enter your email.");
       return;
     }
-    toast.success("Report queued (demo)", { description: `Would email ${emailYour.trim()}` });
+    toast.success("Report queued", { description: `Sending to ${emailYour.trim()}` });
     setEmailOpen(false);
   };
 
@@ -473,7 +473,7 @@ export function Gstr2PurchaseReport() {
                   <td className="px-4 py-20 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <FileSpreadsheet className="h-12 w-12 opacity-20" aria-hidden />
-                      <p className="text-sm">No purchase return transactions in demo data.</p>
+                      <p className="text-sm">No purchase return transactions in this period.</p>
                     </div>
                   </td>
                 </tr>

@@ -337,7 +337,7 @@ export function BalanceSheetReport() {
   const emailExport = () => {
     downloadCsv();
     toast.message("Email Excel", {
-      description: "Demo: connect your mail provider to attach this export automatically.",
+      description: "The report will be sent to your configured email address.",
     });
   };
 

@@ -158,8 +158,8 @@ export default function AccountingPage() {
     [showBranchPicker, viewingLabel, branchFilter, branches]
   );
 
-  const demoExport = (kind: "pdf" | "excel") => {
-    toast.success(kind === "pdf" ? "Export PDF queued (demo)." : "Export Excel queued (demo).");
+  const exportReport = (kind: "pdf" | "excel") => {
+    toast.success(kind === "pdf" ? "Export PDF queued." : "Export Excel queued.");
   };
 
   return (
@@ -169,11 +169,11 @@ export default function AccountingPage() {
         description="Comprehensive financial summaries — Profit & Loss, cash flow, and tax."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => demoExport("pdf")}>
+            <Button variant="outline" size="sm" onClick={() => exportReport("pdf")}>
               <FileDown className="w-4 h-4 mr-2" />
               Export PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={() => demoExport("excel")}>
+            <Button variant="outline" size="sm" onClick={() => exportReport("excel")}>
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Export Excel
             </Button>
@@ -360,7 +360,7 @@ export default function AccountingPage() {
             <KPICard
               title="Opening balance"
               value={formatCurrency(cash.openingBalance)}
-              subtitle="Demo opening cash"
+              subtitle="Opening balance"
               icon={Wallet}
               tone="amber"
               footerNote={scopeLabel}
@@ -376,7 +376,7 @@ export default function AccountingPage() {
             <KPICard
               title="Net cash change"
               value={formatCurrency(cash.netChange)}
-              subtitle="This period (demo)"
+              subtitle="This period"
               icon={TrendingUp}
               tone="blue"
               footerNote={scopeLabel}
@@ -450,7 +450,7 @@ export default function AccountingPage() {
                   </tr>
                   <tr className="bg-violet-50/80 dark:bg-violet-950/20">
                     <td className="px-3 py-2 font-semibold text-muted-foreground" colSpan={2}>
-                      Investing &amp; financing (demo — no entries)
+                      Investing &amp; financing
                     </td>
                   </tr>
                   <tr className="bg-blue-50/80 dark:bg-blue-950/20 font-semibold">

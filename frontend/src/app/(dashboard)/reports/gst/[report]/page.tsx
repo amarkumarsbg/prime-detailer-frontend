@@ -19,7 +19,7 @@ const GST_META: Record<
 > = {
   "gstr-1-sales": {
     title: "GSTR-1 (Sales)",
-    description: "Outward supplies from saved invoices (demo workspace).",
+    description: "Outward supplies from saved invoices.",
     kind: "sales",
   },
   "gstr-2-purchase": {
@@ -142,7 +142,7 @@ export default function GstReportPage() {
       {meta.kind === "tax" && (
         <Card>
           <CardHeader>
-            <CardTitle>Not tracked in demo data</CardTitle>
+            <CardTitle>Not tracked yet</CardTitle>
             <CardDescription>
               TDS/TCS amounts will appear here once withheld tax is captured on expenses and
               receipts.

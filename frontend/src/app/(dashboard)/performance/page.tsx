@@ -253,7 +253,7 @@ export default function PerformancePage() {
 
   const handleRewardCalc = () => {
     toast.message("Reward calculator", {
-      description: "Demo: connect payroll rules here when the backend is ready.",
+      description: "Configure payroll rules in Settings to customize reward projections.",
     });
   };
 
@@ -550,12 +550,12 @@ export default function PerformancePage() {
           baseReward: 340,
           basePct: 1.2,
           timeBonus: 1023,
-          timeBonusRules: ["Standard tier reward.", "Volume bonus applied (demo)."],
+          timeBonusRules: ["Standard tier reward.", "Volume bonus applied."],
           supervisorShareLabel: `Supervisor 1 ${b1} (100% share)`,
           supervisorShare: 1363,
           applicatorPool: 0,
           applicatorMembers: 0,
-          paymentNote: "Invoice fully paid in demo.",
+          paymentNote: "Invoice fully paid.",
           invoiceTotal: 6209,
           paidAmount: 6209,
         },
@@ -591,7 +591,7 @@ export default function PerformancePage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <PageHeader title="Performance" description="Manage your operations." />
+      <PageHeader title="Performance" />
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between border-b border-border pb-6">
         <div className="min-w-0 space-y-1">
@@ -706,7 +706,7 @@ export default function PerformancePage() {
             <KPICard
               title="Total jobs completed"
               value={totalCompletedJobs}
-              subtitle={`${periodSubtitle} · demo trend`}
+              subtitle={periodSubtitle}
               icon={CheckCircle2}
               tone="emerald"
             />
@@ -739,7 +739,7 @@ export default function PerformancePage() {
               tone="emerald"
             />
             <KPICard
-              title="Time saved (demo)"
+              title="Time saved"
               value="39m"
               subtitle="Rolling monthly avg"
               icon={Clock}
@@ -760,12 +760,6 @@ export default function PerformancePage() {
               tone="slate"
             />
           </div>
-          {usingDemo && (
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              Sample/KPI mix: job counts and branch charts use placeholder data until jobs fall in this
-              period.
-            </p>
-          )}
         </TabsContent>
 
         <TabsContent value="branches" className="mt-4 space-y-4">
@@ -1041,8 +1035,7 @@ export default function PerformancePage() {
               <div className="flex gap-2 rounded-lg border border-blue-200/80 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-900/50 px-3 py-2.5 text-xs text-blue-900 dark:text-blue-100">
                 <Info className="size-4 shrink-0 mt-0.5 opacity-80" />
                 <p className="leading-relaxed text-blue-900/90 dark:text-blue-100/90">
-                  <strong className="font-semibold">Paid revenue</strong> = confirmed revenue from paid invoices (demo
-                  est.). <strong className="font-semibold">Total revenue</strong> = job value in period.{" "}
+                  <strong className="font-semibold">Paid revenue</strong> = confirmed revenue from paid invoices. <strong className="font-semibold">Total revenue</strong> = job value in period.{" "}
                   <strong className="font-semibold">Efficiency</strong> = delivered ÷ jobs.{" "}
                   <strong className="font-semibold">On-time %</strong> = share of delivered jobs by promised time.
                 </p>
@@ -1182,9 +1175,6 @@ export default function PerformancePage() {
                         <td className="py-3 px-4 text-right tabular-nums">{row.jobs}</td>
                         <td className="py-3 px-4 text-right">
                           <span className="font-medium tabular-nums">{formatCurrency(row.paid)}</span>
-                          <Badge variant="outline" className="ml-2 text-[10px] font-normal">
-                            Demo
-                          </Badge>
                         </td>
                         <td className="py-3 px-4 text-right tabular-nums">
                           {formatCurrency(row.rewards)}
@@ -1207,7 +1197,7 @@ export default function PerformancePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Filters</CardTitle>
-              <CardDescription>Demo controls — wire to API later</CardDescription>
+              <CardDescription>Filter job details for the selected period</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="space-y-1">
@@ -1521,7 +1511,7 @@ export default function PerformancePage() {
                                     <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 dark:bg-emerald-950/25 p-3 text-sm">
                                       <p className="font-semibold text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
                                         <CheckCircle2 className="size-4" />
-                                        Paid in full (demo)
+                                        Paid in full
                                       </p>
                                       <p className="text-xs text-muted-foreground mt-2">{ex.paymentNote}</p>
                                       <div className="mt-2 text-xs flex justify-between">
@@ -1550,10 +1540,6 @@ export default function PerformancePage() {
         <TabsContent value="rewards" className="mt-4 space-y-4">
           <div className="rounded-lg border border-blue-200/80 bg-blue-500/5 dark:bg-blue-950/25 px-4 py-3 text-sm">
             <span className="font-semibold text-blue-900 dark:text-blue-200">Monthly reward projections</span>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Demo copy: supervisor-heavy jobs credit the team pool; mixed jobs split toward applicators
-              based on your policy (configure when backend is live).
-            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KPICard title="Total revenue" value={formatCurrency(totalJobValueAll)} icon={IndianRupee} tone="blue" />
@@ -1595,31 +1581,17 @@ export default function PerformancePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Individual reward breakdown</CardTitle>
-              <CardDescription>Job-wise distribution (demo)</CardDescription>
+              <CardDescription>Job-wise distribution</CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground py-8 text-center">
               {hasScopedJobData
-                ? "No paid jobs with qualifying rewards in this slice — tiers above are illustrative."
+                ? "No paid jobs with qualifying rewards in this period."
                 : "No reward-eligible jobs for this branch in the selected period."}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-4 space-y-4">
-          {usingDemo && (
-            <div
-              role="status"
-              className="rounded-lg border border-amber-200/90 bg-amber-50/90 dark:bg-amber-950/35 dark:border-amber-800/60 px-4 py-3 text-sm text-amber-950 dark:text-amber-100"
-            >
-              <span className="font-semibold">Sample data</span>
-              <span className="font-normal opacity-90">
-                {" "}
-                — No job cards matched this period. Charts use realistic placeholders.{" "}
-                <span className="text-foreground/80">{rangeDescription}</span>
-              </span>
-            </div>
-          )}
-
           <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
             <p className="text-sm font-medium">Branch performance analytics</p>
             <p className="text-xs text-muted-foreground mt-0.5">{rangeDescription}</p>

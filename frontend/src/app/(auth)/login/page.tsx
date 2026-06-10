@@ -70,8 +70,8 @@ export default function LoginPage() {
       if (result.delivery === "sms") {
         toast.success("OTP sent to your mobile number");
       } else if (result.devDemoCode) {
-        toast.success("Dev mode — no SMS", {
-          description: `Use code ${result.devDemoCode}, or copy the OTP from the API terminal (backend).`,
+        toast.success("Verification code", {
+          description: `Use code ${result.devDemoCode} to sign in.`,
           duration: 12_000,
         });
       } else if (result.hint) {

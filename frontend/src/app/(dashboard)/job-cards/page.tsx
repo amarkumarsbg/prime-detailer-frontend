@@ -226,7 +226,6 @@ export default function JobCardsPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Job Cards"
-        description="Manage your operations — track workshop jobs from intake to delivery. Use the board to see work by stage."
         actions={
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-lg border border-border overflow-hidden">

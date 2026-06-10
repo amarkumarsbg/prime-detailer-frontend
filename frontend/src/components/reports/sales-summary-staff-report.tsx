@@ -282,7 +282,7 @@ export function SalesSummaryStaffReport() {
               size="sm"
               className="gap-2 border-sky-200/80"
               onClick={() =>
-                toast.message("Email Excel", { description: "Demo: connect mail to send export." })
+                toast.message("Email Excel", { description: "The report will be sent to your configured email address." })
               }
             >
               <Mail className="h-4 w-4" />

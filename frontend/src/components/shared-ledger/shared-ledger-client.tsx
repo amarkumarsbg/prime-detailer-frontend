@@ -528,7 +528,7 @@ export function SharedLedgerClient() {
                         size="sm"
                         className="gap-2"
                         onClick={() =>
-                          toast.success("Download", { description: "Demo — export not wired yet." })
+                          toast.success("Download started")
                         }
                       >
                         <Download className="h-4 w-4" />

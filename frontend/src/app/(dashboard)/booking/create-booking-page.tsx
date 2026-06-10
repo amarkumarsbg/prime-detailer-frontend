@@ -1950,11 +1950,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             Apply
           </Button>
         </div>
-        {!compactJobCardDesktop && (
-          <p className="text-[10px] text-muted-foreground">
-            Demo code: WELCOME10 (10% off services before tax)
-          </p>
-        )}
         <Separator />
         <div className="flex items-center gap-2">
           <Banknote className="w-4 h-4 text-amber-600 dark:text-amber-400" />

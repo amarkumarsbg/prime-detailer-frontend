@@ -903,7 +903,7 @@ export default function CustomerDetailPage() {
                         </div>
                       </div>
                       <div className="mt-3">
-                        <p className="text-xs text-muted-foreground mb-1">List price (demo)</p>
+                        <p className="text-xs text-muted-foreground mb-1">List price</p>
                         <p className="text-sm font-medium tabular-nums">{formatInrFull(pkg.price)}</p>
                       </div>
                       <div className="mt-3">

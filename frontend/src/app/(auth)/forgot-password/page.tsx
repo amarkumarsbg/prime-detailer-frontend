@@ -258,11 +258,7 @@ export default function ForgotPasswordPage() {
               </p>
               {delivery === "email" ? (
                 <p className="text-xs text-muted-foreground mb-8 max-w-sm mx-auto leading-relaxed">
-                  Nothing yet? Check Spam/Promotions. This workspace only sends a link if that exact email was used when{" "}
-                  <strong className="text-foreground font-medium">signing up here</strong>
-                  {" "}— seeded demos often use addresses like{" "}
-                  <span className="font-mono">admin@local.dev</span>. Wrong inbox means no mail is sent, even though you
-                  still see this screen.
+                  Nothing yet? Check Spam/Promotions. A reset link is only sent if that exact email is registered on this account.
                 </p>
               ) : (
                 <div className="mb-8" aria-hidden />

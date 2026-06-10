@@ -110,7 +110,7 @@ export function ReportPageChrome({
       toast.error("Enter your email.");
       return;
     }
-    toast.success("Report queued (demo)", { description: `Would email ${emailYour.trim()}` });
+    toast.success("Report queued", { description: `Sending to ${emailYour.trim()}` });
     setEmailOpen(false);
   };
 

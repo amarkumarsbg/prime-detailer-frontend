@@ -60,8 +60,7 @@ export function BillWiseProfitReport() {
               </button>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs text-sm" side="bottom">
-              Bill wise Profit report has been updated; to see how profit is calculated, use your
-              costing rules in Settings (demo).
+              Bill wise Profit report has been updated; profit is calculated using your costing rules in Settings.
             </TooltipContent>
           </Tooltip>
         }

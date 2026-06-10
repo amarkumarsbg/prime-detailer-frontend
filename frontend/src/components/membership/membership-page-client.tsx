@@ -237,7 +237,7 @@ export function MembershipPageClient() {
         includedServiceNames: names,
       });
     }
-    toast.success("Membership activated (demo).");
+    toast.success("Membership activated.");
     setAssignCustomerId("");
     setAssignVehicleId("");
     setAssignPackageId("");
@@ -273,10 +273,7 @@ export function MembershipPageClient() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Membership"
-        description="Add and edit services under Services in the sidebar, then tick them into each package here. Assign packages to customers on the second tab. Demo only — no payments."
-      />
+      <PageHeader title="Membership" />
 
       <Tabs value={mainTab} onValueChange={setTab} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2 sm:w-auto sm:inline-flex">
@@ -301,13 +298,6 @@ export function MembershipPageClient() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg">Membership packages</CardTitle>
-              <CardDescription>
-                Services are maintained under{" "}
-                <Link href="/services" className="font-medium text-primary underline underline-offset-2">
-                  Services
-                </Link>
-                ; pick them here per package.
-              </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-sm">
@@ -377,7 +367,7 @@ export function MembershipPageClient() {
               <CardHeader>
                 <CardTitle className="text-lg">Activate membership</CardTitle>
                 <CardDescription>
-                  One active pass per vehicle per customer (demo). Start date optional — defaults to today.
+                  One active pass per vehicle. Start date is optional and defaults to today.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 sm:max-w-lg">
@@ -457,7 +447,6 @@ export function MembershipPageClient() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Recent subscriptions</CardTitle>
-              <CardDescription>Status is evaluated from end date when you open this screen.</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {subsWithLabels.length === 0 ? (
@@ -502,7 +491,7 @@ export function MembershipPageClient() {
                               className="text-destructive"
                               onClick={() => {
                                 cancelMembership(sub.id);
-                                toast.message("Membership cancelled (demo).");
+                                toast.message("Membership cancelled.");
                               }}
                             >
                               Cancel
@@ -564,11 +553,7 @@ export function MembershipPageClient() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  New washes or services are created on the{" "}
-                  <Link href="/services" className="font-medium text-primary underline underline-offset-2">
-                    Services
-                  </Link>{" "}
-                  page. Only <strong>active</strong> catalog items appear below; search to find them quickly.
+                  Only active catalog services are listed below.
                 </p>
                 {orphanedSelectedIds.length > 0 && (
                   <p className="text-xs text-amber-800 dark:text-amber-200 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 dark:border-amber-900 dark:bg-amber-950/50">

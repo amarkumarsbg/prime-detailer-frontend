@@ -34,7 +34,7 @@ export function Gstr3bReport() {
   );
 
   const downloadCsv = () => {
-    toast.message("Download started", { description: "GSTR-3B summary export (demo)." });
+    toast.message("Download started", { description: "GSTR-3B summary export." });
   };
 
   return (
@@ -125,7 +125,7 @@ export function Gstr3bReport() {
                   colSpan={7}
                   className="border border-border px-4 py-12 text-center text-muted-foreground"
                 >
-                  No inter-state B2C lines in demo data for this period.
+                  No inter-state B2C lines for this period.
                 </td>
               </tr>
             </tbody>

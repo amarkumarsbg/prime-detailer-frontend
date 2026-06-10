@@ -22,7 +22,7 @@ const META: Record<string, { title: string; description: string }> = {
   },
   daybook: {
     title: "Daybook",
-    description: "Chronological voucher view — connect to payments and invoices.",
+    description: "Chronological voucher view for the selected period.",
   },
   "purchase-summary": {
     title: "Purchase Summary",

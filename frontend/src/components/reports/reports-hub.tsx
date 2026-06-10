@@ -287,7 +287,7 @@ export function ReportsHub() {
         <Button
           type="button"
           className="shrink-0 bg-violet-600 hover:bg-violet-700"
-          onClick={() => toast.message("CA Reports Sharing", { description: "Demo: connect a CA workspace to share GST packs securely." })}
+          onClick={() => toast.message("CA Reports Sharing", { description: "Share GST report packs with your CA workspace." })}
         >
           <Share2 className="mr-2 h-4 w-4" />
           CA Reports Sharing

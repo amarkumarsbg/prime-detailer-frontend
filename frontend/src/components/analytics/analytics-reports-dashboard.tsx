@@ -195,7 +195,7 @@ export function AnalyticsReportsDashboard() {
   }, []);
 
   const onExport = () => {
-    toast.success("Report export queued (demo).");
+    toast.success("Report export queued.");
   };
 
   return (

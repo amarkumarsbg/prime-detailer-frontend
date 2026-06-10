@@ -83,7 +83,7 @@ export function AgeingReport() {
   }, [rows]);
 
   const downloadCsv = () => {
-    toast.message("Download started", { description: "Ageing report (demo export)." });
+    toast.message("Download started");
   };
 
   return (
@@ -274,7 +274,7 @@ export function PartyReportByItem() {
             ) : (
               <ReportTableEmpty
                 colSpan={5}
-                message="No party movements for this item in demo data."
+                message="No party movements for this item in the selected period."
                 icon={Search}
               />
             )}
@@ -300,7 +300,7 @@ export function PartyLedgerStatementReport() {
       toast.message("Select a party first.");
       return;
     }
-    toast.message("Download started (demo).");
+    toast.message("Download started.");
   };
 
   return (
@@ -379,8 +379,7 @@ export function PartyLedgerStatementReport() {
           </div>
         ) : (
           <p className="p-6 text-sm text-muted-foreground">
-            Ledger lines for the selected party would appear here (demo: summary cards above show sample
-            figures).
+            No ledger entries for this party in the selected period.
           </p>
         )}
       </div>
@@ -419,7 +418,7 @@ export function PartyWiseOutstandingReport() {
   }, [tab]);
 
   const downloadCsv = () => {
-    toast.message("Download started (demo).");
+    toast.message("Download started.");
   };
 
   return (

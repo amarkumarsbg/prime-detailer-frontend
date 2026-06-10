@@ -115,10 +115,7 @@ export default function ReferralsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Referrals"
-        description="Configure rewards under Referral rules — program toggle, referrer and new-customer amounts, and job minimums."
-      />
+      <PageHeader title="Referrals" />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className={cardSurface}>

@@ -148,7 +148,6 @@ export default function ServicesPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Service Management"
-        description="Manage service packages and add-ons. Packages with the High-end badge qualify for optional advance on job cards (same flag as in Edit)."
         actions={
           <>
             <Button

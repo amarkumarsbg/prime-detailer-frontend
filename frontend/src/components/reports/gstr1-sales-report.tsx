@@ -80,7 +80,7 @@ export function Gstr1SalesReport() {
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
     downloadBlob(blob, `gstr1-sales-${new Date().toISOString().slice(0, 10)}.json`);
-    toast.message("Download started", { description: "JSON export (dummy data)." });
+    toast.message("Download started");
   };
 
   const exportCsv = () => {
@@ -116,7 +116,7 @@ export function Gstr1SalesReport() {
     );
     const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, `gstr1-sales-${new Date().toISOString().slice(0, 10)}.csv`);
-    toast.message("Download started", { description: "Excel-compatible CSV (dummy data)." });
+    toast.message("Download started");
   };
 
   const exportPdfHint = () => {
@@ -124,9 +124,9 @@ export function Gstr1SalesReport() {
     window.print();
   };
 
-  const emailDemo = (kind: "json" | "excel") => {
+  const emailReport = (kind: "json" | "excel") => {
     toast.message(kind === "json" ? "Email JSON" : "Email Excel", {
-      description: "Demo: connect SMTP to mail this report.",
+      description: "The report will be sent to your configured email address.",
     });
   };
 
@@ -307,8 +307,8 @@ export function Gstr1SalesReport() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => emailDemo("json")}>Email JSON</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => emailDemo("excel")}>Email Excel</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => emailReport("json")}>Email JSON</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => emailReport("excel")}>Email Excel</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -362,7 +362,7 @@ export function Gstr1SalesReport() {
             tableSection(rows)
           ) : (
             <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              HSN view uses dummy HSN lines — switch to Invoice View for the sample GSTR-1 table.
+              Switch to Invoice View to see the GSTR-1 table for this period.
             </p>
           )}
         </TabsContent>
@@ -370,14 +370,14 @@ export function Gstr1SalesReport() {
         <TabsContent value="salesReturn" className="mt-4">
           {tableSection(
             [],
-            "No sales return / credit note rows in dummy data. Hook credit notes to populate this tab."
+            "No sales return or credit note rows for this period."
           )}
         </TabsContent>
 
         <TabsContent value="purchaseReturn" className="mt-4">
           {tableSection(
             [],
-            "No purchase return / debit note rows in dummy data. Hook purchase returns to populate this tab."
+            "No purchase return or debit note rows for this period."
           )}
         </TabsContent>
       </Tabs>

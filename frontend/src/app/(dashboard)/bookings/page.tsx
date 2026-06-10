@@ -378,7 +378,6 @@ export default function BookingsPage() {
     <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       <PageHeader
         title="Bookings"
-        description="Walk-ins and calendar appointments: confirm an appointment, then create a job card here. Filter job cards, review totals, and open jobs."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" className="shrink-0" asChild>

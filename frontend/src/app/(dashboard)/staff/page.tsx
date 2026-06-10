@@ -386,7 +386,7 @@ export default function StaffPage() {
               size="icon"
               className="h-8 w-8 text-destructive"
               disabled
-              aria-label="Delete (demo)"
+              aria-label="Delete"
             >
               <Trash2 className="w-4 h-4" />
             </Button>

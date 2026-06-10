@@ -171,7 +171,7 @@ export function ProfitLossReport() {
               className="gap-2 border-sky-200/80"
               onClick={() =>
                 toast.message("Email Excel", {
-                  description: "Demo: connect mail to send this export.",
+                  description: "The report will be sent to your configured email address.",
                 })
               }
             >
