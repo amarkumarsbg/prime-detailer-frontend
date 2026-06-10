@@ -64,17 +64,6 @@ export function isPickupLegComplete(
   return Boolean(getLinkedDropRequest(pickup.jobCardId, requests));
 }
 
-/** Hide completed pickup rows when a drop leg exists — avoids duplicate cards for the same job. */
-export function shouldShowPickupDropInList(
-  req: PickupDropRequest,
-  requests: PickupDropRequest[]
-): boolean {
-  if (req.type !== "PICKUP") return true;
-  const pickup = req;
-  if (!isPickupLegComplete(pickup, requests)) return true;
-  return false;
-}
-
 export function pickupDropDisplayLabel(
   req: PickupDropRequest,
   requests: PickupDropRequest[]
@@ -175,4 +164,101 @@ const JOB_RANK: JobCardStatus[] = [
 
 export function jobStatusRank(status: JobCardStatus): number {
   return JOB_RANK.indexOf(status);
+}
+
+export type PickupDropJobGroup = {
+  jobCardId: string;
+  jobNumber: string;
+  customerName: string;
+  vehicleRegNumber?: string;
+  scheduledTime: string;
+  address: string;
+  branchId: string;
+  pickup?: PickupDropRequest;
+  drop?: PickupDropRequest;
+  /** Standalone request (no linked job card row in the system). */
+  orphan?: PickupDropRequest;
+};
+
+function pickPreferredLeg(
+  current: PickupDropRequest | undefined,
+  incoming: PickupDropRequest
+): PickupDropRequest {
+  if (!current) return incoming;
+  return pickupDropStatusRank(incoming.status) > pickupDropStatusRank(current.status)
+    ? incoming
+    : current;
+}
+
+/** One UI row per job — pickup + drop-off are legs of the same booking, not duplicate jobs. */
+export function groupPickupDropByJob(requests: PickupDropRequest[]): PickupDropJobGroup[] {
+  const byJob = new Map<
+    string,
+    { pickup?: PickupDropRequest; drop?: PickupDropRequest }
+  >();
+  const orphans: PickupDropRequest[] = [];
+
+  for (const r of requests) {
+    if (!r.jobCardId || r.jobCardId.startsWith("new-")) {
+      orphans.push(r);
+      continue;
+    }
+    const cur = byJob.get(r.jobCardId) ?? {};
+    if (r.type === "PICKUP") cur.pickup = pickPreferredLeg(cur.pickup, r);
+    else cur.drop = pickPreferredLeg(cur.drop, r);
+    byJob.set(r.jobCardId, cur);
+  }
+
+  const groups: PickupDropJobGroup[] = [];
+
+  for (const [jobCardId, legs] of byJob) {
+    const ref = legs.pickup ?? legs.drop;
+    if (!ref) continue;
+    groups.push({
+      jobCardId,
+      jobNumber: ref.jobNumber,
+      customerName: ref.customerName,
+      vehicleRegNumber: ref.vehicleRegNumber,
+      scheduledTime: ref.scheduledTime,
+      address: ref.address,
+      branchId: ref.branchId,
+      pickup: legs.pickup,
+      drop: legs.drop,
+    });
+  }
+
+  for (const o of orphans) {
+    groups.push({
+      jobCardId: o.jobCardId,
+      jobNumber: o.jobNumber,
+      customerName: o.customerName,
+      vehicleRegNumber: o.vehicleRegNumber,
+      scheduledTime: o.scheduledTime,
+      address: o.address,
+      branchId: o.branchId,
+      orphan: o,
+    });
+  }
+
+  return groups.sort((a, b) => {
+    const ta = new Date(a.scheduledTime).getTime();
+    const tb = new Date(b.scheduledTime).getTime();
+    if (tb !== ta) return tb - ta;
+    return b.jobNumber.localeCompare(a.jobNumber);
+  });
+}
+
+export function pickupDropGroupMatchesFilters(
+  group: PickupDropJobGroup,
+  statusFilter: PickupDropStatus | "ALL",
+  typeFilter: PickupDropType | "ALL"
+): boolean {
+  const legs = [group.pickup, group.drop, group.orphan].filter(
+    (x): x is PickupDropRequest => x != null
+  );
+  return legs.some((leg) => {
+    if (statusFilter !== "ALL" && leg.status !== statusFilter) return false;
+    if (typeFilter !== "ALL" && leg.type !== typeFilter) return false;
+    return true;
+  });
 }

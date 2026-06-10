@@ -42,11 +42,12 @@ import {
   isDatetimeLocalInPast,
   localDatetimeLocalInputMin,
 } from "@/lib/booking-calendar-validation";
-import { PickupDropRequestCard } from "@/components/pickup-drop/pickup-drop-request-card";
+import { PickupDropJobGroupCard } from "@/components/pickup-drop/pickup-drop-job-group-card";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import {
+  groupPickupDropByJob,
+  pickupDropGroupMatchesFilters,
   PICKUP_DROP_STATUS_LABEL,
-  shouldShowPickupDropInList,
   validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
 
@@ -130,12 +131,9 @@ export default function PickupDropPage() {
     return active.filter((b) => b.id === selectedBranchId);
   }, [branches, selectedBranchId]);
 
-  const filtered = useMemo(() => {
-    let list = scopedRequests.filter((r) => shouldShowPickupDropInList(r, scopedRequests));
-    if (statusFilter !== "ALL") list = list.filter((r) => r.status === statusFilter);
-    if (typeFilter !== "ALL") list = list.filter((r) => r.type === typeFilter);
-    return [...list].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  const filteredGroups = useMemo(() => {
+    return groupPickupDropByJob(scopedRequests).filter((group) =>
+      pickupDropGroupMatchesFilters(group, statusFilter, typeFilter)
     );
   }, [scopedRequests, statusFilter, typeFilter]);
 
@@ -408,7 +406,7 @@ export default function PickupDropPage() {
         </CardContent>
       </Card>
 
-      {filtered.length === 0 ? (
+      {filteredGroups.length === 0 ? (
         <Card className="shadow-sm">
           <CardContent className="py-16 px-4">
             <p className="text-sm text-muted-foreground text-center">
@@ -418,18 +416,23 @@ export default function PickupDropPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filtered.map((r) => (
-            <PickupDropRequestCard
-              key={r.id}
-              request={r}
-              allRequests={scopedRequests}
-              branchScoped={!!selectedBranchId}
-              hasPhone={!!customerPhoneFromPickupRequest(r)}
-              onAssignDriver={handleAssignDriver}
-              onAdvance={handleAdvanceStatus}
-              onWhatsApp={(req) => void handlePickupDropWhatsApp(req)}
-            />
-          ))}
+          {filteredGroups.map((group) => {
+            const phone =
+              customerPhoneFromPickupRequest(group.pickup ?? group.drop ?? group.orphan!) ??
+              undefined;
+            return (
+              <PickupDropJobGroupCard
+                key={group.jobCardId}
+                group={group}
+                allRequests={scopedRequests}
+                branchScoped={!!selectedBranchId}
+                customerPhone={phone}
+                onAssignDriver={handleAssignDriver}
+                onAdvance={handleAdvanceStatus}
+                onWhatsApp={(req) => void handlePickupDropWhatsApp(req)}
+              />
+            );
+          })}
         </div>
       )}
 
