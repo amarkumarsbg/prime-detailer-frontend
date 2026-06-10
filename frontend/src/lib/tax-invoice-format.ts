@@ -147,12 +147,18 @@ export function buildTaxInvoicePrintHtml(
         const hsn = li.hsnSac ?? DEFAULT_SERVICE_HSN;
         const disc = li.lineDiscount ?? 0;
         const gTot = lineGrandWithTax(li, invoice);
+        const discCell =
+          disc > 0
+            ? li.description.includes("Membership benefit")
+              ? `<span class="disc-lbl">Membership</span><br>${formatCurrency(disc)}`
+              : formatCurrency(disc)
+            : "—";
         return `<tr>
         <td class="c">${idx + 1}</td>
         <td class="desc">${escapeHtml(li.description)}</td>
         <td class="c">${hsn}</td>
         <td class="r">${formatCurrency(lineRateDisplay(li))}</td>
-        <td class="r">${disc > 0 ? formatCurrency(disc) : "—"}</td>
+        <td class="r">${discCell}</td>
         <td class="r">${formatCurrency(li.total)}</td>
         <td class="c">${gstPct}%</td>
         <td class="r b">${formatCurrency(gTot)}</td>
@@ -201,6 +207,7 @@ table.inv td.desc { text-align: left; }
 table.inv .c { text-align: center; }
 table.inv .r { text-align: right; font-variant-numeric: tabular-nums; }
 table.inv .b { font-weight: 700; color: #171717; }
+table.inv .disc-lbl { font-size: 8px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #737373; }
 .tot-wrap { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .tot { width: 300px; font-size: 10px; padding: 12px 14px; border-radius: 4px; background: #fafafa; border: 1px solid #d4d4d4; }
 .tot-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e5e5e5; color: #404040; }

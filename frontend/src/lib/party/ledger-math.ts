@@ -22,6 +22,13 @@ export function invoiceOutstanding(inv: Invoice): number {
   return Math.max(0, Math.round((inv.grandTotal - invoicePaidTotal(inv)) * 100) / 100);
 }
 
+/** True when the customer has at least one non-draft invoice with a balance due. */
+export function customerHasPendingInvoiceDues(customerId: string, invoices: Invoice[]): boolean {
+  return invoices
+    .filter((inv) => inv.customerId === customerId && inv.status !== "DRAFT")
+    .some((inv) => invoiceOutstanding(inv) > 0.01);
+}
+
 export function expenseOutstanding(e: Expense): number {
   if (e.paymentStatus === "PAID") return 0;
   const paid = e.amountPaid ?? 0;

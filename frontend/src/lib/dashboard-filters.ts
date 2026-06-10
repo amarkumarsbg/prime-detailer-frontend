@@ -22,6 +22,14 @@ export function isOverdueJobCard(jc: JobCard): boolean {
   return expected < todayStart && !["DELIVERED", "CANCELLED"].includes(jc.status);
 }
 
+/** ISO timestamp for sorting the Delivery column (actual if delivered, else expected). */
+export function jobCardDeliveryAt(jc: JobCard): string {
+  if (jc.status === "DELIVERED") {
+    return jc.actualDelivery ?? jc.updatedAt ?? jc.createdAt;
+  }
+  return jc.expectedDelivery ?? jc.createdAt;
+}
+
 /** Low stock: ml-tracked uses stock/reorder ml; else quantity vs reorder level. */
 export function isLowStockPart(p: Part): boolean {
   if (p.stockQuantityMl != null && p.reorderLevelMl != null) {

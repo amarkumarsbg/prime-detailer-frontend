@@ -255,11 +255,15 @@ export function pickAppointmentForWhatsAppPreview(appointments: Appointment[]): 
     (a) =>
       a.priceGrandTotal != null &&
       a.status !== "CANCELLED" &&
-      a.status !== "COMPLETED"
+      a.status !== "COMPLETED" &&
+      a.status !== "NOT_ATTENDED"
   );
   if (withPricing) return withPricing;
   const active = appointments.filter(
-    (a) => a.status !== "CANCELLED" && a.status !== "COMPLETED"
+    (a) =>
+      a.status !== "CANCELLED" &&
+      a.status !== "COMPLETED" &&
+      a.status !== "NOT_ATTENDED"
   );
   if (active.length > 0) {
     return [...active].sort((a, b) => {

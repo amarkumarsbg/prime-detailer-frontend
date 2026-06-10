@@ -1,7 +1,18 @@
-import type { Invoice, InvoiceLineItem, InvoiceStatus, JobCard, Payment, ServiceItem } from "@/types";
+import type {
+  Invoice,
+  InvoiceLineItem,
+  InvoiceStatus,
+  JobCard,
+  Payment,
+  ServiceCatalogItem,
+  ServiceItem,
+  VehicleSegment,
+} from "@/types";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
+import { useMembershipStore } from "@/store/membership-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 
 const TAX_RATE = 0.18;
 
@@ -40,6 +51,57 @@ function invoiceStatusFromPayments(grandTotal: number, payments: Payment[]): Inv
   return "ISSUED";
 }
 
+function catalogPriceForSegment(item: ServiceCatalogItem, segment: VehicleSegment): number {
+  const key = segment as keyof ServiceCatalogItem["segmentPricing"];
+  return item.segmentPricing[key] ?? item.defaultPrice;
+}
+
+/** Included services redeemed on this job (from membership usage history). */
+function membershipRedeemedCatalogIds(jobCardId: string): Set<string> {
+  const ids = new Set<string>();
+  for (const sub of useMembershipStore.getState().subscriptions) {
+    for (const usage of sub.usageHistory ?? []) {
+      if (usage.jobCardId === jobCardId) ids.add(usage.serviceCatalogId);
+    }
+  }
+  return ids;
+}
+
+function serviceLineItem(
+  s: ServiceItem,
+  job: JobCard,
+  invoiceId: string,
+  index: number,
+  membershipRedeemed: Set<string>,
+  catalog: ServiceCatalogItem[]
+): InvoiceLineItem {
+  const isMembershipBenefit = membershipRedeemed.has(s.serviceCatalogId);
+  if (isMembershipBenefit) {
+    const cat = catalog.find((c) => c.id === s.serviceCatalogId);
+    const fullRate = cat ? catalogPriceForSegment(cat, job.vehicleSegment) : 0;
+    if (fullRate > 0) {
+      return {
+        id: `li-${invoiceId}-svc-${index}`,
+        description: `${s.name} (Membership benefit)`,
+        type: "SERVICE",
+        quantity: 1,
+        unitPrice: fullRate,
+        lineDiscount: fullRate,
+        total: 0,
+      };
+    }
+  }
+
+  return {
+    id: `li-${invoiceId}-svc-${index}`,
+    description: s.name,
+    type: "SERVICE" as const,
+    quantity: 1,
+    unitPrice: s.price,
+    total: s.price,
+  };
+}
+
 /** Build a billable invoice from a delivered job card (services → line items, GST). */
 export function buildInvoiceFromJobCard(
   job: JobCard,
@@ -48,15 +110,12 @@ export function buildInvoiceFromJobCard(
 ): Invoice {
   const hesCatalog = useHighEndServiceStore.getState().services;
   const services = normalizedServicePrices(job);
+  const membershipRedeemed = membershipRedeemedCatalogIds(job.id);
+  const catalog = useServiceCatalogStore.getState().catalog;
 
-  const catalogLines: InvoiceLineItem[] = services.map((s, i) => ({
-    id: `li-${invoiceId}-svc-${i}`,
-    description: s.name,
-    type: "SERVICE" as const,
-    quantity: 1,
-    unitPrice: s.price,
-    total: s.price,
-  }));
+  const catalogLines: InvoiceLineItem[] = services.map((s, i) =>
+    serviceLineItem(s, job, invoiceId, i, membershipRedeemed, catalog)
+  );
 
   const programLines: InvoiceLineItem[] = [];
   for (const hesId of job.highEndServiceIds ?? []) {

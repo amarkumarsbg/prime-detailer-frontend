@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
+import { useJobCardStore } from "@/store/job-card-store";
+import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
 import { useSettingsStore } from "@/store/settings-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useBranchScope } from "@/lib/branch-scope";
@@ -80,6 +82,11 @@ const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: 
   IN_PROGRESS: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500" },
   COMPLETED: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500" },
   CANCELLED: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-400", dot: "bg-red-500" },
+  NOT_ATTENDED: {
+    bg: "bg-slate-100 dark:bg-slate-800/40",
+    text: "text-slate-600 dark:text-slate-400",
+    dot: "bg-slate-400",
+  },
 };
 
 const APPOINTMENT_VEHICLE_SEGMENTS: { value: VehicleSegment; label: string }[] = [
@@ -100,8 +107,14 @@ export default function AppointmentsPage() {
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const staff = useStaffStore((s) => s.staff);
   const appointments = useScopedAppointments();
+  const jobCards = useJobCardStore((s) => s.jobCards);
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
+  const reconcileStaleAppointments = useAppointmentStore((s) => s.reconcileStaleAppointments);
+
+  useEffect(() => {
+    void reconcileStaleAppointments(jobCards);
+  }, [reconcileStaleAppointments, jobCards]);
   const { viewingLabel } = useBranchScope();
   const businessPhone = useSettingsStore((s) => s.businessPhone);
   const businessEmail = useSettingsStore((s) => s.businessEmail);
@@ -440,7 +453,13 @@ export default function AppointmentsPage() {
 
   const upcomingAppointments = useMemo(() => {
     return [...appointments]
-      .filter((a) => a.status !== "COMPLETED" && a.status !== "CANCELLED")
+      .filter(
+        (a) =>
+          a.status !== "COMPLETED" &&
+          a.status !== "CANCELLED" &&
+          a.status !== "NOT_ATTENDED" &&
+          !isAppointmentSlotElapsed(a.date, a.time)
+      )
       .sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
@@ -450,9 +469,12 @@ export default function AppointmentsPage() {
 
   const todayKey = format(new Date(), "yyyy-MM-dd");
   const todayCount = appointmentsByDate.get(todayKey)?.length ?? 0;
-  const scheduledCount = appointments.filter((a) => a.status === "SCHEDULED").length;
-  const confirmedCount = appointments.filter((a) => a.status === "CONFIRMED").length;
-
+  const scheduledCount = appointments.filter(
+    (a) => a.status === "SCHEDULED" && !isAppointmentSlotElapsed(a.date, a.time)
+  ).length;
+  const confirmedCount = appointments.filter(
+    (a) => a.status === "CONFIRMED" && !isAppointmentSlotElapsed(a.date, a.time)
+  ).length;
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader

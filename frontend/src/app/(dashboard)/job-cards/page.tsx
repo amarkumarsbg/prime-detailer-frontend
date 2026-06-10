@@ -10,17 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useJobCardStore } from "@/store/job-card-store";
+import { useBranchStore } from "@/store/branch-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import {
   isOverdueJobCard,
   isTodaysBookingsJob,
   isReadyForDeliveryJob,
+  jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
-import { jobCardDeliveryAt } from "@/lib/job-card-delivery";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
 import { Plus, LayoutGrid, List } from "lucide-react";
@@ -91,11 +92,23 @@ const KANBAN_COLORS: Record<JobCardStatus, string> = {
 export default function JobCardsPage() {
   const router = useRouter();
   const { jobCards } = useJobCardStore();
+  const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId } = useBranchScope();
+  const showBranchColumn = !selectedBranchId;
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+
+  const branchNameById = useMemo(
+    () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
+    [branches]
+  );
+
+  const renderBranchLabel = useCallback(
+    (branchId: string) => branchNameById[branchId] ?? branchId,
+    [branchNameById]
+  );
 
   const branchScopedJobCards = useMemo(
     () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
@@ -158,6 +171,23 @@ export default function JobCardsPage() {
           <span className="font-mono text-xs font-semibold text-primary">{item.jobNumber}</span>
         ),
       },
+      ...(showBranchColumn
+        ? [
+            {
+              key: "branchId",
+              label: "Branch",
+              className: "align-top whitespace-nowrap max-w-[9rem]",
+              render: (item: JobCard) => (
+                <span
+                  className="text-sm text-muted-foreground truncate block"
+                  title={renderBranchLabel(item.branchId)}
+                >
+                  {renderBranchLabel(item.branchId)}
+                </span>
+              ),
+            },
+          ]
+        : []),
       {
         key: "customerName",
         label: "Customer",
@@ -217,7 +247,7 @@ export default function JobCardsPage() {
         render: (item: JobCard) => formatDate(item.createdAt),
       },
     ],
-    []
+    [showBranchColumn, renderBranchLabel]
   );
 
   const searchMatchJobCard = useCallback((jc: JobCard, qLower: string) => jobCardMatchesSearch(jc, qLower), []);
@@ -276,7 +306,9 @@ export default function JobCardsPage() {
           <CardHeader className="space-y-1 border-b border-border/80 bg-muted/20 pb-4">
             <CardTitle className="text-base font-semibold">All job cards</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Open a row for full detail, photos, and status updates.
+              {showBranchColumn
+                ? "All branches — each row shows which outlet the job belongs to."
+                : "Open a row for full detail, photos, and status updates."}
             </p>
           </CardHeader>
           <CardContent className="pt-6 min-w-0">
@@ -306,7 +338,14 @@ export default function JobCardsPage() {
                   onRowClick={(item) => router.push(`/job-cards/${item.id}`)}
                   renderMobileCard={(jc) => (
                     <>
-                      <div className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</span>
+                        {showBranchColumn && (
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground shrink-0 max-w-[45%] truncate">
+                            {renderBranchLabel(jc.branchId)}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm font-medium leading-tight mt-1.5">{jc.customerName}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{jc.customerPhone}</p>
                       <p className="text-sm font-medium leading-tight mt-2">{jc.vehicleRegNumber}</p>
@@ -358,8 +397,13 @@ export default function JobCardsPage() {
                         onClick={() => router.push(`/job-cards/${jc.id}`)}
                         className="rounded-lg border border-border bg-card p-3 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all"
                       >
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-1.5 gap-2">
                           <span className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</span>
+                          {showBranchColumn && (
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[48%]">
+                              {renderBranchLabel(jc.branchId)}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm font-medium leading-tight">{jc.customerName}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}</p>

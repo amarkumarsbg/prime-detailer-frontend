@@ -231,4 +231,7 @@ export async function bootstrapAppData(): Promise<void> {
 
   ensureHitechPartyProfile();
   reconcilePickupWithJobCards();
+  void useAppointmentStore
+    .getState()
+    .reconcileStaleAppointments((c.jobCards as JobCard[]) ?? []);
 }

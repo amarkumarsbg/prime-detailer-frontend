@@ -32,6 +32,7 @@ import {
   findCatalogServiceForAppointment,
   resolveJobBranchId,
 } from "@/lib/job-from-appointment";
+import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import type { Appointment, JobCard, JobCardStatus } from "@/types";
@@ -178,7 +179,12 @@ export default function BookingsPage() {
 
   const confirmedAppointmentsNeedingJob = useMemo(() => {
     return appointments
-      .filter((a) => a.status === "CONFIRMED" && !a.jobCardId)
+      .filter(
+        (a) =>
+          a.status === "CONFIRMED" &&
+          !a.jobCardId &&
+          !isAppointmentSlotElapsed(a.date, a.time)
+      )
       .sort((a, b) => {
         const da = `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`);
         if (da !== 0) return da;

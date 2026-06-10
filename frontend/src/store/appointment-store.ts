@@ -1,13 +1,16 @@
 "use client";
 
 import { create } from "zustand";
-import type { Appointment } from "@/types";
+import type { Appointment, JobCard } from "@/types";
 import { putCollectionDocument } from "@/lib/collection-sync";
+import { listStaleAppointmentPatches } from "@/lib/appointment-status";
 
 interface AppointmentStore {
   appointments: Appointment[];
   addAppointment: (appointment: Appointment) => Promise<void>;
   updateAppointment: (id: string, updates: Partial<Appointment>) => Promise<void>;
+  /** Persist status fixes for bookings whose slot has passed (missed, completed, cancelled). */
+  reconcileStaleAppointments: (jobCards: JobCard[]) => Promise<void>;
 }
 
 export const useAppointmentStore = create<AppointmentStore>((set, get) => ({
@@ -28,5 +31,13 @@ export const useAppointmentStore = create<AppointmentStore>((set, get) => ({
     set((state) => ({
       appointments: state.appointments.map((a) => (a.id === id ? next : a)),
     }));
+  },
+
+  reconcileStaleAppointments: async (jobCards) => {
+    const patches = listStaleAppointmentPatches(get().appointments, jobCards);
+    if (patches.length === 0) return;
+    await Promise.all(
+      patches.map(({ id, status }) => get().updateAppointment(id, { status }))
+    );
   },
 }));

@@ -81,6 +81,8 @@ import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
+import { useInvoiceStore } from "@/store/invoice-store";
+import { customerHasPendingInvoiceDues } from "@/lib/party/ledger-math";
 import { useBranchScope } from "@/lib/branch-scope";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
@@ -343,6 +345,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const getUsedIncludedServiceIds = useMembershipStore((s) => s.getUsedIncludedServiceIds);
   const recordMembershipUsages = useMembershipStore((s) => s.recordMembershipUsages);
   const assignMembership = useMembershipStore((s) => s.assignMembership);
+  const invoices = useInvoiceStore((s) => s.invoices);
   const activeMembershipPackages = useMemo(
     () =>
       [...membershipPackagesAll.filter((p) => p.isActive)].sort((a, b) => a.price - b.price),
@@ -435,6 +438,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   /** Included catalog service ids redeemed on this job at ₹0 (subset of package; must match selectedMainIds when Yes). */
   const [membershipRedeemServiceIds, setMembershipRedeemServiceIds] = useState<string[]>([]);
   const [membershipServicesDialogOpen, setMembershipServicesDialogOpen] = useState(false);
+  /** Main service ids selected before choosing membership Yes (smart suggestions, etc.). */
+  const preMembershipMainIdsRef = useRef<string[]>([]);
 
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkInJob, setCheckInJob] = useState<{
@@ -540,6 +545,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const emailLooks =
     (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
+  const openCreditDialogIfCustomerHasDues = useCallback(
+    (customerId: string) => {
+      if (!isJobCard) return;
+      if (customerHasPendingInvoiceDues(customerId, invoices)) {
+        setCustomerCreditDialogOpen(true);
+      }
+    },
+    [isJobCard, invoices]
+  );
+
   useEffect(() => {
     const digits = customerPhone.replace(/\D/g, "").slice(-10);
     const emailTrim = customerEmail.trim();
@@ -576,8 +591,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     } else {
       setSelectedVehicleId(null);
     }
-    if (isJobCard) setCustomerCreditDialogOpen(true);
-  }, [customerPhone, customerEmail, findByPhone, findByEmail, brandNames, vehicles, isJobCard]);
+    openCreditDialogIfCustomerHasDues(found.id);
+  }, [
+    customerPhone,
+    customerEmail,
+    findByPhone,
+    findByEmail,
+    brandNames,
+    vehicles,
+    isJobCard,
+    openCreditDialogIfCustomerHasDues,
+  ]);
 
   const applySelectedCustomer = (c: Customer) => {
     prevMatchRef.current = c.id;
@@ -604,7 +628,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setLookupPanelCustomers(null);
     setLookupQuery("");
     toast.success("Customer selected", { description: c.name });
-    if (isJobCard) setCustomerCreditDialogOpen(true);
+    openCreditDialogIfCustomerHasDues(c.id);
   };
 
   const cancelLookup = () => {
@@ -922,9 +946,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setMembershipRedeemServiceIds([]);
   }, [existingCustomerId, selectedVehicleId, membershipLookupVehicleId, activeMembershipForSelectedVehicle?.id]);
 
+  /** Keep redeem ids in the job selection without replacing other picks (e.g. smart suggestions). */
   useEffect(() => {
-    if (membershipVisitChoice !== "yes") return;
-    setSelectedMainIds(membershipRedeemServiceIds);
+    if (membershipVisitChoice !== "yes" || membershipRedeemServiceIds.length === 0) return;
+    setSelectedMainIds((prev) => {
+      const merged = new Set(prev);
+      let changed = false;
+      for (const id of membershipRedeemServiceIds) {
+        if (!merged.has(id)) {
+          merged.add(id);
+          changed = true;
+        }
+      }
+      return changed ? [...merged] : prev;
+    });
   }, [membershipVisitChoice, membershipRedeemServiceIds]);
 
   const activeMembershipPackageRow = useMemo(
@@ -1836,7 +1871,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             );
             return;
           }
-          setSelectedMainIds(membershipRedeemServiceIds);
+          setSelectedMainIds((prev) => {
+            const merged = new Set(prev);
+            for (const id of membershipRedeemServiceIds) merged.add(id);
+            return [...merged];
+          });
           setSelectedHighEndIds([]);
         }
       }
@@ -3126,6 +3165,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         variant={membershipVisitChoice === "yes" ? "default" : "outline"}
                         className={membershipVisitChoice === "yes" ? "bg-violet-600 hover:bg-violet-700" : ""}
                         onClick={() => {
+                          preMembershipMainIdsRef.current = selectedMainIds;
                           setMembershipVisitChoice("yes");
                           setSelectedHighEndIds([]);
                           setMembershipRedeemServiceIds([]);
@@ -3139,17 +3179,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         size="sm"
                         variant={membershipVisitChoice === "no" ? "default" : "outline"}
                         onClick={() => {
-                          const redeem = membershipRedeemServiceIds;
                           setMembershipVisitChoice("no");
                           setMembershipRedeemServiceIds([]);
-                          setSelectedMainIds((mains) => {
-                            const r = new Set(redeem);
-                            const onlyRedeem =
-                              redeem.length > 0 &&
-                              mains.length === redeem.length &&
-                              mains.every((id) => r.has(id));
-                            return onlyRedeem ? [] : mains;
-                          });
                         }}
                       >
                         No
@@ -3308,6 +3339,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                             setMembershipRedeemServiceIds((prev) =>
                               on ? [...prev, sid] : prev.filter((x) => x !== sid)
                             );
+                            setSelectedMainIds((prev) => {
+                              if (on) return prev.includes(sid) ? prev : [...prev, sid];
+                              if (preMembershipMainIdsRef.current.includes(sid)) return prev;
+                              return prev.filter((x) => x !== sid);
+                            });
                           }}
                           className="mt-0.5"
                         />
