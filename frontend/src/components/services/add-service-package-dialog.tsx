@@ -247,253 +247,250 @@ export function AddServicePackageDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto gap-0 p-0">
-          <DialogHeader className="border-b border-border px-6 py-4">
+        <DialogContent className="flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+          <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
             <DialogTitle>Add Service Package</DialogTitle>
             <DialogDescription className="sr-only">
               Create a new service with category, pricing by vehicle type, GST, and duration.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAddPackage} className="space-y-5 px-6 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="asp-pkg-name">Service Name</Label>
-              <Input
-                id="asp-pkg-name"
-                value={addForm.name}
-                onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Premium Wash"
-                required
-              />
-            </div>
+          <form onSubmit={handleAddPackage} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-4">
+                <div className="space-y-2">
+                  <Label htmlFor="asp-pkg-name" className="block h-5 leading-5">
+                    Service Name
+                  </Label>
+                  <Input
+                    id="asp-pkg-name"
+                    value={addForm.name}
+                    onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. Premium Wash"
+                    className="h-9"
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label className="flex items-center gap-1.5">
-                  <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-                  Service Category
-                </Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
-                  onClick={() => setCategoryDialogOpen(true)}
-                >
-                  + New
-                </Button>
-              </div>
-              <Select
-                value={addForm.category || undefined}
-                onValueChange={(v) => setAddForm((f) => ({ ...f, category: v }))}
-              >
-                <SelectTrigger id="asp-pkg-category" className="h-10 w-full">
-                  <SelectValue placeholder="— Select category —" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="asp-pkg-desc">Description</Label>
-              <Textarea
-                id="asp-pkg-desc"
-                rows={4}
-                value={addForm.description}
-                onChange={(e) => setAddForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Describe what this package includes…"
-                className="resize-y min-h-[100px]"
-              />
-            </div>
-
-            <div
-              className={cn(
-                "rounded-xl border-2 border-sky-200 bg-sky-50/60 p-4 dark:border-sky-800 dark:bg-sky-950/30"
-              )}
-            >
-              <div className="flex items-start gap-2">
-                <Car className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
-                <div>
-                  <p className="font-medium text-foreground">Pricing by Vehicle Type</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Set prices for each vehicle type:
-                  </p>
+                <div className="space-y-2">
+                  <Label htmlFor="asp-pkg-category" className="flex h-5 items-center gap-1.5 leading-5">
+                    <Tag className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    Service Category
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={addForm.category || undefined}
+                      onValueChange={(v) => setAddForm((f) => ({ ...f, category: v }))}
+                    >
+                      <SelectTrigger id="asp-pkg-category" className="h-9 min-w-0 flex-1">
+                        <SelectValue placeholder="— Select category —" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 shrink-0 border-violet-300 bg-violet-50 px-3 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300"
+                      onClick={() => setCategoryDialogOpen(true)}
+                    >
+                      + New
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {PRICING_QUICK_SEGMENTS.map(({ key, label, hint, icon }) => {
-                  const fk = PRICING_FORM_FIELD[key];
-                  return (
-                    <div key={key} className="space-y-1.5">
-                      <Label className="text-xs font-normal flex flex-col gap-0.5">
-                        <span className="text-lg leading-none" aria-hidden>
-                          {icon}
-                        </span>
-                        <span className="text-foreground">{label}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">{hint}</span>
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                          ₹
-                        </span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={1}
-                          className="pl-7 h-9"
-                          placeholder="0"
-                          value={addForm[fk]}
-                          onChange={(e) =>
-                            setAddForm((f) => ({ ...f, [fk]: e.target.value }))
-                          }
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            <div
-              className={cn(
-                "rounded-xl border-2 border-amber-200/90 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/25"
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="asp-pkg-desc">Description</Label>
+                <Textarea
+                  id="asp-pkg-desc"
+                  rows={2}
+                  value={addForm.description}
+                  onChange={(e) => setAddForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe what this package includes…"
+                  className="min-h-[72px] resize-y"
+                />
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-xl border-2 border-sky-200 bg-sky-50/60 p-3 dark:border-sky-800 dark:bg-sky-950/30"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Car className="h-4 w-4 shrink-0 text-sky-600" />
+                  <p className="text-sm font-medium text-foreground">Pricing by vehicle type</p>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {PRICING_QUICK_SEGMENTS.map(({ key, label, hint, icon }) => {
+                    const fk = PRICING_FORM_FIELD[key];
+                    return (
+                      <div key={key} className="space-y-1">
+                        <Label className="text-xs font-normal flex items-center gap-1.5">
+                          <span className="text-base leading-none" aria-hidden>
+                            {icon}
+                          </span>
+                          <span>
+                            <span className="text-foreground">{label}</span>
+                            <span className="ml-1 text-[10px] text-muted-foreground">{hint}</span>
+                          </span>
+                        </Label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                            ₹
+                          </span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            className="h-9 pl-7"
+                            placeholder="0"
+                            value={addForm[fk]}
+                            onChange={(e) =>
+                              setAddForm((f) => ({ ...f, [fk]: e.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div
+                  className={cn(
+                    "rounded-xl border-2 border-amber-200/90 bg-amber-50/50 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="asp-pkg-gst"
+                        checked={addForm.gstApplicable}
+                        onCheckedChange={(c) =>
+                          setAddForm((f) => ({ ...f, gstApplicable: c === true }))
+                        }
+                      />
+                      <Label htmlFor="asp-pkg-gst" className="cursor-pointer text-sm font-medium">
+                        GST applicable
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="asp-pkg-gst-rate" className="whitespace-nowrap text-sm text-muted-foreground">
+                        Rate
+                      </Label>
+                      <Input
+                        id="asp-pkg-gst-rate"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        className="h-9 w-16"
+                        disabled={!addForm.gstApplicable}
+                        value={addForm.gstPercent}
+                        onChange={(e) =>
+                          setAddForm((f) => ({ ...f, gstPercent: e.target.value }))
+                        }
+                      />
+                      <span className="text-sm text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="asp-pkg-dur">Duration (min)</Label>
+                    <Input
+                      id="asp-pkg-dur"
+                      type="number"
+                      min={0}
+                      className="h-9"
+                      placeholder="e.g. 40"
+                      value={addForm.durationMin}
+                      onChange={(e) =>
+                        setAddForm((f) => ({ ...f, durationMin: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="asp-pkg-max-dur">Max duration</Label>
+                    <Input
+                      id="asp-pkg-max-dur"
+                      type="number"
+                      min={0}
+                      className="h-9"
+                      placeholder="e.g. 50"
+                      value={addForm.maxDuration}
+                      onChange={(e) =>
+                        setAddForm((f) => ({ ...f, maxDuration: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  Branch:{" "}
+                  <span className="font-medium text-foreground">
+                    {currentBranch?.name ?? "Current branch"}
+                  </span>
+                </p>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="asp-pkg-gst"
-                    checked={addForm.gstApplicable}
+                    id="asp-pkg-active"
+                    checked={addForm.active}
                     onCheckedChange={(c) =>
-                      setAddForm((f) => ({ ...f, gstApplicable: c === true }))
+                      setAddForm((f) => ({ ...f, active: c === true }))
                     }
                   />
-                  <Label htmlFor="asp-pkg-gst" className="text-sm font-medium cursor-pointer">
-                    GST Applicable
+                  <Label htmlFor="asp-pkg-active" className="cursor-pointer text-sm font-medium">
+                    Active
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="asp-pkg-high-end"
+                    checked={addForm.isHighEnd}
+                    onCheckedChange={(c) =>
+                      setAddForm((f) => ({ ...f, isHighEnd: c === true }))
+                    }
+                  />
+                  <Label htmlFor="asp-pkg-high-end" className="cursor-pointer text-sm font-medium">
+                    High-end
                   </Label>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="asp-pkg-gst-rate" className="text-sm text-muted-foreground whitespace-nowrap">
-                    GST Rate:
+                  <Label htmlFor="asp-pkg-incentive" className="whitespace-nowrap text-sm">
+                    Incentive %
                   </Label>
                   <Input
-                    id="asp-pkg-gst-rate"
+                    id="asp-pkg-incentive"
                     type="number"
                     min={0}
                     max={100}
-                    step={0.1}
-                    className="h-9 w-20"
-                    disabled={!addForm.gstApplicable}
-                    value={addForm.gstPercent}
+                    step={0.5}
+                    className="h-9 w-16"
+                    value={addForm.incentivePercent}
                     onChange={(e) =>
-                      setAddForm((f) => ({ ...f, gstPercent: e.target.value }))
+                      setAddForm((f) => ({ ...f, incentivePercent: e.target.value }))
                     }
                   />
-                  <span className="text-sm text-muted-foreground">%</span>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="asp-pkg-dur">Duration (minutes)</Label>
-                <Input
-                  id="asp-pkg-dur"
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 40"
-                  value={addForm.durationMin}
-                  onChange={(e) =>
-                    setAddForm((f) => ({ ...f, durationMin: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="asp-pkg-max-dur">Max Duration (optional)</Label>
-                <Input
-                  id="asp-pkg-max-dur"
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 50"
-                  value={addForm.maxDuration}
-                  onChange={(e) =>
-                    setAddForm((f) => ({ ...f, maxDuration: e.target.value }))
-                  }
-                />
-                <p className="text-xs text-muted-foreground">For range like 40–50 mins</p>
-              </div>
-            </div>
-
-            <div className="rounded-xl border-2 border-sky-200 bg-sky-50/70 px-4 py-3 dark:border-sky-800 dark:bg-sky-950/30">
-              <div className="flex gap-2">
-                <Building2 className="h-5 w-5 shrink-0 text-sky-600 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-sky-950 dark:text-sky-50">
-                    Branch: {currentBranch?.name ?? "Current Branch"}
-                  </p>
-                  <p className="text-xs text-sky-800/90 dark:text-sky-200/90 mt-1">
-                    This service will be assigned to your branch automatically.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="asp-pkg-active"
-                  checked={addForm.active}
-                  onCheckedChange={(c) =>
-                    setAddForm((f) => ({ ...f, active: c === true }))
-                  }
-                />
-                <Label htmlFor="asp-pkg-active" className="text-sm font-medium cursor-pointer">
-                  Active (Available for booking)
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="asp-pkg-high-end"
-                  checked={addForm.isHighEnd}
-                  onCheckedChange={(c) =>
-                    setAddForm((f) => ({ ...f, isHighEnd: c === true }))
-                  }
-                />
-                <Label htmlFor="asp-pkg-high-end" className="text-sm font-medium cursor-pointer">
-                  High-end service
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="asp-pkg-incentive" className="text-sm whitespace-nowrap">
-                  Incentive %
-                </Label>
-                <Input
-                  id="asp-pkg-incentive"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  className="h-9 w-20"
-                  value={addForm.incentivePercent}
-                  onChange={(e) =>
-                    setAddForm((f) => ({ ...f, incentivePercent: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border px-0 pb-0">
+            <DialogFooter className="shrink-0 gap-2 border-t border-border px-6 py-4 sm:gap-0">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                Create
-              </Button>
+              <Button type="submit">Create</Button>
             </DialogFooter>
           </form>
         </DialogContent>
