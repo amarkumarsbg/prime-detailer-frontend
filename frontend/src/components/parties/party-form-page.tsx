@@ -155,8 +155,8 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
       : "/parties";
 
   return (
-    <div className="flex flex-col min-h-0">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-background/95 backdrop-blur px-1 py-3 mb-6">
+    <div className="-mx-4 -mt-4 -mb-4 md:-mx-6 md:-mt-6 md:-mb-6 flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] flex-col overflow-hidden bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
+      <header className="relative z-20 flex shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-4 py-3 md:px-6">
         <div className="flex items-center gap-3 min-w-0">
           <Button variant="ghost" size="icon" className="shrink-0" asChild>
             <Link href={backHref} aria-label="Back">
@@ -182,7 +182,8 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
         </div>
       </header>
 
-      <div className="space-y-8 pb-16 max-w-6xl">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 md:px-6">
+        <div className="space-y-8 pb-16 max-w-6xl">
         <section>
           <SectionTitle>General Details</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -529,6 +530,7 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
             </Button>
           </div>
         </section>
+        </div>
       </div>
 
       <AddBankAccountDialog
