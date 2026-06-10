@@ -71,6 +71,9 @@ import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useNotificationStore } from "@/store/notification-store";
+import { usePickupDropStore } from "@/store/pickup-drop-store";
+import { pickupBlocksJobAdvance } from "@/lib/pickup-drop-flow";
+import { JobCardPickupPanel } from "@/components/job-cards/job-card-pickup-panel";
 import { ApiError } from "@/lib/api-client";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
@@ -163,6 +166,7 @@ export default function JobCardDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const { jobCards, updateJobCard } = useJobCardStore();
+  const pickupRequests = usePickupDropStore((s) => s.requests);
   const customers = useCustomerStore((s) => s.customers);
   const staff = useStaffStore((s) => s.staff);
 
@@ -880,6 +884,12 @@ export default function JobCardDetailPage() {
     if (nextIndex < WORKFLOW_STATUSES.length) {
       const nextStatus = WORKFLOW_STATUSES[nextIndex];
 
+      const pickupBlock = pickupBlocksJobAdvance(jobCard.id, pickupRequests, nextStatus);
+      if (pickupBlock) {
+        toast.error("Pickup not complete", { description: pickupBlock });
+        return;
+      }
+
       if (currentStatus === "INSPECTION" && nextStatus === "AWAITING_SERVICE") {
         if (!hasBeforePhoto) {
           setPhotoTab("BEFORE");
@@ -1118,10 +1128,12 @@ export default function JobCardDetailPage() {
         { label: jobCard.jobNumber },
       ]} />
 
-      {/* Workflow progress: vertical timeline on mobile, horizontal row on sm+ */}
       {currentStatus !== "CANCELLED" && (
         <Card>
           <CardContent className="!pt-6 !pb-5 !px-4 sm:!pt-8 sm:!pb-6 sm:!px-10">
+            {jobCard && (
+              <JobCardPickupPanel jobCardId={jobCard.id} branchId={jobCard.branchId} />
+            )}
             <div className="sm:hidden">
               {WORKFLOW_STATUSES.map((status, index) => {
                 const isLast = index === WORKFLOW_STATUSES.length - 1;

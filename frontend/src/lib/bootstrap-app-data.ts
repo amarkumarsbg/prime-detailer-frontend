@@ -80,6 +80,7 @@ import {
   ensureHitechPartyProfile,
   mergeHitechPartyDemoBootstrap,
 } from "@/lib/party/party-hitech-demo";
+import { reconcilePickupWithJobCards } from "@/lib/sync-pickup-from-job-card";
 
 export type BootstrapPayload = {
   customers: Customer[];
@@ -229,4 +230,5 @@ export async function bootstrapAppData(): Promise<void> {
   }
 
   ensureHitechPartyProfile();
+  reconcilePickupWithJobCards();
 }

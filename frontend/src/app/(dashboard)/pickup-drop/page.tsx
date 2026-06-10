@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,9 +26,9 @@ import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
-import { Plus, Truck } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -42,7 +42,9 @@ import {
   isDatetimeLocalInPast,
   localDatetimeLocalInputMin,
 } from "@/lib/booking-calendar-validation";
-import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
+import { PickupDropRequestCard } from "@/components/pickup-drop/pickup-drop-request-card";
+import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
+import { PICKUP_DROP_STATUS_LABEL, validatePickupDropAdvance } from "@/lib/pickup-drop-flow";
 
 function customerPhoneFromPickupRequest(r: PickupDropRequest): string | undefined {
   const direct = r.customerPhone?.trim();
@@ -77,22 +79,6 @@ const TYPE_OPTIONS: { value: PickupDropType | "ALL"; label: string }[] = [
   { value: "DROP", label: "Drop" },
 ];
 
-const STATUS_LABEL: Record<PickupDropStatus, string> = {
-  PENDING: "Pending",
-  DRIVER_ASSIGNED: "Driver Assigned",
-  PICKED_UP: "Picked Up",
-  IN_SERVICE: "In Service",
-  DELIVERED: "Delivered",
-};
-
-const STATUS_STYLE: Record<PickupDropStatus, string> = {
-  PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-  DRIVER_ASSIGNED: "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300",
-  PICKED_UP: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300",
-  IN_SERVICE: "bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300",
-  DELIVERED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-};
-
 const selectTriggerClass =
   "border-input transition-[border-color,box-shadow] duration-[1200ms] ease-[cubic-bezier(0.45,0,0.55,1)] data-[state=open]:border-emerald-600 data-[state=open]:shadow-[0_0_0_1px_rgba(16,133,88,0.25)]";
 
@@ -102,22 +88,9 @@ const selectContentClass =
 const dialogSurfaceClass =
   "!duration-[1200ms] data-[state=open]:!duration-[1200ms] data-[state=closed]:!duration-[1000ms]";
 
-function StatusBadge({ status }: { status: PickupDropStatus }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-        STATUS_STYLE[status]
-      )}
-    >
-      {STATUS_LABEL[status]}
-    </span>
-  );
-}
-
 export default function PickupDropPage() {
   const { jobCards } = useJobCardStore();
-  const { requests, addRequest } = usePickupDropStore();
+  const { requests, addRequest, assignDriver, advanceStatus } = usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
   const { selectedBranchId, viewingLabel } = useBranchScope();
@@ -152,17 +125,6 @@ export default function PickupDropPage() {
     if (!selectedBranchId) return active;
     return active.filter((b) => b.id === selectedBranchId);
   }, [branches, selectedBranchId]);
-
-  const drivers = useMemo(
-    () =>
-      staff.filter(
-        (u) =>
-          u.isActive &&
-          u.role === "MECHANIC" &&
-          (!selectedBranchId || u.branchId === selectedBranchId)
-      ),
-    [staff, selectedBranchId]
-  );
 
   const filtered = useMemo(() => {
     let list = scopedRequests;
@@ -199,7 +161,9 @@ export default function PickupDropPage() {
 
   const handleCreate = () => {
     const driver =
-      driverId !== "unassigned" ? drivers.find((d) => d.id === driverId) : undefined;
+      driverId !== "unassigned"
+        ? staff.find((d) => d.id === driverId)
+        : undefined;
 
     if (createMode === "existing") {
       const jc = scopedJobCards.find((j) => j.id === bookingId);
@@ -326,6 +290,31 @@ export default function PickupDropPage() {
     }
   };
 
+  const handleAdvanceStatus = (r: PickupDropRequest) => {
+    const block = validatePickupDropAdvance(r);
+    if (block) {
+      toast.error(block);
+      return;
+    }
+    const next = advanceStatus(r.id);
+    if (!next) {
+      toast.message("Already at final status");
+      return;
+    }
+    toast.success(PICKUP_DROP_STATUS_LABEL[next]);
+  };
+
+  const handleAssignDriver = (requestId: string, value: string, driverName?: string) => {
+    if (value === "unassigned") {
+      assignDriver(requestId, undefined, undefined);
+      return;
+    }
+    assignDriver(requestId, value, driverName);
+    if (driverName) {
+      toast.success(`Driver: ${driverName}`);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -415,79 +404,29 @@ export default function PickupDropPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Truck className="size-4 text-muted-foreground" />
-            Pickup/Drop Requests
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-16 px-4">
+      {filtered.length === 0 ? (
+        <Card className="shadow-sm">
+          <CardContent className="py-16 px-4">
+            <p className="text-sm text-muted-foreground text-center">
               No pickup/drop requests found
             </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm border-collapse">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-left">
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap">ID</th>
-                    <th className="px-4 py-3 font-semibold">Type</th>
-                    <th className="px-4 py-3 font-semibold">Customer</th>
-                    <th className="px-4 py-3 font-semibold min-w-[180px]">Address</th>
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Scheduled Time</th>
-                    <th className="px-4 py-3 font-semibold">Driver</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap">WhatsApp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id} className="border-b border-border/60 hover:bg-muted/30">
-                      <td className="px-4 py-3 font-mono text-xs font-semibold text-primary whitespace-nowrap">
-                        {r.id}
-                      </td>
-                      <td className="px-4 py-3">{r.type === "PICKUP" ? "Pickup" : "Drop"}</td>
-                      <td className="px-4 py-3 font-medium">{r.customerName}</td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[240px] truncate">
-                        {r.address}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground tabular-nums">
-                        {formatDateTime(r.scheduledTime)}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {r.driverName ?? "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={r.status} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs"
-                          disabled={!customerPhoneFromPickupRequest(r)}
-                          title={
-                            customerPhoneFromPickupRequest(r)
-                              ? "Send pickup/drop update to customer"
-                              : "No phone on file for this request"
-                          }
-                          onClick={() => void handlePickupDropWhatsApp(r)}
-                        >
-                          <WhatsAppIcon className="w-3.5 h-3.5 mr-1 text-[#25D366]" />
-                          Send
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((r) => (
+            <PickupDropRequestCard
+              key={r.id}
+              request={r}
+              branchScoped={!!selectedBranchId}
+              hasPhone={!!customerPhoneFromPickupRequest(r)}
+              onAssignDriver={handleAssignDriver}
+              onAdvance={handleAdvanceStatus}
+              onWhatsApp={(req) => void handlePickupDropWhatsApp(req)}
+            />
+          ))}
+        </div>
+      )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent
@@ -649,19 +588,16 @@ export default function PickupDropPage() {
             </div>
             <div className="grid gap-2">
               <Label>Assign Driver (Optional)</Label>
-              <Select value={driverId} onValueChange={setDriverId}>
-                <SelectTrigger className={selectTriggerClass}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className={selectContentClass}>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {drivers.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PickupDriverSelect
+                branchId={
+                  createMode === "existing"
+                    ? scopedJobCards.find((j) => j.id === bookingId)?.branchId ?? selectedBranchId ?? ""
+                    : newBranchId
+                }
+                value={driverId}
+                onValueChange={(id) => setDriverId(id)}
+                branchScoped={!!selectedBranchId}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="pd-notes">Notes (Optional)</Label>

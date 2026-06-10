@@ -67,6 +67,7 @@ import {
 import { CustomerCreditCheckDialog } from "@/components/job-cards/customer-credit-check-dialog";
 import { AddAddonDialog } from "@/components/services/add-addon-dialog";
 import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
+import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -129,9 +130,11 @@ function queuePickupDropFromBooking(params: {
     | "expectedDelivery"
   >;
   customerAddress: string;
+  pickupDriverId?: string;
+  pickupDriverName?: string;
   branches: { id: string; name: string; address: string }[];
 }) {
-  const { job, customerAddress, branches } = params;
+  const { job, customerAddress, pickupDriverId, pickupDriverName, branches } = params;
   const br = branches.find((b) => b.id === job.branchId);
   const workshop = br ? `${br.name} — ${br.address}` : job.branchId;
   const address =
@@ -148,7 +151,9 @@ function queuePickupDropFromBooking(params: {
     address,
     scheduledTime: job.expectedDelivery,
     type: "PICKUP",
-    notes: "Created from booking wizard",
+    driverId: pickupDriverId,
+    driverName: pickupDriverName,
+    notes: pickupDriverId ? "Created from booking — driver assigned" : "Created from booking wizard",
   });
 }
 /** Must match seeded `serviceCatalog` main rows (`srv-001` … `srv-005` in prisma/seed). */
@@ -382,6 +387,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [serviceSearch, setServiceSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [pickupRequired, setPickupRequired] = useState(false);
+  const [pickupDriverId, setPickupDriverId] = useState("");
   const [showPickup, setShowPickup] = useState(true);
   const [showAddons, setShowAddons] = useState(true);
   const [addonDialogOpen, setAddonDialogOpen] = useState(false);
@@ -1146,11 +1152,24 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       });
       return;
     }
+    if (pickupRequired) {
+      if (!pickupDriverId) {
+        toast.error("Assign a pickup driver when pickup is required.");
+        return;
+      }
+      if (!customerAddress.trim()) {
+        toast.error("Enter the pickup address when pickup is required.");
+        return;
+      }
+    }
 
     const now = new Date().toISOString();
     const jobNumber = getNextJobNumber();
     const id = `jc-local-${Date.now()}`;
     const mechanic = mechanics.find((m) => m.id === mechanicId);
+    const pickupDriver = pickupDriverId
+      ? useStaffStore.getState().staff.find((m) => m.id === pickupDriverId)
+      : undefined;
 
     let custId = existingCustomerId ?? `cust-local-${Date.now()}`;
     const regStored = normalizeRegistrationNumber(vehicleNumber);
@@ -1423,6 +1442,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         queuePickupDropFromBooking({
           job: walkInJob,
           customerAddress,
+          pickupDriverId: pickupDriver?.id,
+          pickupDriverName: pickupDriver?.name,
           branches,
         });
       }
@@ -1450,7 +1471,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       });
 
       toast.success("Booking created", {
-        description: pickupRequired ? `${jobNumber} · Pickup queued under Pickup & Drop` : jobNumber,
+        description: pickupRequired
+          ? `${jobNumber} · Pickup driver ${pickupDriver?.name ?? "assigned"}`
+          : jobNumber,
       });
       void sendJobCardCreatedWhatsApp(walkInJob);
       navigateToCreatedJobCard(id);
@@ -1516,6 +1539,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       queuePickupDropFromBooking({
         job: newJobCard,
         customerAddress,
+        pickupDriverId: pickupDriver?.id,
+        pickupDriverName: pickupDriver?.name,
         branches,
       });
     }
@@ -1560,7 +1585,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setCheckInOpen(true);
     toast.message("Job card created", {
       description: pickupRequired
-        ? "Complete vehicle check-in with before photos to open the job. Pickup request is on Pickup & Drop."
+        ? "Complete check-in with before photos. Mark pickup complete on the job card when the driver collects the vehicle."
         : "Complete vehicle check-in with before photos to open the job.",
     });
   };
@@ -1814,6 +1839,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           setSelectedMainIds(membershipRedeemServiceIds);
           setSelectedHighEndIds([]);
         }
+      }
+    }
+    if (jobWizardStepId === "pickupDrop" && pickupRequired) {
+      if (!pickupDriverId) {
+        toast.error("Assign a pickup driver to continue.");
+        return;
+      }
+      if (!customerAddress.trim()) {
+        toast.error("Enter the pickup address to continue.");
+        return;
       }
     }
     setJobCreateStep((i) => {
@@ -3912,26 +3947,58 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               </div>
             </CardHeader>
             {showPickup && (
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-2">Is pickup required?</p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={pickupRequired ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setPickupRequired(true)}
-                  >
-                    Yes
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={!pickupRequired ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setPickupRequired(false)}
-                  >
-                    No
-                  </Button>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Is pickup required?</p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={pickupRequired ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPickupRequired(true)}
+                    >
+                      Yes
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={!pickupRequired ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setPickupRequired(false);
+                        setPickupDriverId("");
+                      }}
+                    >
+                      No
+                    </Button>
+                  </div>
                 </div>
+                {pickupRequired && (
+                  <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-border/60">
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="pickup-address">Pickup address</Label>
+                      <Textarea
+                        id="pickup-address"
+                        value={customerAddress}
+                        onChange={(e) => setCustomerAddress(e.target.value)}
+                        placeholder="Where should the driver collect the vehicle?"
+                        rows={2}
+                        className="resize-none"
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="pickup-driver">Pickup driver</Label>
+                      <PickupDriverSelect
+                        branchId={branchId}
+                        value={pickupDriverId || "unassigned"}
+                        onValueChange={(id) => setPickupDriverId(id === "unassigned" ? "" : id)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Service mechanic is assigned separately in the next step. Pickup driver collects the vehicle
+                        from the customer.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             )}
           </Card>

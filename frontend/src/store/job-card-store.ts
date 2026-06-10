@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { JobCard } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
+import { syncPickupFromJobCard } from "@/lib/sync-pickup-from-job-card";
 
 interface JobCardStore {
   jobCards: JobCard[];
@@ -30,6 +31,9 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
     set((state) => ({
       jobCards: state.jobCards.map((jc) => (jc.id === id ? next : jc)),
     }));
+    if (updates.status) {
+      syncPickupFromJobCard(id, next.status);
+    }
   },
 
   deleteJobCard: async (id) => {

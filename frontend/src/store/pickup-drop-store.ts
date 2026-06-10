@@ -3,6 +3,11 @@
 import { create } from "zustand";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { postCollectionSnapshot } from "@/lib/collection-sync";
+import {
+  nextPickupDropStatus,
+  PICKUP_DROP_STATUS_LABEL,
+  validatePickupDropAdvance,
+} from "@/lib/pickup-drop-flow";
 
 function pushPickupSnapshot(requests: PickupDropRequest[]) {
   void postCollectionSnapshot("pickupDropRequests", requests).catch((err) => {
@@ -41,6 +46,8 @@ interface PickupDropStore {
   setRequestsFromBootstrap: (requests: PickupDropRequest[]) => void;
   addRequest: (input: AddPickupDropInput) => PickupDropRequest;
   updateStatus: (id: string, status: PickupDropStatus) => void;
+  assignDriver: (id: string, driverId: string | undefined, driverName: string | undefined) => void;
+  advanceStatus: (id: string) => PickupDropStatus | null;
 }
 
 export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
@@ -83,5 +90,35 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
       pushPickupSnapshot(requests);
       return { requests };
     });
+  },
+
+  assignDriver: (id, driverId, driverName) => {
+    set((s) => {
+      const requests = s.requests.map((r) => {
+        if (r.id !== id) return r;
+        const nextStatus =
+          r.status === "PENDING" && driverId ? ("DRIVER_ASSIGNED" as const) : r.status;
+        return {
+          ...r,
+          driverId,
+          driverName,
+          status: nextStatus,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      pushPickupSnapshot(requests);
+      return { requests };
+    });
+  },
+
+  advanceStatus: (id) => {
+    const current = get().requests.find((r) => r.id === id);
+    if (!current) return null;
+    const block = validatePickupDropAdvance(current);
+    if (block) return null;
+    const next = nextPickupDropStatus(current.type, current.status);
+    if (!next) return null;
+    get().updateStatus(id, next);
+    return next;
   },
 }));
