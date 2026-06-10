@@ -70,5 +70,8 @@ export function useParties(): {
 }
 
 export function getPartyById(parties: Party[], id: string): Party | undefined {
-  return parties.find((p) => p.id === id);
+  const normalized = decodeURIComponent(id);
+  return parties.find(
+    (p) => p.id === id || p.id === normalized || decodeURIComponent(p.id) === normalized
+  );
 }

@@ -24,6 +24,7 @@ import {
 import { useParties } from "@/hooks/use-parties";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { partyDisplayBalance, balanceFlow } from "@/lib/party/ledger-math";
+import { PartiesListLoading } from "@/components/parties/party-loading-states";
 import { formatInrFull, formatInrTable } from "@/lib/utils";
 import { useBranchScope } from "@/lib/branch-scope";
 import { toast } from "sonner";
@@ -79,7 +80,7 @@ function matchesSearch(
 
 export function PartiesPageClient() {
   const router = useRouter();
-  const { parties, removeParty } = useParties();
+  const { parties, partiesLoading, removeParty } = useParties();
   const invoices = useScopedInvoices();
   const expenses = useScopedExpenses();
   const { viewingLabel } = useBranchScope();
@@ -176,6 +177,10 @@ export function PartiesPageClient() {
     await removeParty(id);
     toast.success("Party removed from list");
   };
+
+  if (partiesLoading) {
+    return <PartiesListLoading />;
+  }
 
   const tableColGroup = (
     <colgroup>

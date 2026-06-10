@@ -104,6 +104,65 @@ export function PageSkeleton() {
   );
 }
 
+/** Parties list: KPI row + filters + table. */
+export function PartiesPageSkeleton() {
+  return (
+    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] flex-col gap-4 overflow-hidden md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
+      <div className="shrink-0 space-y-2">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-4 w-72 max-w-full" />
+      </div>
+      <CardGridSkeleton count={3} />
+      <div className="flex shrink-0 gap-2">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-10 w-36" />
+        <Skeleton className="h-10 w-28" />
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
+        <TableSkeleton rows={12} cols={6} />
+      </div>
+    </div>
+  );
+}
+
+/** Party detail: sidebar list + header tabs + content. */
+export function PartyDetailSkeleton() {
+  return (
+    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] overflow-hidden rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
+      <div className="hidden lg:flex w-full max-w-[300px] shrink-0 flex-col gap-2 border-r border-border bg-muted/20 p-3">
+        <Skeleton className="h-9 w-full" />
+        {Array.from({ length: 9 }).map((_, i) => (
+          <Skeleton key={i} className="h-11 w-full rounded-md" />
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-border px-4 py-3 sm:px-5 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
+              <Skeleton className="h-7 w-56 max-w-full" />
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Skeleton className="h-9 w-24" />
+              <Skeleton className="h-9 w-16" />
+              <Skeleton className="h-9 w-9" />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-32" />
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-4 sm:p-5 space-y-4">
+          <CardGridSkeleton count={4} />
+          <TableSkeleton rows={8} cols={5} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KpiTileSkeleton() {
   return (
     <div className="rounded-xl border border-border bg-card p-5 sm:p-6">

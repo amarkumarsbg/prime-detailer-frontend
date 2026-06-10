@@ -28,7 +28,8 @@ import {
   PartyPeriodSelect,
   partyFilterTriggerClass,
 } from "@/components/parties/party-period-select";
-import { useParties, getPartyById } from "@/hooks/use-parties";
+import { useParties } from "@/hooks/use-parties";
+import { useParty } from "@/hooks/use-party";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import {
   buildPartyItemWise,
@@ -54,6 +55,10 @@ import {
 import { toast } from "sonner";
 import type { Party, PartyTransactionRow } from "@/types/party";
 import { appendReturnTo, partyDetailReturnPath } from "@/lib/navigation/return-to";
+import {
+  PartyDetailLoadingShell,
+  PartyEmptyState,
+} from "@/components/parties/party-loading-states";
 import { cn } from "@/lib/utils";
 
 const tabTriggerClass =
@@ -88,6 +93,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { parties, removeParty, upsertParty } = useParties();
+  const { party, partyLoading, partyError, partyNotFound, refreshParty } = useParty(partyId);
   const invoices = useScopedInvoices();
   const expenses = useScopedExpenses();
   const [sidebarQuery, setSidebarQuery] = useState("");
@@ -111,8 +117,6 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
       })),
     [parties, invoices, expenses]
   );
-
-  const party = getPartyById(parties, partyId);
 
   const summary = useMemo(
     () => (party ? buildPartySummary(party, invoices, expenses, period) : null),
@@ -200,14 +204,38 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
     router.push("/parties");
   };
 
-  if (!party) {
+  if (partyLoading) {
+    return <PartyDetailLoadingShell />;
+  }
+
+  if (partyError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-        <p className="text-muted-foreground">Party not found</p>
-        <Button variant="outline" onClick={() => router.push("/parties")}>
-          Back to parties
-        </Button>
-      </div>
+      <PartyEmptyState
+        title="Could not load party"
+        description={partyError}
+        action={
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button onClick={() => void refreshParty()}>Try again</Button>
+            <Button variant="outline" onClick={() => router.push("/parties")}>
+              Back to parties
+            </Button>
+          </div>
+        }
+      />
+    );
+  }
+
+  if (partyNotFound || !party) {
+    return (
+      <PartyEmptyState
+        title="Party not found"
+        description="This party may have been removed or the link is incorrect."
+        action={
+          <Button variant="outline" onClick={() => router.push("/parties")}>
+            Back to parties
+          </Button>
+        }
+      />
     );
   }
 
@@ -218,6 +246,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
       name: party.name,
       kind: party.kind,
     });
+    void refreshParty();
   };
 
   const handleTabChange = (value: string) => {
