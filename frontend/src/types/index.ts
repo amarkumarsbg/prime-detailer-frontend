@@ -512,6 +512,8 @@ export type PartCategory =
 export interface Part {
   id: string;
   name: string;
+  /** Manufacturer or product brand (optional). */
+  brand?: string;
   sku: string;
   category: PartCategory;
   /** Count-based stock (pieces, sets, kg, etc.). Not used when stockQuantityMl is set. */

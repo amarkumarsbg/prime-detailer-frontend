@@ -4,7 +4,7 @@ import { create } from "zustand";
 import type { Invoice, JobCard, Part, ProductPurchase, StockMovement } from "@/types";
 import { deductionsForJob, type ConsumptionDeduction } from "@/lib/inventory/consumption";
 import { isMlTrackedPart, litresToMl } from "@/lib/inventory-units";
-import { postCollectionSnapshot } from "@/lib/collection-sync";
+import { deleteCollectionDocument, postCollectionSnapshot } from "@/lib/collection-sync";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 
 interface InventoryStore {
@@ -12,6 +12,7 @@ interface InventoryStore {
   stockMovements: StockMovement[];
   productPurchases: ProductPurchase[];
   addPart: (part: Part) => void;
+  removePart: (partId: string) => Promise<void>;
   addPurchase: (input: Omit<ProductPurchase, "id">) => void;
   recordStockAdjustment: (input: {
     partId: string;
@@ -92,6 +93,36 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       parts: [part, ...state.parts],
     }));
     persistInventorySnapshot(get);
+  },
+
+  removePart: async (partId) => {
+    const { parts, stockMovements, productPurchases } = get();
+    const nextMovements = stockMovements.filter((m) => m.partId !== partId);
+    const nextPurchases = productPurchases.filter((p) => p.partId !== partId);
+    const catalog = useServiceCatalogStore.getState().catalog;
+    const needsCatalogUpdate = catalog.some((s) =>
+      s.consumptionProfile?.some((l) => l.partId === partId)
+    );
+
+    await deleteCollectionDocument("parts", partId);
+    await Promise.all([
+      postCollectionSnapshot("stockMovements", nextMovements),
+      postCollectionSnapshot("productPurchases", nextPurchases),
+    ]);
+    if (needsCatalogUpdate) {
+      await useServiceCatalogStore.getState().setCatalog((prev) =>
+        prev.map((s) => ({
+          ...s,
+          consumptionProfile: (s.consumptionProfile ?? []).filter((l) => l.partId !== partId),
+        }))
+      );
+    }
+
+    set({
+      parts: parts.filter((p) => p.id !== partId),
+      stockMovements: nextMovements,
+      productPurchases: nextPurchases,
+    });
   },
 
   addPurchase: (input) => {

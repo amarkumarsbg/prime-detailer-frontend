@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDateTime, formatDate, cn } from "@/lib/utils";
 import {
   formatMlAndLitres,
+  formatPartStockQuantity,
   getStockStatus,
   isMlTrackedPart,
   litresToMl,
   partStockValueInr,
+  stockStatusShortLabel,
 } from "@/lib/inventory-units";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -39,6 +42,7 @@ import {
   TrendingUp,
   ArrowDownCircle,
   ArrowUpCircle,
+  Trash2,
 } from "lucide-react";
 import type { Part, PartCategory } from "@/types";
 
@@ -76,16 +80,28 @@ const allCategories: PartCategory[] = [
 
 type StockTableFilter = "all" | "low" | "out";
 
+/** Keep focused fields visible when the mobile keyboard opens inside a dialog. */
+function focusMobileFormField(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  if (typeof window === "undefined") return;
+  if (!window.matchMedia("(max-width: 639px)").matches) return;
+  const el = e.currentTarget;
+  window.setTimeout(() => {
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, 320);
+}
+
 export default function InventoryPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const parts = useInventoryStore((s) => s.parts);
   const addPart = useInventoryStore((s) => s.addPart);
+  const removePart = useInventoryStore((s) => s.removePart);
 
   const [stockTableFilter, setStockTableFilter] = useState<StockTableFilter>("all");
 
   const [addPartName, setAddPartName] = useState("");
+  const [addPartBrand, setAddPartBrand] = useState("");
   const [addPartSku, setAddPartSku] = useState("");
   const [addPartCategory, setAddPartCategory] = useState<PartCategory>("Other");
   const [addPartUnit, setAddPartUnit] = useState("Piece");
@@ -96,6 +112,7 @@ export default function InventoryPage() {
 
   const resetAddPartForm = () => {
     setAddPartName("");
+    setAddPartBrand("");
     setAddPartSku("");
     setAddPartCategory("Other");
     setAddPartUnit("Piece");
@@ -134,6 +151,8 @@ export default function InventoryPage() {
   const [adjustPartId, setAdjustPartId] = useState("");
   const [adjustDirection, setAdjustDirection] = useState<"IN" | "OUT">("IN");
   const [adjustAmount, setAdjustAmount] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Part | null>(null);
+  const [deletingPart, setDeletingPart] = useState(false);
 
   const totalParts = parts.length;
   const totalValue = parts.reduce((sum, p) => sum + partStockValueInr(p), 0);
@@ -148,13 +167,44 @@ export default function InventoryPage() {
 
   const partsById = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
 
-  const columns = [
+  const openDeletePart = useCallback((part: Part) => {
+    setDeleteTarget(part);
+  }, []);
+
+  const deleteLinkedServiceCount = useMemo(() => {
+    if (!deleteTarget) return 0;
+    return catalog.filter((s) =>
+      s.consumptionProfile?.some((l) => l.partId === deleteTarget.id)
+    ).length;
+  }, [catalog, deleteTarget]);
+
+  const confirmDeletePart = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeletingPart(true);
+    try {
+      await removePart(deleteTarget.id);
+      if (adjustPartId === deleteTarget.id) setAdjustPartId("");
+      if (purchasePartId === deleteTarget.id) setPurchasePartId("");
+      toast.success("Catalog item deleted");
+      setDeleteTarget(null);
+    } catch {
+      toast.error("Could not delete item. Is the API running?");
+    } finally {
+      setDeletingPart(false);
+    }
+  }, [deleteTarget, removePart, adjustPartId, purchasePartId]);
+
+  const columns = useMemo(
+    () => [
     {
       key: "name",
       label: "Part",
       render: (item: Part) => (
         <div>
           <p className="font-medium">{item.name}</p>
+          {item.brand ? (
+            <p className="text-xs text-muted-foreground">{item.brand}</p>
+          ) : null}
           <p className="text-xs text-muted-foreground">{item.sku}</p>
         </div>
       ),
@@ -163,8 +213,9 @@ export default function InventoryPage() {
       key: "category",
       label: "Category",
       sortable: true,
+      className: "hidden lg:table-cell",
       render: (item: Part) => (
-        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground whitespace-nowrap">
           {item.category}
         </span>
       ),
@@ -173,19 +224,20 @@ export default function InventoryPage() {
       key: "quantity",
       label: "Stock",
       sortable: true,
+      className: "whitespace-nowrap",
       render: (item: Part) => {
         const status = getStockStatus(item);
         return (
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-            <span className="font-semibold text-sm">
-              {isMlTrackedPart(item)
-                ? formatMlAndLitres(item.stockQuantityMl ?? 0)
-                : `${item.quantity} ${item.primaryUnit}`}
+          <div className="inline-flex min-w-[4.5rem] flex-col gap-1">
+            <span className="font-semibold text-sm tabular-nums leading-none">
+              {formatPartStockQuantity(item)}
             </span>
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-medium w-fit ${status.className}`}
+              className={`inline-flex w-fit max-w-full items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${status.className}`}
+              title={status.label}
             >
-              {status.label}
+              <span className="lg:hidden">{stockStatusShortLabel(status.label)}</span>
+              <span className="hidden lg:inline">{status.label}</span>
             </span>
           </div>
         );
@@ -227,7 +279,10 @@ export default function InventoryPage() {
       key: "unitPrice",
       label: "Unit Price",
       sortable: true,
-      render: (item: Part) => <span>{formatCurrency(item.unitPrice)}</span>,
+      className: "whitespace-nowrap text-right",
+      render: (item: Part) => (
+        <span className="tabular-nums">{formatCurrency(item.unitPrice)}</span>
+      ),
     },
     {
       key: "reorderLevel",
@@ -246,7 +301,29 @@ export default function InventoryPage() {
       label: "Supplier",
       className: "hidden lg:table-cell",
     },
-  ];
+    {
+      key: "actions",
+      label: "",
+      className: "w-12 text-right",
+      render: (item: Part) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+          aria-label={`Delete ${item.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            openDeletePart(item);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      ),
+    },
+  ],
+    [openDeletePart]
+  );
 
   const recentMovements = [...stockMovements].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -311,6 +388,7 @@ export default function InventoryPage() {
   const handleAddPartSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const name = addPartName.trim();
+    const brand = addPartBrand.trim() || undefined;
     const sku = addPartSku.trim();
     const supplier = addPartSupplier.trim() || "—";
     if (!name || !sku) {
@@ -337,6 +415,7 @@ export default function InventoryPage() {
       addPart({
         id,
         name,
+        brand,
         sku,
         category: addPartCategory,
         quantity: 0,
@@ -359,6 +438,7 @@ export default function InventoryPage() {
       addPart({
         id,
         name,
+        brand,
         sku,
         category: addPartCategory,
         quantity: qty,
@@ -529,24 +609,51 @@ export default function InventoryPage() {
                   New item
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
+              <DialogContent
+                className={cn(
+                  "flex w-[calc(100vw-1rem)] max-w-lg flex-col gap-0 overflow-hidden p-0",
+                  "max-h-[min(92dvh,720px)]",
+                  "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:left-0 max-sm:max-h-[min(92dvh,100%)]",
+                  "max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none"
+                )}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
+                <DialogHeader className="shrink-0 space-y-1 border-b border-border/60 px-6 pb-3 pt-6 text-left">
                   <DialogTitle>New catalog item</DialogTitle>
                   <DialogDescription>
                     Choose Piece, Set, Kg, etc., or Litre for fluids — the table shows the same unit you pick.
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleAddPartSubmit} className="space-y-4 mt-2">
+                <form
+                  onSubmit={handleAddPartSubmit}
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                >
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 [-webkit-overflow-scrolling:touch]">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-name">Part Name</Label>
-                      <Input
-                        id="add-part-name"
-                        placeholder="e.g. Brake Pad Set"
-                        value={addPartName}
-                        onChange={(e) => setAddPartName(e.target.value)}
-                        required
-                      />
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="add-part-name">Part Name</Label>
+                        <Input
+                          id="add-part-name"
+                          placeholder="e.g. Brake Pad Set"
+                          value={addPartName}
+                          onChange={(e) => setAddPartName(e.target.value)}
+                          onFocus={focusMobileFormField}
+                          autoComplete="off"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-part-brand">Brand</Label>
+                        <Input
+                          id="add-part-brand"
+                          placeholder="e.g. Bosch"
+                          value={addPartBrand}
+                          onChange={(e) => setAddPartBrand(e.target.value)}
+                          onFocus={focusMobileFormField}
+                          autoComplete="off"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="add-part-sku">SKU</Label>
@@ -555,6 +662,8 @@ export default function InventoryPage() {
                         placeholder="e.g. BRK-PAD-001"
                         value={addPartSku}
                         onChange={(e) => setAddPartSku(e.target.value)}
+                        onFocus={focusMobileFormField}
+                        autoComplete="off"
                         required
                       />
                     </div>
@@ -640,10 +749,13 @@ export default function InventoryPage() {
                         placeholder="e.g. Bosch India (optional)"
                         value={addPartSupplier}
                         onChange={(e) => setAddPartSupplier(e.target.value)}
+                        onFocus={focusMobileFormField}
+                        autoComplete="off"
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2 pt-2">
+                  </div>
+                  <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-background px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                     <Button
                       type="button"
                       variant="outline"
@@ -765,7 +877,50 @@ export default function InventoryPage() {
             data={partsForTable}
             columns={columns}
             searchPlaceholder="Search SKU, name, supplier…"
-            searchKeys={["name", "sku", "category", "supplier"]}
+            searchKeys={["name", "sku", "category", "supplier", "brand"]}
+            mobileCardBelow="lg"
+            renderMobileCard={(item) => {
+              const status = getStockStatus(item);
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium leading-snug">{item.name}</p>
+                      {item.brand ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.brand}</p>
+                      ) : null}
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{item.sku}</p>
+                      <span className="mt-2 inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+                        {item.category}
+                      </span>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold text-sm tabular-nums whitespace-nowrap">
+                        {formatPartStockQuantity(item)}
+                      </p>
+                      <span
+                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${status.className}`}
+                      >
+                        {status.label}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
+                    <span className="text-sm tabular-nums font-medium">{formatCurrency(item.unitPrice)}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => openDeletePart(item)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              );
+            }}
           />
         </TabsContent>
         <TabsContent value="movements" className="mt-4 space-y-3">
@@ -852,6 +1007,75 @@ export default function InventoryPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deletingPart && setDeleteTarget(null)}>
+        <DialogContent
+          className={cn(
+            "flex w-[calc(100vw-1rem)] max-w-md flex-col gap-0 overflow-hidden p-0",
+            "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:left-0",
+            "max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0",
+            "max-sm:rounded-t-2xl max-sm:rounded-b-none"
+          )}
+        >
+          <DialogHeader className="shrink-0 space-y-0 border-b border-border/60 px-6 pb-4 pt-6 text-left">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle>Delete catalog item?</DialogTitle>
+                <DialogDescription>
+                  This permanently deletes the item and related records from the database.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          {deleteTarget ? (
+            <div className="space-y-4 px-6 py-4">
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
+                <p className="font-medium leading-snug">{deleteTarget.name}</p>
+                {deleteTarget.brand ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{deleteTarget.brand}</p>
+                ) : null}
+                <p className="mt-1 font-mono text-xs text-muted-foreground">{deleteTarget.sku}</p>
+              </div>
+              <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+                <li>Removed from the parts catalog</li>
+                <li>Stock movements and purchase history deleted</li>
+                {deleteLinkedServiceCount > 0 ? (
+                  <li>
+                    Unlinked from {deleteLinkedServiceCount} service
+                    {deleteLinkedServiceCount === 1 ? "" : "s"}
+                  </li>
+                ) : null}
+              </ul>
+              <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                This cannot be undone.
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={deletingPart}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full sm:w-auto"
+              disabled={deletingPart}
+              onClick={() => void confirmDeletePart()}
+            >
+              {deletingPart ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -28,6 +28,23 @@ export function formatMlAndLitres(ml: number): string {
   return `${ml.toLocaleString("en-IN")} ml (${formatLitresFromMl(ml)})`;
 }
 
+/** Compact on-hand label for tables and cards (e.g. `45 pcs`, `12.5 L`). */
+export function formatPartStockQuantity(part: Part): string {
+  if (isMlTrackedPart(part)) {
+    return formatLitresFromMl(part.stockQuantityMl ?? 0);
+  }
+  const qty = part.quantity.toLocaleString("en-IN");
+  const unit = part.primaryUnit.trim() || "units";
+  return `${qty} ${unit}`;
+}
+
+export function stockStatusShortLabel(label: string): string {
+  if (label === "In Stock") return "OK";
+  if (label === "Low Stock") return "Low";
+  if (label === "Out of Stock") return "Out";
+  return label;
+}
+
 /** Stock value: per-litre pricing for ml-tracked fluids; else quantity × unit price. */
 export function partStockValueInr(part: Part): number {
   if (isMlTrackedPart(part)) {

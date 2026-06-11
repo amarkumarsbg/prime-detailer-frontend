@@ -27,6 +27,8 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void;
   /** Below `md`, render each row as a card instead of a wide table (no horizontal scroll). */
   renderMobileCard?: (item: T) => React.ReactNode;
+  /** When `renderMobileCard` is set, use cards below this breakpoint (`md` = 768px, `lg` = 1024px). */
+  mobileCardBelow?: "md" | "lg";
   actions?: React.ReactNode;
   /** Hide built-in search (use when search lives in an external filter bar). */
   hideSearch?: boolean;
@@ -49,6 +51,7 @@ export function DataTable<T extends Record<string, any>>({
   pageSize = 10,
   onRowClick,
   renderMobileCard,
+  mobileCardBelow = "md",
   actions,
   hideSearch = false,
   getRowDomId,
@@ -56,6 +59,10 @@ export function DataTable<T extends Record<string, any>>({
   defaultSortKey,
   defaultSortDir = "desc",
 }: DataTableProps<T>) {
+  const mobileCardHiddenClass = mobileCardBelow === "lg" ? "lg:hidden" : "md:hidden";
+  const tableHiddenClass =
+    mobileCardBelow === "lg" ? "hidden lg:block overflow-x-auto" : "hidden md:block overflow-x-auto";
+
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
@@ -145,7 +152,7 @@ export function DataTable<T extends Record<string, any>>({
 
       <div className="rounded-xl border border-border overflow-hidden">
         {renderMobileCard && (
-          <div className="md:hidden p-3 space-y-3 bg-card">
+          <div className={`${mobileCardHiddenClass} p-3 space-y-3 bg-card`}>
             {paged.length === 0 ? (
               <p className="text-center py-12 text-sm text-muted-foreground">No results found</p>
             ) : (
@@ -175,7 +182,7 @@ export function DataTable<T extends Record<string, any>>({
             )}
           </div>
         )}
-        <div className={renderMobileCard ? "hidden md:block overflow-x-auto" : "overflow-x-auto"}>
+        <div className={renderMobileCard ? tableHiddenClass : "overflow-x-auto"}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50">
