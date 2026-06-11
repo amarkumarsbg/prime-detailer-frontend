@@ -715,7 +715,7 @@ export default function QuotationsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard
           title="Total Quotations"
           value={kpis.total}
@@ -747,7 +747,7 @@ export default function QuotationsPage() {
         </CardHeader>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex-wrap h-auto gap-1 w-full justify-start bg-muted/50 p-1">
+            <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/50 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {TAB_VALUES.map((tab) => (
                 <TabsTrigger key={tab} value={tab} className="data-[state=active]:shadow-sm">
                   {TAB_LABELS[tab]} ({tabCounts[tab] ?? 0})
@@ -775,6 +775,22 @@ export default function QuotationsPage() {
                   onRowClick={(item) => {
                     setSelectedQuotation(item);
                     setDetailsDialogOpen(true);
+                  }}
+                  renderMobileCard={(item) => {
+                    const q = item as Quotation;
+                    return (
+                      <>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold">{q.quotationNumber}</span>
+                          <QuotationStatusBadge status={q.status} />
+                        </div>
+                        <p className="mt-2 font-medium leading-snug">{q.customerName}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {q.vehicleRegNumber} · {q.vehicleMakeModel}
+                        </p>
+                        <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(q.grandTotal)}</p>
+                      </>
+                    );
                   }}
                 />
               </TabsContent>

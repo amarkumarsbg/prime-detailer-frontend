@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
+import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
 import { DataTable } from "@/components/shared/data-table";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ import {
   resolveJobBranchId,
 } from "@/lib/job-from-appointment";
 import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import type { Appointment, JobCard, JobCardStatus } from "@/types";
 import {
@@ -128,6 +129,15 @@ export default function BookingsPage() {
   const [branchFilterId, setBranchFilterId] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (statusFilter !== "ALL") n += 1;
+    if (showBranchPicker && branchFilterId !== "all") n += 1;
+    if (dateFrom.trim() || dateTo.trim()) n += 1;
+    return n;
+  }, [statusFilter, showBranchPicker, branchFilterId, dateFrom, dateTo]);
 
   const headerScoped = useMemo(
     () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
@@ -492,7 +502,7 @@ export default function BookingsPage() {
             </span>
             <div className="min-w-0 space-y-1">
               <CardTitle className="text-base">Confirmed appointments</CardTitle>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground max-md:hidden">
                 After you confirm a booking on{" "}
                 <Link href="/appointments" className="text-primary underline-offset-4 hover:underline">
                   Appointments
@@ -509,61 +519,107 @@ export default function BookingsPage() {
               here.
             </p>
           ) : (
-            <div className="rounded-lg border border-border bg-background overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40 text-left">
-                    <th className="p-3 font-medium">Booking</th>
-                    <th className="p-3 font-medium whitespace-nowrap">Date &amp; time</th>
-                    <th className="p-3 font-medium">Customer</th>
-                    <th className="p-3 font-medium">Vehicle</th>
-                    <th className="p-3 font-medium hidden md:table-cell">Service</th>
-                    <th className="p-3 font-medium text-right w-[1%]">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {confirmedAppointmentsNeedingJob.map((apt) => (
-                    <tr key={apt.id} className="border-b border-border/80 last:border-0">
-                      <td className="p-3 font-mono text-xs font-semibold text-primary whitespace-nowrap">
+            <>
+              <div className="space-y-3 md:hidden">
+                {confirmedAppointmentsNeedingJob.map((apt) => (
+                  <div
+                    key={apt.id}
+                    className="rounded-lg border border-border bg-background p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-primary">
                         {apt.bookingId}
-                      </td>
-                      <td className="p-3 text-muted-foreground whitespace-nowrap">
+                      </span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {apt.date} · {apt.time}
-                      </td>
-                      <td className="p-3">
-                        <div className="font-medium">{apt.customerName}</div>
-                        <div className="text-xs text-muted-foreground">{apt.customerPhone}</div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-mono text-xs">{apt.vehicleRegNumber}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-1">
-                          {apt.vehicleMakeModel}
-                        </div>
-                      </td>
-                      <td className="p-3 text-muted-foreground hidden md:table-cell max-w-[12rem] truncate">
-                        {apt.serviceType}
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="whitespace-nowrap"
-                          disabled={creatingFromAppointmentId === apt.id}
-                          onClick={() => void createJobFromAppointment(apt)}
-                        >
-                          {creatingFromAppointmentId === apt.id ? (
-                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                          ) : (
-                            <Plus className="w-3.5 h-3.5 mr-1.5" />
-                          )}
-                          Create job card
-                        </Button>
-                      </td>
+                      </span>
+                    </div>
+                    <p className="mt-2 font-medium leading-snug">{apt.customerName}</p>
+                    <a
+                      href={`tel:${apt.customerPhone.replace(/\s/g, "")}`}
+                      className="text-xs text-primary"
+                    >
+                      {apt.customerPhone}
+                    </a>
+                    <p className="mt-2 font-mono text-xs">{apt.vehicleRegNumber}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {apt.vehicleMakeModel}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                      {apt.serviceType}
+                    </p>
+                    <Button
+                      type="button"
+                      className="mt-3 w-full"
+                      disabled={creatingFromAppointmentId === apt.id}
+                      onClick={() => void createJobFromAppointment(apt)}
+                    >
+                      {creatingFromAppointmentId === apt.id ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4 mr-2" />
+                      )}
+                      Create job card
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:block rounded-lg border border-border bg-background overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 text-left">
+                      <th className="p-3 font-medium">Booking</th>
+                      <th className="p-3 font-medium whitespace-nowrap">Date &amp; time</th>
+                      <th className="p-3 font-medium">Customer</th>
+                      <th className="p-3 font-medium">Vehicle</th>
+                      <th className="p-3 font-medium hidden md:table-cell">Service</th>
+                      <th className="p-3 font-medium text-right w-[1%]">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {confirmedAppointmentsNeedingJob.map((apt) => (
+                      <tr key={apt.id} className="border-b border-border/80 last:border-0">
+                        <td className="p-3 font-mono text-xs font-semibold text-primary whitespace-nowrap">
+                          {apt.bookingId}
+                        </td>
+                        <td className="p-3 text-muted-foreground whitespace-nowrap">
+                          {apt.date} · {apt.time}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-medium">{apt.customerName}</div>
+                          <div className="text-xs text-muted-foreground">{apt.customerPhone}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-mono text-xs">{apt.vehicleRegNumber}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-1">
+                            {apt.vehicleMakeModel}
+                          </div>
+                        </td>
+                        <td className="p-3 text-muted-foreground hidden md:table-cell max-w-[12rem] truncate">
+                          {apt.serviceType}
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="whitespace-nowrap"
+                            disabled={creatingFromAppointmentId === apt.id}
+                            onClick={() => void createJobFromAppointment(apt)}
+                          >
+                            {creatingFromAppointmentId === apt.id ? (
+                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            ) : (
+                              <Plus className="w-3.5 h-3.5 mr-1.5" />
+                            )}
+                            Create job card
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -585,59 +641,65 @@ export default function BookingsPage() {
                   aria-label="Search bookings"
                 />
               </div>
-              <div className="w-full min-w-0 max-w-full xl:w-[168px] xl:shrink-0">
-                <Select
-                  value={statusFilter}
-                  onValueChange={(v) => setStatusFilter(v as JobCardStatus | "ALL")}
-                >
-                  <SelectTrigger className="h-10 w-full min-w-0 bg-background xl:w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {showBranchPicker && (
+              <MobileFilterTrigger
+                onClick={() => setFilterSheetOpen(true)}
+                activeCount={activeFilterCount}
+              />
+              <div className="hidden w-full min-w-0 max-w-full flex-col gap-3 md:flex xl:flex-nowrap xl:flex-row xl:items-center">
                 <div className="w-full min-w-0 max-w-full xl:w-[168px] xl:shrink-0">
-                  <Select value={branchFilterId} onValueChange={setBranchFilterId}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(v) => setStatusFilter(v as JobCardStatus | "ALL")}
+                  >
                     <SelectTrigger className="h-10 w-full min-w-0 bg-background xl:w-full">
-                      <SelectValue placeholder="All Branches" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Branches</SelectItem>
-                      {activeBranches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
+                      {STATUS_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-              <div className="flex w-full min-w-0 max-w-full flex-col gap-2 md:flex-row md:items-stretch md:gap-2 xl:flex-[1.1] xl:justify-end xl:gap-2">
-                <div className="w-full min-w-0 md:min-w-0 md:flex-1 md:max-w-[11rem] xl:max-w-[11rem]">
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="date-input-icon-end h-10 min-w-0 w-full max-w-full bg-background pr-9 [color-scheme:light] dark:[color-scheme:dark]"
-                  />
-                </div>
-                <span className="shrink-0 self-center px-0.5 text-center text-sm text-muted-foreground md:self-center">
-                  to
-                </span>
-                <div className="w-full min-w-0 md:min-w-0 md:flex-1 md:max-w-[11rem] xl:max-w-[11rem]">
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="date-input-icon-end h-10 min-w-0 w-full max-w-full bg-background pr-9 [color-scheme:light] dark:[color-scheme:dark]"
-                  />
+                {showBranchPicker && (
+                  <div className="w-full min-w-0 max-w-full xl:w-[168px] xl:shrink-0">
+                    <Select value={branchFilterId} onValueChange={setBranchFilterId}>
+                      <SelectTrigger className="h-10 w-full min-w-0 bg-background xl:w-full">
+                        <SelectValue placeholder="All Branches" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Branches</SelectItem>
+                        {activeBranches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="flex w-full min-w-0 max-w-full flex-col gap-2 md:flex-row md:items-stretch md:gap-2 xl:flex-[1.1] xl:justify-end xl:gap-2">
+                  <div className="w-full min-w-0 md:min-w-0 md:flex-1 md:max-w-[11rem] xl:max-w-[11rem]">
+                    <Input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="date-input-icon-end h-10 min-w-0 w-full max-w-full bg-background pr-9 [color-scheme:light] dark:[color-scheme:dark]"
+                    />
+                  </div>
+                  <span className="shrink-0 self-center px-0.5 text-center text-sm text-muted-foreground md:self-center">
+                    to
+                  </span>
+                  <div className="w-full min-w-0 md:min-w-0 md:flex-1 md:max-w-[11rem] xl:max-w-[11rem]">
+                    <Input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="date-input-icon-end h-10 min-w-0 w-full max-w-full bg-background pr-9 [color-scheme:light] dark:[color-scheme:dark]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -700,6 +762,75 @@ export default function BookingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <MobileFilterSheet
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        title="Booking filters"
+        activeCount={activeFilterCount}
+        onReset={() => {
+          setStatusFilter("ALL");
+          setBranchFilterId("all");
+          setDateFrom("");
+          setDateTo("");
+        }}
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Status</p>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as JobCardStatus | "ALL")}
+          >
+            <SelectTrigger className="h-10 w-full bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {showBranchPicker ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Branch</p>
+            <Select value={branchFilterId} onValueChange={setBranchFilterId}>
+              <SelectTrigger className="h-10 w-full bg-background">
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {activeBranches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Date range</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="date-input-icon-end h-10 bg-background"
+              aria-label="From date"
+            />
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="date-input-icon-end h-10 bg-background"
+              aria-label="To date"
+            />
+          </div>
+        </div>
+      </MobileFilterSheet>
     </div>
   );
 }

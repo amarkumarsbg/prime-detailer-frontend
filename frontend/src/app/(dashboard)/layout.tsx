@@ -8,6 +8,8 @@ import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ScrollToTopButton } from "@/components/layout/scroll-to-top-button";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { RecentNavTracker } from "@/components/layout/recent-nav-tracker";
 import { AppDataSync } from "@/components/layout/app-data-sync";
 import { Button } from "@/components/ui/button";
 
@@ -101,7 +103,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Header />
         <main
           ref={mainScrollRef}
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain p-4 md:p-6 [scrollbar-gutter:stable]"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 [scrollbar-gutter:stable]"
         >
           {bootstrapError ? (
             <div
@@ -125,6 +127,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
         <ScrollToTopButton scrollContainerRef={mainScrollRef} />
+        <MobileBottomNav />
+        <RecentNavTracker />
       </div>
     </div>
   );

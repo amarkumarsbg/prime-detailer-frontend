@@ -9,50 +9,16 @@ import { useSidebarStore } from "@/store/sidebar-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useDashboardFilterStore } from "@/store/dashboard-filter-store";
 import { useSettingsStore } from "@/store/settings-store";
-import type { UserRole } from "@/types";
 import { canAccessNavItem } from "@/lib/rbac";
+import { NAV_GROUPS } from "@/lib/nav-items";
+import { getRecentNav } from "@/lib/recent-nav";
 import {
-  LayoutDashboard,
-  Users,
-  Car,
   CarFront,
-  ClipboardList,
-  Wrench,
   X,
-  UserCog,
-  Package,
-  Calendar,
-  CalendarCheck,
-  Truck,
-  BarChart3,
-  Banknote,
-  Receipt,
-  History,
-  Bell,
-  Settings,
-  Gauge,
-  FileText,
-  PhoneCall,
   LogOut,
-  QrCode,
-  Wallet,
-  Store,
-  TrendingUp,
-  FileBarChart,
   ChevronDown,
-  Gift,
-  Building2,
-  Landmark,
-  Crown,
-  BookMarked,
+  Clock,
 } from "lucide-react";
-
-type NavItem = {
-  label: string;
-  href: string;
-  icon: React.ElementType;
-  roles?: UserRole[];
-};
 
 function navSectionSlug(label: string): string {
   return label
@@ -71,115 +37,6 @@ const SIDEBAR_CLEAR_FILTER_HREFS = new Set([
   "/reminders",
 ]);
 
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
-  {
-    label: "Workspace",
-    items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Job Cards", href: "/job-cards", icon: ClipboardList },
-      { label: "Bookings", href: "/bookings", icon: CalendarCheck },
-      { label: "Pickup & Drop", href: "/pickup-drop", icon: Truck },
-      { label: "Quotations", href: "/quotations", icon: FileText },
-      { label: "Appointments", href: "/appointments", icon: Calendar },
-    ],
-  },
-  {
-    label: "Customers & fleet",
-    items: [
-      { label: "Customers", href: "/customers", icon: Users },
-      { label: "Membership", href: "/membership", icon: Crown },
-      { label: "Vehicles", href: "/vehicles", icon: Car },
-      { label: "Reminders", href: "/reminders", icon: Bell, roles: ["ADMIN", "MANAGER", "RECEPTIONIST"] },
-      { label: "Follow-ups", href: "/follow-ups", icon: PhoneCall, roles: ["ADMIN", "MANAGER", "RECEPTIONIST"] },
-      { label: "Referrals", href: "/referrals", icon: Gift, roles: ["ADMIN", "MANAGER"] },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { label: "Invoices", href: "/billing", icon: Receipt },
-      {
-        label: "Reports",
-        href: "/reports",
-        icon: FileBarChart,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
-      },
-      {
-        label: "Cash & Bank",
-        href: "/cash-bank",
-        icon: Landmark,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
-      },
-      {
-        label: "Parties",
-        href: "/parties",
-        icon: Building2,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
-      },
-      {
-        label: "Shared Ledger",
-        href: "/shared-ledger",
-        icon: BookMarked,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
-      },
-      {
-        label: "Expenses",
-        href: "/expenses",
-        icon: Banknote,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
-      },
-      {
-        label: "Vendors",
-        href: "/vendors",
-        icon: Store,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
-      },
-    ],
-  },
-  {
-    label: "HR & staff",
-    items: [
-      { label: "Users & Staff", href: "/staff", icon: UserCog, roles: ["ADMIN", "MANAGER"] },
-      { label: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"] },
-      { label: "Salary & Payroll", href: "/payroll", icon: Wallet, roles: ["ADMIN", "MANAGER"] },
-    ],
-  },
-  {
-    label: "Workshop",
-    items: [
-      { label: "Services", href: "/services", icon: Wrench, roles: ["ADMIN", "MANAGER"] },
-      { label: "Inventory", href: "/inventory", icon: Package, roles: ["ADMIN", "MANAGER"] },
-    ],
-  },
-  {
-    label: "Analytics & Reports",
-    items: [
-      {
-        label: "Locations",
-        href: "/branches",
-        icon: Building2,
-        roles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "BRANCH_MANAGER"],
-      },
-      {
-        label: "Performance",
-        href: "/performance",
-        icon: TrendingUp,
-        roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
-      },
-      { label: "Mechanics", href: "/mechanics", icon: Gauge, roles: ["ADMIN", "MANAGER"] },
-      { label: "Analytics", href: "/reports/analytics", icon: BarChart3, roles: ["ADMIN", "MANAGER"] },
-      {
-        label: "Advanced Reports",
-        href: "/advanced-reports",
-        icon: FileBarChart,
-        roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
-      },
-      { label: "Activity Log", href: "/activity", icon: History, roles: ["ADMIN"] },
-      { label: "Settings", href: "/settings", icon: Settings, roles: ["ADMIN"] },
-    ],
-  },
-];
-
 /** Sidebar active state: Finance "Reports" links to `/reports` but must not stay lit on `/reports/analytics` (that page is the separate "Analytics" item). */
 function isNavItemActive(pathname: string, href: string): boolean {
   if (href === "/reports") {
@@ -192,14 +49,66 @@ function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function MobileQuickLinks({ onNavClick }: { onNavClick?: () => void }) {
+  const pathname = usePathname();
+  const userRole = useAuthStore((s) => s.user?.role);
+  const [recent, setRecent] = useState(() => getRecentNav());
+
+  useEffect(() => {
+    setRecent(getRecentNav());
+  }, [pathname]);
+
+  const accessible = recent.filter((entry) => {
+    const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === entry.href);
+    return item && canAccessNavItem(item.roles, userRole);
+  });
+
+  if (accessible.length === 0) return null;
+
+  return (
+    <section className="mb-2 space-y-1 border-b border-[var(--sidebar-border)] px-1.5 pb-3" aria-label="Recent pages">
+      <h2 className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--sidebar-section-heading)]">
+        <Clock className="size-3 opacity-80" aria-hidden />
+        Recent
+      </h2>
+      <div className="space-y-0.5">
+        {accessible.map((entry) => {
+          const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === entry.href);
+          if (!item) return null;
+          const isActive = isNavItemActive(pathname, entry.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={entry.href}
+              href={entry.href}
+              onClick={() => onNavClick?.()}
+              className={cn(
+                "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium",
+                isActive
+                  ? "bg-[var(--sidebar-active)] text-[var(--sidebar-active-foreground)]"
+                  : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0 opacity-90" />
+              <span className="truncate">{entry.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function SidebarContent({
   onNavClick,
   navOverflow = "hidden",
   className,
+  showQuickLinks = false,
 }: {
   onNavClick?: () => void;
   navOverflow?: "hidden" | "auto";
   className?: string;
+  showQuickLinks?: boolean;
 }) {
   const pathname = usePathname();
   const userRole = useAuthStore((s) => s.user?.role);
@@ -273,6 +182,7 @@ function SidebarContent({
         )}
       >
         <div ref={navContentRef} className="space-y-3">
+          {showQuickLinks ? <MobileQuickLinks onNavClick={onNavClick} /> : null}
           {filteredGroups.map((group, groupIndex) => (
             <section
               key={group.label}
@@ -412,6 +322,7 @@ export function Sidebar() {
             className="flex-1 min-h-0"
             onNavClick={() => setMobileOpen(false)}
             navOverflow="auto"
+            showQuickLinks
           />
         </div>
 

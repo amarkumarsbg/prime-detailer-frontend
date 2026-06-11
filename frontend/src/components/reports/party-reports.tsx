@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { ReportPageChrome } from "@/components/reports/report-page-chrome";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { ReportTableEmpty } from "@/components/reports/report-table-empty";
 import { Input } from "@/components/ui/input";
 import {
@@ -108,7 +113,32 @@ export function AgeingReport() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card print:text-xs">
+      <MobileCardList>
+        {rows.map((r) => (
+          <MobileRowCard key={r.id}>
+            <p className="font-medium leading-snug">{r.partyName}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-muted-foreground">Total due</span>
+                <p className="font-semibold tabular-nums">
+                  {r.totalDue != null ? formatInrFull(r.totalDue) : "—"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Overdue</span>
+                <p className="font-semibold tabular-nums text-red-600">
+                  {r.totalOverdue != null ? formatInrFull(r.totalOverdue) : "—"}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Total amount</span>
+                <p className="text-base font-bold tabular-nums">{formatInrFull(r.totalAmount)}</p>
+              </div>
+            </div>
+          </MobileRowCard>
+        ))}
+      </MobileCardList>
+      <DesktopTableWrap className="rounded-lg border border-border bg-card print:text-xs">
         <table className="w-full min-w-[1100px] border-collapse text-xs sm:text-sm">
           <thead>
             <tr>
@@ -208,7 +238,7 @@ export function AgeingReport() {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </DesktopTableWrap>
     </ReportPageChrome>
   );
 }
@@ -480,7 +510,25 @@ export function PartyWiseOutstandingReport() {
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <MobileCardList>
+        {filteredRows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No parties found.</p>
+        ) : (
+          filteredRows.map((r) => (
+            <MobileRowCard key={r.id}>
+              <p className="font-medium leading-snug">{r.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {r.category ?? "—"}
+                {r.contact ? ` · ${r.contact}` : ""}
+              </p>
+              <p className="mt-3 text-lg font-bold tabular-nums">
+                {r.closingBalance != null ? formatInrFull(r.closingBalance) : "—"}
+              </p>
+            </MobileRowCard>
+          ))
+        )}
+      </MobileCardList>
+      <DesktopTableWrap className="rounded-lg border border-border bg-card">
         <table className="w-full min-w-[720px] border-collapse text-xs sm:text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50 text-[10px] font-semibold uppercase text-muted-foreground sm:text-xs">
@@ -509,7 +557,7 @@ export function PartyWiseOutstandingReport() {
             )}
           </tbody>
         </table>
-      </div>
+      </DesktopTableWrap>
     </ReportPageChrome>
   );
 }

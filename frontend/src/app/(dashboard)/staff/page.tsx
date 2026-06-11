@@ -880,6 +880,43 @@ export default function StaffPage() {
               searchKeys={["name", "email", "phone", "role", "id"]}
               pageSize={tablePageSize}
               onRowClick={(item) => router.push(`/staff/${item.id}`)}
+              renderMobileCard={(item) => {
+                const u = item as User;
+                const badge = ROLE_BADGE_MAP[u.role];
+                const Icon = badge.icon;
+                const branch = branches.find((b) => b.id === u.branchId);
+                return (
+                  <>
+                    <div className="flex items-start gap-3">
+                      <Avatar className="size-10 shrink-0">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                          {getInitials(u.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium leading-snug">{u.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{u.email}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}
+                      >
+                        <Icon className="size-3 shrink-0" />
+                        {badge.label}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${u.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}
+                      >
+                        {u.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {u.phone?.trim() || "No phone"} · {branch?.name ?? "—"}
+                    </p>
+                  </>
+                );
+              }}
             />
           </div>
         </TabsContent>
@@ -924,6 +961,26 @@ export default function StaffPage() {
             searchKeys={["name", "email", "phone", "id"]}
             pageSize={tablePageSize}
             onRowClick={(c) => router.push(`/customers/${c.id}`)}
+            renderMobileCard={(item) => {
+              const c = item as Customer;
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium leading-snug">{c.name}</p>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${c.isInactive ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
+                    >
+                      {c.isInactive ? "Inactive" : "Active"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{c.email}</p>
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span>{c.phone}</span>
+                    <span className="tabular-nums text-muted-foreground">{c.totalVisits} visits</span>
+                  </div>
+                </>
+              );
+            }}
           />
         </TabsContent>
       </Tabs>

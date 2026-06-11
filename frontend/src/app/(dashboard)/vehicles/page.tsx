@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  dialogMobileSheetContentClasses,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -219,10 +220,46 @@ export default function VehiclesPage() {
         searchKeys={["registrationNumber", "make", "model", "customerName"]}
         pageSize={10}
         onRowClick={(item) => router.push(`/vehicles/${(item as Vehicle).id}`)}
+        renderMobileCard={(item) => {
+          const v = item as Vehicle;
+          const hex = getColorHex(v.color);
+          return (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-mono text-sm font-bold">{v.registrationNumber}</span>
+                <Badge variant="outline" className="shrink-0 text-[10px]">
+                  {v.segment?.replace(/_/g, " ") ?? "—"}
+                </Badge>
+              </div>
+              <p className="mt-2 font-medium leading-snug">
+                {v.make} {v.model}
+                {v.variant ? ` · ${v.variant}` : ""}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{v.customerName}</p>
+              <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="size-3 rounded-full border border-border shrink-0"
+                    style={{ backgroundColor: hex }}
+                  />
+                  {v.color} · {v.year}
+                </span>
+                <Badge variant="secondary">{v.fuelType}</Badge>
+              </div>
+            </>
+          );
+        }}
       />
 
+      <div className="flex gap-2 md:hidden">
+        <Button className="flex-1" onClick={() => setAddDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Vehicle
+        </Button>
+      </div>
+
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh] overflow-y-auto sm:max-w-[500px]")}>
           <DialogHeader>
             <DialogTitle>Add Vehicle</DialogTitle>
           </DialogHeader>

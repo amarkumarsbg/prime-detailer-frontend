@@ -2,6 +2,11 @@
 
 import { useMemo } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -46,10 +51,33 @@ export default function VendorsPage() {
           <Store className="w-5 h-5 text-muted-foreground" />
           <CardTitle className="text-base">Vendor directory</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="p-0">
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-10 text-center">No purchase records yet.</p>
+            <p className="text-sm text-muted-foreground py-10 text-center px-4">No purchase records yet.</p>
           ) : (
+            <>
+            <MobileCardList className="p-3">
+              {rows.map((r) => (
+                <MobileRowCard key={r.vendorName}>
+                  <p className="font-medium leading-snug">{r.vendorName}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Purchases</span>
+                      <p className="font-semibold tabular-nums">{r.count}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Est. spend</span>
+                      <p className="font-semibold tabular-nums">{formatCurrency(r.totalCost)}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Last purchase</span>
+                      <p className="font-medium">{formatDate(r.lastAt)}</p>
+                    </div>
+                  </div>
+                </MobileRowCard>
+              ))}
+            </MobileCardList>
+            <DesktopTableWrap className="px-3 pb-3">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
@@ -74,8 +102,10 @@ export default function VendorsPage() {
                 ))}
               </tbody>
             </table>
+            </DesktopTableWrap>
+            </>
           )}
-          <p className="text-xs text-muted-foreground mt-3">
+          <p className="text-xs text-muted-foreground mt-3 px-3 pb-3">
             Part labels:{" "}
             {parts.length ? `${parts.length} parts in catalog` : "Load inventory for more context."}
           </p>

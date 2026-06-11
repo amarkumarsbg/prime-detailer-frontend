@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { ReportPageChrome } from "@/components/reports/report-page-chrome";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { ReportTableEmpty } from "@/components/reports/report-table-empty";
 import {
   Select,
@@ -177,7 +182,34 @@ export function ItemSalesPurchaseSummaryReport() {
         </Select>
       }
     >
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <MobileCardList>
+        {rows.map((r) => (
+          <MobileRowCard key={r.partId}>
+            <p className="font-medium leading-snug">{r.itemName}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-muted-foreground">Sales qty</span>
+                <p className="font-semibold tabular-nums">{r.salesQty}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Purchase qty</span>
+                <p className="font-semibold tabular-nums">{r.purchaseQty}</p>
+              </div>
+            </div>
+          </MobileRowCard>
+        ))}
+        {rows.length > 0 && (
+          <div className="rounded-lg border border-border bg-muted/25 p-4 text-sm font-semibold">
+            <div className="flex justify-between">
+              <span>Total</span>
+              <span className="tabular-nums">
+                {totals.sales} / {totals.purchase}
+              </span>
+            </div>
+          </div>
+        )}
+      </MobileCardList>
+      <DesktopTableWrap className="rounded-lg border border-border bg-card">
         <table className="w-full min-w-[560px] border-collapse text-xs sm:text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50 text-[10px] font-semibold uppercase text-muted-foreground sm:text-xs">
@@ -214,7 +246,7 @@ export function ItemSalesPurchaseSummaryReport() {
             )}
           </tbody>
         </table>
-      </div>
+      </DesktopTableWrap>
     </ReportPageChrome>
   );
 }

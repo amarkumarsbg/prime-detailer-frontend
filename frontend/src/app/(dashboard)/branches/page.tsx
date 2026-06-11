@@ -341,6 +341,37 @@ export default function BranchesPage() {
               .toLowerCase();
             return hay.includes(q);
           }}
+          renderMobileCard={(item) => {
+            const b = item as Branch;
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium leading-snug">{b.name}</p>
+                  <Badge
+                    className={cn(
+                      "shrink-0 font-normal",
+                      b.isActive
+                        ? "bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-100"
+                        : "text-muted-foreground"
+                    )}
+                    variant={b.isActive ? "secondary" : "outline"}
+                  >
+                    {b.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">{b.code ?? b.id}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {[b.city, b.state].filter(Boolean).join(", ") || "—"}
+                </p>
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span>{b.phone}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {staffCountByBranch.get(b.id) ?? 0} staff
+                  </span>
+                </div>
+              </>
+            );
+          }}
         />
       </Card>
 

@@ -9,7 +9,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -143,7 +146,7 @@ export function ReportPageChrome({
             {titleAccessory}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center lg:justify-end">
             <Button
               type="button"
               variant="outline"
@@ -187,10 +190,10 @@ export function ReportPageChrome({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           {showPeriod && (
             <Select value={period} onValueChange={onPeriodChange}>
-              <SelectTrigger className="h-9 w-[200px] border-violet-300/60 bg-background">
+              <SelectTrigger className="h-9 w-full border-violet-300/60 bg-background sm:w-[200px]">
                 <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-primary" />
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
@@ -210,8 +213,8 @@ export function ReportPageChrome({
       {children}
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "sm:max-w-md")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
             <DialogTitle>Email Excel Report</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
+import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
 import { DataTable } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { InvoiceStatusBadge } from "@/components/shared/status-badge";
@@ -94,6 +95,7 @@ export default function BillingPage() {
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const invoices = useInvoiceStore((s) => s.invoices);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const branches = useBranchStore((s) => s.branches);
@@ -104,6 +106,7 @@ export default function BillingPage() {
     pageBranchFilter,
     setPageBranchFilter,
   } = useBranchPageFilter();
+  const branchFilterActive = showBranchPicker && pageBranchFilter !== "all" ? 1 : 0;
 
   const branchScopedInvoices = useMemo(
     () =>
@@ -294,10 +297,16 @@ export default function BillingPage() {
       <Card>
         <CardContent className="p-4 flex flex-col sm:flex-row sm:items-end gap-3">
           {showBranchPicker ? (
-            <div className="space-y-1.5 min-w-[200px]">
+            <>
+            <MobileFilterTrigger
+              onClick={() => setFilterSheetOpen(true)}
+              activeCount={branchFilterActive}
+              className="md:hidden"
+            />
+            <div className="hidden md:block space-y-1.5 w-full sm:min-w-[200px] sm:w-auto">
               <Label className="text-xs">Filter by branch</Label>
               <Select value={pageBranchFilter} onValueChange={setPageBranchFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -310,6 +319,7 @@ export default function BillingPage() {
                 </SelectContent>
               </Select>
             </div>
+            </>
           ) : (
             <div className="space-y-1.5">
               <Label className="text-xs">Branch</Label>
@@ -330,7 +340,7 @@ export default function BillingPage() {
         />
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard
           title="Total Revenue"
           value={formatCurrency(kpis.totalRevenue)}
@@ -360,15 +370,19 @@ export default function BillingPage() {
       <Card className="border-border/80 shadow-sm overflow-hidden">
         <CardHeader className="space-y-1 border-b border-border/80 bg-muted/20 pb-4">
           <CardTitle className="text-base font-semibold">Invoices</CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground max-md:hidden">
             Open an invoice to record payments, print, or share via WhatsApp.
           </p>
         </CardHeader>
         <CardContent className="pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex-wrap h-auto gap-1 w-full justify-start bg-muted/50 p-1">
+            <TabsList className="flex h-auto w-full max-w-full flex-nowrap justify-start gap-1 overflow-x-auto bg-muted/50 p-1 [-webkit-overflow-scrolling:touch] md:flex-wrap">
               {STATUS_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} className="data-[state=active]:shadow-sm">
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="shrink-0 data-[state=active]:shadow-sm"
+                >
                   {tab.label}{" "}
                   <span className="text-muted-foreground font-normal">
                     ({tabCounts[tab.value] ?? 0})
@@ -397,12 +411,72 @@ export default function BillingPage() {
                   ]}
                   pageSize={10}
                   onRowClick={handleRowClick}
+                  renderMobileCard={(item) => (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-primary">
+                          {String(item.invoiceNumber)}
+                        </span>
+                        <InvoiceStatusBadge status={item.status as InvoiceStatus} />
+                      </div>
+                      <p className="font-medium mt-2 leading-snug">{String(item.customerName)}</p>
+                      <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                        {String(item.vehicleRegNumber)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {String(item.servicesSummary)}
+                      </p>
+                      <div className="mt-3 flex items-end justify-between gap-3 border-t border-border/80 pt-3">
+                        <div>
+                          <p className="text-lg font-bold tabular-nums">
+                            {formatCurrency(item.grandTotal as number)}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {formatDate(String(item.createdAt))}
+                            {item.paymentMethod
+                              ? ` · ${getPaymentMethodLabel(String(item.paymentMethod))}`
+                              : ""}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
+                          {String(item.jobNumber)}
+                        </Badge>
+                      </div>
+                    </>
+                  )}
                 />
               </TabsContent>
             ))}
           </Tabs>
         </CardContent>
       </Card>
+
+      {showBranchPicker ? (
+        <MobileFilterSheet
+          open={filterSheetOpen}
+          onOpenChange={setFilterSheetOpen}
+          title="Invoice filters"
+          activeCount={branchFilterActive}
+          onReset={() => setPageBranchFilter("all")}
+        >
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Branch</p>
+            <Select value={pageBranchFilter} onValueChange={setPageBranchFilter}>
+              <SelectTrigger className="h-10 w-full bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All branches</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </MobileFilterSheet>
+      ) : null}
     </div>
   );
 }

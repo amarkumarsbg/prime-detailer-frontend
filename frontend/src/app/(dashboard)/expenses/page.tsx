@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/shared/page-header";
+import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
 import { DataTable } from "@/components/shared/data-table";
 import { AddExpenseDialog } from "@/components/expenses/add-expense-dialog";
 import {
@@ -148,6 +149,9 @@ function ExpensesPageContent() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [compareOn, setCompareOn] = useState(false);
   const [fullViewOn, setFullViewOn] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const activeFilterCount =
+    (categoryFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0);
 
   useEffect(() => {
     if (!highlight) return;
@@ -407,7 +411,7 @@ function ExpensesPageContent() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Card className="border-border/80 shadow-sm overflow-hidden">
           <CardContent className="!flex !flex-row !items-center !justify-between gap-4 !py-5">
             <div className="min-w-0 space-y-1">
@@ -492,8 +496,31 @@ function ExpensesPageContent() {
             return hay.includes(q);
           }}
           hideSearch={false}
+          renderMobileCard={(item) => {
+            const e = item as Expense;
+            return (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">{formatDate(e.date)}</span>
+                  <Badge variant={statusBadgeVariant(e.paymentStatus)}>{e.paymentStatus}</Badge>
+                </div>
+                <p className="mt-2 font-medium leading-snug">{e.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {categoryLabel(e.category)}
+                  {e.vendorName ? ` · ${e.vendorName}` : ""}
+                </p>
+                <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(e.amount)}</p>
+              </>
+            );
+          }}
           actions={
-            <div className="flex flex-wrap items-center gap-2 justify-end">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              <MobileFilterTrigger
+                onClick={() => setFilterSheetOpen(true)}
+                activeCount={activeFilterCount}
+                className="sm:hidden"
+              />
+              <div className="hidden md:flex flex-wrap items-center gap-2">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-[160px] sm:w-[180px]">
                   <SelectValue placeholder="Category" />
@@ -519,6 +546,7 @@ function ExpensesPageContent() {
                   <SelectItem value="OVERDUE">Overdue</SelectItem>
                 </SelectContent>
               </Select>
+              </div>
               <Button type="button" variant="outline" size="sm" onClick={() => exportCsv(scoped)}>
                 <Download className="w-4 h-4 mr-2" />
                 Export
@@ -527,6 +555,49 @@ function ExpensesPageContent() {
           }
         />
       </div>
+
+      <MobileFilterSheet
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        title="Expense filters"
+        activeCount={activeFilterCount}
+        onReset={() => {
+          setCategoryFilter("all");
+          setStatusFilter("all");
+        }}
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Category</p>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="h-10 w-full bg-background">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categoryOptions.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {categoryLabel(c)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Payment status</p>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 w-full bg-background">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="PAID">Paid</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="PARTIAL">Partial</SelectItem>
+              <SelectItem value="OVERDUE">Overdue</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </MobileFilterSheet>
 
       <AddExpenseDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>

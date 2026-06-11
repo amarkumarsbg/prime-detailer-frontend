@@ -21,14 +21,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogTrigger,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isInactiveCustomer } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
-import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
+import { cn, formatDate, formatCurrency, getInitials } from "@/lib/utils";
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
@@ -218,69 +219,10 @@ export default function CustomersPage() {
         title="Customers"
         description="Manage your customers and their vehicles"
         actions={
-          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Customer
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Add Customer</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" {...register("name")} placeholder="Full name" />
-                  {errors.name && (
-                    <p className="text-sm text-destructive">{errors.name.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" {...register("phone")} placeholder="+91-9876543210" />
-                  {errors.phone && (
-                    <p className="text-sm text-destructive">{errors.phone.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    {...register("email")}
-                    placeholder="email@example.com"
-                  />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Textarea
-                    id="address"
-                    {...register("address")}
-                    placeholder="Full address"
-                    rows={3}
-                  />
-                  {errors.address && (
-                    <p className="text-sm text-destructive">{errors.address.message}</p>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setAddDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit">Add Customer</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Customer
+          </Button>
         }
       />
 
@@ -290,6 +232,13 @@ export default function CustomersPage() {
           onDismiss={() => setActiveFilter(null)}
         />
       )}
+
+      <div className="flex gap-2 md:hidden">
+        <Button className="flex-1" onClick={() => setAddDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Customer
+        </Button>
+      </div>
 
       <DataTable
         data={tableData}
@@ -310,7 +259,119 @@ export default function CustomersPage() {
           return blob.split(",").some((reg) => reg.includes(qReg));
         }}
         onRowClick={handleRowClick}
+        renderMobileCard={(item) => (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar className="h-10 w-10 shrink-0">
+                  <AvatarFallback className="text-xs">
+                    {getInitials(String(item.name ?? ""))}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="font-medium leading-snug truncate">{String(item.name)}</p>
+                  <a
+                    href={`tel:${String(item.phone).replace(/\s/g, "")}`}
+                    className="text-xs text-primary mt-0.5 block"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {String(item.phone)}
+                  </a>
+                </div>
+              </div>
+              {Boolean(item.isInactive) ? (
+                <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
+                  <UserX className="w-3 h-3" />
+                  Inactive
+                </Badge>
+              ) : null}
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <div>
+                <dt className="text-muted-foreground">Vehicles</dt>
+                <dd className="font-medium tabular-nums">{String(item.vehiclesCount)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Visits</dt>
+                <dd className="font-medium tabular-nums">{String(item.totalVisits)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Wallet</dt>
+                <dd className="font-semibold tabular-nums">
+                  {formatCurrency((item.walletBalance as number) ?? 0)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Points</dt>
+                <dd className="font-medium tabular-nums">{String(item.rewardPoints)}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-muted-foreground">Last visit</dt>
+                <dd>{item.lastVisitDate ? formatDate(String(item.lastVisitDate)) : "—"}</dd>
+              </div>
+            </dl>
+          </>
+        )}
       />
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh] sm:max-w-md")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
+            <DialogTitle>Add Customer</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" {...register("name")} placeholder="Full name" />
+                {errors.name && (
+                  <p className="text-sm text-destructive">{errors.name.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input id="phone" {...register("phone")} placeholder="+91-9876543210" />
+                {errors.phone && (
+                  <p className="text-sm text-destructive">{errors.phone.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  {...register("email")}
+                  placeholder="email@example.com"
+                />
+                {errors.email && (
+                  <p className="text-sm text-destructive">{errors.email.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="address">Address</Label>
+                <Textarea
+                  id="address"
+                  {...register("address")}
+                  placeholder="Full address"
+                  rows={3}
+                />
+                {errors.address && (
+                  <p className="text-sm text-destructive">{errors.address.message}</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Add Customer</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

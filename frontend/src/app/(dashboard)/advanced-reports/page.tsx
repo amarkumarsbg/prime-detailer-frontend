@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -462,7 +467,44 @@ export default function AdvancedReportsPage() {
                 </button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <MobileCardList className="p-3">
+                {schedules.map((row) => (
+                  <MobileRowCard key={row.id}>
+                    <p className="font-medium leading-snug">{row.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {row.reportType} · {row.format}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{row.recipients}</p>
+                    <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                      <span>
+                        {row.frequency}
+                        {" · "}
+                        {row.active ? (
+                          <span className="text-emerald-600 dark:text-emerald-400">Active</span>
+                        ) : (
+                          <span className="text-muted-foreground">Paused</span>
+                        )}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">{row.nextDelivery}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full text-destructive hover:text-destructive"
+                      onClick={() => {
+                        removeSchedule(row.id);
+                        toast.message("Schedule removed");
+                      }}
+                    >
+                      <Trash2 className="size-4 mr-2" />
+                      Remove schedule
+                    </Button>
+                  </MobileRowCard>
+                ))}
+              </MobileCardList>
+              <DesktopTableWrap>
                 <table className="w-full text-sm min-w-[720px]">
                   <thead>
                     <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -515,7 +557,8 @@ export default function AdvancedReportsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DesktopTableWrap>
+              </>
             )}
           </CardContent>
         </Card>
