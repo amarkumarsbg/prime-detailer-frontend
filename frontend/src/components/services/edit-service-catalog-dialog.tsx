@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -191,7 +192,7 @@ export function EditServiceCatalogDialog({
         className="sm:max-w-lg max-h-[90vh] overflow-y-auto gap-0 p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="border-b border-border px-6 py-4">
+        <DialogHeader className={dialogMobileSheetHeaderClasses}>
           <DialogTitle className="text-xl font-semibold">Edit Service Package</DialogTitle>
           <DialogDescription className="sr-only">
             Update service name, compatibility, GST-inclusive pricing, duration, and availability.

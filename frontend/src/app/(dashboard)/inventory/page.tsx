@@ -25,6 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -610,15 +612,10 @@ export default function InventoryPage() {
                 </Button>
               </DialogTrigger>
               <DialogContent
-                className={cn(
-                  "flex w-[calc(100vw-1rem)] max-w-lg flex-col gap-0 overflow-hidden p-0",
-                  "max-h-[min(92dvh,720px)]",
-                  "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:left-0 max-sm:max-h-[min(92dvh,100%)]",
-                  "max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none"
-                )}
+                className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,720px)]")}
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
-                <DialogHeader className="shrink-0 space-y-1 border-b border-border/60 px-6 pb-3 pt-6 text-left">
+                <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
                   <DialogTitle>New catalog item</DialogTitle>
                   <DialogDescription>
                     Choose Piece, Set, Kg, etc., or Litre for fluids — the table shows the same unit you pick.
@@ -1009,15 +1006,8 @@ export default function InventoryPage() {
       </Tabs>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deletingPart && setDeleteTarget(null)}>
-        <DialogContent
-          className={cn(
-            "flex w-[calc(100vw-1rem)] max-w-md flex-col gap-0 overflow-hidden p-0",
-            "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:left-0",
-            "max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0",
-            "max-sm:rounded-t-2xl max-sm:rounded-b-none"
-          )}
-        >
-          <DialogHeader className="shrink-0 space-y-0 border-b border-border/60 px-6 pb-4 pt-6 text-left">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-w-md")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "space-y-0")}>
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
                 <Trash2 className="h-5 w-5 text-destructive" />
@@ -1058,7 +1048,6 @@ export default function InventoryPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full sm:w-auto"
               disabled={deletingPart}
               onClick={() => setDeleteTarget(null)}
             >
@@ -1067,7 +1056,6 @@ export default function InventoryPage() {
             <Button
               type="button"
               variant="destructive"
-              className="w-full sm:w-auto"
               disabled={deletingPart}
               onClick={() => void confirmDeletePart()}
             >

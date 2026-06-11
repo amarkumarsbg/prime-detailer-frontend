@@ -57,7 +57,7 @@ export function ServiceAddonCard({
           <Clock className="h-3.5 w-3.5" />
           Duration: {formatServiceDurationLabel(service)}
         </p>
-        <div className="mt-auto pt-4 flex gap-2">
+        <div className="mt-auto flex flex-col gap-2 pt-4 sm:flex-row">
           <Button
             variant="outline"
             size="sm"
@@ -67,8 +67,14 @@ export function ServiceAddonCard({
             <Pencil className="h-3.5 w-3.5 mr-1.5" />
             Edit
           </Button>
-          <Button variant="outline" size="sm" className="text-destructive" onClick={onDelete}>
-            <Trash2 className="h-3.5 w-3.5" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 sm:w-auto"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+            Delete
           </Button>
         </div>
       </CardContent>

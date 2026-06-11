@@ -7,7 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -256,7 +259,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
           className="sm:max-w-[480px] max-h-[90vh] gap-0 p-0 flex flex-col overflow-hidden"
           showClose
         >
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle className="text-xl font-semibold">Add Expense</DialogTitle>
           </DialogHeader>
 
@@ -521,8 +524,8 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       </Dialog>
 
       <Dialog open={vendorDialogOpen} onOpenChange={setVendorDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] gap-0 p-0 flex flex-col overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh]")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>Add New Vendor</DialogTitle>
           </DialogHeader>
           <ScrollArea className="h-[min(480px,calc(85vh-120px))] px-6">

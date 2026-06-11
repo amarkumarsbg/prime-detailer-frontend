@@ -125,7 +125,7 @@ export function ServicePackageCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-200" asChild>
             <Link href={`/services/${service.id}/parts`} className="gap-1.5">
               <Boxes className="h-3.5 w-3.5" />
@@ -144,7 +144,7 @@ export function ServicePackageCard({
           <Button
             variant="outline"
             size="sm"
-            className="text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+            className="col-span-2 text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5 sm:col-span-1"
             onClick={onDelete}
           >
             <Trash2 className="h-3.5 w-3.5" />

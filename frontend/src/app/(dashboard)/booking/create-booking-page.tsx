@@ -63,6 +63,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { CustomerCreditCheckDialog } from "@/components/job-cards/customer-credit-check-dialog";
 import { AddAddonDialog } from "@/components/services/add-addon-dialog";
@@ -2731,8 +2733,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               cancelAddVehicleFromPopup();
             }}
           >
-            <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-              <DialogHeader className="shrink-0 space-y-1 border-b border-border px-6 pb-4 pt-6 text-left">
+            <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,720px)]")}>
+              <DialogHeader className={dialogMobileSheetHeaderClasses}>
                 <DialogTitle>Add New Vehicle</DialogTitle>
                 <DialogDescription>
                   Enter registration, brand, and model. Use + New if a brand or model is not in the list.
@@ -4605,10 +4607,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           }}
         >
           <DialogContent
-            className={cn(
-              "flex h-[min(92vh,880px)] w-[min(100vw-1rem,1200px)] max-w-[min(100vw-1rem,1200px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl",
-              "max-sm:fixed max-sm:inset-0 max-sm:left-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0"
-            )}
+            mobileVariant="fullscreen"
+            showMobileHandle={false}
+            className="flex h-[min(92vh,880px)] w-[min(100vw-1rem,1200px)] max-w-[min(100vw-1rem,1200px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"
           >
             <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 pb-2.5 pt-3 text-left sm:space-y-1.5 sm:px-6 sm:pb-3 sm:pt-4">
               <DialogTitle className="pr-10 text-base leading-tight sm:pr-8 sm:text-xl">

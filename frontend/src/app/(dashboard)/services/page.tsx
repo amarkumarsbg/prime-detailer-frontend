@@ -22,6 +22,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -31,12 +33,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function ServicesPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
+  const removeFromCatalog = useServiceCatalogStore((s) => s.removeFromCatalog);
   const categoryRecords = useServiceCategoryStore((s) => s.categories);
 
   const [search, setSearch] = useState("");
@@ -53,6 +57,7 @@ export default function ServicesPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [addonEdit, setAddonEdit] = useState<ServiceCatalogItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ServiceCatalogItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const extraForDialog = useMemo(
     () => [...categoryRecords.map((c) => c.name), ...inlineNewCategories],
@@ -124,24 +129,39 @@ export default function ServicesPage() {
     return filteredAddons.slice(start, start + ps);
   }, [filteredAddons, page, ps]);
 
-  const handleSaveEdit = (next: ServiceCatalogItem) => {
-    setCatalog((prev) => prev.map((s) => (s.id === next.id ? next : s)));
-    setEditOpen(false);
-    setEditTarget(null);
-    toast.success("Service updated");
+  const handleSaveEdit = async (next: ServiceCatalogItem) => {
+    try {
+      await setCatalog((prev) => prev.map((s) => (s.id === next.id ? next : s)));
+      setEditOpen(false);
+      setEditTarget(null);
+      toast.success("Service updated");
+    } catch {
+      toast.error("Could not update service. Is the API running?");
+    }
   };
 
-  const handleSaveAddon = (next: ServiceCatalogItem) => {
-    setCatalog((prev) => prev.map((s) => (s.id === next.id ? next : s)));
-    setAddonEdit(null);
-    toast.success("Add-on updated");
+  const handleSaveAddon = async (next: ServiceCatalogItem) => {
+    try {
+      await setCatalog((prev) => prev.map((s) => (s.id === next.id ? next : s)));
+      setAddonEdit(null);
+      toast.success("Add-on updated");
+    } catch {
+      toast.error("Could not update add-on. Is the API running?");
+    }
   };
 
-  const handleDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
-    setCatalog((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-    toast.success(`“${deleteTarget.name}” removed`);
-    setDeleteTarget(null);
+    setDeleting(true);
+    try {
+      await removeFromCatalog(deleteTarget.id);
+      toast.success(`“${deleteTarget.name}” deleted`);
+      setDeleteTarget(null);
+    } catch {
+      toast.error("Could not delete. Is the API running?");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -150,10 +170,11 @@ export default function ServicesPage() {
         title="Service Management"
         actions={
           <>
-            <Button
-              className="gap-2"
-              onClick={() => setAddonDialogOpen(true)}
-            >
+            <Button className="gap-2" onClick={() => setPackageDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add Service
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setAddonDialogOpen(true)}>
               <Plus className="h-4 w-4" />
               Add Add-on
             </Button>
@@ -162,12 +183,6 @@ export default function ServicesPage() {
               onOpenChange={setPackageDialogOpen}
               extraCategories={extraForDialog}
               setExtraCategories={setInlineNewCategories}
-              trigger={
-                <Button variant="default" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Package
-                </Button>
-              }
             />
             <AddAddonDialog open={addonDialogOpen} onOpenChange={setAddonDialogOpen} />
           </>
@@ -246,7 +261,30 @@ export default function ServicesPage() {
           />
         </div>
 
+        {mainTab === "packages" ? (
+          <div className="mt-3 flex gap-2 sm:hidden">
+            <Button className="flex-1 gap-2" onClick={() => setPackageDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add Service
+            </Button>
+          </div>
+        ) : mainTab === "addons" ? (
+          <div className="mt-3 flex gap-2 sm:hidden">
+            <Button className="flex-1 gap-2" variant="outline" onClick={() => setAddonDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add Add-on
+            </Button>
+          </div>
+        ) : null}
+
         <TabsContent value="packages" className="mt-6 space-y-6">
+          {pagedPackages.length === 0 ? (
+            <EmptyServicesState
+              label="services"
+              onAdd={() => setPackageDialogOpen(true)}
+              addLabel="Add Service"
+            />
+          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {pagedPackages.map((service) => (
               <ServicePackageCard
@@ -270,6 +308,13 @@ export default function ServicesPage() {
         </TabsContent>
 
         <TabsContent value="addons" className="mt-6 space-y-6">
+          {pagedAddons.length === 0 ? (
+            <EmptyServicesState
+              label="add-ons"
+              onAdd={() => setAddonDialogOpen(true)}
+              addLabel="Add Add-on"
+            />
+          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {pagedAddons.map((service) => (
               <ServiceAddonCard
@@ -312,30 +357,80 @@ export default function ServicesPage() {
         onSave={handleSaveAddon}
       />
 
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete {deleteTarget?.isAddon ? "add-on" : "service"}?</DialogTitle>
-            <DialogDescription>
-              {deleteTarget ? (
-                <>
-                  This removes <span className="font-medium text-foreground">{deleteTarget.name}</span>{" "}
-                  from the catalog.
-                </>
-              ) : null}
-            </DialogDescription>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}
+      >
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-w-md")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "space-y-0")}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle>
+                  Delete {deleteTarget?.isAddon ? "add-on" : "service"}?
+                </DialogTitle>
+                <DialogDescription>
+                  This permanently deletes the item from the database.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+          {deleteTarget ? (
+            <div className="space-y-3 px-6 py-4">
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
+                <p className="font-medium leading-snug">{deleteTarget.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{deleteTarget.category}</p>
+              </div>
+              <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                This cannot be undone.
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
               Cancel
             </Button>
-            <Button type="button" variant="destructive" onClick={handleDelete}>
-              Delete
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void confirmDelete()}
+            >
+              {deleting ? "Deleting…" : "Delete permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function EmptyServicesState({
+  label,
+  addLabel,
+  onAdd,
+}: {
+  label: string;
+  addLabel: string;
+  onAdd: () => void;
+}) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+        <p className="text-sm text-muted-foreground">No {label} yet.</p>
+        <Button className="gap-2" onClick={onAdd}>
+          <Plus className="h-4 w-4" />
+          {addLabel}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

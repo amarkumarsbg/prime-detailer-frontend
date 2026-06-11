@@ -51,6 +51,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -2542,8 +2544,8 @@ export default function JobCardDetailPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] flex flex-col gap-0 p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0 text-left">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>Before photos required</DialogTitle>
             <DialogDescription>
               Add at least one &quot;Before&quot; inspection photo to move this job from Inspection to In Service.
@@ -2675,8 +2677,8 @@ export default function JobCardDetailPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] flex flex-col gap-0 p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0 text-left">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>After photos required</DialogTitle>
             <DialogDescription>
               Add at least one &quot;After&quot; inspection photo to move this job from Quality Check to Ready. QC must already be
@@ -2798,8 +2800,8 @@ export default function JobCardDetailPage() {
         open={serviceChecklistRequiredOpen}
         onOpenChange={setServiceChecklistRequiredOpen}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] flex flex-col gap-0 p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0 text-left">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>Complete service checklist</DialogTitle>
             <DialogDescription>
               Mark every service line as done before moving from In Service to Quality Check ({completedCount} of {totalCount}{" "}

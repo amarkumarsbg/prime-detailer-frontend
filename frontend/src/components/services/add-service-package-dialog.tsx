@@ -19,6 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -127,6 +129,7 @@ export function AddServicePackageDialog({
   const setExtraCategories = setExtraCategoriesProp ?? setInternalExtra;
 
   const [addForm, setAddForm] = useState<AddPackageForm>(emptyAddPackage);
+  const [saving, setSaving] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [catName, setCatName] = useState("");
   const [catSlug, setCatSlug] = useState("");
@@ -182,8 +185,9 @@ export function AddServicePackageDialog({
     toast.success("Category created", { description: name });
   };
 
-  const handleAddPackage = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddPackage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (saving) return;
     const name = addForm.name.trim();
     const description = addForm.description.trim();
     const category = addForm.category.trim();
@@ -236,20 +240,27 @@ export function AddServicePackageDialog({
       durationMinutes,
       maxDurationMinutes,
     };
-    setCatalog((prev) => [newItem, ...prev]);
-    onOpenChange(false);
-    setAddForm(emptyAddPackage());
-    toast.success("Service package created", { description: name });
-    onCreated?.(newItem);
+    setSaving(true);
+    try {
+      await setCatalog((prev) => [newItem, ...prev]);
+      onOpenChange(false);
+      setAddForm(emptyAddPackage());
+      toast.success("Service created", { description: name });
+      onCreated?.(newItem);
+    } catch {
+      toast.error("Could not save service. Is the API running?");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-        <DialogContent className="flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-          <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
-            <DialogTitle>Add Service Package</DialogTitle>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh] sm:max-w-3xl")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
+            <DialogTitle>Add Service</DialogTitle>
             <DialogDescription className="sr-only">
               Create a new service with category, pricing by vehicle type, GST, and duration.
             </DialogDescription>
@@ -490,7 +501,9 @@ export function AddServicePackageDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Create</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Create"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

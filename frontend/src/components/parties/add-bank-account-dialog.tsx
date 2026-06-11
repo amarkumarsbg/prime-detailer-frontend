@@ -8,6 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,8 +94,8 @@ export function AddBankAccountDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] gap-0 p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+      <DialogContent className={cn(dialogMobileSheetContentClasses, "sm:max-w-[640px]")}>
+        <DialogHeader className={dialogMobileSheetHeaderClasses}>
           <DialogTitle>{initial ? "Edit Bank Account" : "Add Bank Account"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit}>

@@ -10,7 +10,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,8 +172,8 @@ export function CustomerCreditCheckDialog({
           onOpenChange(next);
         }}
       >
-        <DialogContent className="flex max-h-[min(90vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="shrink-0 space-y-1 border-b border-border px-6 pb-4 pt-6 text-left">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,640px)]")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
             <DialogTitle>Credit &amp; pending payments</DialogTitle>
             <DialogDescription>
               {customerName.trim() || "Customer"}

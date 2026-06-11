@@ -14,7 +14,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import type { SegmentPricing, ServiceCatalogItem } from "@/types";
@@ -69,8 +72,11 @@ export function AddAddonDialog({
     if (open) queueMicrotask(() => setForm(emptyForm()));
   }, [open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     const name = form.name.trim();
     if (!name) {
       toast.error("Add-on name is required");
@@ -106,16 +112,23 @@ export function AddAddonDialog({
       gstApplicable: true,
     };
 
-    setCatalog((prev) => [newItem, ...prev]);
-    onCreated?.(newItem);
-    onOpenChange(false);
-    toast.success("Add-on created", { description: name });
+    setSaving(true);
+    try {
+      await setCatalog((prev) => [newItem, ...prev]);
+      onCreated?.(newItem);
+      onOpenChange(false);
+      toast.success("Add-on created", { description: name });
+    } catch {
+      toast.error("Could not save add-on. Is the API running?");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto gap-0 p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
+      <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh] overflow-y-auto")}>
+        <DialogHeader className={dialogMobileSheetHeaderClasses}>
           <DialogTitle>Add Add-on</DialogTitle>
           <DialogDescription className="sr-only">
             Create a new add-on with name, description, price, and duration for your branch.
@@ -232,8 +245,8 @@ export function AddAddonDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">
-              Create
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Create"}
             </Button>
           </DialogFooter>
         </form>

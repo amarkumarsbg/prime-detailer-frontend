@@ -14,6 +14,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +38,7 @@ import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
-import { formatDate, formatInrFull } from "@/lib/utils";
+import { cn, formatDate, formatInrFull } from "@/lib/utils";
 import { Crown, Package, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
@@ -511,8 +513,8 @@ export function MembershipPageClient() {
       </Tabs>
 
       <Dialog open={pkgDialogOpen} onOpenChange={setPkgDialogOpen}>
-        <DialogContent className="flex max-h-[min(90vh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="shrink-0 space-y-1.5 px-6 pt-6 text-left">
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,calc(100dvh-2rem))]")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
             <DialogTitle>{editingPackage ? "Edit package" : "New package"}</DialogTitle>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-2 [scrollbar-gutter:stable]">
