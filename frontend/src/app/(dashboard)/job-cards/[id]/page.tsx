@@ -93,6 +93,7 @@ import {
 import {
   buildHighEndReminderMonthIntervals,
   defaultManualFirstFollowUpMonths,
+  expectedDeliveryFromHighEndCompletion,
   formatHighEndCompletionMinutes,
   HIGH_END_COMPLETION_PRESETS,
   highEndCompletionSelectValue,
@@ -290,8 +291,14 @@ export default function JobCardDetailPage() {
         const m = next[sid];
         if (m != null && m > 0 && Number.isFinite(m)) payload[sid] = Math.round(m);
       }
+      const expectedDelivery = expectedDeliveryFromHighEndCompletion(
+        jobCard.createdAt,
+        jobCard.highEndServiceIds ?? [],
+        payload
+      ).toISOString();
       updateJobCard(jobCard.id, {
         highEndCompletionMinutesByServiceId: Object.keys(payload).length > 0 ? payload : undefined,
+        expectedDelivery,
         updatedAt: new Date().toISOString(),
       });
     },
@@ -725,9 +732,19 @@ export default function JobCardDetailPage() {
       ? WORKFLOW_STATUSES[currentStatusIndex + 1]
       : null;
 
-  /** Block advancing into In Service until someone is assigned (same idea as Before-photo gate). */
+  /** Block advancing into In Service (or beyond) until someone is assigned. */
+  const inServiceWorkflowIndex = WORKFLOW_STATUSES.indexOf("AWAITING_SERVICE");
   const advanceBlockedByMechanic =
-    nextWorkflowStatus === "AWAITING_SERVICE" && !hasMechanicAssigned;
+    !hasMechanicAssigned &&
+    nextWorkflowStatus !== null &&
+    WORKFLOW_STATUSES.indexOf(nextWorkflowStatus) >= inServiceWorkflowIndex;
+
+  const updateStatusDisabled =
+    currentStatusIndex >= WORKFLOW_STATUSES.length - 1 || advanceBlockedByMechanic;
+
+  const updateStatusDisabledTitle = advanceBlockedByMechanic
+    ? "Assign a mechanic before moving to In Service"
+    : undefined;
 
   const completedCount = serviceItems.filter((s) => s.isCompleted).length;
   const totalCount = serviceItems.length;
@@ -880,6 +897,13 @@ export default function JobCardDetailPage() {
 
   const handleUpdateStatus = () => {
     if (!jobCard || currentStatus === "DELIVERED" || currentStatus === "CANCELLED") return;
+    if (advanceBlockedByMechanic) {
+      toast.error("Assign a mechanic before moving to In Service", {
+        description: "Use Assign mechanic in the workflow bar above.",
+      });
+      setShowQuickAssignDialog(true);
+      return;
+    }
     const nextIndex = currentStatusIndex + 1;
     if (nextIndex < WORKFLOW_STATUSES.length) {
       const nextStatus = WORKFLOW_STATUSES[nextIndex];
@@ -1270,12 +1294,11 @@ export default function JobCardDetailPage() {
                       </Button>
                     )}
                     <Button
+                      type="button"
                       className="w-full sm:w-auto"
                       onClick={handleUpdateStatus}
-                      disabled={
-                        currentStatusIndex >= WORKFLOW_STATUSES.length - 1 ||
-                        advanceBlockedByMechanic
-                      }
+                      disabled={updateStatusDisabled}
+                      title={updateStatusDisabledTitle}
                     >
                       Update Status
                     </Button>
@@ -2524,6 +2547,11 @@ export default function JobCardDetailPage() {
             <DialogTitle>Before photos required</DialogTitle>
             <DialogDescription>
               Add at least one &quot;Before&quot; inspection photo to move this job from Inspection to In Service.
+              {advanceBlockedByMechanic ? (
+                <span className="mt-2 block text-amber-600 dark:text-amber-500">
+                  Assign a mechanic before you can continue to In Service.
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-4 min-h-0 flex-1 overflow-y-auto space-y-4">
@@ -2615,9 +2643,16 @@ export default function JobCardDetailPage() {
             </Button>
             <Button
               type="button"
+              disabled={advanceBlockedByMechanic}
+              title={updateStatusDisabledTitle}
               onClick={() => {
                 if (!displayPhotos.some((p) => p.type === "BEFORE")) {
                   toast.error("Add at least one Before photo first");
+                  return;
+                }
+                if (!hasMechanicAssigned) {
+                  toast.error("Assign a mechanic before moving to In Service");
+                  setShowQuickAssignDialog(true);
                   return;
                 }
                 setBeforePhotoRequiredOpen(false);

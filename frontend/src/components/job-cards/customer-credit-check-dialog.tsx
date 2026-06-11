@@ -48,11 +48,14 @@ function balanceDue(inv: Invoice): number {
 export function CustomerCreditCheckDialog({
   open,
   onOpenChange,
+  onPrepareClose,
   customerId,
   customerName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called before close so a parent booking shell dialog is not dismissed on mobile. */
+  onPrepareClose?: () => void;
   customerId: string | null;
   customerName: string;
 }) {
@@ -159,7 +162,13 @@ export function CustomerCreditCheckDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) onPrepareClose?.();
+          onOpenChange(next);
+        }}
+      >
         <DialogContent className="flex max-h-[min(90vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
           <DialogHeader className="shrink-0 space-y-1 border-b border-border px-6 pb-4 pt-6 text-left">
             <DialogTitle>Credit &amp; pending payments</DialogTitle>
@@ -228,7 +237,13 @@ export function CustomerCreditCheckDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={recordOpen} onOpenChange={setRecordOpen}>
+      <Dialog
+        open={recordOpen}
+        onOpenChange={(next) => {
+          if (!next) onPrepareClose?.();
+          setRecordOpen(next);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Record payment</DialogTitle>

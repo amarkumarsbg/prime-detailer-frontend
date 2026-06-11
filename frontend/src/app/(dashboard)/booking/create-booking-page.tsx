@@ -101,8 +101,10 @@ import {
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import {
   defaultManualFirstFollowUpMonths,
+  expectedDeliveryFromHighEndCompletion,
   HIGH_END_COMPLETION_PRESETS,
   highEndCompletionSelectValue,
+  maxHighEndCompletionMinutes,
 } from "@/lib/high-end-follow-up";
 import { formatServiceDurationLabel } from "@/lib/service-duration";
 import type {
@@ -221,6 +223,10 @@ function joinDatetimeLocal(date: string, time: string): string {
   return `${d}T${tm}`;
 }
 
+function hasExpectedDeliveryDateSet(value: string): boolean {
+  return Boolean(splitDatetimeLocal(value).date.trim());
+}
+
 function membershipTierLabel(tier: MembershipTier): string {
   switch (tier) {
     case "MONTHLY":
@@ -283,6 +289,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const router = useRouter();
   /** Prevents create flow dialog `onOpenChange` from navigating away when we already route to `/job-cards/[id]`. */
   const skipJobCardListRedirectRef = useRef(false);
+  /** Nested modals inside the mobile booking shell must not dismiss the shell (Radix bubbles close). */
+  const skipBookingShellCloseRef = useRef(false);
+  const guardBookingShellFromNestedClose = useCallback(() => {
+    skipBookingShellCloseRef.current = true;
+  }, []);
   const navigateToCreatedJobCard = useCallback((jobId: string) => {
     skipJobCardListRedirectRef.current = true;
     router.replace(`/job-cards/${jobId}`);
@@ -372,7 +383,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment | "">("");
-  const [bookingWhen, setBookingWhen] = useState(() => datetimeLocalValue(new Date()));
+  const [bookingWhen, setBookingWhen] = useState(() =>
+    isWalkIn ? datetimeLocalValue(new Date()) : ""
+  );
   const bookingScheduleDateMin = localTodayDateInputMin();
   const bookingScheduleSplit = splitDatetimeLocal(bookingWhen);
   const bookingScheduleTimeMin =
@@ -1080,6 +1093,32 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }, 0);
   }, [selectedHighEndIds, highEndServices]);
 
+  const suggestedJobCardExpectedDelivery = useMemo(() => {
+    if (!isJobCard) return null;
+    return expectedDeliveryFromHighEndCompletion(
+      new Date(),
+      selectedHighEndIds,
+      highEndCompletionMinutesById
+    );
+  }, [isJobCard, selectedHighEndIds, highEndCompletionMinutesById]);
+
+  const computedExpectedDelivery = useMemo(() => {
+    if (isWalkIn) {
+      return expectedDeliveryFromHighEndCompletion(
+        new Date(bookingWhen),
+        selectedHighEndIds,
+        highEndCompletionMinutesById
+      );
+    }
+    if (hasExpectedDeliveryDateSet(bookingWhen)) return new Date(bookingWhen);
+    return null;
+  }, [isWalkIn, bookingWhen, selectedHighEndIds, highEndCompletionMinutesById]);
+
+  const jobCardExpectedDeliveryReady =
+    isJobCard &&
+    hasExpectedDeliveryDateSet(bookingWhen) &&
+    !isDatetimeLocalInPast(bookingWhen);
+
   const highEndSummaryLines = useMemo(
     () =>
       selectedHighEndIds
@@ -1186,6 +1225,18 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (isWalkIn && isDatetimeLocalInPast(bookingWhen)) {
       toast.error("Booking cannot be in the past", {
         description: "Choose today with a future time, or a later date.",
+      });
+      return;
+    }
+    if (isJobCard && !hasExpectedDeliveryDateSet(bookingWhen)) {
+      toast.error("Select an expected delivery date", {
+        description: "Set the date on Notes & job details before creating the job card.",
+      });
+      return;
+    }
+    if (isJobCard && isDatetimeLocalInPast(bookingWhen)) {
+      toast.error("Expected delivery cannot be in the past", {
+        description: "Set a future date and time on Notes & job details.",
       });
       return;
     }
@@ -1432,9 +1483,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         .filter(Boolean)
         .join("\n") || undefined;
 
-    const expectedDeliveryIso = isWalkIn
+    const expectedDeliveryIso = isJobCard
       ? new Date(bookingWhen).toISOString()
-      : now;
+      : expectedDeliveryFromHighEndCompletion(
+          new Date(bookingWhen),
+          selectedHighEndIds,
+          highEndCompletionMinutesById
+        ).toISOString();
 
     const advanceAmountPatch = (() => {
       const t = advanceAmountInput.trim();
@@ -1787,6 +1842,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
   const jobWizardStepId = wizardSteps[jobCreateStep] ?? "customer";
   const jobWizardStepCount = wizardSteps.length;
+
+  const notesStepNextBlocked =
+    isJobCard && jobWizardStepId === "notesAndJobDetails" && !jobCardExpectedDeliveryReady;
+
   const bookingWizardIncomplete =
     useBookingWizard && jobWizardStepCount > 0 && jobCreateStep < jobWizardStepCount - 1;
 
@@ -1897,6 +1956,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         return;
       }
     }
+    if (jobWizardStepId === "notesAndJobDetails" && isJobCard) {
+      if (!hasExpectedDeliveryDateSet(bookingWhen)) {
+        toast.error("Select an expected delivery date to continue.");
+        return;
+      }
+      if (isDatetimeLocalInPast(bookingWhen)) {
+        toast.error("Expected delivery must be in the future.");
+        return;
+      }
+    }
     setJobCreateStep((i) => {
       let n = i + 1;
       while (
@@ -2004,14 +2073,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               {isJobCard ? "Expected delivery" : "Date & time"}
             </dt>
             <dd className="text-right text-xs">
-              {isWalkIn
-                ? bookingWhen
-                  ? new Date(bookingWhen).toLocaleString(undefined, {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })
-                  : "—"
-                : "Current date & time when you create"}
+              {computedExpectedDelivery
+                ? computedExpectedDelivery.toLocaleString(undefined, {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })
+                : "Not set"}
             </dd>
           </div>
         </dl>
@@ -2656,6 +2723,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 setAddVehiclePopupOpen(true);
                 return;
               }
+              guardBookingShellFromNestedClose();
               if (skipAddVehicleCancelOnCloseRef.current) {
                 skipAddVehicleCancelOnCloseRef.current = false;
                 return;
@@ -2800,7 +2868,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </DialogContent>
           </Dialog>
 
-          <Dialog open={newBrandOpen} onOpenChange={setNewBrandOpen}>
+          <Dialog
+            open={newBrandOpen}
+            onOpenChange={(open) => {
+              if (!open) guardBookingShellFromNestedClose();
+              setNewBrandOpen(open);
+            }}
+          >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Add brand</DialogTitle>
@@ -2862,7 +2936,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </DialogContent>
           </Dialog>
 
-          <Dialog open={newModelOpen} onOpenChange={setNewModelOpen}>
+          <Dialog
+            open={newModelOpen}
+            onOpenChange={(open) => {
+              if (!open) guardBookingShellFromNestedClose();
+              setNewModelOpen(open);
+            }}
+          >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Add model</DialogTitle>
@@ -3314,7 +3394,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </CardContent>
           </Card>
 
-          <Dialog open={membershipServicesDialogOpen} onOpenChange={setMembershipServicesDialogOpen}>
+          <Dialog
+            open={membershipServicesDialogOpen}
+            onOpenChange={(open) => {
+              if (!open) guardBookingShellFromNestedClose();
+              setMembershipServicesDialogOpen(open);
+            }}
+          >
             <DialogContent className="max-h-[min(90vh,520px)] flex flex-col sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Included services</DialogTitle>
@@ -3887,6 +3973,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                   </>
                                 );
                               })()}
+                              <p className="text-[10px] text-muted-foreground leading-snug">
+                                Plan turnaround time — pick the delivery date on Notes &amp; job details.
+                              </p>
                             </div>
                           </div>
                         )}
@@ -4204,6 +4293,119 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 <CardTitle className="text-lg">Job details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="min-w-0 max-w-md space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                    Expected delivery <span className="text-destructive">*</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When should the vehicle be ready for the customer? Select a date to continue.
+                  </p>
+                  {suggestedJobCardExpectedDelivery &&
+                  maxHighEndCompletionMinutes(selectedHighEndIds, highEndCompletionMinutesById) > 0 ? (
+                    <p className="text-xs text-muted-foreground/90">
+                      Suggested from planned completion:{" "}
+                      <span className="font-medium text-foreground">
+                        {suggestedJobCardExpectedDelivery.toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </p>
+                  ) : null}
+                  <div className="min-w-0 space-y-3 md:hidden">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="expected-delivery-date" className="text-xs text-muted-foreground">
+                        Date
+                      </Label>
+                      <Input
+                        id="expected-delivery-date"
+                        type="date"
+                        min={bookingScheduleDateMin}
+                        value={splitDatetimeLocal(bookingWhen).date}
+                        onChange={(e) => {
+                          const picked = e.target.value;
+                          if (!picked) {
+                            setBookingWhen("");
+                            return;
+                          }
+                          const prev = splitDatetimeLocal(bookingWhen);
+                          const time =
+                            hasExpectedDeliveryDateSet(bookingWhen) && bookingWhen.includes("T")
+                              ? prev.time
+                              : picked === bookingScheduleDateMin
+                                ? localTimeInputMinNow()
+                                : "18:00";
+                          let next = joinDatetimeLocal(picked, time);
+                          if (
+                            picked === bookingScheduleDateMin &&
+                            next &&
+                            isDatetimeLocalInPast(next)
+                          ) {
+                            next = joinDatetimeLocal(picked, localTimeInputMinNow());
+                          }
+                          setBookingWhen(next);
+                        }}
+                        required
+                        className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="expected-delivery-time" className="text-xs text-muted-foreground">
+                        Time
+                      </Label>
+                      <Input
+                        id="expected-delivery-time"
+                        type="time"
+                        min={
+                          splitDatetimeLocal(bookingWhen).date === bookingScheduleDateMin
+                            ? localTimeInputMinNow()
+                            : undefined
+                        }
+                        value={
+                          hasExpectedDeliveryDateSet(bookingWhen)
+                            ? splitDatetimeLocal(bookingWhen).time
+                            : ""
+                        }
+                        disabled={!hasExpectedDeliveryDateSet(bookingWhen)}
+                        onChange={(e) => {
+                          const { date } = splitDatetimeLocal(bookingWhen);
+                          if (!date) return;
+                          let next = joinDatetimeLocal(date, e.target.value);
+                          if (date === bookingScheduleDateMin && next && isDatetimeLocalInPast(next)) {
+                            next = joinDatetimeLocal(date, localTimeInputMinNow());
+                          }
+                          setBookingWhen(next);
+                        }}
+                        required
+                        className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
+                      />
+                    </div>
+                  </div>
+                  <div className="relative hidden md:block">
+                    <Input
+                      id="expected-delivery-when"
+                      type="datetime-local"
+                      min={localDatetimeLocalInputMin()}
+                      value={bookingWhen}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) {
+                          setBookingWhen("");
+                          return;
+                        }
+                        if (!isDatetimeLocalInPast(v)) {
+                          setBookingWhen(v);
+                        } else {
+                          setBookingWhen(localDatetimeLocalInputMin());
+                        }
+                      }}
+                      required
+                      className="h-10 pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:bottom-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                    />
+                    <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="reportedIssues">Reported issues</Label>
                   <Textarea
@@ -4258,7 +4460,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               Back
             </Button>
             {jobCreateStep < jobWizardStepCount - 1 ? (
-              <Button type="button" size="sm" onClick={goNextJobWizard}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={goNextJobWizard}
+                disabled={notesStepNextBlocked}
+                title={notesStepNextBlocked ? "Select an expected delivery date to continue" : undefined}
+              >
                 Next
               </Button>
             ) : (
@@ -4317,7 +4525,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     </Button>
                   )}
                   {jobCreateStep < jobWizardStepCount - 1 ? (
-                    <Button type="button" className="min-w-[5rem] font-semibold shadow-sm" onClick={goNextJobWizard}>
+                    <Button
+                      type="button"
+                      className="min-w-[5rem] font-semibold shadow-sm"
+                      onClick={goNextJobWizard}
+                      disabled={notesStepNextBlocked}
+                      title={notesStepNextBlocked ? "Select an expected delivery date to continue" : undefined}
+                    >
                       Next
                     </Button>
                   ) : (
@@ -4382,6 +4596,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 skipJobCardListRedirectRef.current = false;
                 return;
               }
+              if (skipBookingShellCloseRef.current) {
+                skipBookingShellCloseRef.current = false;
+                return;
+              }
               router.push(bookingListHref);
             }
           }}
@@ -4410,7 +4628,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         </Dialog>
       )}
 
-      <Dialog open={pricingService !== null} onOpenChange={(open) => !open && setPricingService(null)}>
+      <Dialog
+        open={pricingService !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            guardBookingShellFromNestedClose();
+            setPricingService(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="pr-8">{pricingService?.name}</DialogTitle>
@@ -4433,7 +4659,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         <Dialog
           open={checkInOpen}
           onOpenChange={(open) => {
-            if (!open) dismissCheckIn();
+            if (!open) {
+              guardBookingShellFromNestedClose();
+              dismissCheckIn();
+            }
           }}
         >
           <DialogContent
@@ -4574,7 +4803,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
       <CustomerCreditCheckDialog
         open={customerCreditDialogOpen && isJobCard}
-        onOpenChange={setCustomerCreditDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) guardBookingShellFromNestedClose();
+          setCustomerCreditDialogOpen(open);
+        }}
+        onPrepareClose={guardBookingShellFromNestedClose}
         customerId={existingCustomerId}
         customerName={customerName}
       />

@@ -59,3 +59,28 @@ export function highEndCompletionSelectValue(minutes: number | undefined): strin
   const rounded = Math.round(minutes);
   return PRESET_MINUTE_SET.has(rounded) ? String(rounded) : "__custom__";
 }
+
+/** Longest planned completion among selected high-end programs (0 when none set). */
+export function maxHighEndCompletionMinutes(
+  serviceIds: string[],
+  minutesById: Record<string, number | undefined>
+): number {
+  let max = 0;
+  for (const id of serviceIds) {
+    const m = minutesById[id];
+    if (m != null && Number.isFinite(m) && m > max) max = Math.round(m);
+  }
+  return max;
+}
+
+/** Expected delivery = base receive time + longest high-end planned completion. */
+export function expectedDeliveryFromHighEndCompletion(
+  baseDate: Date | string,
+  serviceIds: string[],
+  minutesById: Record<string, number | undefined>
+): Date {
+  const base = new Date(baseDate);
+  const minutes = maxHighEndCompletionMinutes(serviceIds, minutesById);
+  if (minutes <= 0) return base;
+  return new Date(base.getTime() + minutes * 60_000);
+}

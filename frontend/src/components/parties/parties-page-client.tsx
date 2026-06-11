@@ -185,17 +185,6 @@ export function PartiesPageClient() {
     return <PartiesListLoading />;
   }
 
-  const tableColGroup = (
-    <colgroup>
-      <col style={{ width: "30%" }} />
-      <col style={{ width: "14%" }} />
-      <col style={{ width: "18%" }} />
-      <col style={{ width: "14%" }} />
-      <col style={{ width: "14%" }} />
-      <col style={{ width: 32 }} />
-    </colgroup>
-  );
-
   const actionTh =
     "sticky top-0 z-10 w-[32px] min-w-[32px] max-w-[32px] border border-border bg-muted p-0 align-middle";
   const actionTd =
@@ -208,7 +197,7 @@ export function PartiesPageClient() {
 
   const tableHeaderRow = (
     <tr>
-      <th className={thCell}>
+      <th className={`${thCell} w-[50%] sm:w-[30%]`}>
         <button
           type="button"
           className="inline-flex items-center gap-1.5 font-semibold hover:text-foreground transition-colors"
@@ -218,10 +207,10 @@ export function PartiesPageClient() {
           <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
         </button>
       </th>
-      <th className={`${thCell} hidden md:table-cell`}>Category</th>
-      <th className={`${thCell} hidden sm:table-cell`}>Mobile Number</th>
-      <th className={thCell}>Party type</th>
-      <th className={`${thCell} tabular-nums`}>
+      <th className={`${thCell} hidden md:table-cell md:w-[14%]`}>Category</th>
+      <th className={`${thCell} hidden sm:table-cell sm:w-[18%]`}>Mobile Number</th>
+      <th className={`${thCell} hidden sm:table-cell sm:w-[14%]`}>Party type</th>
+      <th className={`${thCell} w-[38%] sm:w-[14%] text-right tabular-nums whitespace-nowrap`}>
         <button
           type="button"
           className="inline-flex items-center gap-1.5 font-semibold hover:text-foreground transition-colors"
@@ -317,8 +306,7 @@ export function PartiesPageClient() {
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-y-contain">
-              <table className="w-full table-fixed border-collapse border border-border text-sm">
-                {tableColGroup}
+              <table className="w-full table-fixed border-collapse border border-border text-sm min-w-[280px]">
                 <thead>{tableHeaderRow}</thead>
                 <tbody>
                   {filtered.map((p) => {
@@ -330,17 +318,22 @@ export function PartiesPageClient() {
                         className="cursor-pointer transition-colors duration-200 hover:[&>td]:bg-muted"
                         onClick={goToParty}
                       >
-                        <td className={`${tdCell} font-medium`}>{p.name}</td>
+                        <td className={`${tdCell} font-medium min-w-0`}>
+                          <div className="truncate">{p.name}</div>
+                          <div className="text-xs font-normal text-muted-foreground sm:hidden">
+                            {p.kind === "customer" ? "Customer" : "Supplier"}
+                          </div>
+                        </td>
                         <td className={`${tdMuted} hidden md:table-cell`}>
                           {p.category ?? "—"}
                         </td>
-                        <td className={`${tdMuted} hidden sm:table-cell`}>
+                        <td className={`${tdMuted} hidden sm:table-cell whitespace-nowrap`}>
                           {p.mobile ?? "—"}
                         </td>
-                        <td className={tdCell}>
+                        <td className={`${tdCell} hidden sm:table-cell whitespace-nowrap`}>
                           {p.kind === "customer" ? "Customer" : "Supplier"}
                         </td>
-                        <td className={`${tdCell} tabular-nums`}>
+                        <td className={`${tdCell} text-right tabular-nums whitespace-nowrap`}>
                           {formatInrTable(p.balance)}
                         </td>
                         <td
