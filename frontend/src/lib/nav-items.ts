@@ -146,7 +146,3 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
     ],
   },
 ];
-
-export function flattenNavItems(): NavItemDef[] {
-  return NAV_GROUPS.flatMap((g) => g.items);
-}

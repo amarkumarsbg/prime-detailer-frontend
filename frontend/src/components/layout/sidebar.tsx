@@ -11,13 +11,11 @@ import { useDashboardFilterStore } from "@/store/dashboard-filter-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { canAccessNavItem } from "@/lib/rbac";
 import { NAV_GROUPS } from "@/lib/nav-items";
-import { getRecentNav } from "@/lib/recent-nav";
 import {
   CarFront,
   X,
   LogOut,
   ChevronDown,
-  Clock,
 } from "lucide-react";
 
 function navSectionSlug(label: string): string {
@@ -49,66 +47,14 @@ function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function MobileQuickLinks({ onNavClick }: { onNavClick?: () => void }) {
-  const pathname = usePathname();
-  const userRole = useAuthStore((s) => s.user?.role);
-  const [recent, setRecent] = useState(() => getRecentNav());
-
-  useEffect(() => {
-    setRecent(getRecentNav());
-  }, [pathname]);
-
-  const accessible = recent.filter((entry) => {
-    const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === entry.href);
-    return item && canAccessNavItem(item.roles, userRole);
-  });
-
-  if (accessible.length === 0) return null;
-
-  return (
-    <section className="mb-2 space-y-1 border-b border-[var(--sidebar-border)] px-1.5 pb-3" aria-label="Recent pages">
-      <h2 className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--sidebar-section-heading)]">
-        <Clock className="size-3 opacity-80" aria-hidden />
-        Recent
-      </h2>
-      <div className="space-y-0.5">
-        {accessible.map((entry) => {
-          const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === entry.href);
-          if (!item) return null;
-          const isActive = isNavItemActive(pathname, entry.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={entry.href}
-              href={entry.href}
-              onClick={() => onNavClick?.()}
-              className={cn(
-                "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium",
-                isActive
-                  ? "bg-[var(--sidebar-active)] text-[var(--sidebar-active-foreground)]"
-                  : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]"
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0 opacity-90" />
-              <span className="truncate">{entry.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 function SidebarContent({
   onNavClick,
   navOverflow = "hidden",
   className,
-  showQuickLinks = false,
 }: {
   onNavClick?: () => void;
   navOverflow?: "hidden" | "auto";
   className?: string;
-  showQuickLinks?: boolean;
 }) {
   const pathname = usePathname();
   const userRole = useAuthStore((s) => s.user?.role);
@@ -182,7 +128,6 @@ function SidebarContent({
         )}
       >
         <div ref={navContentRef} className="space-y-3">
-          {showQuickLinks ? <MobileQuickLinks onNavClick={onNavClick} /> : null}
           {filteredGroups.map((group, groupIndex) => (
             <section
               key={group.label}
@@ -322,7 +267,6 @@ export function Sidebar() {
             className="flex-1 min-h-0"
             onNavClick={() => setMobileOpen(false)}
             navOverflow="auto"
-            showQuickLinks
           />
         </div>
 

@@ -9,7 +9,6 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ScrollToTopButton } from "@/components/layout/scroll-to-top-button";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
-import { RecentNavTracker } from "@/components/layout/recent-nav-tracker";
 import { AppDataSync } from "@/components/layout/app-data-sync";
 import { Button } from "@/components/ui/button";
 
@@ -128,7 +127,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
         <ScrollToTopButton scrollContainerRef={mainScrollRef} />
         <MobileBottomNav />
-        <RecentNavTracker />
       </div>
     </div>
   );
