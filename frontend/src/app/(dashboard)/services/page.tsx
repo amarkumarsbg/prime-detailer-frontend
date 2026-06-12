@@ -12,6 +12,7 @@ import { ServicePackageCard } from "@/components/services/service-package-card";
 import { ServiceAddonCard } from "@/components/services/service-addon-card";
 import { ServiceCategoriesTab } from "@/components/services/service-categories-tab";
 import { PageHeader } from "@/components/shared/page-header";
+import { KPICard } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,7 +34,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Trash2,
+  Package,
+  CircleCheck,
+  Star,
+  Puzzle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -45,7 +54,7 @@ export default function ServicesPage() {
 
   const [search, setSearch] = useState("");
   const [mainTab, setMainTab] = useState("packages");
-  const [pageSize, setPageSize] = useState("5");
+  const [pageSize, setPageSize] = useState("10");
   const [page, setPage] = useState(1);
 
   const [packageDialogOpen, setPackageDialogOpen] = useState(false);
@@ -164,120 +173,190 @@ export default function ServicesPage() {
     }
   };
 
-  return (
-    <div className="space-y-4 sm:space-y-6">
-      <PageHeader
-        title="Service Management"
-        actions={
-          <>
-            <Button className="gap-2" onClick={() => setPackageDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Add Service
-            </Button>
-            <Button variant="outline" className="gap-2" onClick={() => setAddonDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Add Add-on
-            </Button>
-            <AddServicePackageDialog
-              open={packageDialogOpen}
-              onOpenChange={setPackageDialogOpen}
-              extraCategories={extraForDialog}
-              setExtraCategories={setInlineNewCategories}
-            />
-            <AddAddonDialog open={addonDialogOpen} onOpenChange={setAddonDialogOpen} />
-          </>
-        }
+  const headerActions = (
+    <>
+      <div className="flex items-center gap-2 sm:hidden">
+        {mainTab === "packages" ? (
+          <Button
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={() => setPackageDialogOpen(true)}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add Service
+          </Button>
+        ) : null}
+        {mainTab === "addons" ? (
+          <Button
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={() => setAddonDialogOpen(true)}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add Add-on
+          </Button>
+        ) : null}
+      </div>
+      <div className="hidden gap-2 sm:flex">
+        <Button className="gap-2" onClick={() => setPackageDialogOpen(true)}>
+          <Plus className="h-4 w-4" />
+          Add Service
+        </Button>
+        <Button variant="outline" className="gap-2" onClick={() => setAddonDialogOpen(true)}>
+          <Plus className="h-4 w-4" />
+          Add Add-on
+        </Button>
+      </div>
+      <AddServicePackageDialog
+        open={packageDialogOpen}
+        onOpenChange={setPackageDialogOpen}
+        extraCategories={extraForDialog}
+        setExtraCategories={setInlineNewCategories}
       />
+      <AddAddonDialog open={addonDialogOpen} onOpenChange={setAddonDialogOpen} />
+    </>
+  );
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {(
-          [
-            { label: "PACKAGES", value: kpis.packages, accent: "text-foreground" },
-            { label: "ACTIVE", value: kpis.activePackages, accent: "text-emerald-600" },
-            {
-              label: "HIGH-END",
-              value: kpis.highEndPackages,
-              accent: "text-amber-700 dark:text-amber-400",
-            },
-            { label: "ADD-ONS", value: kpis.addons, accent: "text-foreground" },
-            { label: "ACTIVE", value: kpis.activeAddons, accent: "text-emerald-600" },
-          ] as const
-        ).map((k, i) => (
-          <Card key={`${k.label}-${i}`} className="shadow-sm">
-            <CardContent className="p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {k.label}
-              </p>
-              <p className={`text-2xl font-bold tabular-nums mt-1 ${k.accent}`}>{k.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+  return (
+    <div className="flex flex-col gap-3 sm:gap-4 md:gap-6">
+      <div className="order-2 hidden grid-cols-2 gap-2 sm:grid-cols-3 md:order-1 md:grid lg:grid-cols-5 md:gap-3">
+        <KPICard
+          size="compact"
+          title="Packages"
+          value={kpis.packages}
+          icon={Package}
+          tone="violet"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="Active packages"
+          value={kpis.activePackages}
+          icon={CircleCheck}
+          tone="emerald"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="High-end"
+          value={kpis.highEndPackages}
+          icon={Star}
+          tone="amber"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+          className="col-span-2 sm:col-span-1"
+        />
+        <KPICard
+          size="compact"
+          title="Add-ons"
+          value={kpis.addons}
+          icon={Puzzle}
+          tone="blue"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="Active add-ons"
+          value={kpis.activeAddons}
+          icon={CircleCheck}
+          tone="emerald"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+          className="col-span-2 sm:col-span-1"
+        />
       </div>
 
-      <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v); setPage(1); }} className="w-full">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-0">
-          <TabsList className="h-auto w-full sm:w-auto bg-transparent p-0 gap-0 rounded-none">
-            <TabsTrigger
-              value="packages"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-muted-foreground data-[state=active]:text-emerald-700"
-            >
-              Packages <span className="text-muted-foreground ml-1">({packages.length})</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="addons"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-muted-foreground data-[state=active]:text-emerald-700"
-            >
-              Add-ons <span className="text-muted-foreground ml-1">({addons.length})</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="categories"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-violet-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2 text-muted-foreground data-[state=active]:text-violet-700"
-            >
-              Categories <span className="text-muted-foreground ml-1">({categoryRecords.length})</span>
-            </TabsTrigger>
-          </TabsList>
-          <div className="flex items-center gap-2 text-sm pb-2 sm:pb-0">
-            <span className="text-muted-foreground whitespace-nowrap">SHOW:</span>
-            <Select value={pageSize} onValueChange={(v) => { setPageSize(v); setPage(1); }}>
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="5">5 per page</SelectItem>
-                <SelectItem value="10">10 per page</SelectItem>
-                <SelectItem value="20">20 per page</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="relative mt-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder="Search services or add-ons…"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+      <Tabs
+        value={mainTab}
+        onValueChange={(v) => {
+          setMainTab(v);
+          setPage(1);
+        }}
+        className="w-full md:order-2"
+      >
+        <div className="space-y-2">
+          <PageHeader
+            title="Service Management"
+            description="Manage service packages, add-ons, and categories."
+            hideDescriptionOnMobile
+            inlineActionsOnMobile
+            actions={headerActions}
           />
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <TabsList className="h-auto min-w-0 flex-1 flex-wrap justify-start gap-1 rounded-lg bg-muted p-1 sm:flex-none sm:rounded-none sm:bg-transparent sm:p-0">
+              <TabsTrigger
+                value="packages"
+                className="gap-1.5 rounded-md px-2.5 py-1.5 text-xs data-[state=active]:shadow-sm sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-emerald-600 sm:data-[state=active]:shadow-none data-[state=active]:text-emerald-700"
+              >
+                Packages
+                <span className="rounded-full bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground sm:hidden">
+                  {packages.length}
+                </span>
+                <span className="hidden text-muted-foreground sm:inline">({packages.length})</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="addons"
+                className="gap-1.5 rounded-md px-2.5 py-1.5 text-xs data-[state=active]:shadow-sm sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-emerald-600 sm:data-[state=active]:shadow-none data-[state=active]:text-emerald-700"
+              >
+                Add-ons
+                <span className="rounded-full bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground sm:hidden">
+                  {addons.length}
+                </span>
+                <span className="hidden text-muted-foreground sm:inline">({addons.length})</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="categories"
+                className="gap-1.5 rounded-md px-2.5 py-1.5 text-xs data-[state=active]:shadow-sm sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-violet-600 sm:data-[state=active]:shadow-none data-[state=active]:text-violet-700"
+              >
+                Categories
+                <span className="rounded-full bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground sm:hidden">
+                  {categoryRecords.length}
+                </span>
+                <span className="hidden text-muted-foreground sm:inline">
+                  ({categoryRecords.length})
+                </span>
+              </TabsTrigger>
+            </TabsList>
+            <div className="hidden items-center gap-2 pb-0 text-sm md:flex">
+              <span className="whitespace-nowrap text-muted-foreground">Show:</span>
+              <Select
+                value={pageSize}
+                onValueChange={(v) => {
+                  setPageSize(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 per page</SelectItem>
+                  <SelectItem value="20">20 per page</SelectItem>
+                  <SelectItem value="50">50 per page</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-9 pl-9"
+              placeholder="Search services or add-ons…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
 
-        {mainTab === "packages" ? (
-          <div className="mt-3 flex gap-2 sm:hidden">
-            <Button className="flex-1 gap-2" onClick={() => setPackageDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Add Service
-            </Button>
-          </div>
-        ) : mainTab === "addons" ? (
-          <div className="mt-3 flex gap-2 sm:hidden">
-            <Button className="flex-1 gap-2" variant="outline" onClick={() => setAddonDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Add Add-on
-            </Button>
-          </div>
-        ) : null}
-
-        <TabsContent value="packages" className="mt-6 space-y-6">
+        <TabsContent value="packages" className="mt-3 space-y-4 sm:mt-6 sm:space-y-6">
           {pagedPackages.length === 0 ? (
             <EmptyServicesState
               label="services"
@@ -302,12 +381,18 @@ export default function ServicesPage() {
             page={page}
             totalPages={pkgPages}
             total={filteredPackages.length}
+            itemsPerPage={ps}
             onPage={setPage}
             label="packages"
+            pageSize={pageSize}
+            onPageSizeChange={(v) => {
+              setPageSize(v);
+              setPage(1);
+            }}
           />
         </TabsContent>
 
-        <TabsContent value="addons" className="mt-6 space-y-6">
+        <TabsContent value="addons" className="mt-3 space-y-4 sm:mt-6 sm:space-y-6">
           {pagedAddons.length === 0 ? (
             <EmptyServicesState
               label="add-ons"
@@ -329,14 +414,70 @@ export default function ServicesPage() {
             page={page}
             totalPages={addonPages}
             total={filteredAddons.length}
+            itemsPerPage={ps}
             onPage={setPage}
             label="add-ons"
+            pageSize={pageSize}
+            onPageSizeChange={(v) => {
+              setPageSize(v);
+              setPage(1);
+            }}
           />
         </TabsContent>
 
-        <TabsContent value="categories" className="mt-6">
+        <TabsContent value="categories" className="mt-3 sm:mt-6">
           <ServiceCategoriesTab search={search} />
         </TabsContent>
+
+        <div className="grid grid-cols-2 gap-2 pb-3 pt-4 sm:grid-cols-3 md:hidden">
+          <KPICard
+            size="compact"
+            title="Packages"
+            value={kpis.packages}
+            icon={Package}
+            tone="violet"
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-lg"
+          />
+          <KPICard
+            size="compact"
+            title="Active packages"
+            value={kpis.activePackages}
+            icon={CircleCheck}
+            tone="emerald"
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-lg"
+          />
+          <KPICard
+            size="compact"
+            title="High-end"
+            value={kpis.highEndPackages}
+            icon={Star}
+            tone="amber"
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-lg"
+            className="col-span-2 sm:col-span-1"
+          />
+          <KPICard
+            size="compact"
+            title="Add-ons"
+            value={kpis.addons}
+            icon={Puzzle}
+            tone="blue"
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-lg"
+          />
+          <KPICard
+            size="compact"
+            title="Active add-ons"
+            value={kpis.activeAddons}
+            icon={CircleCheck}
+            tone="emerald"
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-lg"
+            className="col-span-2 sm:col-span-1"
+          />
+        </div>
       </Tabs>
 
       <EditServiceCatalogDialog
@@ -438,38 +579,75 @@ function PaginationBar({
   page,
   totalPages,
   total,
+  itemsPerPage,
   onPage,
   label,
+  pageSize,
+  onPageSizeChange,
 }: {
   page: number;
   totalPages: number;
   total: number;
+  itemsPerPage: number;
   onPage: (p: number) => void;
   label: string;
+  pageSize?: string;
+  onPageSizeChange?: (size: string) => void;
 }) {
+  if (total === 0) return null;
+
+  const start = (page - 1) * itemsPerPage + 1;
+  const end = Math.min(page * itemsPerPage, total);
+  const singlePage = totalPages <= 1;
+
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-border/60">
-      <p className="text-sm text-muted-foreground">
-        Showing page {page} of {totalPages} ({total} total {label})
+    <div className="flex flex-col items-center justify-between gap-3 border-t border-border/60 pt-2 sm:flex-row">
+      <p className="text-xs text-muted-foreground sm:text-sm">
+        {singlePage
+          ? `Showing all ${total} ${label}`
+          : `Showing ${start}–${end} of ${total} ${label}`}
       </p>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page <= 1}
-          onClick={() => onPage(page - 1)}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page >= totalPages}
-          onClick={() => onPage(page + 1)}
-        >
-          Next
-        </Button>
-      </div>
+      {singlePage ? null : (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {pageSize && onPageSizeChange ? (
+            <Select
+              value={pageSize}
+              onValueChange={(v) => {
+                onPageSizeChange(v);
+                onPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[120px] text-xs md:hidden">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5 per page</SelectItem>
+                <SelectItem value="10">10 per page</SelectItem>
+                <SelectItem value="20">20 per page</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => onPage(page - 1)}
+          >
+            Previous
+          </Button>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => onPage(page + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

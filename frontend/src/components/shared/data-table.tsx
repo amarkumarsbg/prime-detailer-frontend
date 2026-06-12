@@ -39,6 +39,8 @@ interface DataTableProps<T> {
   /** Default column sort (newest-first: key `createdAt` or `date`, dir `desc`). */
   defaultSortKey?: string;
   defaultSortDir?: "asc" | "desc";
+  /** When set, replaces the default empty row/card message. */
+  emptyContent?: React.ReactNode;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +60,7 @@ export function DataTable<T extends Record<string, any>>({
   focusItemId,
   defaultSortKey,
   defaultSortDir = "desc",
+  emptyContent,
 }: DataTableProps<T>) {
   const mobileCardHiddenClass = mobileCardBelow === "lg" ? "lg:hidden" : "md:hidden";
   const tableHiddenClass =
@@ -154,7 +157,9 @@ export function DataTable<T extends Record<string, any>>({
         {renderMobileCard && (
           <div className={`${mobileCardHiddenClass} p-3 space-y-3 bg-card`}>
             {paged.length === 0 ? (
-              <p className="text-center py-12 text-sm text-muted-foreground">No results found</p>
+              emptyContent ?? (
+                <p className="text-center py-12 text-sm text-muted-foreground">No results found</p>
+              )
             ) : (
               paged.map((item, i) => {
                 const rowKey = String((item as T & { id?: string }).id ?? `${page}-${i}`);
@@ -205,8 +210,8 @@ export function DataTable<T extends Record<string, any>>({
             <tbody>
               {paged.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="text-center py-12 text-muted-foreground">
-                    No results found
+                  <td colSpan={columns.length} className="text-center text-muted-foreground">
+                    {emptyContent ?? <span className="block py-12">No results found</span>}
                   </td>
                 </tr>
               ) : (

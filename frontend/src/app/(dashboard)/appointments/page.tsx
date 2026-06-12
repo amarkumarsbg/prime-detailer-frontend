@@ -13,6 +13,7 @@ import { useBranchStore } from "@/store/branch-store";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedAppointments } from "@/hooks/use-scoped-data";
 import { PageHeader } from "@/components/shared/page-header";
+import { KPICard } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,7 @@ import {
   User,
   Calendar,
   Check,
+  XCircle,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import type { Appointment, AppointmentStatus, Vehicle, VehicleSegment } from "@/types";
@@ -475,17 +477,20 @@ export default function AppointmentsPage() {
   const confirmedCount = appointments.filter(
     (a) => a.status === "CONFIRMED" && !isAppointmentSlotElapsed(a.date, a.time)
   ).length;
+  const cancelledCount = appointments.filter(
+    (a) => a.status === "CANCELLED" || a.status === "NOT_ATTENDED"
+  ).length;
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <PageHeader
         title="Appointments"
-        description={`Manage bookings and the service calendar for ${viewingLabel}.`}
+        inlineActionsOnMobile
+        className="mb-3 sm:mb-6"
         actions={
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            <Dialog open={dialogOpen} onOpenChange={handleAppointmentDialogChange}>
+          <Dialog open={dialogOpen} onOpenChange={handleAppointmentDialogChange}>
             <DialogTrigger asChild>
-              <Button type="button">
-                <Plus className="w-4 h-4 mr-2" />
+              <Button type="button" size="sm" className="shrink-0 whitespace-nowrap">
+                <Plus className="w-4 h-4 mr-1.5" />
                 New Appointment
               </Button>
             </DialogTrigger>
@@ -778,54 +783,49 @@ export default function AppointmentsPage() {
               </form>
             </DialogContent>
           </Dialog>
-          </div>
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30">
-              <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{todayCount}</p>
-              <p className="text-sm text-muted-foreground">Today</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30">
-              <Clock className="w-6 h-6 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{scheduledCount}</p>
-              <p className="text-sm text-muted-foreground">Scheduled</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-              <User className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{confirmedCount}</p>
-              <p className="text-sm text-muted-foreground">Confirmed</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+        <KPICard
+          size="compact"
+          title="Today"
+          value={todayCount}
+          icon={Calendar}
+          tone="blue"
+          titleClassName="whitespace-nowrap"
+        />
+        <KPICard
+          size="compact"
+          title="Scheduled"
+          value={scheduledCount}
+          icon={Clock}
+          tone="violet"
+          titleClassName="whitespace-nowrap"
+        />
+        <KPICard
+          size="compact"
+          title="Confirmed"
+          value={confirmedCount}
+          icon={User}
+          tone="emerald"
+          titleClassName="whitespace-nowrap"
+        />
+        <KPICard
+          size="compact"
+          title="Cancelled"
+          value={cancelledCount}
+          icon={XCircle}
+          tone="rose"
+          titleClassName="whitespace-nowrap"
+        />
       </div>
 
       <Card className="border-border/80 shadow-sm overflow-hidden">
-        <CardHeader className="border-b border-border/70 bg-muted/20 pb-4">
+        <CardHeader className="border-b border-border/70 bg-muted/20 px-4 py-3 sm:px-6 sm:pb-4 sm:pt-4">
           <CardTitle className="text-base">Booking workspace</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Sections stay separated: pick a day on the left, review that day&apos;s bookings on the right, or use the list for everything upcoming.
-          </p>
         </CardHeader>
-        <CardContent className="pt-5">
+        <CardContent className="px-3 pt-3 sm:px-6 sm:pt-5">
       <Tabs defaultValue="calendar" className="w-full">
         <TabsList className="w-full flex flex-wrap justify-start rounded-none border-0 border-b border-border/70 bg-transparent p-0 h-auto gap-0 mb-1">
           <TabsTrigger

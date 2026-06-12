@@ -394,15 +394,14 @@ export default function BookingsPage() {
     <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       <PageHeader
         title="Bookings"
+        inlineActionsOnMobile
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" className="shrink-0" asChild>
-              <Link href="/bookings/walk-in">
-                <Plus className="w-4 h-4 mr-2" />
-                Create booking
-              </Link>
-            </Button>
-          </div>
+          <Button size="sm" className="shrink-0 whitespace-nowrap" asChild>
+            <Link href="/bookings/walk-in">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Create booking
+            </Link>
+          </Button>
         }
       />
 

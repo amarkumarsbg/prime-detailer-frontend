@@ -7,6 +7,8 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import {
   ShippingAddressForm,
@@ -118,11 +120,11 @@ export function ManageShippingAddressesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "gap-0 p-0 overflow-hidden rounded-xl border border-neutral-200",
-          "w-[calc(100%-2rem)] sm:max-w-[720px] shadow-xl"
+          dialogMobileSheetContentClasses,
+          "max-h-[min(92dvh,100%)] gap-0 overflow-hidden rounded-xl border border-neutral-200 p-0 shadow-xl sm:max-w-[720px]"
         )}
       >
-        <div className="border-b border-neutral-200 px-6 py-5 pr-12">
+        <div className={cn(dialogMobileSheetHeaderClasses, "border-b border-neutral-200 pr-12")}>
           <DialogTitle className="text-base font-semibold leading-tight text-neutral-800">
             {view === "list"
               ? "Manage Shipping Addresses"
@@ -134,59 +136,95 @@ export function ManageShippingAddressesDialog({
 
         {view === "list" ? (
           <>
-            <div className="px-6">
-              <div
-                className={cn(
-                  COL_GRID,
-                  "border-b border-neutral-200 py-3 text-sm font-normal text-[#858D9D]"
-                )}
-              >
-                <span>Address</span>
-                <span className="text-center">Edit</span>
-                <span className="text-right">Default Address</span>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6">
+              <div className="space-y-2 sm:hidden">
+                {addresses.map((addr) => (
+                  <div
+                    key={addr.id}
+                    className={cn(
+                      "rounded-lg border border-neutral-200 p-3",
+                      addr.isDefault && "border-violet-300 bg-violet-50/80"
+                    )}
+                  >
+                    <AddressCell addr={addr} />
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
+                      <button
+                        type="button"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-[#858D9D] hover:bg-violet-100/80 hover:text-neutral-800"
+                        onClick={() => openEdit(addr)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </button>
+                      <label className="flex items-center gap-2 text-xs text-neutral-600">
+                        <input
+                          type="radio"
+                          name="default-shipping-mobile"
+                          checked={Boolean(addr.isDefault)}
+                          onChange={() => setDefault(addr.id)}
+                          className="h-4 w-4 cursor-pointer accent-[#5B4FCF]"
+                        />
+                        Default
+                      </label>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {addresses.map((addr) => (
+              <div className="hidden sm:block">
                 <div
-                  key={addr.id}
                   className={cn(
                     COL_GRID,
-                    "border-b border-neutral-100 py-4",
-                    addr.isDefault && "bg-violet-50/80 -mx-6 px-6"
+                    "border-b border-neutral-200 py-3 text-sm font-normal text-[#858D9D]"
                   )}
                 >
-                  <AddressCell addr={addr} />
-                  <div className="flex justify-center">
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#858D9D] hover:bg-violet-100/80 hover:text-neutral-800"
-                      aria-label="Edit address"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openEdit(addr);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="flex justify-end pr-1">
-                    <input
-                      type="radio"
-                      name="default-shipping"
-                      checked={Boolean(addr.isDefault)}
-                      onChange={() => setDefault(addr.id)}
-                      className="h-4 w-4 cursor-pointer accent-[#5B4FCF]"
-                      aria-label={`Default: ${addr.name}`}
-                    />
-                  </div>
+                  <span>Address</span>
+                  <span className="text-center">Edit</span>
+                  <span className="text-right">Default Address</span>
                 </div>
-              ))}
 
-              <div className="border-b border-neutral-200 py-4">
+                {addresses.map((addr) => (
+                  <div
+                    key={addr.id}
+                    className={cn(
+                      COL_GRID,
+                      "border-b border-neutral-100 py-4",
+                      addr.isDefault && "-mx-6 bg-violet-50/80 px-6"
+                    )}
+                  >
+                    <AddressCell addr={addr} />
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[#858D9D] hover:bg-violet-100/80 hover:text-neutral-800"
+                        aria-label="Edit address"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openEdit(addr);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex justify-end pr-1">
+                      <input
+                        type="radio"
+                        name="default-shipping"
+                        checked={Boolean(addr.isDefault)}
+                        onChange={() => setDefault(addr.id)}
+                        className="h-4 w-4 cursor-pointer accent-[#5B4FCF]"
+                        aria-label={`Default: ${addr.name}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-b border-neutral-200 py-4 sm:border-b-0">
                 <button
                   type="button"
-                  className="text-sm font-normal text-blue-600 hover:text-blue-700 no-underline hover:no-underline"
+                  className="text-sm font-normal text-blue-600 no-underline hover:text-blue-700 hover:no-underline"
                   onClick={openAdd}
                 >
                   + Add New Shipping Address
@@ -194,7 +232,7 @@ export function ManageShippingAddressesDialog({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 px-6 py-5">
+            <div className="flex shrink-0 justify-end gap-3 border-t border-neutral-200 px-4 py-4 sm:px-6 sm:py-5">
               <Button
                 type="button"
                 variant="outline"
@@ -214,10 +252,10 @@ export function ManageShippingAddressesDialog({
           </>
         ) : (
           <>
-            <div className="px-6 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
               <ShippingAddressForm form={form} onChange={setForm} />
             </div>
-            <div className="flex justify-end gap-3 border-t border-neutral-200 px-6 py-5">
+            <div className="flex shrink-0 justify-end gap-3 border-t border-neutral-200 px-4 py-4 sm:px-6 sm:py-5">
               <Button
                 type="button"
                 variant="outline"

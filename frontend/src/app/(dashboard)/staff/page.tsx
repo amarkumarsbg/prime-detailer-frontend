@@ -14,6 +14,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { PageHeader } from "@/components/shared/page-header";
+import { MobileFilterSheet } from "@/components/shared/mobile-filter-sheet";
+import { KPICard } from "@/components/shared/kpi-card";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +59,10 @@ import {
   Info,
   Pencil,
   Trash2,
+  SlidersHorizontal,
+  Users,
+  UserX,
+  MailCheck,
 } from "lucide-react";
 import type { User, UserRole, Customer } from "@/types";
 import { toast } from "sonner";
@@ -135,6 +141,12 @@ export default function StaffPage() {
   const [filterRole, setFilterRole] = useState<UserRole | "ALL">("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
   const [tablePageSize, setTablePageSize] = useState(20);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  const activeStaffFilterCount =
+    (filterRole !== "ALL" ? 1 : 0) +
+    (filterStatus !== "ALL" ? 1 : 0) +
+    (showBranchPicker && filterBranch !== "all" ? 1 : 0);
 
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -516,12 +528,14 @@ export default function StaffPage() {
       <PageHeader
         title="Users Management"
         description="Directory and attendance PINs for staff. Super Admin and Admin can create accounts (no public signup)."
+        hideDescriptionOnMobile
+        inlineActionsOnMobile
         actions={
           <div className="flex flex-wrap gap-2">
             {mainTab === "customers" ? (
-              <Button asChild>
+              <Button size="sm" className="shrink-0 whitespace-nowrap" asChild>
                 <Link href="/customers">
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="w-4 h-4 mr-1.5" />
                   Add customer
                 </Link>
               </Button>
@@ -535,8 +549,8 @@ export default function StaffPage() {
                   }}
                 >
                   <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
+                    <Button size="sm" className="shrink-0 whitespace-nowrap">
+                      <Plus className="w-4 h-4 mr-1.5" />
                       Add Staff
                     </Button>
                   </DialogTrigger>
@@ -732,9 +746,6 @@ export default function StaffPage() {
                 </Dialog>
               )
             )}
-            <Button variant="outline" type="button" asChild>
-              <Link href="/settings">Branches &amp; org settings</Link>
-            </Button>
           </div>
         }
       />
@@ -745,43 +756,118 @@ export default function StaffPage() {
           <TabsTrigger value="customers">Customers</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="staff" className="space-y-4 mt-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Total users</p>
-                <p className="text-2xl font-bold tabular-nums mt-1">{staffStats.total}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Active</p>
-                <p className="text-2xl font-bold tabular-nums mt-1 text-emerald-600">
-                  {staffStats.active}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Inactive</p>
-                <p className="text-2xl font-bold tabular-nums mt-1 text-red-600">
-                  {staffStats.inactive}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Verified email</p>
-                <p className="text-2xl font-bold tabular-nums mt-1 text-blue-600">
-                  {staffStats.verified}
-                </p>
-              </CardContent>
-            </Card>
+        <TabsContent value="staff" className="mt-4 flex flex-col gap-3 md:gap-4">
+          <div className="order-1 md:order-3">
+            <h2 className="mb-2 text-sm font-semibold">Staff list</h2>
+            <DataTable
+              data={filteredStaff}
+              columns={columns}
+              searchPlaceholder="Search staff…"
+              searchKeys={["name", "email", "phone", "role", "id"]}
+              pageSize={tablePageSize}
+              onRowClick={(item) => router.push(`/staff/${item.id}`)}
+              actions={
+                <Button
+                  type="button"
+                  variant={activeStaffFilterCount > 0 ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs md:hidden"
+                  onClick={() => setFilterSheetOpen(true)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                  Filters
+                  {activeStaffFilterCount > 0 ? (
+                    <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-semibold leading-none">
+                      {activeStaffFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+              }
+              renderMobileCard={(item) => {
+                const u = item as User;
+                const badge = ROLE_BADGE_MAP[u.role];
+                const Icon = badge.icon;
+                const branch = branches.find((b) => b.id === u.branchId);
+                return (
+                  <>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar className="size-8 shrink-0">
+                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+                          {getInitials(u.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold leading-tight text-foreground">
+                          {u.name}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">{u.email}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${u.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}
+                      >
+                        {u.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.className}`}
+                      >
+                        <Icon className="size-2.5 shrink-0" />
+                        {badge.label}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {u.phone?.trim() || "No phone"}
+                        {showBranchPicker ? ` · ${branch?.name ?? "—"}` : ""}
+                      </span>
+                    </div>
+                  </>
+                );
+              }}
+            />
           </div>
 
-          <Card>
-            <CardContent className="p-4 flex flex-col gap-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="order-2 grid grid-cols-2 gap-2 md:order-1 lg:grid-cols-4 md:gap-3">
+            <KPICard
+              size="compact"
+              title="Total users"
+              value={staffStats.total}
+              icon={Users}
+              tone="violet"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Active"
+              value={staffStats.active}
+              icon={UserCheck}
+              tone="emerald"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Inactive"
+              value={staffStats.inactive}
+              icon={UserX}
+              tone="rose"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Verified email"
+              value={staffStats.verified}
+              icon={MailCheck}
+              tone="blue"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+          </div>
+
+          <Card className="order-3 hidden md:order-2 md:block">
+            <CardContent className="flex flex-col gap-3 p-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {showBranchPicker ? (
                   <div className="space-y-1.5">
                     <Label className="text-xs">Filter by branch</Label>
@@ -799,12 +885,7 @@ export default function StaffPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Branch</Label>
-                    <p className="text-sm font-medium h-10 flex items-center">{viewingLabel}</p>
-                  </div>
-                )}
+                ) : null}
                 <div className="space-y-1.5">
                   <Label className="text-xs">Filter by role</Label>
                   <Select
@@ -858,102 +939,108 @@ export default function StaffPage() {
                   </Select>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Showing staff for:{" "}
-                <span className="font-medium text-foreground">{branchScopeLabel}</span>
-                {showBranchPicker && filterBranch === "all" ? (
-                  <span>
-                    {" "}
-                    — pick a branch in this filter or use the header switcher to narrow the list.
-                  </span>
-                ) : null}
-              </p>
+              {showBranchPicker ? (
+                <p className="text-xs text-muted-foreground">
+                  Showing staff for:{" "}
+                  <span className="font-medium text-foreground">{branchScopeLabel}</span>
+                  {filterBranch === "all" ? (
+                    <span>
+                      {" "}
+                      — pick a branch in this filter or use the header switcher to narrow the list.
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
             </CardContent>
           </Card>
 
-          <div>
-            <h2 className="text-sm font-semibold mb-2">Staff list</h2>
-            <DataTable
-              data={filteredStaff}
-              columns={columns}
-              searchPlaceholder="Search staff…"
-              searchKeys={["name", "email", "phone", "role", "id"]}
-              pageSize={tablePageSize}
-              onRowClick={(item) => router.push(`/staff/${item.id}`)}
-              renderMobileCard={(item) => {
-                const u = item as User;
-                const badge = ROLE_BADGE_MAP[u.role];
-                const Icon = badge.icon;
-                const branch = branches.find((b) => b.id === u.branchId);
-                return (
-                  <>
-                    <div className="flex items-start gap-3">
-                      <Avatar className="size-10 shrink-0">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                          {getInitials(u.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium leading-snug">{u.name}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{u.email}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}
-                      >
-                        <Icon className="size-3 shrink-0" />
-                        {badge.label}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${u.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}
-                      >
-                        {u.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {u.phone?.trim() || "No phone"} · {branch?.name ?? "—"}
-                    </p>
-                  </>
-                );
-              }}
-            />
-          </div>
+          <MobileFilterSheet
+            open={filterSheetOpen}
+            onOpenChange={setFilterSheetOpen}
+            title="Staff filters"
+            activeCount={activeStaffFilterCount}
+            onReset={() => {
+              setFilterBranch("all");
+              setFilterRole("ALL");
+              setFilterStatus("ALL");
+              setTablePageSize(20);
+            }}
+          >
+            {showBranchPicker ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Branch</p>
+                <Select value={filterBranch} onValueChange={setFilterBranch}>
+                  <SelectTrigger className="h-10 w-full bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All branches</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Role</p>
+              <Select
+                value={filterRole}
+                onValueChange={(v) => setFilterRole(v as UserRole | "ALL")}
+              >
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_ROLES_FILTER.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r === "ALL" ? "All roles" : roleDisplayLabel(r)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Status</p>
+              <Select
+                value={filterStatus}
+                onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}
+              >
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All status</SelectItem>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Items per page</p>
+              <Select
+                value={String(tablePageSize)}
+                onValueChange={(v) => setTablePageSize(Number(v))}
+              >
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </MobileFilterSheet>
         </TabsContent>
 
-        <TabsContent value="customers" className="space-y-4 mt-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Total customers</p>
-                <p className="text-2xl font-bold tabular-nums mt-1">{customerStats.total}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Active</p>
-                <p className="text-2xl font-bold tabular-nums mt-1 text-emerald-600">
-                  {customerStats.active}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Inactive</p>
-                <p className="text-2xl font-bold tabular-nums mt-1 text-red-600">
-                  {customerStats.inactive}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium">Verified email</p>
-                <p className="text-2xl font-bold tabular-nums mt-1 text-blue-600">
-                  {customerStats.verified}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="customers" className="mt-4 flex flex-col gap-3 md:gap-4">
+          <div className="order-1 md:order-2">
           <DataTable
             data={branchScopedCustomers}
             columns={customerColumns}
@@ -965,23 +1052,62 @@ export default function StaffPage() {
               const c = item as Customer;
               return (
                 <>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium leading-snug">{c.name}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold leading-tight text-foreground">{c.name}</p>
                     <span
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${c.isInactive ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${c.isInactive ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
                     >
                       {c.isInactive ? "Inactive" : "Active"}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{c.email}</p>
-                  <div className="mt-3 flex items-center justify-between text-xs">
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{c.email}</p>
+                  <p className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>{c.phone}</span>
-                    <span className="tabular-nums text-muted-foreground">{c.totalVisits} visits</span>
-                  </div>
+                    <span className="tabular-nums">{c.totalVisits} visits</span>
+                  </p>
                 </>
               );
             }}
           />
+          </div>
+          <div className="order-2 grid grid-cols-2 gap-2 md:order-1 lg:grid-cols-4 md:gap-3">
+            <KPICard
+              size="compact"
+              title="Total customers"
+              value={customerStats.total}
+              icon={Users}
+              tone="violet"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Active"
+              value={customerStats.active}
+              icon={UserCheck}
+              tone="emerald"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Inactive"
+              value={customerStats.inactive}
+              icon={UserX}
+              tone="rose"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Verified email"
+              value={customerStats.verified}
+              icon={MailCheck}
+              tone="blue"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl"
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

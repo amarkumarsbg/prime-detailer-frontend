@@ -155,35 +155,36 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
       : "/parties";
 
   return (
-    <div className="-mx-4 -mt-4 -mb-4 md:-mx-6 md:-mt-6 md:-mb-6 flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] flex-col overflow-hidden bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
-      <header className="relative z-20 flex shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-4 py-3 md:px-6">
-        <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="icon" className="shrink-0" asChild>
+    <div className="-mx-4 -mt-4 md:-mx-6 md:-mt-6 md:-mb-6 flex flex-col bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:overflow-hidden">
+      <header className="relative z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4 py-2.5 md:gap-4 md:px-6 md:py-3">
+        <div className="flex min-w-0 items-center gap-2 md:gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
             <Link href={backHref} aria-label="Back">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <h1 className="text-lg font-semibold truncate">{title}</h1>
+          <h1 className="truncate text-base font-semibold md:text-lg">{title}</h1>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
           {mode === "create" && (
             <Button
               type="button"
               variant="outline"
-              className="border-primary text-primary hover:bg-primary/5"
+              size="sm"
+              className="hidden border-primary text-primary hover:bg-primary/5 sm:inline-flex"
               onClick={() => persist(true)}
             >
               Save &amp; New
             </Button>
           )}
-          <Button type="button" onClick={() => persist(false)}>
+          <Button type="button" size="sm" onClick={() => persist(false)}>
             Save
           </Button>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 md:px-6">
-        <div className="space-y-8 pb-16 max-w-6xl">
+      <div className="px-4 py-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain md:px-6 md:py-6">
+        <div className="mx-auto max-w-6xl space-y-6 pb-8 md:space-y-8 md:pb-16">
         <section>
           <SectionTitle>General Details</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -210,8 +211,8 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
                 placeholder="Enter email"
               />
             </Field>
-            <Field label="Opening Balance">
-              <div className="flex rounded-md border border-input overflow-hidden">
+            <Field label="Opening Balance" className="sm:col-span-2 lg:col-span-1">
+              <div className="flex flex-col overflow-hidden rounded-md border border-input sm:flex-row">
                 <span className="inline-flex items-center px-3 bg-muted text-sm border-r border-input">
                   ₹
                 </span>
@@ -229,7 +230,7 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
                     set("openingBalanceSide", v as PartyFormState["openingBalanceSide"])
                   }
                 >
-                  <SelectTrigger className="w-[130px] border-0 border-l rounded-none focus:ring-0">
+                  <SelectTrigger className="w-full border-0 border-t rounded-none focus:ring-0 sm:w-[130px] sm:border-l sm:border-t-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -240,7 +241,7 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
               </div>
             </Field>
             <Field label="GSTIN" className="sm:col-span-2">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   value={form.gstin}
                   onChange={(e) => set("gstin", e.target.value)}
@@ -250,7 +251,8 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
                 <Button
                   type="button"
                   variant="secondary"
-                  className="shrink-0 bg-primary/10 text-primary hover:bg-primary/15"
+                  size="sm"
+                  className="h-9 shrink-0 bg-primary/10 text-primary hover:bg-primary/15 sm:h-10"
                   onClick={handleGstinLookup}
                 >
                   Get Details

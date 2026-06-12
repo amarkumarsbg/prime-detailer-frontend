@@ -3,7 +3,6 @@
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
-import { useSidebarStore } from "@/store/sidebar-store";
 import { useScopedNotifications } from "@/hooks/use-scoped-data";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
 import { canOrgWideRole } from "@/lib/branch-selection";
@@ -34,7 +33,6 @@ import {
   Moon,
   Sun,
   User,
-  Menu,
   Wrench,
   Building2,
 } from "lucide-react";
@@ -45,7 +43,6 @@ export function Header() {
   const { user, currentBranch, logout, setBranch } = useAuthStore();
   const branchesFromStore = useBranchStore((s) => s.branches);
   const businessName = useSettingsStore((s) => s.businessName);
-  const toggleMobileOpen = useSidebarStore((s) => s.toggleMobileOpen);
   const scopedNotifications = useScopedNotifications();
   const unreadCount = scopedNotifications.filter((n) => !n.read).length;
   const router = useRouter();
@@ -246,15 +243,6 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        <button
-          type="button"
-          onClick={toggleMobileOpen}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-accent transition-colors md:hidden"
-          aria-label="Open menu"
-        >
-          <Menu className="size-5 shrink-0" />
-        </button>
       </div>
     </header>
   );

@@ -74,51 +74,67 @@ export default function FollowUpsPage() {
       <PageHeader
         title="Follow-ups"
         description={`Inactive customers and follow-up tasks for ${viewingLabel}.`}
+        hideDescriptionOnMobile
       />
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <UserX className="w-4 h-4 text-muted-foreground" />
-            Inactive Customers ({followUps.length})
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <UserX className="h-4 w-4 text-muted-foreground" />
+            Inactive Customers
+            <Badge
+              variant="secondary"
+              className="h-5 px-1.5 text-[10px] font-semibold tabular-nums"
+            >
+              {followUps.length}
+            </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pb-4 md:pb-6">
           {followUps.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               No follow-ups pending
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2 md:space-y-3">
               {followUps.map((fu) => (
                 <div
                   key={fu.id}
-                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                  className="flex items-start gap-2 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/50 sm:p-3"
                 >
-                  <Link href={`/customers/${fu.customerId}`} className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{fu.customerName}</span>
-                      <Badge variant={STATUS_VARIANTS[fu.status] ?? "secondary"}>
-                        {fu.status.replace("_", " ")}
+                  <Link href={`/customers/${fu.customerId}`} className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium leading-tight">
+                        {fu.customerName}
+                      </span>
+                      <Badge
+                        variant={STATUS_VARIANTS[fu.status] ?? "secondary"}
+                        className="h-5 shrink-0 px-1.5 text-[10px] font-medium"
+                      >
+                        {fu.status.replace(/_/g, " ")}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                      <Phone className="w-3 h-3" />
+                    <a
+                      href={`tel:${fu.customerPhone?.replace(/\s/g, "") ?? ""}`}
+                      className="mt-0.5 flex items-center gap-1 text-[11px] leading-tight text-primary"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Phone className="h-3 w-3 shrink-0" aria-hidden />
                       {fu.customerPhone}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Last visit: {formatDate(fu.lastVisitDate)} &middot; {fu.daysSinceLastVisit} days ago
+                    </a>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                      Last visit: {formatDate(fu.lastVisitDate)} · {fu.daysSinceLastVisit} days ago
                     </p>
                   </Link>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    className="shrink-0 h-8 text-xs"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
                     onClick={() => void handleFollowUpWhatsApp(fu)}
+                    aria-label={`WhatsApp ${fu.customerName}`}
                   >
-                    <WhatsAppIcon className="w-3.5 h-3.5 mr-1.5 text-[#25D366]" />
-                    WhatsApp
+                    <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
                   </Button>
                 </div>
               ))}

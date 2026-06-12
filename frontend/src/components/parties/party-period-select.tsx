@@ -135,10 +135,10 @@ export function PartyPeriodSelect({ value, onChange, className }: PartyPeriodSel
   const triggerLabel = calendarOpen ? CUSTOM_RANGE_LABEL : formatPeriodLabel(value);
 
   const triggerWidth = calendarOpen
-    ? "w-[240px]"
+    ? "w-full min-w-0 max-w-full sm:w-[240px]"
     : hasAppliedCustom
-      ? "w-[280px]"
-      : "w-[220px]";
+      ? "w-full min-w-0 max-w-full sm:w-[280px]"
+      : "w-full min-w-0 max-w-full sm:w-[220px]";
 
   return (
     <PartyCustomDateRangePopover

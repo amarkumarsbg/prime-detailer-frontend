@@ -4,31 +4,20 @@ import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
-import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
 import { DataTable } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { notifyInvoiceCreatedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useJobCardStore } from "@/store/job-card-store";
-import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
 import {
   applyInvoiceBranchFilters,
-  resolveBranchScopeLabel,
-  useBranchPageFilter,
+  useBranchScope,
 } from "@/lib/branch-scope";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isPendingPaymentInvoice } from "@/lib/dashboard-filters";
@@ -37,11 +26,11 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice, InvoiceStatus } from "@/types";
 import { IndianRupee, TrendingUp, FileText, Receipt } from "lucide-react";
 
-const STATUS_TABS: { value: "all" | InvoiceStatus; label: string }[] = [
+const STATUS_TABS: { value: "all" | InvoiceStatus; label: string; shortLabel?: string }[] = [
   { value: "all", label: "All" },
   { value: "DRAFT", label: "Draft" },
   { value: "ISSUED", label: "Issued" },
-  { value: "PARTIALLY_PAID", label: "Partially Paid" },
+  { value: "PARTIALLY_PAID", label: "Partially Paid", shortLabel: "Partial" },
   { value: "PAID", label: "Paid" },
 ];
 
@@ -95,18 +84,9 @@ export default function BillingPage() {
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState<string>("all");
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const invoices = useInvoiceStore((s) => s.invoices);
   const jobCards = useJobCardStore((s) => s.jobCards);
-  const branches = useBranchStore((s) => s.branches);
-  const {
-    selectedBranchId,
-    showBranchPicker,
-    viewingLabel,
-    pageBranchFilter,
-    setPageBranchFilter,
-  } = useBranchPageFilter();
-  const branchFilterActive = showBranchPicker && pageBranchFilter !== "all" ? 1 : 0;
+  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
 
   const branchScopedInvoices = useMemo(
     () =>
@@ -115,14 +95,9 @@ export default function BillingPage() {
         jobCards,
         selectedBranchId,
         showBranchPicker,
-        pageBranchFilter
+        "all"
       ),
-    [invoices, jobCards, selectedBranchId, showBranchPicker, pageBranchFilter]
-  );
-
-  const branchScopeLabel = useMemo(
-    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, pageBranchFilter, branches),
-    [showBranchPicker, viewingLabel, pageBranchFilter, branches]
+    [invoices, jobCards, selectedBranchId, showBranchPicker]
   );
 
   const invoicesForView = useMemo(() => {
@@ -291,47 +266,9 @@ export default function BillingPage() {
       </Suspense>
       <PageHeader
         title="Billing & Invoices"
-        description={`View and manage invoices for ${branchScopeLabel}.`}
+        description={`View and manage invoices for ${viewingLabel}.`}
+        hideDescriptionOnMobile
       />
-
-      <Card>
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-end gap-3">
-          {showBranchPicker ? (
-            <>
-            <MobileFilterTrigger
-              onClick={() => setFilterSheetOpen(true)}
-              activeCount={branchFilterActive}
-              className="md:hidden"
-            />
-            <div className="hidden md:block space-y-1.5 w-full sm:min-w-[200px] sm:w-auto">
-              <Label className="text-xs">Filter by branch</Label>
-              <Select value={pageBranchFilter} onValueChange={setPageBranchFilter}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All branches</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            </>
-          ) : (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Branch</Label>
-              <p className="text-sm font-medium h-10 flex items-center">{viewingLabel}</p>
-            </div>
-          )}
-          <p className="text-xs text-muted-foreground sm:ml-auto sm:pb-2">
-            Showing invoices for:{" "}
-            <span className="font-medium text-foreground">{branchScopeLabel}</span>
-          </p>
-        </CardContent>
-      </Card>
 
       {activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT && (
         <FilterBanner
@@ -340,58 +277,68 @@ export default function BillingPage() {
         />
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <KPICard
+          size="compact"
           title="Total Revenue"
           value={formatCurrency(kpis.totalRevenue)}
           icon={IndianRupee}
           tone="emerald"
+          titleClassName="leading-tight"
         />
         <KPICard
+          size="compact"
           title="Outstanding"
           value={formatCurrency(kpis.outstanding)}
           icon={TrendingUp}
           tone="rose"
+          titleClassName="leading-tight"
         />
         <KPICard
+          size="compact"
           title="Invoices This Month"
           value={kpis.thisMonth}
           icon={FileText}
           tone="blue"
+          titleClassName="leading-tight"
         />
         <KPICard
-          title="Average Invoice Value"
+          size="compact"
+          title="Avg Invoice"
           value={formatCurrency(kpis.avgValue)}
           icon={Receipt}
           tone="violet"
+          className="col-span-2 lg:col-span-1"
+          titleClassName="leading-tight"
         />
       </div>
 
       <Card className="border-border/80 shadow-sm overflow-hidden">
-        <CardHeader className="space-y-1 border-b border-border/80 bg-muted/20 pb-4">
+        <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 pb-3 pt-4 sm:px-6 sm:pb-4">
           <CardTitle className="text-base font-semibold">Invoices</CardTitle>
-          <p className="text-sm text-muted-foreground max-md:hidden">
+          <p className="hidden text-sm text-muted-foreground md:block">
             Open an invoice to record payments, print, or share via WhatsApp.
           </p>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="px-3 pt-4 sm:px-6 sm:pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex h-auto w-full max-w-full flex-nowrap justify-start gap-1 overflow-x-auto bg-muted/50 p-1 [-webkit-overflow-scrolling:touch] md:flex-wrap">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
               {STATUS_TABS.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="shrink-0 data-[state=active]:shadow-sm"
+                  className="h-8 px-2.5 text-xs data-[state=active]:shadow-sm sm:h-9 sm:px-3 sm:text-sm"
                 >
-                  {tab.label}{" "}
-                  <span className="text-muted-foreground font-normal">
+                  <span className="sm:hidden">{tab.shortLabel ?? tab.label}</span>
+                  <span className="hidden sm:inline">{tab.label}</span>{" "}
+                  <span className="font-normal text-muted-foreground tabular-nums">
                     ({tabCounts[tab.value] ?? 0})
                   </span>
                 </TabsTrigger>
               ))}
             </TabsList>
             {STATUS_TABS.map((tab) => (
-              <TabsContent key={tab.value} value={tab.value} className="mt-6 focus-visible:outline-none">
+              <TabsContent key={tab.value} value={tab.value} className="mt-4 focus-visible:outline-none sm:mt-6">
                 <DataTable
                   data={
                     tab.value === "all"
@@ -401,7 +348,7 @@ export default function BillingPage() {
                   columns={columns}
                   defaultSortKey="createdAt"
                   defaultSortDir="desc"
-                  searchPlaceholder="Search by invoice number, customer, or vehicle..."
+                  searchPlaceholder="Search invoice, customer, vehicle…"
                   searchKeys={[
                     "invoiceNumber",
                     "customerName",
@@ -411,39 +358,44 @@ export default function BillingPage() {
                   ]}
                   pageSize={10}
                   onRowClick={handleRowClick}
-                  renderMobileCard={(item) => (
-                    <>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-mono text-xs font-semibold text-primary">
-                          {String(item.invoiceNumber)}
-                        </span>
-                        <InvoiceStatusBadge status={item.status as InvoiceStatus} />
-                      </div>
-                      <p className="font-medium mt-2 leading-snug">{String(item.customerName)}</p>
-                      <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                        {String(item.vehicleRegNumber)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {String(item.servicesSummary)}
-                      </p>
-                      <div className="mt-3 flex items-end justify-between gap-3 border-t border-border/80 pt-3">
-                        <div>
-                          <p className="text-lg font-bold tabular-nums">
+                  renderMobileCard={(item) => {
+                    const paymentLabel = item.paymentMethod
+                      ? getPaymentMethodLabel(String(item.paymentMethod))
+                      : null;
+                    return (
+                      <>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="truncate font-mono text-xs font-bold text-primary">
+                            {String(item.invoiceNumber)}
+                          </span>
+                          <InvoiceStatusBadge
+                            status={item.status as InvoiceStatus}
+                            className="h-5 shrink-0 px-1.5 text-[10px]"
+                          />
+                        </div>
+                        <p className="mt-1 truncate text-sm font-medium leading-tight">
+                          {String(item.customerName)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          <span className="font-mono">{String(item.vehicleRegNumber)}</span>
+                          <span aria-hidden> · </span>
+                          <span className="font-mono">{String(item.jobNumber)}</span>
+                        </p>
+                        <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                          <p className="text-base font-bold tabular-nums leading-none">
                             {formatCurrency(item.grandTotal as number)}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="shrink-0 text-[10px] text-muted-foreground">
                             {formatDate(String(item.createdAt))}
-                            {item.paymentMethod
-                              ? ` · ${getPaymentMethodLabel(String(item.paymentMethod))}`
-                              : ""}
                           </p>
                         </div>
-                        <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
-                          {String(item.jobNumber)}
-                        </Badge>
-                      </div>
-                    </>
-                  )}
+                        <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                          {String(item.servicesSummary)}
+                          {paymentLabel ? ` · ${paymentLabel}` : ""}
+                        </p>
+                      </>
+                    );
+                  }}
                 />
               </TabsContent>
             ))}
@@ -451,32 +403,6 @@ export default function BillingPage() {
         </CardContent>
       </Card>
 
-      {showBranchPicker ? (
-        <MobileFilterSheet
-          open={filterSheetOpen}
-          onOpenChange={setFilterSheetOpen}
-          title="Invoice filters"
-          activeCount={branchFilterActive}
-          onReset={() => setPageBranchFilter("all")}
-        >
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Branch</p>
-            <Select value={pageBranchFilter} onValueChange={setPageBranchFilter}>
-              <SelectTrigger className="h-10 w-full bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All branches</SelectItem>
-                {branches.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </MobileFilterSheet>
-      ) : null}
     </div>
   );
 }

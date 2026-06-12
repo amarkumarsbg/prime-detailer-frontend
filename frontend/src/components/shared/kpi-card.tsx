@@ -139,6 +139,8 @@ interface KPICardProps {
   decorativeHover?: boolean;
   /** Extra classes on the title (e.g. `whitespace-nowrap`). */
   titleClassName?: string;
+  /** Extra classes on the value (e.g. smaller currency on narrow mobile tiles). */
+  valueClassName?: string;
 }
 
 export function KPICard({
@@ -156,6 +158,7 @@ export function KPICard({
   active,
   decorativeHover = false,
   titleClassName,
+  valueClassName,
 }: KPICardProps) {
   const isFeatured = variant === "featured";
   const isCompact = size === "compact";
@@ -215,7 +218,8 @@ export function KPICard({
             <p
               className={cn(
                 "font-bold tracking-tight",
-                isFeatured ? "text-3xl" : isCompact ? "text-xl" : "text-2xl"
+                isFeatured ? "text-3xl" : isCompact ? "text-xl" : "text-2xl",
+                valueClassName
               )}
             >
               {value}

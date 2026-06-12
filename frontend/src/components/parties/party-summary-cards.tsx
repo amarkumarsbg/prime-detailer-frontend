@@ -16,18 +16,17 @@ type PartySummaryCardsProps = {
   summary: PartyLedgerSummary;
 };
 
-const ledgerTitleClass = "whitespace-nowrap";
-
 export function PartySummaryCards({ kind, summary }: PartySummaryCardsProps) {
   const isCustomer = kind === "customer";
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
       <KPICard
         size="compact"
         decorativeHover
-        title={isCustomer ? "Total Receivable Amount" : "Total Payable Amount"}
-        titleClassName={ledgerTitleClass}
+        title={isCustomer ? "Receivable" : "Payable"}
+        titleClassName="text-[11px] leading-tight sm:text-xs"
+        valueClassName="text-sm tabular-nums sm:text-xl"
         value={formatInrTable(summary.totalReceivableOrPayable)}
         icon={IndianRupee}
         tone="slate"
@@ -35,8 +34,9 @@ export function PartySummaryCards({ kind, summary }: PartySummaryCardsProps) {
       <KPICard
         size="compact"
         decorativeHover
-        title="Overdue Amount"
-        titleClassName={ledgerTitleClass}
+        title="Overdue"
+        titleClassName="text-[11px] leading-tight sm:text-xs"
+        valueClassName="text-sm tabular-nums sm:text-xl"
         value={formatInrTable(summary.overdueAmount)}
         icon={AlertCircle}
         tone="amber"
@@ -44,8 +44,9 @@ export function PartySummaryCards({ kind, summary }: PartySummaryCardsProps) {
       <KPICard
         size="compact"
         decorativeHover
-        title={isCustomer ? "Total Sales Amount" : "Total Purchases Amount"}
-        titleClassName={ledgerTitleClass}
+        title={isCustomer ? "Total Sales" : "Total Purchases"}
+        titleClassName="text-[11px] leading-tight sm:text-xs"
+        valueClassName="text-sm tabular-nums sm:text-xl"
         value={formatInrTable(summary.totalSalesOrPurchases)}
         icon={FilePlus2}
         tone="blue"
@@ -53,8 +54,9 @@ export function PartySummaryCards({ kind, summary }: PartySummaryCardsProps) {
       <KPICard
         size="compact"
         decorativeHover
-        title={isCustomer ? "Total Received Amount" : "Total Paid Amount"}
-        titleClassName={ledgerTitleClass}
+        title={isCustomer ? "Received" : "Paid"}
+        titleClassName="text-[11px] leading-tight sm:text-xs"
+        valueClassName="text-sm tabular-nums sm:text-xl"
         value={formatInrTable(summary.totalReceivedOrPaid)}
         icon={isCustomer ? RotateCcw : CircleDollarSign}
         tone="blue"
