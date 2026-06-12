@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { compareFieldValues } from "@/lib/sort-by-date";
+import { cn } from "@/lib/utils";
 
 interface Column<T> {
   key: string;
@@ -41,6 +42,8 @@ interface DataTableProps<T> {
   defaultSortDir?: "asc" | "desc";
   /** When set, replaces the default empty row/card message. */
   emptyContent?: React.ReactNode;
+  /** Extra classes on mobile card wrappers (e.g. tighter padding). */
+  mobileCardClassName?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,6 +64,7 @@ export function DataTable<T extends Record<string, any>>({
   defaultSortKey,
   defaultSortDir = "desc",
   emptyContent,
+  mobileCardClassName,
 }: DataTableProps<T>) {
   const mobileCardHiddenClass = mobileCardBelow === "lg" ? "lg:hidden" : "md:hidden";
   const tableHiddenClass =
@@ -145,7 +149,7 @@ export function DataTable<T extends Record<string, any>>({
               placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="pl-9"
+              className="pl-9 text-sm placeholder:text-muted-foreground"
             />
           </div>
           {actions}
@@ -178,7 +182,12 @@ export function DataTable<T extends Record<string, any>>({
                         onRowClick(item);
                       }
                     }}
-                    className={`rounded-lg border border-border bg-card p-3 text-sm shadow-sm ${onRowClick ? "cursor-pointer outline-none transition-[background-color,border-color] duration-200 ease-out hover:bg-muted/40 hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring" : ""}`}
+                    className={cn(
+                      "rounded-lg border border-border bg-card text-sm shadow-sm",
+                      mobileCardClassName ?? "p-3",
+                      onRowClick &&
+                        "cursor-pointer outline-none transition-[background-color,border-color] duration-200 ease-out hover:bg-muted/40 hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring"
+                    )}
                   >
                     {renderMobileCard(item)}
                   </div>

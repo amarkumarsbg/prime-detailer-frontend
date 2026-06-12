@@ -125,12 +125,19 @@ interface KPICardProps {
   /** e.g. "All branches" under the metric (competitor-style scope). */
   footerNote?: string;
   icon: LucideIcon;
-  trend?: { value: number; isPositive: boolean };
+  trend?: { value: number; isPositive: boolean; label?: string };
   className?: string;
   tone?: KPICardTone;
   variant?: "default" | "featured";
   /** Shorter card for dense dashboards (e.g. Parties filters). */
   size?: "default" | "compact";
+  /** White card + colored icon only (modern SaaS dashboards). */
+  surface?: "default" | "minimal";
+  /** Shown instead of value when `isEmpty` is true. */
+  emptyLabel?: string;
+  isEmpty?: boolean;
+  /** Hint shown under empty label (e.g. "Revenue will appear after first invoice"). */
+  emptyHint?: string;
   /** When set, the whole card is a button (e.g. filter KPIs on Parties). */
   onClick?: () => void;
   /** Highlight when this filter/card is active. */
@@ -154,6 +161,10 @@ export function KPICard({
   tone,
   variant = "default",
   size = "default",
+  surface = "default",
+  emptyLabel,
+  isEmpty = false,
+  emptyHint,
   onClick,
   active,
   decorativeHover = false,
@@ -164,6 +175,12 @@ export function KPICard({
   const isCompact = size === "compact";
   const interactive = Boolean(onClick);
   const isFilterChip = Boolean(tone) && (interactive || decorativeHover);
+  const isMinimal = surface === "minimal";
+  const showTrend =
+    Boolean(trend) &&
+    trend!.value > 0 &&
+    !isEmpty &&
+    !(typeof value === "number" && value === 0);
 
   const card = (
     <Card
@@ -173,12 +190,15 @@ export function KPICard({
         isFilterChip && !active && toneFilterIdleClass[tone!],
         isFilterChip && active && toneFilterActiveClass[tone!],
         isFilterChip && !active && toneFilterHoverClass[tone!],
-        !isFilterChip && tone && !active && toneSurfaceClass[tone],
-        !isFilterChip && interactive && tone && !active && toneHoverClass[tone],
+        !isFilterChip && tone && isMinimal && "border border-border/60 bg-card shadow-sm min-h-[5.75rem] sm:min-h-[6rem]",
+        !isFilterChip && tone && !isMinimal && !active && toneSurfaceClass[tone],
+        !isFilterChip && interactive && tone && !isMinimal && !active && toneHoverClass[tone],
         !isFilterChip && interactive && "hover:shadow-md",
         !interactive &&
           !decorativeHover &&
+          !isMinimal &&
           "motion-safe:hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-md duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)]",
+        isMinimal && !interactive && "hover:shadow-md",
         !tone && interactive && "hover:shadow-md dark:hover:shadow-md",
         !tone && !interactive && "hover:shadow-md dark:hover:shadow-md",
         isFeatured &&
@@ -193,7 +213,7 @@ export function KPICard({
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col justify-center",
-          isCompact ? "p-3 sm:p-3.5" : "p-5 sm:p-6"
+          isCompact ? "p-2.5 sm:p-3.5" : "p-5 sm:p-6"
         )}
       >
         <div
@@ -202,7 +222,7 @@ export function KPICard({
             isCompact ? "gap-2" : "gap-3"
           )}
         >
-          <div className={cn("min-w-0", isCompact ? "space-y-0.5" : "space-y-2")}>
+          <div className={cn("min-w-0", isCompact ? "space-y-0" : "space-y-2")}>
             <p
               className={cn(
                 "font-medium",
@@ -218,26 +238,36 @@ export function KPICard({
             <p
               className={cn(
                 "font-bold tracking-tight",
-                isFeatured ? "text-3xl" : isCompact ? "text-xl" : "text-2xl",
+                isEmpty && "text-sm font-medium text-muted-foreground",
+                !isEmpty && (isFeatured ? "text-3xl" : isCompact ? "text-lg sm:text-xl" : "text-2xl"),
+                isCompact && "min-h-[1.375rem] flex items-center",
                 valueClassName
               )}
             >
-              {value}
+              {isEmpty && emptyLabel ? emptyLabel : value}
             </p>
-            {(subtitle || trend) && (
-              <div className="flex flex-wrap items-center gap-2">
-                {trend && (
+            {(subtitle || (trend && showTrend) || (isEmpty && emptyHint) || isCompact) && (
+              <div
+                className={cn(
+                  "flex flex-wrap items-center gap-1.5",
+                  isCompact && "min-h-[1.125rem]"
+                )}
+              >
+                {trend && showTrend && (
                   <span
                     className={cn(
-                      "text-xs font-medium px-1.5 py-0.5 rounded",
+                      "text-[11px] font-medium",
                       trend.isPositive
-                        ? "text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950"
-                        : "text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-950"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400"
                     )}
                   >
-                    {trend.isPositive ? "+" : ""}
-                    {trend.value}%
+                    {trend.isPositive ? "↑" : "↓"} {trend.value}%
+                    {trend.label ? ` ${trend.label}` : ""}
                   </span>
+                )}
+                {isEmpty && emptyHint && !showTrend && (
+                  <span className="text-[11px] text-muted-foreground/80">{emptyHint}</span>
                 )}
                 {subtitle && (
                   <span className="text-xs text-muted-foreground">
@@ -253,7 +283,7 @@ export function KPICard({
           <div
             className={cn(
               "flex shrink-0 items-center justify-center rounded-lg",
-              isFeatured ? "h-12 w-12" : isCompact ? "h-9 w-9" : "h-11 w-11",
+              isFeatured ? "h-12 w-12" : isCompact ? "h-7 w-7 sm:h-9 sm:w-9" : "h-11 w-11",
               tone
                 ? toneIconClass[tone]
                 : "bg-primary/10 text-primary"
@@ -261,7 +291,7 @@ export function KPICard({
           >
             <Icon
               className={
-                isFeatured ? "h-6 w-6" : isCompact ? "h-4 w-4" : "h-5 w-5"
+                isFeatured ? "h-6 w-6" : isCompact ? "h-3.5 w-3.5 sm:h-4 sm:w-4" : "h-5 w-5"
               }
             />
           </div>

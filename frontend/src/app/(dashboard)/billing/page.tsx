@@ -277,14 +277,15 @@ export default function BillingPage() {
         />
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <KPICard
           size="compact"
           title="Total Revenue"
           value={formatCurrency(kpis.totalRevenue)}
           icon={IndianRupee}
           tone="emerald"
-          titleClassName="leading-tight"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl tabular-nums"
         />
         <KPICard
           size="compact"
@@ -292,7 +293,8 @@ export default function BillingPage() {
           value={formatCurrency(kpis.outstanding)}
           icon={TrendingUp}
           tone="rose"
-          titleClassName="leading-tight"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl tabular-nums"
         />
         <KPICard
           size="compact"
@@ -300,7 +302,8 @@ export default function BillingPage() {
           value={kpis.thisMonth}
           icon={FileText}
           tone="blue"
-          titleClassName="leading-tight"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl tabular-nums"
         />
         <KPICard
           size="compact"
@@ -308,8 +311,8 @@ export default function BillingPage() {
           value={formatCurrency(kpis.avgValue)}
           icon={Receipt}
           tone="violet"
-          className="col-span-2 lg:col-span-1"
-          titleClassName="leading-tight"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl tabular-nums"
         />
       </div>
 
@@ -322,12 +325,13 @@ export default function BillingPage() {
         </CardHeader>
         <CardContent className="px-3 pt-4 sm:px-6 sm:pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
+            <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 bg-muted/50 p-1 sm:w-full sm:flex-wrap">
               {STATUS_TABS.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="h-8 px-2.5 text-xs data-[state=active]:shadow-sm sm:h-9 sm:px-3 sm:text-sm"
+                  className="h-8 shrink-0 px-2.5 text-xs data-[state=active]:shadow-sm sm:h-9 sm:px-3 sm:text-sm"
                 >
                   <span className="sm:hidden">{tab.shortLabel ?? tab.label}</span>
                   <span className="hidden sm:inline">{tab.label}</span>{" "}
@@ -337,6 +341,7 @@ export default function BillingPage() {
                 </TabsTrigger>
               ))}
             </TabsList>
+            </div>
             {STATUS_TABS.map((tab) => (
               <TabsContent key={tab.value} value={tab.value} className="mt-4 focus-visible:outline-none sm:mt-6">
                 <DataTable

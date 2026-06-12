@@ -124,7 +124,7 @@ export function Header() {
         </div>
       </Link>
 
-      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center md:flex md:shrink-0 md:min-w-0 md:max-w-none">
+      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-2 sm:max-md:pl-3 max-md:flex max-md:items-center max-md:justify-end md:flex md:shrink-0 md:min-w-0 md:max-w-none">
         <Select
           value={currentBranch?.id ?? ALL_BRANCHES_BRANCH.id}
           onValueChange={(id) => {
