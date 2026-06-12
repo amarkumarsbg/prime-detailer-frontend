@@ -14,7 +14,7 @@ function Spinner({ className }: { className?: string }) {
 
 export function PartyDetailLoadingShell() {
   return (
-    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] items-center justify-center rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
+    <div className="flex min-h-[40vh] items-center justify-center rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:min-h-0">
       <Spinner />
     </div>
   );
@@ -22,7 +22,7 @@ export function PartyDetailLoadingShell() {
 
 export function PartiesListLoading() {
   return (
-    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] items-center justify-center md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
+    <div className="flex min-h-[40vh] items-center justify-center md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:min-h-0">
       <Spinner />
     </div>
   );

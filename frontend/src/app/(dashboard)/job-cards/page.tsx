@@ -7,8 +7,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
@@ -24,7 +30,7 @@ import { formatDate, formatDateTime } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
-import { Plus, LayoutGrid, List } from "lucide-react";
+import { Plus, LayoutGrid, List, ChevronDown } from "lucide-react";
 
 const TAB_STATUSES: (JobCardStatus | "ALL")[] = [
   "ALL",
@@ -144,6 +150,51 @@ export default function JobCardsPage() {
     return c;
   }, [jobCardsForView]);
 
+  const visibleStatuses = useMemo(
+    () =>
+      TAB_STATUSES.filter(
+        (status) => status === "ALL" || (counts[status] ?? 0) > 0
+      ),
+    [counts]
+  );
+
+  const moreStatuses = useMemo(
+    () =>
+      TAB_STATUSES.filter(
+        (status) => status !== "ALL" && (counts[status] ?? 0) === 0
+      ),
+    [counts]
+  );
+
+  const isMoreTabActive = moreStatuses.includes(activeTab as JobCardStatus);
+
+  const viewToggle = (
+    <div
+      className="flex shrink-0 items-center rounded-lg border border-border overflow-hidden"
+      role="group"
+      aria-label="View mode"
+    >
+      <button
+        type="button"
+        onClick={() => setViewMode("list")}
+        aria-pressed={viewMode === "list"}
+        title="List view"
+        className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+      >
+        <List className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setViewMode("kanban")}
+        aria-pressed={viewMode === "kanban"}
+        title="Board view"
+        className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+      >
+        <LayoutGrid className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
   const kanbanData = useMemo(() => {
     const map: Record<string, JobCard[]> = {};
     KANBAN_COLUMNS.forEach((s) => { map[s] = []; });
@@ -253,29 +304,18 @@ export default function JobCardsPage() {
   const searchMatchJobCard = useCallback((jc: JobCard, qLower: string) => jobCardMatchesSearch(jc, qLower), []);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 max-md:pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <PageHeader
         title="Job Cards"
+        inlineActionsOnMobile
         actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-border overflow-hidden">
-              <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center justify-center w-9 h-9 transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("kanban")}
-                className={`flex items-center justify-center w-9 h-9 transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {viewToggle}
             <Link href="/job-cards/new">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                New Job Card
+              <Button size="sm" className="h-8 px-3">
+                <Plus className="w-4 h-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">New Job Card</span>
+                <span className="sm:hidden">New</span>
               </Button>
             </Link>
           </div>
@@ -303,67 +343,98 @@ export default function JobCardsPage() {
 
       {viewMode === "list" ? (
         <Card className="border-border/80 shadow-sm overflow-hidden">
-          <CardHeader className="space-y-1 border-b border-border/80 bg-muted/20 pb-4">
-            <CardTitle className="text-base font-semibold">All job cards</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {showBranchColumn
-                ? "All branches — each row shows which outlet the job belongs to."
-                : "Open a row for full detail, photos, and status updates."}
-            </p>
-          </CardHeader>
-          <CardContent className="pt-6 min-w-0">
+          <CardContent className="pt-4 min-w-0 sm:pt-5">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
-              <TabsList className="flex flex-wrap h-auto gap-1 w-full justify-start bg-muted/50 p-1">
-                {TAB_STATUSES.map((status) => (
-                  <TabsTrigger
-                    key={status}
-                    value={status}
-                    className="shrink-0 data-[state=active]:shadow-sm"
-                  >
-                    {TAB_LABELS[status]} ({counts[status] ?? 0})
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <div className="mb-3 -mx-1 overflow-x-auto px-1 sm:mx-0 sm:px-0">
+                <TabsList className="inline-flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 bg-muted/50 p-1">
+                    {visibleStatuses.map((status) => (
+                      <TabsTrigger
+                        key={status}
+                        value={status}
+                        className="h-8 shrink-0 px-2.5 text-xs data-[state=active]:shadow-sm sm:h-9 sm:px-3 sm:text-sm"
+                      >
+                        {TAB_LABELS[status]} ({counts[status] ?? 0})
+                      </TabsTrigger>
+                    ))}
+                    {moreStatuses.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors sm:h-9 sm:px-3 sm:text-sm ${
+                              isMoreTabActive
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                            }`}
+                          >
+                            More
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          {moreStatuses.map((status) => (
+                            <DropdownMenuItem
+                              key={status}
+                              onClick={() => setActiveTab(status)}
+                            >
+                              {TAB_LABELS[status]} (0)
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TabsList>
+              </div>
 
-              <div className="mt-6 min-w-0 space-y-4" aria-live="polite">
+              <div className="min-w-0 space-y-4" aria-live="polite">
                 <DataTable<JobCard>
                   key={activeTab}
                   data={filteredJobCardsForListTab}
                   columns={columns}
                   defaultSortKey="expectedDelivery"
                   defaultSortDir="desc"
-                  searchPlaceholder="Search by job, customer, vehicle, or service…"
+                  searchPlaceholder="Search jobs, customers, vehicles..."
                   searchMatch={searchMatchJobCard}
                   pageSize={10}
+                  mobileCardClassName="p-2.5"
                   onRowClick={(item) => router.push(`/job-cards/${item.id}`)}
                   renderMobileCard={(jc) => (
-                    <>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</span>
-                        {showBranchColumn && (
-                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground shrink-0 max-w-[45%] truncate">
-                            {renderBranchLabel(jc.branchId)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm font-medium leading-tight mt-1.5">{jc.customerName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{jc.customerPhone}</p>
-                      <p className="text-sm font-medium leading-tight mt-2">{jc.vehicleRegNumber}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{jc.vehicleMakeModel}</p>
-                      <div className="mt-3 pt-3 border-t border-border space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-muted-foreground truncate min-w-0">
-                            {jc.mechanicName ?? "Unassigned"}
-                          </span>
-                          <JobCardStatusBadge status={jc.status} />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
+                    <div className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-0.5">
+                      <span className="font-mono text-xs font-semibold text-primary">
+                        {jc.jobNumber}
+                      </span>
+                      <JobCardStatusBadge
+                        status={jc.status}
+                        className="shrink-0 justify-self-end row-span-1"
+                      />
+                      {showBranchColumn && (
+                        <span className="col-span-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">
+                          {renderBranchLabel(jc.branchId)}
+                        </span>
+                      )}
+                      <p className="col-span-2 text-sm font-medium leading-tight">
+                        {jc.customerName}
+                      </p>
+                      <p className="col-span-2 text-xs text-muted-foreground">
+                        {jc.customerPhone}
+                      </p>
+                      <p className="col-span-2 text-sm font-medium leading-tight mt-0.5">
+                        {jc.vehicleRegNumber}
+                      </p>
+                      <p className="col-span-2 text-xs text-muted-foreground line-clamp-1">
+                        {jc.vehicleMakeModel}
+                      </p>
+                      <div className="col-span-2 mt-1.5 pt-1.5 border-t border-border/80 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                        <span className="truncate min-w-0">
+                          {jc.mechanicName ?? "Unassigned"}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
                           {jc.status === "DELIVERED"
                             ? formatDateTime(jc.actualDelivery ?? jc.updatedAt)
                             : formatDate(jc.expectedDelivery)}
-                        </p>
+                        </span>
                       </div>
-                    </>
+                    </div>
                   )}
                 />
               </div>

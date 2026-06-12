@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +44,7 @@ import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
 import { cn, formatDate, formatInrFull } from "@/lib/utils";
-import { Crown, Package, UserPlus } from "lucide-react";
+import { Crown, Package, Pencil, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
 
@@ -59,6 +64,112 @@ function tierBadgeVariant(tier: MembershipTier): "default" | "secondary" | "outl
     default:
       return "default";
   }
+}
+
+function formatTierLabel(tier: MembershipTier): string {
+  const found = TIER_OPTIONS.find((o) => o.value === tier);
+  if (!found) return tier;
+  return found.label.replace(/\s*\(.*\)$/, "");
+}
+
+const MOBILE_SERVICES_PREVIEW = 2;
+
+function MembershipPackageMobileCard({
+  pkg,
+  serviceNames,
+  onEdit,
+  onToggleActive,
+}: {
+  pkg: MembershipPackage;
+  serviceNames: string[];
+  onEdit: () => void;
+  onToggleActive: (active: boolean) => void;
+}) {
+  const [servicesExpanded, setServicesExpanded] = useState(false);
+  const overflowCount = Math.max(0, serviceNames.length - MOBILE_SERVICES_PREVIEW);
+  const showTruncated = overflowCount > 0 && !servicesExpanded;
+  const previewText = showTruncated
+    ? serviceNames.slice(0, MOBILE_SERVICES_PREVIEW).join(", ")
+    : serviceNames.join(", ");
+
+  return (
+    <MobileRowCard className="p-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold leading-tight">{pkg.name}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <Badge variant={tierBadgeVariant(pkg.tier)} className="h-5 px-1.5 text-[10px] font-medium">
+              {formatTierLabel(pkg.tier)}
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">
+              {MEMBERSHIP_TIER_DAYS[pkg.tier]} days
+            </span>
+          </div>
+          <p className="mt-2 text-lg font-bold tabular-nums leading-none">{formatInrFull(pkg.price)}</p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-8 shrink-0 gap-1 px-2.5"
+          onClick={onEdit}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </Button>
+      </div>
+
+      {serviceNames.length > 0 ? (
+        <div className="mt-2.5 rounded-md bg-muted/35 px-2.5 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Services
+          </p>
+          <p className="mt-0.5 text-xs leading-snug text-foreground/90">
+            {previewText}
+            {showTruncated ? (
+              <>
+                {", "}
+                <button
+                  type="button"
+                  className="font-semibold text-primary hover:underline"
+                  onClick={() => setServicesExpanded(true)}
+                >
+                  +{overflowCount} more
+                </button>
+              </>
+            ) : null}
+          </p>
+          {overflowCount > 0 && servicesExpanded ? (
+            <button
+              type="button"
+              className="mt-1 text-[11px] font-medium text-primary hover:underline"
+              onClick={() => setServicesExpanded(false)}
+            >
+              Show less
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-2.5 flex items-center border-t border-border/50 pt-2.5">
+        <label className="flex items-center gap-2">
+          <Switch
+            checked={pkg.isActive}
+            onCheckedChange={onToggleActive}
+            aria-label={`Active ${pkg.name}`}
+          />
+          <span
+            className={cn(
+              "text-xs font-medium",
+              pkg.isActive ? "text-foreground" : "text-muted-foreground"
+            )}
+          >
+            {pkg.isActive ? "Active" : "Inactive"}
+          </span>
+        </label>
+      </div>
+    </MobileRowCard>
+  );
 }
 
 type TabValue = "packages" | "assign";
@@ -289,62 +400,76 @@ export function MembershipPageClient() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="packages" className="mt-6 space-y-4">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button type="button" onClick={openNewPackage} className="bg-violet-600 hover:bg-violet-700">
-              <Crown className="mr-2 h-4 w-4" />
-              Add package
-            </Button>
-          </div>
-
+        <TabsContent value="packages" className="mt-3 md:mt-6">
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg">Membership packages</CardTitle>
+              <Button
+                type="button"
+                onClick={openNewPackage}
+                className="w-full shrink-0 bg-violet-600 hover:bg-violet-700 sm:w-auto"
+              >
+                <Crown className="mr-2 h-4 w-4" />
+                Add package
+              </Button>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-medium uppercase text-muted-foreground">
-                    <th className="px-2 py-2">Name</th>
-                    <th className="px-2 py-2">Tier</th>
-                    <th className="px-2 py-2 text-right">Price</th>
-                    <th className="px-2 py-2">Included services</th>
-                    <th className="px-2 py-2 text-center">Active</th>
-                    <th className="w-[100px] px-2 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {packages.map((p) => (
-                    <tr key={p.id} className="border-b border-border/80">
-                      <td className="px-2 py-2 font-medium">{p.name}</td>
-                      <td className="px-2 py-2">
-                        <Badge variant={tierBadgeVariant(p.tier)}>{p.tier}</Badge>
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {MEMBERSHIP_TIER_DAYS[p.tier]} days
-                        </span>
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(p.price)}</td>
-                      <td className="max-w-[280px] px-2 py-2 text-sm text-muted-foreground">
-                        {p.includedServiceIds
-                          .map((id) => serviceNameById.get(id) ?? id)
-                          .join(", ")}
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <Switch
-                          checked={p.isActive}
-                          onCheckedChange={(c) => setPackageActive(p.id, c)}
-                          aria-label={`Active ${p.name}`}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditPackage(p)}>
-                          Edit
-                        </Button>
-                      </td>
+            <CardContent className="pb-2 md:pb-6">
+              <MobileCardList className="space-y-2.5 pb-6">
+                {packages.map((p) => (
+                  <MembershipPackageMobileCard
+                    key={p.id}
+                    pkg={p}
+                    serviceNames={p.includedServiceIds.map((id) => serviceNameById.get(id) ?? id)}
+                    onEdit={() => openEditPackage(p)}
+                    onToggleActive={(c) => setPackageActive(p.id, c)}
+                  />
+                ))}
+              </MobileCardList>
+              <DesktopTableWrap>
+                <table className="w-full min-w-[720px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs font-medium uppercase text-muted-foreground">
+                      <th className="px-2 py-2">Name</th>
+                      <th className="px-2 py-2">Tier</th>
+                      <th className="px-2 py-2 text-right">Price</th>
+                      <th className="px-2 py-2">Included services</th>
+                      <th className="px-2 py-2 text-center">Active</th>
+                      <th className="w-[100px] px-2 py-2" />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {packages.map((p) => (
+                      <tr key={p.id} className="border-b border-border/80">
+                        <td className="px-2 py-2 font-medium">{p.name}</td>
+                        <td className="px-2 py-2">
+                          <Badge variant={tierBadgeVariant(p.tier)}>{p.tier}</Badge>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {MEMBERSHIP_TIER_DAYS[p.tier]} days
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(p.price)}</td>
+                        <td className="max-w-[280px] px-2 py-2 text-sm text-muted-foreground">
+                          {p.includedServiceIds
+                            .map((id) => serviceNameById.get(id) ?? id)
+                            .join(", ")}
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <Switch
+                            checked={p.isActive}
+                            onCheckedChange={(c) => setPackageActive(p.id, c)}
+                            aria-label={`Active ${p.name}`}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditPackage(p)}>
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DesktopTableWrap>
             </CardContent>
           </Card>
         </TabsContent>

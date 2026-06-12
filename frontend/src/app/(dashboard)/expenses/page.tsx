@@ -4,8 +4,9 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/shared/page-header";
-import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
+import { MobileFilterSheet } from "@/components/shared/mobile-filter-sheet";
 import { DataTable } from "@/components/shared/data-table";
+import { KPICard } from "@/components/shared/kpi-card";
 import { AddExpenseDialog } from "@/components/expenses/add-expense-dialog";
 import {
   ExpenseDateRangePicker,
@@ -32,11 +33,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useExpenseStore } from "@/store/expense-store";
 import { useBranchStore } from "@/store/branch-store";
-import {
-  applyBranchFilters,
-  resolveBranchScopeLabel,
-  useBranchScope,
-} from "@/lib/branch-scope";
+import { applyBranchFilters, useBranchScope } from "@/lib/branch-scope";
 import type { Expense, ExpensePaymentStatus } from "@/types";
 import {
   Plus,
@@ -50,6 +47,8 @@ import {
   Tag,
   Download,
   MoreHorizontal,
+  Receipt,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -137,7 +136,7 @@ function ExpensesPageContent() {
   const customCategories = useExpenseStore((s) => s.customCategories);
   const removeExpense = useExpenseStore((s) => s.removeExpense);
   const branches = useBranchStore((s) => s.branches);
-  const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
+  const { selectedBranchId, showBranchPicker } = useBranchScope();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<ExpenseDateFilter>({
@@ -151,7 +150,11 @@ function ExpensesPageContent() {
   const [fullViewOn, setFullViewOn] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const activeFilterCount =
-    (categoryFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0);
+    (categoryFilter !== "all" ? 1 : 0) +
+    (statusFilter !== "all" ? 1 : 0) +
+    (showBranchPicker && branchFilter !== "all" ? 1 : 0) +
+    (compareOn ? 1 : 0) +
+    (fullViewOn ? 1 : 0);
 
   useEffect(() => {
     if (!highlight) return;
@@ -216,10 +219,26 @@ function ExpensesPageContent() {
     [dateFilter]
   );
 
-  const branchSummary = useMemo(
-    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, branchFilter, branches),
-    [showBranchPicker, viewingLabel, branchFilter, branches]
-  );
+  const mobileActiveFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (categoryFilter !== "all") labels.push(categoryLabel(categoryFilter));
+    if (statusFilter !== "all") labels.push(statusFilter);
+    if (showBranchPicker && branchFilter !== "all") {
+      const b = branches.find((br) => br.id === branchFilter);
+      labels.push(b?.name ?? "Branch");
+    }
+    if (compareOn) labels.push("Compare");
+    if (fullViewOn) labels.push("Full");
+    return labels;
+  }, [
+    categoryFilter,
+    statusFilter,
+    showBranchPicker,
+    branchFilter,
+    branches,
+    compareOn,
+    fullViewOn,
+  ]);
 
   const resetFilters = () => {
     setDateFilter({ kind: "preset", preset: "this_month" });
@@ -327,20 +346,34 @@ function ExpensesPageContent() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <PageHeader
         title="Expense Management"
         description="Track and manage operational expenses."
+        hideDescriptionOnMobile
+        inlineActionsOnMobile
         actions={
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
             Add Expense
           </Button>
         }
       />
 
-      <Card className="border-border/80 shadow-sm">
-        <CardContent className="pt-6 space-y-4">
+      <Card className="border-border/80 shadow-sm lg:hidden">
+        <CardContent className="space-y-2 p-3">
+          <ExpenseDateRangePicker value={dateFilter} onChange={setDateFilter} />
+          <p className="text-[11px] leading-tight text-muted-foreground">
+            {dateSummary}
+            {mobileActiveFilterLabels.length > 0
+              ? ` · ${mobileActiveFilterLabels.join(" · ")}`
+              : ""}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="hidden border-border/80 shadow-sm lg:block">
+        <CardContent className="space-y-4 pt-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <ExpenseDateRangePicker value={dateFilter} onChange={setDateFilter} />
@@ -360,12 +393,7 @@ function ExpensesPageContent() {
                     ))}
                   </SelectContent>
                 </Select>
-              ) : (
-                <div className="flex h-10 items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm">
-                  <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
-                  <span className="font-medium">{viewingLabel}</span>
-                </div>
-              )}
+              ) : null}
 
               <div className="flex items-center gap-1">
                 <Button
@@ -395,7 +423,7 @@ function ExpensesPageContent() {
               type="button"
               variant="ghost"
               size="sm"
-              className="text-muted-foreground self-start lg:self-auto"
+              className="self-start text-muted-foreground lg:self-auto"
               onClick={resetFilters}
             >
               <X className="w-4 h-4 mr-1" />
@@ -404,73 +432,62 @@ function ExpensesPageContent() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Showing: {dateSummary} • {branchSummary}
+            Showing: {dateSummary}
+            {showBranchPicker && branchFilter !== "all"
+              ? ` • ${branches.find((b) => b.id === branchFilter)?.name ?? "Branch"}`
+              : ""}
             {compareOn ? " • Compare on" : ""}
             {fullViewOn ? " • Full layout" : ""}
           </p>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Card className="border-border/80 shadow-sm overflow-hidden">
-          <CardContent className="!flex !flex-row !items-center !justify-between gap-4 !py-5">
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
-              <p className="text-2xl font-bold tabular-nums">{formatCurrency(kpis.total)}</p>
-              <p className="text-xs text-muted-foreground">
-                {kpis.expenseCount} expense(s)
-                {compareOn ? " · vs prior: —" : ""}
-              </p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
-              <IndianRupee className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 shadow-sm overflow-hidden">
-          <CardContent className="!flex !flex-row !items-center !justify-between gap-4 !py-5">
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Paid</p>
-              <p className="text-2xl font-bold tabular-nums">{formatCurrency(kpis.totalPaid)}</p>
-              <p className="text-xs text-muted-foreground">Including partial payments</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <FileCheck className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 shadow-sm overflow-hidden">
-          <CardContent className="!flex !flex-row !items-center !justify-between gap-4 !py-5">
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Payables</p>
-              <p className="text-2xl font-bold tabular-nums">{formatCurrency(kpis.payables)}</p>
-              <p className="text-xs text-muted-foreground">Pending + due amounts</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-500/15 text-orange-600 dark:text-orange-400">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 shadow-sm overflow-hidden">
-          <CardContent className="!flex !flex-row !items-center !justify-between gap-4 !py-5">
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Partial Payments</p>
-              <p className="text-2xl font-bold tabular-nums">{kpis.partialCount}</p>
-              <p className="text-xs text-muted-foreground">In progress</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
-              <Tag className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-2 md:gap-3 xl:grid-cols-4">
+        <KPICard
+          size="compact"
+          title="Total Expenses"
+          value={formatCurrency(kpis.total)}
+          subtitle={`${kpis.expenseCount} expense(s)`}
+          icon={IndianRupee}
+          tone="blue"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="Total Paid"
+          value={formatCurrency(kpis.totalPaid)}
+          subtitle="Including partial"
+          icon={FileCheck}
+          tone="emerald"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="Total Payables"
+          value={formatCurrency(kpis.payables)}
+          subtitle="Pending + due"
+          icon={AlertTriangle}
+          tone="orange"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="Partial Payments"
+          value={kpis.partialCount}
+          subtitle="In progress"
+          icon={Tag}
+          tone="amber"
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+        />
       </div>
 
-      <div className="space-y-3">
-        <h2 className="text-base font-semibold tracking-tight">
-          Expenses ({scoped.length})
+      <div className="space-y-2 md:space-y-3">
+        <h2 className="text-sm font-semibold tracking-tight md:text-base">
+          Expenses <span className="text-muted-foreground">({scoped.length})</span>
         </h2>
         <DataTable
           data={scoped}
@@ -509,49 +526,84 @@ function ExpensesPageContent() {
                   {categoryLabel(e.category)}
                   {e.vendorName ? ` · ${e.vendorName}` : ""}
                 </p>
-                <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(e.amount)}</p>
+                <p className="mt-2 text-base font-bold tabular-nums">{formatCurrency(e.amount)}</p>
               </>
             );
           }}
-          actions={
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-              <MobileFilterTrigger
-                onClick={() => setFilterSheetOpen(true)}
-                activeCount={activeFilterCount}
-                className="sm:hidden"
-              />
-              <div className="hidden md:flex flex-wrap items-center gap-2">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[160px] sm:w-[180px]">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categoryOptions.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {categoryLabel(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px] sm:w-[160px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="PAID">Paid</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="PARTIAL">Partial</SelectItem>
-                  <SelectItem value="OVERDUE">Overdue</SelectItem>
-                </SelectContent>
-              </Select>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => exportCsv(scoped)}>
-                <Download className="w-4 h-4 mr-2" />
-                Export
+          emptyContent={
+            <div className="flex flex-col items-center px-4 py-8 text-center">
+              <Receipt className="mb-2 h-7 w-7 text-muted-foreground/50" />
+              <p className="text-sm font-medium">No expenses found</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Adjust filters or add a new expense.
+              </p>
+              <Button size="sm" className="mt-3" onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Expense
               </Button>
             </div>
+          }
+          actions={
+            <>
+              <div className="flex flex-wrap items-center gap-1.5 md:hidden">
+                <Button
+                  type="button"
+                  variant={activeFilterCount > 0 ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  onClick={() => setFilterSheetOpen(true)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                  Filters
+                  {activeFilterCount > 0 ? (
+                    <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-semibold leading-none">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  onClick={() => exportCsv(scoped)}
+                >
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  Export
+                </Button>
+              </div>
+              <div className="hidden flex-wrap items-center gap-2 md:flex">
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-[160px] sm:w-[180px]">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categoryOptions.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {categoryLabel(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[140px] sm:w-[160px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="PAID">Paid</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="PARTIAL">Partial</SelectItem>
+                    <SelectItem value="OVERDUE">Overdue</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="sm" onClick={() => exportCsv(scoped)}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+              </div>
+            </>
           }
         />
       </div>
@@ -564,8 +616,29 @@ function ExpensesPageContent() {
         onReset={() => {
           setCategoryFilter("all");
           setStatusFilter("all");
+          if (showBranchPicker) setBranchFilter("all");
+          setCompareOn(false);
+          setFullViewOn(false);
         }}
       >
+        {showBranchPicker ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Branch</p>
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="h-10 w-full bg-background">
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <p className="text-sm font-medium">Category</p>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -596,6 +669,31 @@ function ExpensesPageContent() {
               <SelectItem value="OVERDUE">Overdue</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">View options</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={compareOn ? "default" : "outline"}
+              size="sm"
+              className="h-9 gap-1.5"
+              onClick={() => setCompareOn((v) => !v)}
+            >
+              <BarChart2 className="h-4 w-4" />
+              Compare
+            </Button>
+            <Button
+              type="button"
+              variant={fullViewOn ? "default" : "outline"}
+              size="sm"
+              className="h-9 gap-1.5"
+              onClick={() => setFullViewOn((v) => !v)}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Full
+            </Button>
+          </div>
         </div>
       </MobileFilterSheet>
 

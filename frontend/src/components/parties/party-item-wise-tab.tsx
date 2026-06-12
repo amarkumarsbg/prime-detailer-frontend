@@ -25,10 +25,51 @@ function formatAmount(amount: number): string {
   return formatInrTable(amount);
 }
 
+function EmptyState() {
+  return (
+    <div className="flex min-h-[160px] flex-col items-center justify-center px-6 py-10 text-center md:min-h-[280px] md:py-16">
+      <PartyTransactionsEmptyIcon className="mb-4 h-[54px] w-[54px] shrink-0" />
+      <p className="text-sm text-[#858D9D]">No transactions for the selected time period</p>
+    </div>
+  );
+}
+
 export function PartyItemWiseTab({ rows }: PartyItemWiseTabProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background">
-      <div className="overflow-x-auto">
+      <div className="space-y-2 p-3 md:hidden">
+        {rows.length === 0 ? (
+          <EmptyState />
+        ) : (
+          rows.map((r, i) => (
+            <div
+              key={`${r.itemName}-${r.itemCode}-${i}`}
+              className="rounded-lg border border-border bg-card p-3 text-sm shadow-sm"
+            >
+              <p className="font-medium leading-tight">{r.itemName}</p>
+              {r.itemCode ? (
+                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{r.itemCode}</p>
+              ) : null}
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded-md bg-muted/40 px-2 py-1.5">
+                  <p className="text-muted-foreground">Sales</p>
+                  <p className="mt-0.5 font-medium tabular-nums">{formatQty(r.salesQuantity, r.salesUnit)}</p>
+                  <p className="mt-0.5 font-semibold tabular-nums">{formatAmount(r.salesAmount)}</p>
+                </div>
+                <div className="rounded-md bg-muted/40 px-2 py-1.5">
+                  <p className="text-muted-foreground">Purchase</p>
+                  <p className="mt-0.5 font-medium tabular-nums">
+                    {formatQty(r.purchaseQuantity, r.purchaseUnit)}
+                  </p>
+                  <p className="mt-0.5 font-semibold tabular-nums">{formatAmount(r.purchaseAmount)}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[880px] border-collapse text-sm">
           <thead>
             <tr>
@@ -44,33 +85,20 @@ export function PartyItemWiseTab({ rows }: PartyItemWiseTabProps) {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={6} className="border-t border-border bg-background p-0">
-                  <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-16 text-center">
-                    <PartyTransactionsEmptyIcon className="mb-4 h-[54px] w-[54px] shrink-0" />
-                    <p className="text-sm text-[#858D9D]">
-                      No transactions for the selected time period
-                    </p>
-                  </div>
+                  <EmptyState />
                 </td>
               </tr>
             ) : (
               rows.map((r, i) => (
                 <tr key={`${r.itemName}-${r.itemCode}-${i}`} className="hover:bg-muted/30">
                   <td className={cn(tdClass, "font-medium")}>{r.itemName}</td>
-                  <td className={cn(tdClass, "text-muted-foreground font-mono text-xs")}>
+                  <td className={cn(tdClass, "font-mono text-xs text-muted-foreground")}>
                     {r.itemCode}
                   </td>
-                  <td className={tdNumClass}>
-                    {formatQty(r.salesQuantity, r.salesUnit)}
-                  </td>
-                  <td className={cn(tdNumClass, "font-medium")}>
-                    {formatAmount(r.salesAmount)}
-                  </td>
-                  <td className={tdNumClass}>
-                    {formatQty(r.purchaseQuantity, r.purchaseUnit)}
-                  </td>
-                  <td className={cn(tdNumClass, "font-medium")}>
-                    {formatAmount(r.purchaseAmount)}
-                  </td>
+                  <td className={tdNumClass}>{formatQty(r.salesQuantity, r.salesUnit)}</td>
+                  <td className={cn(tdNumClass, "font-medium")}>{formatAmount(r.salesAmount)}</td>
+                  <td className={tdNumClass}>{formatQty(r.purchaseQuantity, r.purchaseUnit)}</td>
+                  <td className={cn(tdNumClass, "font-medium")}>{formatAmount(r.purchaseAmount)}</td>
                 </tr>
               ))
             )}

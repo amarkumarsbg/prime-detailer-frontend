@@ -217,10 +217,10 @@ export default function CustomersPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Customers"
-        description="Manage your customers and their vehicles"
+        inlineActionsOnMobile
         actions={
-          <Button onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
             Add Customer
           </Button>
         }
@@ -232,13 +232,6 @@ export default function CustomersPage() {
           onDismiss={() => setActiveFilter(null)}
         />
       )}
-
-      <div className="flex gap-2 md:hidden">
-        <Button className="flex-1" onClick={() => setAddDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Customer
-        </Button>
-      </div>
 
       <DataTable
         data={tableData}
@@ -261,55 +254,66 @@ export default function CustomersPage() {
         onRowClick={handleRowClick}
         renderMobileCard={(item) => (
           <>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarFallback className="text-xs">
-                    {getInitials(String(item.name ?? ""))}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="font-medium leading-snug truncate">{String(item.name)}</p>
-                  <a
-                    href={`tel:${String(item.phone).replace(/\s/g, "")}`}
-                    className="text-xs text-primary mt-0.5 block"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {String(item.phone)}
-                  </a>
+            <div className="flex items-center gap-2.5">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="text-[10px]">
+                  {getInitials(String(item.name ?? ""))}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-medium leading-tight">{String(item.name)}</p>
+                  {Boolean(item.isInactive) ? (
+                    <Badge variant="secondary" className="h-5 shrink-0 gap-0.5 px-1.5 text-[10px]">
+                      <UserX className="h-2.5 w-2.5" />
+                      Inactive
+                    </Badge>
+                  ) : null}
                 </div>
+                <a
+                  href={`tel:${String(item.phone).replace(/\s/g, "")}`}
+                  className="text-[11px] text-primary leading-tight"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {String(item.phone)}
+                </a>
               </div>
-              {Boolean(item.isInactive) ? (
-                <Badge variant="secondary" className="shrink-0 gap-1 text-[10px]">
-                  <UserX className="w-3 h-3" />
-                  Inactive
-                </Badge>
-              ) : null}
             </div>
-            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-              <div>
-                <dt className="text-muted-foreground">Vehicles</dt>
-                <dd className="font-medium tabular-nums">{String(item.vehiclesCount)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Visits</dt>
-                <dd className="font-medium tabular-nums">{String(item.totalVisits)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Wallet</dt>
-                <dd className="font-semibold tabular-nums">
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-muted-foreground">
+              <span>
+                <span className="font-medium text-foreground tabular-nums">{String(item.vehiclesCount)}</span>{" "}
+                veh
+              </span>
+              <span aria-hidden className="text-border/80">
+                ·
+              </span>
+              <span>
+                <span className="font-medium text-foreground tabular-nums">{String(item.totalVisits)}</span>{" "}
+                visits
+              </span>
+              <span aria-hidden className="text-border/80">
+                ·
+              </span>
+              <span>
+                <span className="font-semibold text-foreground tabular-nums">
                   {formatCurrency((item.walletBalance as number) ?? 0)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Points</dt>
-                <dd className="font-medium tabular-nums">{String(item.rewardPoints)}</dd>
-              </div>
-              <div className="col-span-2">
-                <dt className="text-muted-foreground">Last visit</dt>
-                <dd>{item.lastVisitDate ? formatDate(String(item.lastVisitDate)) : "—"}</dd>
-              </div>
-            </dl>
+                </span>
+              </span>
+              <span aria-hidden className="text-border/80">
+                ·
+              </span>
+              <span>
+                <span className="font-medium text-foreground tabular-nums">{String(item.rewardPoints)}</span> pts
+              </span>
+              {item.lastVisitDate ? (
+                <>
+                  <span aria-hidden className="text-border/80">
+                    ·
+                  </span>
+                  <span>Last {formatDate(String(item.lastVisitDate))}</span>
+                </>
+              ) : null}
+            </p>
           </>
         )}
       />

@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
   dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Vehicle, FuelType, VehicleSegment } from "@/types";
-import { Plus } from "lucide-react";
+import { Plus, User } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -52,6 +53,11 @@ interface AddVehicleFormData {
   year: number;
   customerId: string;
   notes?: string;
+}
+
+function formatFuelLabel(fuel: FuelType): string {
+  if (fuel === "CNG") return "CNG";
+  return fuel.charAt(0) + fuel.slice(1).toLowerCase();
 }
 
 function getColorHex(colorName: string): string {
@@ -204,10 +210,10 @@ export default function VehiclesPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Vehicles"
-        description="Manage all registered vehicles"
+        inlineActionsOnMobile
         actions={
-          <Button onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
             Add Vehicle
           </Button>
         }
@@ -223,180 +229,201 @@ export default function VehiclesPage() {
         renderMobileCard={(item) => {
           const v = item as Vehicle;
           const hex = getColorHex(v.color);
+          const segmentLabel = v.segment?.replace(/_/g, " ") ?? "—";
           return (
             <>
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-mono text-sm font-bold">{v.registrationNumber}</span>
-                <Badge variant="outline" className="shrink-0 text-[10px]">
-                  {v.segment?.replace(/_/g, " ") ?? "—"}
+              <div className="flex items-center justify-between gap-2">
+                <Badge
+                  variant="default"
+                  className="h-6 max-w-[70%] truncate font-mono text-xs font-bold tracking-wide"
+                >
+                  {v.registrationNumber}
+                </Badge>
+                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-medium uppercase">
+                  {segmentLabel}
                 </Badge>
               </div>
-              <p className="mt-2 font-medium leading-snug">
+              <p className="mt-1.5 text-sm font-medium leading-tight">
                 {v.make} {v.model}
-                {v.variant ? ` · ${v.variant}` : ""}
+                {v.variant ? ` ${v.variant}` : ""}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">{v.customerName}</p>
-              <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="size-3 rounded-full border border-border shrink-0"
-                    style={{ backgroundColor: hex }}
-                  />
-                  {v.color} · {v.year}
+              <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
+                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="truncate">{v.customerName}</span>
+              </p>
+              <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span
+                  className="size-2.5 shrink-0 rounded-full border border-border"
+                  style={{ backgroundColor: hex }}
+                  aria-hidden
+                />
+                <span className="truncate">
+                  {v.color} · {v.year} · {formatFuelLabel(v.fuelType)}
                 </span>
-                <Badge variant="secondary">{v.fuelType}</Badge>
-              </div>
+              </p>
             </>
           );
         }}
       />
 
-      <div className="flex gap-2 md:hidden">
-        <Button className="flex-1" onClick={() => setAddDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Vehicle
-        </Button>
-      </div>
-
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh] overflow-y-auto sm:max-w-[500px]")}>
-          <DialogHeader>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,100%)] sm:max-w-[500px]")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
             <DialogTitle>Add Vehicle</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-3 sm:space-y-4 sm:py-4">
               <div className="space-y-2">
-                <Label htmlFor="registrationNumber">Registration Number</Label>
-                <Input
-                  id="registrationNumber"
-                  placeholder="KA-01-AB-1234"
-                  maxLength={16}
-                  {...register("registrationNumber", {
-                    required: "Required",
-                    validate: (v) =>
-                      isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_ERROR_SHORT,
-                  })}
-                />
-                {errors.registrationNumber && (
-                  <p className="text-sm text-destructive">{errors.registrationNumber.message}</p>
-                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="registrationNumber">Registration Number</Label>
+                  <Input
+                    id="registrationNumber"
+                    placeholder="KA-01-AB-1234"
+                    maxLength={16}
+                    {...register("registrationNumber", {
+                      required: "Required",
+                      validate: (v) =>
+                        isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_ERROR_SHORT,
+                    })}
+                  />
+                  {errors.registrationNumber && (
+                    <p className="text-xs text-destructive">{errors.registrationNumber.message}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="customerId">Customer</Label>
+                  <Select
+                    value={watchCustomerId}
+                    onValueChange={(v) => setValue("customerId", v)}
+                  >
+                    <SelectTrigger className={cn(errors.customerId && "border-destructive")}>
+                      <SelectValue placeholder="Select customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.customerId && (
+                    <p className="text-xs text-destructive">{errors.customerId.message}</p>
+                  )}
+                </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="year">Year</Label>
-                <Input
-                  id="year"
-                  type="number"
-                  placeholder="2024"
-                  {...register("year")}
-                />
-                {errors.year && (
-                  <p className="text-sm text-destructive">{errors.year.message}</p>
-                )}
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Vehicle details
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="make">Make</Label>
+                    <Input id="make" placeholder="Maruti" {...register("make")} />
+                    {errors.make && (
+                      <p className="text-xs text-destructive">{errors.make.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="model">Model</Label>
+                    <Input id="model" placeholder="Swift" {...register("model")} />
+                    {errors.model && (
+                      <p className="text-xs text-destructive">{errors.model.message}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="variant">Variant (optional)</Label>
+                  <Input id="variant" placeholder="VXI" {...register("variant")} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Specifications
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fuelType">Fuel Type</Label>
+                    <Select
+                      value={watchFuelType}
+                      onValueChange={(v) => setValue("fuelType", v as FuelType)}
+                    >
+                      <SelectTrigger className={cn(errors.fuelType && "border-destructive")}>
+                        <SelectValue placeholder="Select fuel type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fuelTypes.map((ft) => (
+                          <SelectItem key={ft} value={ft}>
+                            {ft}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.fuelType && (
+                      <p className="text-xs text-destructive">{errors.fuelType.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="segment">Segment</Label>
+                    <Select
+                      value={watchSegment}
+                      onValueChange={(v) => setValue("segment", v as VehicleSegment)}
+                    >
+                      <SelectTrigger className={cn(errors.segment && "border-destructive")}>
+                        <SelectValue placeholder="Select segment" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vehicleSegments.map((seg) => (
+                          <SelectItem key={seg} value={seg}>
+                            {seg.replace(/_/g, " ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.segment && (
+                      <p className="text-xs text-destructive">{errors.segment.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="color">Color</Label>
+                    <Input id="color" placeholder="Pearl Arctic White" {...register("color")} />
+                    {errors.color && (
+                      <p className="text-xs text-destructive">{errors.color.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="year">Year</Label>
+                    <Input id="year" type="number" placeholder="2024" {...register("year")} />
+                    {errors.year && (
+                      <p className="text-xs text-destructive">{errors.year.message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Additional
+                </p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="notes">Notes (optional)</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Additional notes..."
+                    rows={2}
+                    className="min-h-0 resize-none"
+                    {...register("notes")}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="make">Make</Label>
-                <Input id="make" placeholder="Maruti" {...register("make")} />
-                {errors.make && (
-                  <p className="text-sm text-destructive">{errors.make.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="model">Model</Label>
-                <Input id="model" placeholder="Swift" {...register("model")} />
-                {errors.model && (
-                  <p className="text-sm text-destructive">{errors.model.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="variant">Variant (optional)</Label>
-              <Input id="variant" placeholder="VXI" {...register("variant")} />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fuelType">Fuel Type</Label>
-                <Select
-                  value={watchFuelType}
-                  onValueChange={(v) => setValue("fuelType", v as FuelType)}
-                >
-                  <SelectTrigger className={cn(errors.fuelType && "border-destructive")}>
-                    <SelectValue placeholder="Select fuel type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fuelTypes.map((ft) => (
-                      <SelectItem key={ft} value={ft}>
-                        {ft}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.fuelType && (
-                  <p className="text-sm text-destructive">{errors.fuelType.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="segment">Segment</Label>
-                <Select
-                  value={watchSegment}
-                  onValueChange={(v) => setValue("segment", v as VehicleSegment)}
-                >
-                  <SelectTrigger className={cn(errors.segment && "border-destructive")}>
-                    <SelectValue placeholder="Select segment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicleSegments.map((seg) => (
-                      <SelectItem key={seg} value={seg}>
-                        {seg.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.segment && (
-                  <p className="text-sm text-destructive">{errors.segment.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="color">Color</Label>
-                <Input id="color" placeholder="Pearl Arctic White" {...register("color")} />
-                {errors.color && (
-                  <p className="text-sm text-destructive">{errors.color.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="customerId">Customer</Label>
-              <Select
-                value={watchCustomerId}
-                onValueChange={(v) => setValue("customerId", v)}
-              >
-                <SelectTrigger className={cn(errors.customerId && "border-destructive")}>
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.customerId && (
-                <p className="text-sm text-destructive">{errors.customerId.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (optional)</Label>
-              <Textarea id="notes" placeholder="Additional notes..." {...register("notes")} />
-            </div>
-
-            <DialogFooter>
+            <DialogFooter className="shrink-0 gap-2 border-t border-border/60 bg-background/95 px-6 py-3 backdrop-blur-sm sm:justify-end sm:py-4">
               <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
                 Cancel
               </Button>

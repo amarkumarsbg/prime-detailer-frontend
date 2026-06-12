@@ -276,7 +276,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] overflow-hidden rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
+    <div className="flex flex-col rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:overflow-hidden">
       <PartyListPanel
         className="w-full max-w-[300px] shrink-0 hidden lg:flex"
         parties={partiesWithBalance}
@@ -289,7 +289,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
       <Tabs
         value={tab}
         onValueChange={handleTabChange}
-        className="flex min-w-0 flex-1 flex-col overflow-hidden"
+        className="flex min-w-0 flex-1 flex-col md:overflow-hidden"
       >
         <div className="shrink-0 border-b border-border bg-background px-4 py-3 sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -301,7 +301,33 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
               </Button>
               <h1 className="text-lg font-bold truncate sm:text-xl">{party.name}</h1>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex md:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 gap-1">
+                    Actions
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {party.kind === "customer" ? (
+                    <DropdownMenuItem asChild>
+                      <Link href="/billing">Create sales invoice</Link>
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuItem asChild>
+                    <Link href={`/parties/${encodeURIComponent(party.id)}/edit`}>Edit party</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    Remove party
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
               {party.kind === "customer" && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -326,7 +352,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
               <Button
                 size="sm"
                 variant="outline"
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 className="h-4 w-4" />
@@ -334,32 +360,34 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
             </div>
           </div>
 
-          <TabsList className="mt-3 h-auto w-full justify-start gap-4 sm:gap-6 rounded-none bg-transparent p-0 border-0 border-b-0">
-            <TabsTrigger value="transactions" className={cn(tabTriggerClass, "gap-1.5")}>
+          <TabsList className="mt-3 h-auto w-full justify-start gap-2 overflow-x-auto rounded-none border-0 border-b-0 bg-transparent p-0 [-webkit-overflow-scrolling:touch] sm:gap-6">
+            <TabsTrigger value="transactions" className={cn(tabTriggerClass, "shrink-0 gap-1.5")}>
               <Wallet className="h-4 w-4 shrink-0 opacity-70" />
               Transactions
             </TabsTrigger>
-            <TabsTrigger value="profile" className={cn(tabTriggerClass, "gap-1.5")}>
+            <TabsTrigger value="profile" className={cn(tabTriggerClass, "shrink-0 gap-1.5")}>
               <UserCircle className="h-4 w-4 shrink-0 opacity-70" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="ledger" className={cn(tabTriggerClass, "gap-1.5")}>
+            <TabsTrigger value="ledger" className={cn(tabTriggerClass, "shrink-0 gap-1.5")}>
               <BookOpen className="h-4 w-4 shrink-0 opacity-70" />
-              Ledger (Statement)
+              <span className="sm:hidden">Ledger</span>
+              <span className="hidden sm:inline">Ledger (Statement)</span>
             </TabsTrigger>
-            <TabsTrigger value="items" className={cn(tabTriggerClass, "gap-1.5")}>
+            <TabsTrigger value="items" className={cn(tabTriggerClass, "shrink-0 gap-1.5")}>
               <Package className="h-4 w-4 shrink-0 opacity-70" />
-              Item Wise Report
+              <span className="sm:hidden">Items</span>
+              <span className="hidden sm:inline">Item Wise Report</span>
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 sm:px-5 space-y-4">
+        <div className="space-y-4 px-4 py-4 sm:px-5 md:min-h-0 md:flex-1 md:overflow-y-auto">
           {tab === "transactions" && (
-            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-0.5">
-              <PartyPeriodSelect value={period} onChange={setPeriod} />
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              <PartyPeriodSelect value={period} onChange={setPeriod} className="w-full sm:w-auto" />
               <Select value={txnTypeFilter} onValueChange={setTxnTypeFilter}>
-                <SelectTrigger className={cn(partyFilterTriggerClass, "w-[200px]")}>
+                <SelectTrigger className={cn(partyFilterTriggerClass, "w-full sm:w-[200px]")}>
                   <SelectValue placeholder="Select Transaction Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -369,7 +397,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className={cn(partyFilterTriggerClass, "w-[160px]")}>
+                <SelectTrigger className={cn(partyFilterTriggerClass, "w-full sm:w-[160px]")}>
                   <SelectValue placeholder="Select Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -388,17 +416,18 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
           <TabsContent value="profile" className="mt-0 focus-visible:outline-none">
             <PartyProfileTab party={party} onUpdateParty={handleUpdateParty} />
           </TabsContent>
-          <TabsContent value="ledger" className="mt-0 space-y-4 focus-visible:outline-none">
+          <TabsContent value="ledger" className="mt-0 space-y-3 focus-visible:outline-none sm:space-y-4">
             {summary && <PartySummaryCards kind={party.kind} summary={summary} />}
-            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-0.5">
-              <PartyPeriodSelect value={period} onChange={setPeriod} />
-              <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <PartyPeriodSelect value={period} onChange={setPeriod} className="w-full sm:w-auto" />
+              <div className="flex sm:ml-auto sm:shrink-0 sm:items-center sm:gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0">
-                      <Download className="h-4 w-4 mr-1" />
-                      Download Excel
-                      <ChevronDown className="h-3 w-3 ml-1" />
+                    <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:w-auto">
+                      <Download className="h-4 w-4" />
+                      <span className="md:hidden">Export</span>
+                      <span className="hidden md:inline">Download Excel</span>
+                      <ChevronDown className="h-3 w-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -408,18 +437,18 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 shrink-0"
+                  className="h-9 w-full sm:w-auto"
                   onClick={() => window.print()}
                 >
-                  <Printer className="h-4 w-4 mr-1" />
-                  Print PDF
+                  <Printer className="mr-1 h-4 w-4" />
+                  Print
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0">
-                      <Share2 className="h-4 w-4 mr-1" />
+                    <Button variant="outline" size="sm" className="hidden h-9 shrink-0 md:inline-flex">
+                      <Share2 className="mr-1 h-4 w-4" />
                       Share
-                      <ChevronDown className="h-3 w-3 ml-1" />
+                      <ChevronDown className="ml-1 h-3 w-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -438,16 +467,16 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
             </div>
             <PartyLedgerTab lines={statement} returnTo={partyReturnPath} />
           </TabsContent>
-          <TabsContent value="items" className="mt-0 space-y-4 focus-visible:outline-none">
-            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-0.5">
-              <PartyPeriodSelect value={period} onChange={setPeriod} />
-              <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+          <TabsContent value="items" className="mt-0 space-y-3 focus-visible:outline-none sm:space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <PartyPeriodSelect value={period} onChange={setPeriod} className="w-full sm:w-auto" />
+              <div className="flex gap-2 sm:ml-auto sm:shrink-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0">
-                      <Download className="h-4 w-4 mr-1" />
-                      Download
-                      <ChevronDown className="h-3 w-3 ml-1" />
+                    <Button variant="outline" size="sm" className="h-9 flex-1 gap-1 sm:flex-none">
+                      <Download className="h-4 w-4" />
+                      Export
+                      <ChevronDown className="h-3 w-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -457,10 +486,10 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 shrink-0"
+                  className="h-9 flex-1 sm:flex-none"
                   onClick={() => window.print()}
                 >
-                  <Printer className="h-4 w-4 mr-1" />
+                  <Printer className="mr-1 h-4 w-4" />
                   Print
                 </Button>
               </div>

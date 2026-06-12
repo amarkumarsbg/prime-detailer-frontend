@@ -45,9 +45,19 @@ export function JobCardStatusBadge({
   );
 }
 
-export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
+export function InvoiceStatusBadge({
+  status,
+  className,
+}: {
+  status: InvoiceStatus;
+  className?: string;
+}) {
   const config = INVOICE_STATUS_CONFIG[status];
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+  return (
+    <Badge variant={config.variant} className={className}>
+      {config.label}
+    </Badge>
+  );
 }
 
 export function QuotationStatusBadge({ status }: { status: QuotationStatus }) {

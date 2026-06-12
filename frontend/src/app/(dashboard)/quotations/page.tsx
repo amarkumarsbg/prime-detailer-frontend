@@ -681,9 +681,11 @@ export default function QuotationsPage() {
       <PageHeader
         title="Quotations & Estimates"
         description="Create and manage quotations, send estimates via WhatsApp, and convert to job cards"
+        hideDescriptionOnMobile
+        inlineActionsOnMobile
         actions={
-          <Button onClick={() => setNewDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setNewDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
             New Quotation
           </Button>
         }
@@ -717,24 +719,32 @@ export default function QuotationsPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard
-          title="Total Quotations"
+          size="compact"
+          title="Total"
           value={kpis.total}
           icon={FileText}
+          titleClassName="whitespace-nowrap"
         />
         <KPICard
-          title="Pending Approval"
+          size="compact"
+          title="Pending"
           value={kpis.pendingApproval}
           icon={Clock}
+          titleClassName="whitespace-nowrap"
         />
         <KPICard
+          size="compact"
           title="Approved"
           value={kpis.approved}
           icon={CheckCircle2}
+          titleClassName="whitespace-nowrap"
         />
         <KPICard
-          title="Converted to Job Card"
+          size="compact"
+          title="Converted"
           value={kpis.converted}
           icon={ArrowRightCircle}
+          titleClassName="whitespace-nowrap"
         />
       </div>
 

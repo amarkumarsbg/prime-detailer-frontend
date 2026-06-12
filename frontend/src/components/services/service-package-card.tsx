@@ -125,30 +125,30 @@ export function ServicePackageCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-200" asChild>
-            <Link href={`/services/${service.id}/parts`} className="gap-1.5">
-              <Boxes className="h-3.5 w-3.5" />
-              Parts
+        <div className="grid grid-cols-3 gap-2">
+          <Button variant="outline" size="sm" className="h-8 gap-1 border-emerald-200 px-2 text-emerald-700" asChild>
+            <Link href={`/services/${service.id}/parts`} className="gap-1">
+              <Boxes className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate text-xs">Parts</span>
             </Link>
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="text-emerald-700 border-emerald-200 gap-1.5"
+            className="h-8 gap-1 border-emerald-200 px-2 text-emerald-700"
             onClick={onEdit}
           >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit
+            <Pencil className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate text-xs">Edit</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="col-span-2 text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5 sm:col-span-1"
+            className="h-8 gap-1 border-destructive/30 px-2 text-destructive hover:bg-destructive/10"
             onClick={onDelete}
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate text-xs">Delete</span>
           </Button>
         </div>
       </CardContent>

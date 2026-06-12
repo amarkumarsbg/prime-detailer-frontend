@@ -22,11 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useExpenseStore } from "@/store/expense-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
 import { resolveSessionBranchId } from "@/lib/all-branches";
+import { useBranchScope } from "@/lib/branch-scope";
 import type { ExpenseCategory, ExpensePaymentMethod, ExpensePaymentStatus } from "@/types";
 import { toast } from "sonner";
 
@@ -77,6 +77,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
   const branches = useBranchStore((s) => s.branches);
   const user = useAuthStore((s) => s.user);
   const currentBranch = useAuthStore((s) => s.currentBranch);
+  const { showBranchPicker } = useBranchScope();
 
   const categoryListId = useId();
   const vendorListId = useId();
@@ -252,235 +253,257 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
     setReceiptName(file.name);
   };
 
+  const sectionLabelClass =
+    "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="sm:max-w-[480px] max-h-[90vh] gap-0 p-0 flex flex-col overflow-hidden"
+          className={cn(
+            dialogMobileSheetContentClasses,
+            "max-h-[min(92dvh,100%)] sm:max-w-[480px]"
+          )}
           showClose
         >
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
-            <DialogTitle className="text-xl font-semibold">Add Expense</DialogTitle>
+            <DialogTitle className="text-lg font-semibold sm:text-xl">Add Expense</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="h-[min(520px,calc(85vh-140px))] px-6">
-            <form id="add-expense-form" onSubmit={handleSubmit} className="space-y-4 pb-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:space-y-4 sm:py-4">
               <div className="space-y-2">
-                <Label htmlFor="exp-title">Title</Label>
-                <Input
-                  id="exp-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., Office Supplies"
-                  autoComplete="off"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="exp-amt">Amount</Label>
+                <p className={sectionLabelClass}>Basics</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="exp-title">Title</Label>
                   <Input
-                    id="exp-amt"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="exp-date">Date</Label>
-                  <Input
-                    id="exp-date"
-                    type="date"
-                    value={dateStr}
-                    onChange={(e) => setDateStr(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="exp-cat">Category *</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="exp-cat"
-                    list={categoryListId}
-                    value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
-                    placeholder="Search or select category..."
+                    id="exp-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g., Office Supplies"
                     autoComplete="off"
                   />
-                  <datalist id={categoryListId}>
-                    {mergedCategories.map((c) => (
-                      <option key={c} value={c}>
-                        {categoryLabel(c)}
-                      </option>
-                    ))}
-                  </datalist>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="shrink-0 text-primary px-2"
-                    onClick={() => setCatDialogOpen(true)}
-                  >
-                    + New
-                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="exp-amt">Amount</Label>
+                    <Input
+                      id="exp-amt"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="exp-date">Date</Label>
+                    <Input
+                      id="exp-date"
+                      type="date"
+                      value={dateStr}
+                      onChange={(e) => setDateStr(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="exp-vendor">Vendor (Optional)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="exp-vendor"
-                    list={vendorListId}
-                    value={vendorInput}
-                    onChange={(e) => setVendorInput(e.target.value)}
-                    placeholder="Search or select vendor..."
-                    autoComplete="off"
-                  />
-                  <datalist id={vendorListId}>
-                    {mergedVendorNames.map((v) => (
-                      <option key={v} value={v} />
-                    ))}
-                  </datalist>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="shrink-0 text-primary px-2"
-                    onClick={() => setVendorDialogOpen(true)}
-                  >
-                    + New
-                  </Button>
+                <p className={sectionLabelClass}>Category & vendor</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="exp-cat">Category *</Label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      id="exp-cat"
+                      list={categoryListId}
+                      value={categoryInput}
+                      onChange={(e) => setCategoryInput(e.target.value)}
+                      placeholder="Search or select..."
+                      autoComplete="off"
+                      className="min-w-0"
+                    />
+                    <datalist id={categoryListId}>
+                      {mergedCategories.map((c) => (
+                        <option key={c} value={c}>
+                          {categoryLabel(c)}
+                        </option>
+                      ))}
+                    </datalist>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 px-2 text-primary"
+                      onClick={() => setCatDialogOpen(true)}
+                    >
+                      + New
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="exp-vendor">Vendor (optional)</Label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      id="exp-vendor"
+                      list={vendorListId}
+                      value={vendorInput}
+                      onChange={(e) => setVendorInput(e.target.value)}
+                      placeholder="Search or select..."
+                      autoComplete="off"
+                      className="min-w-0"
+                    />
+                    <datalist id={vendorListId}>
+                      {mergedVendorNames.map((v) => (
+                        <option key={v} value={v} />
+                      ))}
+                    </datalist>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 px-2 text-primary"
+                      onClick={() => setVendorDialogOpen(true)}
+                    >
+                      + New
+                    </Button>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Branch</Label>
-                <Select value={branchId} onValueChange={setBranchId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Payment Status</Label>
-                  <Select
-                    value={paymentStatus}
-                    onValueChange={(v) =>
-                      setPaymentStatus(v as ExpensePaymentStatus)
-                    }
-                  >
+              {showBranchPicker ? (
+                <div className="space-y-1.5">
+                  <Label>Branch</Label>
+                  <Select value={branchId} onValueChange={setBranchId}>
                     <SelectTrigger className="w-full">
-                      <SelectValue />
+                      <SelectValue placeholder="Select Branch" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(
-                        ["PAID", "PENDING", "PARTIAL", "OVERDUE"] as const
-                      ).map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {paymentStatusLabel(s)}
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Payment Method</Label>
-                  <Select
-                    value={paymentMethod}
-                    onValueChange={(v) =>
-                      setPaymentMethod(v as ExpensePaymentMethod)
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(
-                        [
-                          "CASH",
-                          "CARD",
-                          "UPI",
-                          "BANK_TRANSFER",
-                          "OTHER",
-                        ] as const
-                      ).map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {paymentMethodLabel(m)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              ) : null}
+
+              <div className="space-y-2">
+                <p className={sectionLabelClass}>Payment</p>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select
+                      value={paymentStatus}
+                      onValueChange={(v) =>
+                        setPaymentStatus(v as ExpensePaymentStatus)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(
+                          ["PAID", "PENDING", "PARTIAL", "OVERDUE"] as const
+                        ).map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {paymentStatusLabel(s)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Method</Label>
+                    <Select
+                      value={paymentMethod}
+                      onValueChange={(v) =>
+                        setPaymentMethod(v as ExpensePaymentMethod)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(
+                          [
+                            "CASH",
+                            "CARD",
+                            "UPI",
+                            "BANK_TRANSFER",
+                            "OTHER",
+                          ] as const
+                        ).map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {paymentMethodLabel(m)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+                {paymentStatus === "PARTIAL" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="exp-partial">Amount paid so far</Label>
+                    <Input
+                      id="exp-partial"
+                      inputMode="decimal"
+                      value={amountPaid}
+                      onChange={(e) => setAmountPaid(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
               </div>
 
-              {paymentStatus === "PARTIAL" && (
-                <div className="space-y-2">
-                  <Label htmlFor="exp-partial">Amount paid so far</Label>
-                  <Input
-                    id="exp-partial"
-                    inputMode="decimal"
-                    value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    placeholder="0.00"
+              <div className="space-y-2">
+                <p className={sectionLabelClass}>Additional</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="exp-desc">Description</Label>
+                  <Textarea
+                    id="exp-desc"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Optional details..."
+                    rows={2}
+                    className="min-h-0 resize-none"
                   />
                 </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="exp-desc">Description</Label>
-                <Textarea
-                  id="exp-desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional details..."
-                  rows={3}
-                  className="resize-y min-h-[80px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="exp-receipt">Receipt (PDF/Image)</Label>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="exp-receipt">Receipt (PDF/image)</Label>
                   <Input
                     id="exp-receipt"
                     type="file"
                     accept=".pdf,image/*"
-                    className="cursor-pointer max-w-full sm:max-w-[240px]"
+                    className="cursor-pointer"
                     onChange={onReceiptChange}
                   />
-                  <span className="text-sm text-muted-foreground">
-                    {receiptName || "No file chosen"}
-                  </span>
+                  {receiptName ? (
+                    <p className="truncate text-xs text-muted-foreground">{receiptName}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Max 5MB</p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Upload receipt (PDF or Image, Max 5MB)
-                </p>
               </div>
-            </form>
-          </ScrollArea>
+            </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border bg-background shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" form="add-expense-form">
-              Save Expense
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="shrink-0 flex-row gap-2 border-t border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur-sm sm:justify-end sm:px-6 sm:py-3 [&_button]:h-9 [&_button]:min-h-9 [&_button]:w-auto [&_button]:flex-1 [&_button]:px-3 sm:[&_button]:flex-none">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm">
+                <span className="sm:hidden">Save</span>
+                <span className="hidden sm:inline">Save Expense</span>
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -528,7 +551,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>Add New Vendor</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="h-[min(480px,calc(85vh-120px))] px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <div className="space-y-4 pb-4">
               <div className="space-y-2">
                 <Label htmlFor="v-name">Vendor Name</Label>
@@ -622,7 +645,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
                 />
               </div>
             </div>
-          </ScrollArea>
+          </div>
           <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
             <Button type="button" variant="outline" onClick={() => setVendorDialogOpen(false)}>
               Cancel

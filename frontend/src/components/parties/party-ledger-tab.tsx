@@ -41,9 +41,63 @@ function balanceForRow(row: PartyStatementLine): string {
 export function PartyLedgerTab({ lines, returnTo }: PartyLedgerTabProps) {
   const router = useRouter();
 
+  const navigate = (row: PartyStatementLine) => {
+    if (row.isSummary) return;
+    const baseHref = statementLineHref(row.id);
+    const href = baseHref && returnTo ? appendReturnTo(baseHref, returnTo) : baseHref;
+    if (href) router.push(href);
+  };
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background">
-      <div className="overflow-x-auto">
+      <div className="space-y-2 p-3 md:hidden">
+        {lines.map((row) => {
+          const clickable = !row.isSummary && statementLineHref(row.id);
+          return (
+            <div
+              key={row.id}
+              role={clickable ? "button" : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onClick={() => navigate(row)}
+              onKeyDown={(e) => {
+                if (clickable && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  navigate(row);
+                }
+              }}
+              className={cn(
+                "rounded-lg border border-border bg-card p-3 text-sm",
+                row.isSummary && "bg-muted/30 font-medium",
+                clickable && "cursor-pointer shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/40"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-muted-foreground">{row.date}</p>
+                  <p className="mt-0.5 truncate text-sm font-medium leading-tight">{row.voucher}</p>
+                </div>
+                <p className="shrink-0 text-sm font-bold tabular-nums">{balanceForRow(row)}</p>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span>
+                  Credit: <span className="font-medium text-foreground">{creditForRow(row)}</span>
+                </span>
+                <span>
+                  Debit: <span className="font-medium text-foreground">{debitForRow(row)}</span>
+                </span>
+                {row.paymentMode && row.paymentMode !== "—" ? (
+                  <span className="col-span-2">Mode: {row.paymentMode}</span>
+                ) : null}
+                {row.dueLabel ? (
+                  <span className="col-span-2 text-amber-700 dark:text-amber-400">{row.dueLabel}</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr>
@@ -63,39 +117,39 @@ export function PartyLedgerTab({ lines, returnTo }: PartyLedgerTabProps) {
               const href =
                 baseHref && returnTo ? appendReturnTo(baseHref, returnTo) : baseHref;
               return (
-              <tr
-                key={row.id}
-                className={cn(
-                  "hover:bg-muted/20",
-                  row.isSummary && "bg-muted/25 font-medium",
-                  href && "cursor-pointer"
-                )}
-                tabIndex={href ? 0 : undefined}
-                role={href ? "link" : undefined}
-                onClick={() => href && router.push(href)}
-                onKeyDown={(e) => {
-                  if (href && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
-                    router.push(href);
-                  }
-                }}
-              >
-                <td className={cn(tdClass, "whitespace-nowrap")}>{row.date}</td>
-                <td className={tdClass}>{row.voucher}</td>
-                <td className={cn(tdClass, "font-mono text-xs")}>{row.serialNo}</td>
-                <td className={cn(tdClass, "text-muted-foreground")}>{row.paymentMode}</td>
-                <td className={tdNumClass}>{creditForRow(row)}</td>
-                <td className={tdNumClass}>{debitForRow(row)}</td>
-                <td className={cn(tdNumClass, "font-medium")}>{balanceForRow(row)}</td>
-                <td className={tdClass}>
-                  {row.dueLabel ? (
-                    <span className="text-xs text-amber-700 dark:text-amber-400">{row.dueLabel}</span>
-                  ) : (
-                    "—"
+                <tr
+                  key={row.id}
+                  className={cn(
+                    "hover:bg-muted/20",
+                    row.isSummary && "bg-muted/25 font-medium",
+                    href && "cursor-pointer"
                   )}
-                </td>
-              </tr>
-            );
+                  tabIndex={href ? 0 : undefined}
+                  role={href ? "link" : undefined}
+                  onClick={() => href && router.push(href)}
+                  onKeyDown={(e) => {
+                    if (href && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      router.push(href);
+                    }
+                  }}
+                >
+                  <td className={cn(tdClass, "whitespace-nowrap")}>{row.date}</td>
+                  <td className={tdClass}>{row.voucher}</td>
+                  <td className={cn(tdClass, "font-mono text-xs")}>{row.serialNo}</td>
+                  <td className={cn(tdClass, "text-muted-foreground")}>{row.paymentMode}</td>
+                  <td className={tdNumClass}>{creditForRow(row)}</td>
+                  <td className={tdNumClass}>{debitForRow(row)}</td>
+                  <td className={cn(tdNumClass, "font-medium")}>{balanceForRow(row)}</td>
+                  <td className={tdClass}>
+                    {row.dueLabel ? (
+                      <span className="text-xs text-amber-700 dark:text-amber-400">{row.dueLabel}</span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              );
             })}
           </tbody>
         </table>

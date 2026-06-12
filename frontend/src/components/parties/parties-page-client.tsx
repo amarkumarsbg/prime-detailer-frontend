@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
+import { MobileFilterSheet } from "@/components/shared/mobile-filter-sheet";
 import { KPICard } from "@/components/shared/kpi-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -37,16 +37,18 @@ import { useParties } from "@/hooks/use-parties";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { partyDisplayBalance, balanceFlow } from "@/lib/party/ledger-math";
 import { PartiesListLoading } from "@/components/parties/party-loading-states";
-import { formatInrFull, formatInrTable } from "@/lib/utils";
+import { formatCurrency, formatInrTable } from "@/lib/utils";
 import { useBranchScope } from "@/lib/branch-scope";
 import { toast } from "sonner";
 import {
   ArrowDownRight,
   ArrowUpRight,
   ArrowUpDown,
+  Download,
   MoreVertical,
   Pencil,
   Plus,
+  SlidersHorizontal,
   Trash2,
   Users,
 } from "lucide-react";
@@ -248,58 +250,97 @@ export function PartiesPageClient() {
     </tr>
   );
 
+  const typeFilterOptions = [
+    { value: "all" as const, label: "All types" },
+    { value: "customer" as const, label: "Customers" },
+    { value: "supplier" as const, label: "Suppliers" },
+  ] as const;
+
   return (
-    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] flex-col gap-4 overflow-hidden md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)]">
-      <div className="shrink-0">
-        <PageHeader
-          title="Parties"
-          description={`Customers & suppliers ledger. Viewing: ${viewingLabel}.`}
-        />
-      </div>
+    <div className="flex flex-col gap-3 sm:gap-4 md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:overflow-hidden">
+      <PageHeader
+        title="Parties"
+        description={`Customers & suppliers ledger. Viewing: ${viewingLabel}.`}
+        hideDescriptionOnMobile
+        inlineActionsOnMobile
+        actions={
+          <Button
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={() => router.push("/parties/new")}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Create Party
+          </Button>
+        }
+      />
 
-      <div className="grid shrink-0 grid-cols-1 items-stretch sm:grid-cols-3 gap-3">
-        <KPICard
-          size="compact"
-          title="All Parties"
-          value={parties.length}
-          icon={Users}
-          tone="violet"
-          active={balanceFilter === "all"}
-          onClick={() => setBalanceFilter("all")}
-        />
-        <KPICard
-          size="compact"
-          title="To Collect"
-          value={formatInrFull(totals.toCollect)}
-          icon={ArrowDownRight}
-          tone="emerald"
-          active={balanceFilter === "collect"}
-          onClick={() => setBalanceFilterToggle("collect")}
-        />
-        <KPICard
-          size="compact"
-          title="To Pay"
-          value={formatInrFull(totals.toPay)}
-          icon={ArrowUpRight}
-          tone="rose"
-          active={balanceFilter === "pay"}
-          onClick={() => setBalanceFilterToggle("pay")}
-        />
-      </div>
-
-      <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex w-full min-w-0 flex-col gap-2 md:flex-1 md:flex-row md:items-center">
+      <div className="flex flex-col gap-2 md:hidden">
+        <div className="flex items-center gap-2">
           <Input
             placeholder="Search parties"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full md:max-w-xs"
+            className="h-9 min-w-0 flex-1"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="relative h-9 w-9 shrink-0"
+                aria-label="More actions"
+              >
+                <MoreVertical className="h-4 w-4" />
+                {activeFilterCount > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setFilterSheetOpen(true)}>
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Filters
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportFilteredCsv}>
+                <Download className="mr-2 h-4 w-4" />
+                Export CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {typeFilterOptions.map((opt) => (
+            <Button
+              key={opt.value}
+              type="button"
+              size="sm"
+              variant={typeFilter === opt.value ? "default" : "outline"}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => setTypeFilter(opt.value)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="hidden shrink-0 flex-col gap-3 md:flex md:flex-row md:items-center md:justify-between">
+        <div className="flex w-full min-w-0 flex-1 flex-row items-center gap-2">
+          <Input
+            placeholder="Search parties"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="max-w-xs"
           />
           <Select
             value={searchCategory}
             onValueChange={(v) => setSearchCategory(v as SearchCategory)}
           >
-            <SelectTrigger className="hidden w-[180px] shrink-0 md:flex">
+            <SelectTrigger className="w-[180px] shrink-0">
               <SelectValue placeholder="Search Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -311,44 +352,56 @@ export function PartiesPageClient() {
               <SelectItem value="supplier">Suppliers only</SelectItem>
             </SelectContent>
           </Select>
-          <MobileFilterTrigger
-            onClick={() => setFilterSheetOpen(true)}
-            activeCount={activeFilterCount}
-          />
         </div>
-        <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center md:shrink-0">
-          <Button variant="outline" className="w-full md:w-auto" onClick={exportFilteredCsv}>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" onClick={exportFilteredCsv}>
             Export CSV
           </Button>
-          <Button className="w-full md:w-auto" onClick={() => router.push("/parties/new")}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={() => router.push("/parties/new")}>
+            <Plus className="mr-2 h-4 w-4" />
             Create Party
           </Button>
         </div>
       </div>
 
-      <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch] md:hidden">
-        {(
-          [
-            { value: "all" as const, label: "All types" },
-            { value: "customer" as const, label: "Customers" },
-            { value: "supplier" as const, label: "Suppliers" },
-          ] as const
-        ).map((opt) => (
-          <Button
-            key={opt.value}
-            type="button"
-            size="sm"
-            variant={typeFilter === opt.value ? "default" : "outline"}
-            className="shrink-0"
-            onClick={() => setTypeFilter(opt.value)}
-          >
-            {opt.label}
-          </Button>
-        ))}
+      <div className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
+        <KPICard
+          size="compact"
+          title="All Parties"
+          value={parties.length}
+          icon={Users}
+          tone="violet"
+          active={balanceFilter === "all"}
+          onClick={() => setBalanceFilter("all")}
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-lg sm:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="To Collect"
+          value={formatCurrency(totals.toCollect)}
+          icon={ArrowDownRight}
+          tone="emerald"
+          active={balanceFilter === "collect"}
+          onClick={() => setBalanceFilterToggle("collect")}
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+        />
+        <KPICard
+          size="compact"
+          title="To Pay"
+          value={formatCurrency(totals.toPay)}
+          icon={ArrowUpRight}
+          tone="rose"
+          active={balanceFilter === "pay"}
+          onClick={() => setBalanceFilterToggle("pay")}
+          titleClassName="text-[11px] leading-tight sm:text-xs"
+          valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+          className="col-span-2 md:col-span-1"
+        />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="flex flex-col rounded-lg border border-border bg-card shadow-sm md:min-h-0 md:flex-1 md:overflow-hidden">
         {filtered.length === 0 ? (
           <EmptyState
             type="parties-filter"
@@ -357,7 +410,7 @@ export function PartiesPageClient() {
           />
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 space-y-3 md:hidden">
+            <div className="space-y-2 p-3 pb-4 md:hidden">
               {filtered.map((p) => {
                 const flow = balanceFlow(p.kind, p.balance);
                 const goToParty = () => router.push(`/parties/${encodeURIComponent(p.id)}`);
@@ -373,61 +426,65 @@ export function PartiesPageClient() {
                         goToParty();
                       }
                     }}
-                    className="rounded-lg border border-border bg-card p-4 text-sm shadow-sm cursor-pointer transition-colors hover:bg-muted/40 hover:border-primary/30"
+                    className="cursor-pointer rounded-lg border border-border bg-card p-3 text-sm shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/40"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold leading-snug">{p.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="truncate text-sm font-semibold leading-tight">{p.name}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
                           {p.kind === "customer" ? "Customer" : "Supplier"}
                           {p.category ? ` · ${p.category}` : ""}
                         </p>
                         {p.mobile ? (
                           <a
                             href={`tel:${p.mobile.replace(/\s/g, "")}`}
-                            className="mt-0.5 block text-xs text-primary"
+                            className="mt-0.5 block text-[11px] text-primary"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {p.mobile}
                           </a>
                         ) : null}
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p
-                          className={`text-base font-bold tabular-nums ${
-                            flow === "in"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : flow === "out"
-                                ? "text-rose-600 dark:text-rose-400"
-                                : "text-foreground"
-                          }`}
-                        >
-                          {formatInrTable(p.balance)}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">
-                          {flow === "in" ? "To collect" : flow === "out" ? "To pay" : "Settled"}
-                        </p>
+                      <div className="flex shrink-0 items-start gap-1">
+                        <div className="text-right">
+                          <p
+                            className={cn(
+                              "text-sm font-bold tabular-nums leading-none",
+                              flow === "in" && "text-emerald-600 dark:text-emerald-400",
+                              flow === "out" && "text-rose-600 dark:text-rose-400"
+                            )}
+                          >
+                            {formatInrTable(p.balance)}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            {flow === "in" ? "To collect" : flow === "out" ? "To pay" : "Settled"}
+                          </p>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Party actions">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/parties/${encodeURIComponent(p.id)}/edit`}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
-                    </div>
-                    <div
-                      className="mt-3 flex gap-2 border-t border-border/80 pt-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button variant="outline" size="sm" className="flex-1" asChild>
-                        <Link href={`/parties/${encodeURIComponent(p.id)}/edit`}>
-                          <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                          Edit
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                        Delete
-                      </Button>
                     </div>
                   </div>
                 );

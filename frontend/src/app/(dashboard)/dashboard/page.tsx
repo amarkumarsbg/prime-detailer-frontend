@@ -10,6 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { KPICard } from "@/components/shared/kpi-card";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -21,6 +27,7 @@ import { useReminderStore } from "@/store/reminder-store";
 import {
   computeBranchScopedDashboardStats,
   filterRemindersByBranch,
+  filterInvoicesByBranch,
   useBranchScope,
 } from "@/lib/branch-scope";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -28,8 +35,6 @@ import { useCustomerStore } from "@/store/customer-store";
 import { getStockStatus } from "@/lib/inventory-units";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import {
-  Car,
-  CarFront,
   Wrench,
   IndianRupee,
   UserPlus,
@@ -46,11 +51,14 @@ import {
   ClipboardList,
   AlertCircle,
   Building2,
-  Star,
   Calendar,
   Users,
   BarChart3,
   Eye,
+  MoreHorizontal,
+  Car,
+  CarFront,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -60,7 +68,6 @@ import { StaggerGrid } from "@/components/motion/stagger-grid";
 import {
   alertStaggerContainer,
   alertStaggerItem,
-  easeSmooth,
 } from "@/components/motion/dashboard-motion";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import {
@@ -68,18 +75,13 @@ import {
   isReadyForDeliveryJob,
   isInactiveCustomer,
 } from "@/lib/dashboard-filters";
-import type { DashboardStats, JobCard } from "@/types";
+import type { DashboardStats, JobCard, UserRole } from "@/types";
 import { DashboardSkeleton } from "@/components/shared/skeleton-loader";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { useSettingsStore } from "@/store/settings-store";
+import { useAuthStore } from "@/store/auth-store";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { notifyJobReadyWhatsApp } from "@/lib/whatsapp-automation-triggers";
-
-const PENDING_BOOKING_STATUSES: JobCard["status"][] = [
-  "RECEIVED",
-  "INSPECTION",
-  "AWAITING_SERVICE",
-];
 
 const FUNNEL_IN_PROGRESS: JobCard["status"][] = [
   "INSPECTION",
@@ -117,6 +119,22 @@ function daysAgoMidnight(days: number): Date {
   return d;
 }
 
+type DashboardView = "admin" | "manager" | "technician";
+
+function getDashboardView(role: UserRole | undefined): DashboardView {
+  if (!role) return "manager";
+  if (role === "SUPER_ADMIN" || role === "ADMIN") return "admin";
+  if (role === "MECHANIC") return "technician";
+  return "manager";
+}
+
+const QUICK_ACTIONS = [
+  { href: "/job-cards/new", label: "New Job", icon: ClipboardList },
+  { href: "/bookings/walk-in", label: "New Booking", icon: Calendar },
+  { href: "/customers", label: "New Customer", icon: UserPlus },
+  { href: "/billing", label: "Invoice", icon: Receipt },
+] as const;
+
 export default function DashboardPage() {
   const router = useRouter();
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
@@ -131,6 +149,8 @@ export default function DashboardPage() {
     useDashboardStatsStore((s) => s.stats) ?? EMPTY_DASHBOARD_STATS;
   const serviceReminders = useReminderStore((s) => s.reminders);
   const businessName = useSettingsStore((s) => s.businessName);
+  const user = useAuthStore((s) => s.user);
+  const dashboardView = getDashboardView(user?.role);
 
   const [recentBookingPreview, setRecentBookingPreview] = useState<JobCard | null>(null);
 
@@ -166,6 +186,11 @@ export default function DashboardPage() {
     [scopedJobCards]
   );
 
+  const jobsToday = useMemo(
+    () => scopedJobCards.filter(isTodaysBookingsJob),
+    [scopedJobCards]
+  );
+
   const executive = useMemo(() => {
     const d30 = daysAgoMidnight(30);
     const d60 = daysAgoMidnight(60);
@@ -184,10 +209,6 @@ export default function DashboardPage() {
           }
         : undefined;
 
-    const todaysJobCount = scopedJobCards.filter(isTodaysBookingsJob).length;
-    const pendingBookings = scopedJobCards.filter((jc) =>
-      PENDING_BOOKING_STATUSES.includes(jc.status)
-    ).length;
     const completed30d = scopedJobCards.filter((jc) => {
       if (jc.status !== "DELIVERED") return false;
       const end = jc.actualDelivery
@@ -195,6 +216,9 @@ export default function DashboardPage() {
         : new Date(jc.updatedAt);
       return end >= d30;
     }).length;
+    const pendingBookings = scopedJobCards.filter((jc) =>
+      ["RECEIVED", "INSPECTION", "AWAITING_SERVICE"].includes(jc.status)
+    ).length;
     const activeCustomers = customers.filter((c) => {
       if (isInactiveCustomer(c)) return false;
       return scopedJobCards.some((jc) => jc.customerId === c.id);
@@ -203,17 +227,12 @@ export default function DashboardPage() {
     return {
       totalRevenue30d: rev30,
       revenueTrend,
-      todaysJobCount,
+      todaysJobCount: jobsToday.length,
       pendingBookings,
       completed30d,
       activeCustomers,
     };
-  }, [scopedJobCards, customers]);
-
-  const jobsToday = useMemo(
-    () => scopedJobCards.filter(isTodaysBookingsJob),
-    [scopedJobCards]
-  );
+  }, [scopedJobCards, customers, jobsToday]);
 
   const todaysFunnel = useMemo(() => {
     const total = jobsToday.length;
@@ -270,6 +289,7 @@ export default function DashboardPage() {
       id: string;
       icon: React.ElementType;
       label: string;
+      shortLabel: string;
       count: number;
       href: string;
       color: string;
@@ -285,10 +305,11 @@ export default function DashboardPage() {
         id: "overdue",
         icon: AlertTriangle,
         label: "Overdue job cards",
+        shortLabel: "Overdue Jobs",
         count: overdueJobs.length,
         href: "/job-cards",
         color: "text-red-700 dark:text-red-400",
-        bgColor: "bg-red-100 dark:bg-red-900/30",
+        bgColor: "bg-red-50 dark:bg-red-950/40",
       });
     }
 
@@ -298,10 +319,11 @@ export default function DashboardPage() {
         id: "stock",
         icon: Package,
         label: "Low stock items",
+        shortLabel: "Low Stock",
         count: lowStock.length,
         href: "/inventory",
         color: "text-amber-700 dark:text-amber-400",
-        bgColor: "bg-amber-100 dark:bg-amber-900/30",
+        bgColor: "bg-amber-50 dark:bg-amber-950/40",
       });
     }
 
@@ -310,10 +332,11 @@ export default function DashboardPage() {
         id: "payments",
         icon: Receipt,
         label: "Pending payments",
+        shortLabel: "Pending Payments",
         count: stats.pendingPayments,
         href: "/billing",
         color: "text-orange-700 dark:text-orange-400",
-        bgColor: "bg-orange-100 dark:bg-orange-900/30",
+        bgColor: "bg-orange-50 dark:bg-orange-950/40",
       });
     }
 
@@ -325,10 +348,11 @@ export default function DashboardPage() {
         id: "reminders",
         icon: Bell,
         label: "Due service reminders",
+        shortLabel: "Service Reminders",
         count: overdueReminders.length,
         href: "/reminders",
         color: "text-violet-700 dark:text-violet-400",
-        bgColor: "bg-violet-100 dark:bg-violet-900/30",
+        bgColor: "bg-violet-50 dark:bg-violet-950/40",
       });
     }
 
@@ -337,10 +361,11 @@ export default function DashboardPage() {
         id: "inactive",
         icon: UserX,
         label: "Inactive customers",
+        shortLabel: "Inactive Customers",
         count: stats.inactiveCustomers,
         href: "/customers",
         color: "text-slate-700 dark:text-slate-400",
-        bgColor: "bg-slate-100 dark:bg-slate-900/30",
+        bgColor: "bg-slate-50 dark:bg-slate-900/40",
       });
     }
 
@@ -352,6 +377,56 @@ export default function DashboardPage() {
     parts,
     scopedReminders,
   ]);
+
+  const revenueYesterday = useMemo(() => {
+    const todayStart = daysAgoMidnight(0);
+    const yesterdayStart = daysAgoMidnight(1);
+    const scoped = filterInvoicesByBranch(invoices, jobCards, selectedBranchId);
+    return scoped.reduce(
+      (sum, inv) =>
+        sum +
+        inv.payments
+          .filter((p) => {
+            const d = new Date(p.paidAt);
+            return d >= yesterdayStart && d < todayStart;
+          })
+          .reduce((s, p) => s + p.amount, 0),
+      0
+    );
+  }, [invoices, jobCards, selectedBranchId]);
+
+  const dailyRevenueTrend = useMemo(() => {
+    if (stats.dailyRevenue <= 0 || revenueYesterday <= 0) return undefined;
+    return {
+      value: Math.abs(
+        Math.round(((stats.dailyRevenue - revenueYesterday) / revenueYesterday) * 100)
+      ),
+      isPositive: stats.dailyRevenue >= revenueYesterday,
+      label: "vs yesterday",
+    };
+  }, [stats.dailyRevenue, revenueYesterday]);
+
+  const technicianStats = useMemo(() => {
+    if (!user?.id) return { assigned: 0, inProgress: 0, completed: 0 };
+    const todayStart = daysAgoMidnight(0);
+    const mine = scopedJobCards.filter((j) => j.mechanicId === user.id);
+    return {
+      assigned: mine.filter(
+        (j) =>
+          Boolean(j.mechanicId) &&
+          !["DELIVERED", "CANCELLED", "READY"].includes(j.status)
+      ).length,
+      inProgress: mine.filter((j) => FUNNEL_IN_PROGRESS.includes(j.status)).length,
+      completed: mine.filter((j) => {
+        if (j.status !== "DELIVERED") return false;
+        const end = j.actualDelivery ? new Date(j.actualDelivery) : new Date(j.updatedAt);
+        return end >= todayStart;
+      }).length,
+    };
+  }, [scopedJobCards, user?.id]);
+
+  const alertCardClassName =
+    "group flex w-full min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left shadow-sm transition-shadow hover:shadow-md cursor-pointer";
 
   const branchNameById = useMemo(
     () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
@@ -366,33 +441,27 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 shrink-0" />
-            <span>
-              Viewing:{" "}
-              <span className="font-medium text-foreground">{viewingLabel}</span>
-            </span>
-            <span className="text-muted-foreground/70">&middot;</span>
-            <time dateTime={new Date().toISOString().slice(0, 10)} className="tabular-nums">
-              {formatDate(new Date())}
-            </time>
-          </p>
-        </div>
-        <Link href="/job-cards/new" className="w-full sm:w-auto shrink-0">
-          <Button className="w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            New Job Card
-          </Button>
-        </Link>
+    <div className="max-md:pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+      {/* ——— Mobile-only layout ——— */}
+      <div className="md:hidden space-y-3">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+          <Building2 className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            Viewing:{" "}
+            <span className="font-medium text-foreground">{viewingLabel}</span>
+          </span>
+          <span className="text-muted-foreground/70">&middot;</span>
+          <time dateTime={new Date().toISOString().slice(0, 10)} className="tabular-nums">
+            {formatDate(new Date())}
+          </time>
+        </p>
       </div>
 
       {alerts.length > 0 &&
         (reduceMotion ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
             {alerts.map((alert) => {
               const filterMap: Record<string, string> = {
                 overdue: DASHBOARD_FILTER.OVERDUE,
@@ -410,11 +479,20 @@ export default function DashboardPage() {
                     if (filter) setActiveFilter(filter);
                     router.push(alert.href);
                   }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left`}
+                  className={alertCardClassName}
                 >
-                  <alert.icon className={`w-4 h-4 ${alert.color}`} />
-                  <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
-                  <span className="text-xs text-muted-foreground">{alert.label}</span>
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${alert.bgColor}`}
+                  >
+                    <alert.icon className={`w-4 h-4 ${alert.color}`} />
+                  </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="text-sm font-semibold leading-tight">
+                      <span className={alert.color}>{alert.count}</span>{" "}
+                      <span className="text-foreground">{alert.shortLabel}</span>
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground" />
                 </button>
               );
             })}
@@ -424,7 +502,7 @@ export default function DashboardPage() {
             variants={alertStaggerContainer}
             initial="hidden"
             animate="show"
-            className="flex flex-wrap gap-2"
+            className="space-y-2"
           >
             {alerts.map((alert) => {
               const filterMap: Record<string, string> = {
@@ -444,331 +522,208 @@ export default function DashboardPage() {
                     if (filter) setActiveFilter(filter);
                     router.push(alert.href);
                   }}
-                  whileHover={{
-                    y: -1,
-                    transition: { delay: 0.2, duration: 0.75, ease: easeSmooth },
-                  }}
                   whileTap={{ scale: 0.99 }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left hover:shadow-sm`}
+                  className={alertCardClassName}
                 >
-                  <alert.icon className={`w-4 h-4 ${alert.color}`} />
-                  <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
-                  <span className="text-xs text-muted-foreground">{alert.label}</span>
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${alert.bgColor}`}
+                  >
+                    <alert.icon className={`w-4 h-4 ${alert.color}`} />
+                  </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="text-sm font-semibold leading-tight">
+                      <span className={alert.color}>{alert.count}</span>{" "}
+                      <span className="text-foreground">{alert.shortLabel}</span>
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground" />
                 </motion.button>
               );
             })}
           </motion.div>
         ))}
 
-      {/* Revenue & collections — all money metrics first */}
-      <div className="space-y-5">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Revenue &amp; collections
-          </p>
-          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <KPICard
-              tone="emerald"
-              title="Total Revenue"
-              value={formatCurrency(executive.totalRevenue30d)}
-              subtitle="Last 30 days"
-              footerNote={viewingLabel}
-              icon={IndianRupee}
-              trend={executive.revenueTrend}
-            />
-            <KPICard
-              tone="emerald"
-              title="Today's Revenue"
-              value={formatCurrency(stats.dailyRevenue)}
-              subtitle="collected"
-              icon={IndianRupee}
-            />
-            <KPICard
-              tone="blue"
-              title="Net Profit Today"
-              value={formatCurrency(stats.netProfitToday)}
-              subtitle="revenue - expenses"
-              icon={IndianRupee}
-            />
-            <KPICard
-              tone="amber"
-              title="Pending Payments"
-              value={stats.pendingPayments}
-              subtitle="awaiting collection"
-              icon={AlertCircle}
-            />
-            <KPICard
-              tone="rose"
-              title="Total Expenses Today"
-              value={formatCurrency(stats.totalExpensesToday)}
-              subtitle="today"
-              icon={TrendingDown}
-            />
-          </StaggerGrid>
-        </div>
-
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Overview
-          </p>
-          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <KPICard
-              tone="blue"
-              title={"Today's Jobs"}
-              value={executive.todaysJobCount}
-              footerNote={viewingLabel}
-              icon={Calendar}
-            />
-            <KPICard
-              tone="amber"
-              title="Pending Bookings"
-              value={executive.pendingBookings}
-              footerNote={viewingLabel}
-              icon={Clock}
-            />
-            <KPICard
-              tone="violet"
-              title="Completed Services"
-              value={executive.completed30d}
-              subtitle="Last 30 days"
-              footerNote={viewingLabel}
-              icon={CheckCircle2}
-            />
-            <KPICard
-              tone="orange"
-              title="Average Rating"
-              value={stats.averageRating.toFixed(1)}
-              footerNote={viewingLabel}
-              icon={Star}
-            />
-            <KPICard
-              tone="blue"
-              title="Active Customers"
-              value={executive.activeCustomers}
-              footerNote={viewingLabel}
-              icon={Users}
-            />
-          </StaggerGrid>
-        </div>
-
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Operations
-          </p>
-          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-            <KPICard
-              tone="blue"
-              title="Cars Received"
-              value={stats.carsReceivedToday}
-              subtitle="today"
-              icon={Car}
-              trend={{ value: 12, isPositive: true }}
-            />
-            <KPICard
-              tone="violet"
-              title="Cars Delivered"
-              value={stats.carsDeliveredToday}
-              subtitle="today"
-              icon={CarFront}
-              trend={{ value: 8, isPositive: true }}
-            />
-            <KPICard
-              tone="orange"
-              title="In Progress"
-              value={stats.inProgressServices}
-              subtitle="services"
-              icon={Wrench}
-            />
-            <KPICard
-              tone="emerald"
-              title="Active Job Cards"
-              value={stats.activeJobCards}
-              subtitle="in progress"
-              icon={ClipboardList}
-            />
-            <KPICard
-              tone="blue"
-              title="New Customers"
-              value={stats.newCustomersToday}
-              subtitle="today"
-              icon={UserPlus}
-            />
-            <KPICard
-              tone="slate"
-              title="Inactive Customers"
-              value={stats.inactiveCustomers}
-              subtitle="need follow-up"
-              icon={UserX}
-            />
-          </StaggerGrid>
-        </div>
-      </div>
-
-      {/* Today's Jobs funnel */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
-          <CardTitle className="text-base font-semibold">Today&apos;s Jobs</CardTitle>
-          <Button variant="link" className="h-auto p-0 text-emerald-600" asChild>
-            <Link href="/job-cards">Show</Link>
+      {/* Today's Jobs — operations first */}
+      <Card className="border border-border/60 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-2.5 sm:px-5 sm:py-3">
+          <CardTitle className="text-sm font-semibold sm:text-base">Today&apos;s Jobs</CardTitle>
+          <Button variant="link" className="h-auto p-0 text-emerald-600 text-xs sm:text-sm" asChild>
+            <Link href="/job-cards">View all</Link>
           </Button>
         </CardHeader>
-        <CardContent className="pt-0">
-          <StaggerGrid className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <CardContent className="px-4 pt-0 pb-3 sm:px-5 sm:pb-4">
+          <StaggerGrid className="grid grid-cols-4 gap-1.5 sm:gap-2">
             {(
-              [
-                {
-                  label: "Total",
-                  value: todaysFunnel.total,
-                  className:
-                    "bg-slate-100/90 text-slate-900 dark:bg-slate-800/50 dark:text-slate-100",
-                },
-                {
-                  label: "Assigned",
-                  value: todaysFunnel.assigned,
-                  className:
-                    "bg-sky-100/90 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100",
-                },
-                {
-                  label: "In Progress",
-                  value: todaysFunnel.inProgress,
-                  className:
-                    "bg-violet-100/90 text-violet-900 dark:bg-violet-950/40 dark:text-violet-100",
-                },
-                {
-                  label: "Completed",
-                  value: todaysFunnel.completed,
-                  className:
-                    "bg-emerald-100/90 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100",
-                },
-              ] as const
+              dashboardView === "technician"
+                ? [
+                    { label: "Assigned", value: technicianStats.assigned },
+                    { label: "In Progress", value: technicianStats.inProgress },
+                    { label: "Done", value: technicianStats.completed },
+                    { label: "Total", value: todaysFunnel.total },
+                  ]
+                : [
+                    { label: "Total", value: todaysFunnel.total },
+                    { label: "Assigned", value: todaysFunnel.assigned },
+                    { label: "Active", value: todaysFunnel.inProgress },
+                    { label: "Done", value: todaysFunnel.completed },
+                  ]
             ).map((tile) => (
               <div
                 key={tile.label}
-                className={`flex min-h-28 flex-col items-center justify-center rounded-xl px-3 py-5 text-center ${tile.className}`}
+                className="flex min-h-[3.25rem] flex-col items-center justify-center rounded-lg border border-border/50 bg-muted/30 px-1 py-2 text-center sm:min-h-[3.75rem]"
               >
-                <p className="text-xs font-medium opacity-80">{tile.label}</p>
-                <p className="text-3xl font-bold tabular-nums mt-1">{tile.value}</p>
+                <p className="text-[9px] font-medium text-muted-foreground sm:text-[10px]">
+                  {tile.label}
+                </p>
+                <p className="mt-0.5 text-base font-bold tabular-nums sm:text-lg">{tile.value}</p>
               </div>
             ))}
           </StaggerGrid>
         </CardContent>
       </Card>
 
-      {/* Quick actions */}
+      {/* Quick actions — 2×2 grid */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
           Quick actions
         </p>
-        <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {(
-            [
-              {
-                href: "/job-cards",
-                title: "Manage Job Cards",
-                desc: "View and assign jobs",
-                icon: Wrench,
-              },
-              {
-                href: "/services",
-                title: "Service Packages",
-                desc: "Manage services",
-                icon: Calendar,
-              },
-              {
-                href: "/customers",
-                title: "Users",
-                desc: "Manage customers & staff",
-                icon: Users,
-              },
-              {
-                href: "/reports",
-                title: "Analytics",
-                desc: "View detailed reports",
-                icon: BarChart3,
-              },
-            ] as const
-          ).map((item) => (
-            <Link key={item.href} href={item.href} className="block h-full min-h-[140px]">
-              <Card className="h-full translate-y-0 transform-gpu will-change-transform transition-[transform,box-shadow] duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)] motion-safe:hover:-translate-y-1 hover:shadow-md">
-                <div className="flex h-full min-h-[140px] flex-col items-center justify-center gap-3 px-5 py-8 text-center">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
-                    <item.icon className="h-5 w-5" />
+        <div className="grid grid-cols-2 gap-2">
+          {QUICK_ACTIONS.map((action) => (
+            <Link key={action.href} href={action.href}>
+              <Card className="border border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md">
+                <CardContent className="flex items-center gap-2 p-2 sm:p-2.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60 text-foreground">
+                    <action.icon className="h-3.5 w-3.5" />
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">{item.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
-                  </div>
-                </div>
+                  <span className="text-xs font-medium sm:text-sm">{action.label}</span>
+                  <Plus className="ml-auto h-3 w-3 text-muted-foreground" />
+                </CardContent>
               </Card>
             </Link>
           ))}
-        </StaggerGrid>
+        </div>
       </div>
 
-      {/* Branch performance */}
+      {/* Revenue — fixed 4-card grid */}
+      {dashboardView !== "technician" && (
       <div>
-        <p className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <BarChart3 className="w-4 h-4 text-muted-foreground" />
-          Branch Performance (Last 30 Days)
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          Revenue
         </p>
-        <StaggerGrid className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {branchPerformance.map(
-            ({ branch, code, revenue, bookings, completed, completionRate, jobCards, rating }) => (
-              <Card key={branch.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{branch.name}</CardTitle>
-                  <p className="text-xs font-mono text-muted-foreground">{code}</p>
-                </CardHeader>
-                <CardContent className="grid gap-2 text-sm">
-                  {(
-                    [
-                      ["Revenue", formatCurrency(revenue)],
-                      ["Bookings", String(bookings)],
-                      ["Completed", String(completed)],
-                      ["Completion Rate", `${completionRate}%`],
-                      ["Job Cards", String(jobCards)],
-                      ["Rating", String(rating)],
-                    ] as const
-                  ).map(([label, val]) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between gap-4 border-b border-border/60 py-2 last:border-0"
-                    >
-                      <span className="text-muted-foreground">{label}</span>
-                      <span
-                        className={
-                          label === "Revenue"
-                            ? "font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
-                            : label === "Completion Rate"
-                              ? "font-medium text-blue-600 dark:text-blue-400 tabular-nums"
-                              : "font-medium tabular-nums text-right"
-                        }
-                      >
-                        {val}
-                      </span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )
-          )}
+        <StaggerGrid className="grid grid-cols-2 gap-2 items-stretch">
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="emerald"
+            title="Revenue"
+            value={formatCurrency(stats.dailyRevenue)}
+            isEmpty={stats.dailyRevenue === 0}
+            emptyLabel="No revenue today"
+            emptyHint="Revenue will appear after first invoice"
+            icon={IndianRupee}
+            trend={dailyRevenueTrend}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="amber"
+            title="Pending"
+            value={stats.pendingPayments}
+            isEmpty={stats.pendingPayments === 0}
+            emptyLabel="All clear"
+            emptyHint="No pending collections"
+            icon={AlertCircle}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="blue"
+            title="Profit"
+            value={formatCurrency(stats.netProfitToday)}
+            isEmpty={stats.netProfitToday === 0}
+            emptyLabel="No profit today"
+            icon={IndianRupee}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="rose"
+            title="Expenses"
+            value={formatCurrency(stats.totalExpensesToday)}
+            isEmpty={stats.totalExpensesToday === 0}
+            emptyLabel="No expenses today"
+            icon={TrendingDown}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
         </StaggerGrid>
       </div>
+      )}
 
-      {/* Today's Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Technician focus KPIs */}
+      {dashboardView === "technician" && (
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          My work
+        </p>
+        <StaggerGrid className="grid grid-cols-3 gap-2">
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="blue"
+            title="Assigned"
+            value={technicianStats.assigned}
+            icon={ClipboardList}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="violet"
+            title="In Progress"
+            value={technicianStats.inProgress}
+            icon={Wrench}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
+          <KPICard
+            size="compact"
+            surface="minimal"
+            tone="emerald"
+            title="Completed"
+            value={technicianStats.completed}
+            icon={CheckCircle2}
+            titleClassName="text-[11px] leading-tight"
+            valueClassName="text-base sm:text-lg tabular-nums"
+          />
+        </StaggerGrid>
+      </div>
+      )}
+
+      {/* Today's activity — desktop only to reduce mobile scroll */}
+      {(todaysBookingsLive.length > 0 || readyForDeliveryLive.length > 0) && (
+      <div className="hidden lg:grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+        {todaysBookingsLive.length > 0 ? (
         <Card>
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-3 sm:px-6 sm:pb-3">
             <div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-muted-foreground" />
-                <CardTitle className="text-base font-semibold">Today&apos;s Bookings</CardTitle>
+                <CardTitle className="text-sm font-semibold sm:text-base">Today&apos;s Bookings</CardTitle>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Job cards created today</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Job cards created today</p>
             </div>
             <Button
               variant="ghost"
               size="sm"
+              className="h-8 px-2"
               onClick={() => {
                 setActiveFilter(DASHBOARD_FILTER.TODAYS_BOOKINGS);
                 router.push("/job-cards");
@@ -777,48 +732,45 @@ export default function DashboardPage() {
               View all <ArrowRight className="w-3 h-3 ml-1" />
             </Button>
           </CardHeader>
-          <CardContent className="pt-0">
-            {todaysBookingsLive.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No bookings today</p>
-            ) : (
-              <div className="max-h-[min(260px,45vh)] overflow-y-auto overscroll-contain space-y-3 pr-1 -mr-0.5 [scrollbar-gutter:stable]">
+          <CardContent className="px-4 pt-0 pb-4 sm:px-6 sm:pb-6">
+              <div className="max-h-[min(220px,40vh)] overflow-y-auto overscroll-contain space-y-2 pr-1 [scrollbar-gutter:stable]">
                 {todaysBookingsLive.map((jc) => (
                   <Link
                     key={jc.id}
                     href={`/job-cards/${jc.id}`}
-                    className="flex shrink-0 items-center justify-between rounded-lg border border-border p-3 transition-[background-color,border-color] duration-[850ms] ease-[cubic-bezier(0.45,0,0.55,1)] hover:bg-muted/50"
+                    className="flex items-center justify-between rounded-lg border border-border p-2.5 hover:bg-muted/50 sm:p-3"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">{jc.jobNumber}</span>
                         <JobCardStatusBadge status={jc.status} />
                       </div>
-                      <p className="text-sm font-medium mt-1 truncate">{jc.customerName}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-medium mt-0.5 truncate">{jc.customerName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
                       </p>
                     </div>
-                    <div className="text-right ml-4">
-                      <p className="text-xs text-muted-foreground">
-                        {jc.mechanicName || "Unassigned"}
-                      </p>
-                    </div>
+                    <p className="text-[11px] text-muted-foreground ml-3 shrink-0">
+                      {jc.mechanicName || "Unassigned"}
+                    </p>
                   </Link>
                 ))}
               </div>
-            )}
           </CardContent>
         </Card>
+        ) : null}
 
+        {readyForDeliveryLive.length > 0 ? (
         <Card>
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-3 sm:px-6 sm:pb-3">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <CardTitle className="text-base font-semibold">Ready for Delivery</CardTitle>
+              <CardTitle className="text-sm font-semibold sm:text-base">Ready for Delivery</CardTitle>
             </div>
             <Button
               variant="ghost"
               size="sm"
+              className="h-8 px-2"
               onClick={() => {
                 setActiveFilter(DASHBOARD_FILTER.READY_FOR_DELIVERY);
                 router.push("/job-cards");
@@ -827,41 +779,34 @@ export default function DashboardPage() {
               View all <ArrowRight className="w-3 h-3 ml-1" />
             </Button>
           </CardHeader>
-          <CardContent className="pt-0">
-            {readyForDeliveryLive.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No vehicles ready for delivery
-              </p>
-            ) : (
-              <div className="max-h-[min(260px,45vh)] overflow-y-auto overscroll-contain space-y-3 pr-1 -mr-0.5 [scrollbar-gutter:stable]">
+          <CardContent className="px-4 pt-0 pb-4 sm:px-6 sm:pb-6">
+              <div className="max-h-[min(220px,40vh)] overflow-y-auto overscroll-contain space-y-2 pr-1 [scrollbar-gutter:stable]">
                 {readyForDeliveryLive.map((jc) => (
                   <div
                     key={jc.id}
-                    className="flex shrink-0 items-center gap-2 rounded-lg border border-border p-3 transition-[background-color,border-color] duration-[850ms] ease-[cubic-bezier(0.45,0,0.55,1)] hover:bg-muted/50"
+                    className="flex items-center gap-2 rounded-lg border border-border p-2.5 hover:bg-muted/50 sm:p-3"
                   >
                     <Link
                       href={`/job-cards/${jc.id}`}
-                      className="flex flex-1 min-w-0 items-center justify-between gap-3"
+                      className="flex flex-1 min-w-0 items-center justify-between gap-2"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs text-muted-foreground">{jc.jobNumber}</span>
                           <JobCardStatusBadge status={jc.status} />
                         </div>
-                        <p className="text-sm font-medium mt-1 truncate">{jc.customerName}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm font-medium mt-0.5 truncate">{jc.customerName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
                           {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
                         </p>
                       </div>
-                      <div className="text-right ml-4 shrink-0">
-                        <p className="text-xs text-muted-foreground">{jc.customerPhone}</p>
-                      </div>
+                      <p className="text-[11px] text-muted-foreground shrink-0">{jc.customerPhone}</p>
                     </Link>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 shrink-0 text-[#25D366] hover:text-[#128C7E] hover:bg-emerald-500/10"
+                      className="h-8 w-8 shrink-0 text-[#25D366] hover:text-[#128C7E] hover:bg-emerald-500/10"
                       title="WhatsApp: ready for pickup"
                       onClick={() => notifyJobReadyWhatsApp(jc, businessName)}
                     >
@@ -870,66 +815,81 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            )}
           </CardContent>
         </Card>
+        ) : null}
       </div>
+      )}
 
-      {/* Recent bookings table */}
+      {/* Recent bookings */}
+      {recentBookings.length > 0 && (
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-4">
-          <CardTitle className="text-base font-semibold">Recent Bookings</CardTitle>
-          <Button variant="default" size="sm" asChild>
-            <Link href="/bookings">View All Bookings</Link>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 px-4 py-3 sm:px-6 sm:pb-4">
+          <div className="min-w-0">
+            <CardTitle className="text-sm font-semibold sm:text-base">
+              Recent Bookings ({recentBookings.length})
+            </CardTitle>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Latest activity</p>
+          </div>
+          <Button variant="default" size="sm" className="h-8 shrink-0" asChild>
+            <Link href="/bookings">View All</Link>
           </Button>
         </CardHeader>
-        <CardContent className="pt-0">
-          <div className="md:hidden space-y-2">
-            {recentBookings.slice(0, 10).map((jc, i) => (
+        <CardContent className="px-4 pt-0 pb-4 sm:px-6 sm:pb-6">
+          <div className="md:hidden space-y-1.5">
+            {recentBookings.slice(0, 8).map((jc, i) => (
               <div
                 key={jc.id}
                 className={cn(
-                  "rounded-lg border border-border/80 p-3 text-sm",
+                  "rounded-lg border border-border/80 p-2 text-sm",
                   i % 2 === 0 ? "bg-background" : "bg-muted/25"
                 )}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</span>
-                  <JobCardStatusBadge status={jc.status} className="shrink-0 whitespace-nowrap text-[10px]" />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] font-semibold text-primary">
+                    {jc.jobNumber}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <JobCardStatusBadge
+                      status={jc.status}
+                      className="whitespace-nowrap text-[10px]"
+                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          aria-label="Booking actions"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/job-cards/${jc.id}`}>Open job card</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setRecentBookingPreview(jc)}>
+                          Quick view
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-                <p className="font-medium mt-1.5 leading-tight">{jc.customerName}</p>
-                <p className="text-xs text-muted-foreground mt-1">{jc.services[0]?.name ?? "—"}</p>
-                <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                  <dt className="text-muted-foreground">Booking date</dt>
-                  <dd className="text-foreground">
-                    {jc.expectedDelivery ? formatDate(jc.expectedDelivery) : "—"}
-                  </dd>
-                  <dt className="text-muted-foreground">Booked on</dt>
-                  <dd className="text-foreground">{formatDate(jc.createdAt)}</dd>
-                  <dt className="text-muted-foreground">Price</dt>
-                  <dd className="text-foreground tabular-nums font-medium">{formatCurrency(jc.estimatedAmount)}</dd>
-                  <dt className="text-muted-foreground">Branch</dt>
-                  <dd className="text-foreground min-w-0 truncate">{branchNameById[jc.branchId] ?? jc.branchId}</dd>
-                </dl>
-                <div className="flex items-center justify-end gap-1 mt-3 pt-2 border-t border-border/80">
-                  <Button variant="outline" size="sm" className="h-8" asChild>
-                    <Link href={`/job-cards/${jc.id}`}>
-                      <ClipboardList className="w-3.5 h-3.5 mr-1.5" />
-                      Job card
-                    </Link>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    title="Quick preview"
-                    aria-label="Quick preview booking"
-                    onClick={() => setRecentBookingPreview(jc)}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </div>
+                <p className="font-medium text-sm leading-tight truncate mt-0.5">
+                  {jc.customerName}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {jc.services[0]?.name ?? "—"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                  {formatCurrency(jc.estimatedAmount)}
+                  <span className="mx-1.5 text-border">•</span>
+                  {jc.expectedDelivery
+                    ? formatDate(jc.expectedDelivery)
+                    : formatDate(jc.createdAt)}
+                </p>
               </div>
             ))}
           </div>
@@ -973,21 +933,21 @@ export default function DashboardPage() {
                     </td>
                     <td className="px-3 py-3.5 align-middle text-center">
                       <div className="inline-flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Open job card">
-                          <Link href={`/job-cards/${jc.id}`} aria-label="Open job card">
-                            <ClipboardList className="w-4 h-4" />
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                          <Link href={`/job-cards/${jc.id}`}>
+                            <ClipboardList className="w-3.5 h-3.5 mr-1" />
+                            Job card
                           </Link>
                         </Button>
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Quick preview"
-                          aria-label="Quick preview booking"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
                           onClick={() => setRecentBookingPreview(jc)}
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5 mr-1" />
+                          View
                         </Button>
                       </div>
                     </td>
@@ -998,6 +958,537 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {/* Branch performance — admin only */}
+      {dashboardView === "admin" && (
+      <div>
+        <p className="text-xs font-semibold flex items-center gap-2 mb-2 sm:text-sm sm:mb-3">
+          <BarChart3 className="w-4 h-4 text-muted-foreground" />
+          Branch Performance (30 days)
+        </p>
+        <StaggerGrid className="grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-2">
+          {branchPerformance.map(
+            ({ branch, code, revenue, bookings, completed, completionRate }) => (
+              <Card key={branch.id}>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-sm font-semibold truncate">{branch.name}</p>
+                    <span className="text-[10px] font-mono text-muted-foreground shrink-0">{code}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Revenue</p>
+                      <p className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                        {formatCurrency(revenue)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Bookings</p>
+                      <p className="font-medium tabular-nums">{bookings}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Completed</p>
+                      <p className="font-medium tabular-nums">{completed}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Completion</p>
+                      <p className="font-medium text-blue-600 dark:text-blue-400 tabular-nums">
+                        {completionRate}%
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          )}
+        </StaggerGrid>
+      </div>
+      )}
+
+      </div>
+
+      {/* ——— Desktop layout (unchanged classic dashboard) ——— */}
+      <div className="hidden md:block space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                Viewing:{" "}
+                <span className="font-medium text-foreground">{viewingLabel}</span>
+              </span>
+              <span className="text-muted-foreground/70">&middot;</span>
+              <time dateTime={new Date().toISOString().slice(0, 10)} className="tabular-nums">
+                {formatDate(new Date())}
+              </time>
+            </p>
+          </div>
+          <Link href="/job-cards/new" className="shrink-0">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              New Job Card
+            </Button>
+          </Link>
+        </div>
+
+        {alerts.length > 0 &&
+          (reduceMotion ? (
+            <div className="flex flex-wrap gap-2">
+              {alerts.map((alert) => {
+                const filterMap: Record<string, string> = {
+                  overdue: DASHBOARD_FILTER.OVERDUE,
+                  stock: DASHBOARD_FILTER.LOW_STOCK,
+                  payments: DASHBOARD_FILTER.PENDING_PAYMENT,
+                  reminders: DASHBOARD_FILTER.DUE_SOON,
+                  inactive: DASHBOARD_FILTER.INACTIVE,
+                };
+                const filter = filterMap[alert.id];
+                return (
+                  <button
+                    key={alert.id}
+                    type="button"
+                    onClick={() => {
+                      if (filter) setActiveFilter(filter);
+                      router.push(alert.href);
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left hover:shadow-sm`}
+                  >
+                    <alert.icon className={`w-4 h-4 ${alert.color}`} />
+                    <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
+                    <span className="text-xs text-muted-foreground">{alert.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <motion.div
+              variants={alertStaggerContainer}
+              initial="hidden"
+              animate="show"
+              className="flex flex-wrap gap-2"
+            >
+              {alerts.map((alert) => {
+                const filterMap: Record<string, string> = {
+                  overdue: DASHBOARD_FILTER.OVERDUE,
+                  stock: DASHBOARD_FILTER.LOW_STOCK,
+                  payments: DASHBOARD_FILTER.PENDING_PAYMENT,
+                  reminders: DASHBOARD_FILTER.DUE_SOON,
+                  inactive: DASHBOARD_FILTER.INACTIVE,
+                };
+                const filter = filterMap[alert.id];
+                return (
+                  <motion.button
+                    key={alert.id}
+                    type="button"
+                    variants={alertStaggerItem}
+                    onClick={() => {
+                      if (filter) setActiveFilter(filter);
+                      router.push(alert.href);
+                    }}
+                    whileTap={{ scale: 0.99 }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left hover:shadow-sm`}
+                  >
+                    <alert.icon className={`w-4 h-4 ${alert.color}`} />
+                    <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
+                    <span className="text-xs text-muted-foreground">{alert.label}</span>
+                  </motion.button>
+                );
+              })}
+            </motion.div>
+          ))}
+
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Revenue &amp; collections
+          </p>
+          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <KPICard
+              tone="emerald"
+              title="Total Revenue"
+              value={formatCurrency(executive.totalRevenue30d)}
+              subtitle="Last 30 days"
+              icon={IndianRupee}
+              trend={
+                executive.totalRevenue30d > 0 ? executive.revenueTrend : undefined
+              }
+            />
+            <KPICard
+              tone="emerald"
+              title="Today's Revenue"
+              value={formatCurrency(stats.dailyRevenue)}
+              subtitle="collected"
+              icon={IndianRupee}
+            />
+            <KPICard
+              tone="blue"
+              title="Net Profit Today"
+              value={formatCurrency(stats.netProfitToday)}
+              subtitle="revenue − expenses"
+              icon={IndianRupee}
+            />
+            <KPICard
+              tone="amber"
+              title="Pending Payments"
+              value={stats.pendingPayments}
+              subtitle="awaiting collection"
+              icon={AlertCircle}
+            />
+            <KPICard
+              tone="rose"
+              title="Expenses Today"
+              value={formatCurrency(stats.totalExpensesToday)}
+              subtitle="today"
+              icon={TrendingDown}
+            />
+          </StaggerGrid>
+        </div>
+
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Overview
+          </p>
+          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <KPICard tone="blue" title={"Today's Jobs"} value={executive.todaysJobCount} icon={Calendar} />
+            <KPICard tone="amber" title="Pending Bookings" value={executive.pendingBookings} icon={Clock} />
+            <KPICard
+              tone="violet"
+              title="Completed Services"
+              value={executive.completed30d}
+              subtitle="Last 30 days"
+              icon={CheckCircle2}
+            />
+            <KPICard tone="orange" title="Average Rating" value={stats.averageRating.toFixed(1)} icon={Star} />
+            <KPICard tone="blue" title="Active Customers" value={executive.activeCustomers} icon={Users} />
+          </StaggerGrid>
+        </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-6 pb-4">
+            <CardTitle className="text-base">Today&apos;s Jobs</CardTitle>
+            <Button variant="link" className="h-auto p-0 text-emerald-600" asChild>
+              <Link href="/job-cards">Show</Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <StaggerGrid className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {(
+                [
+                  {
+                    label: "Total",
+                    value: todaysFunnel.total,
+                    className:
+                      "bg-slate-100/90 text-slate-900 dark:bg-slate-800/50 dark:text-slate-100",
+                  },
+                  {
+                    label: "Assigned",
+                    value: todaysFunnel.assigned,
+                    className:
+                      "bg-sky-100/90 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100",
+                  },
+                  {
+                    label: "In Progress",
+                    value: todaysFunnel.inProgress,
+                    className:
+                      "bg-violet-100/90 text-violet-900 dark:bg-violet-950/40 dark:text-violet-100",
+                  },
+                  {
+                    label: "Completed",
+                    value: todaysFunnel.completed,
+                    className:
+                      "bg-emerald-100/90 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100",
+                  },
+                ] as const
+              ).map((tile) => (
+                <div
+                  key={tile.label}
+                  className={`flex min-h-28 flex-col items-center justify-center rounded-xl px-3 py-5 text-center ${tile.className}`}
+                >
+                  <p className="text-xs font-medium opacity-80">{tile.label}</p>
+                  <p className="mt-1 text-3xl font-bold tabular-nums">{tile.value}</p>
+                </div>
+              ))}
+            </StaggerGrid>
+          </CardContent>
+        </Card>
+
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Operations
+          </p>
+          <StaggerGrid className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <KPICard tone="blue" title="Cars Received" value={stats.carsReceivedToday} subtitle="today" icon={Car} />
+            <KPICard tone="violet" title="Cars Delivered" value={stats.carsDeliveredToday} subtitle="today" icon={CarFront} />
+            <KPICard tone="orange" title="In Progress" value={stats.inProgressServices} subtitle="services" icon={Wrench} />
+            <KPICard tone="emerald" title="Active Job Cards" value={stats.activeJobCards} subtitle="in progress" icon={ClipboardList} />
+            <KPICard tone="blue" title="New Customers" value={stats.newCustomersToday} subtitle="today" icon={UserPlus} />
+            <KPICard tone="slate" title="Inactive Customers" value={stats.inactiveCustomers} subtitle="need follow-up" icon={UserX} />
+          </StaggerGrid>
+        </div>
+
+        {(todaysBookingsLive.length > 0 || readyForDeliveryLive.length > 0) && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {todaysBookingsLive.length > 0 ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-6 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <CardTitle className="text-base">Today&apos;s Bookings</CardTitle>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Job cards created today</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => {
+                  setActiveFilter(DASHBOARD_FILTER.TODAYS_BOOKINGS);
+                  router.push("/job-cards");
+                }}
+              >
+                View all <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <div className="max-h-[min(280px,40vh)] overflow-y-auto overscroll-contain space-y-2 pr-1 [scrollbar-gutter:stable]">
+                {todaysBookingsLive.map((jc) => (
+                  <Link
+                    key={jc.id}
+                    href={`/job-cards/${jc.id}`}
+                    className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground">{jc.jobNumber}</span>
+                        <JobCardStatusBadge status={jc.status} />
+                      </div>
+                      <p className="text-sm font-medium mt-0.5 truncate">{jc.customerName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground ml-3 shrink-0">
+                      {jc.mechanicName || "Unassigned"}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          ) : null}
+
+          {readyForDeliveryLive.length > 0 ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-6 pb-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <CardTitle className="text-base">Ready for Delivery</CardTitle>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => {
+                  setActiveFilter(DASHBOARD_FILTER.READY_FOR_DELIVERY);
+                  router.push("/job-cards");
+                }}
+              >
+                View all <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </CardHeader>
+            <CardContent className="px-6 pb-6">
+              <div className="max-h-[min(280px,40vh)] overflow-y-auto overscroll-contain space-y-2 pr-1 [scrollbar-gutter:stable]">
+                {readyForDeliveryLive.map((jc) => (
+                  <div
+                    key={jc.id}
+                    className="flex items-center gap-2 rounded-lg border border-border p-3 hover:bg-muted/50"
+                  >
+                    <Link
+                      href={`/job-cards/${jc.id}`}
+                      className="flex flex-1 min-w-0 items-center justify-between gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">{jc.jobNumber}</span>
+                          <JobCardStatusBadge status={jc.status} />
+                        </div>
+                        <p className="text-sm font-medium mt-0.5 truncate">{jc.customerName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground shrink-0">{jc.customerPhone}</p>
+                    </Link>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-[#25D366] hover:text-[#128C7E] hover:bg-emerald-500/10"
+                      title="WhatsApp: ready for pickup"
+                      onClick={() => notifyJobReadyWhatsApp(jc, businessName)}
+                    >
+                      <WhatsAppIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          ) : null}
+        </div>
+        )}
+
+        {recentBookings.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-6 pb-4">
+            <CardTitle className="text-base">Recent Bookings</CardTitle>
+            <Button variant="default" size="sm" className="h-8" asChild>
+              <Link href="/bookings">View All</Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left">
+                    <th className="px-3 py-3.5 align-middle font-semibold whitespace-nowrap">ID</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold">Customer</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold">Service</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold whitespace-nowrap">Booking Date</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold whitespace-nowrap">Booked On</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold whitespace-nowrap">Price</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold min-w-[140px] w-[9rem]">Status</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold">Branch</th>
+                    <th className="px-3 py-3.5 align-middle font-semibold text-center w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentBookings.slice(0, 10).map((jc, i) => (
+                    <tr key={jc.id} className={cnRow(i)}>
+                      <td className="px-3 py-3.5 align-middle font-mono text-xs whitespace-nowrap">{jc.jobNumber}</td>
+                      <td className="px-3 py-3.5 align-middle font-medium max-w-[140px]">{jc.customerName}</td>
+                      <td className="px-3 py-3.5 align-middle text-muted-foreground max-w-[200px]">
+                        {jc.services[0]?.name ?? "—"}
+                      </td>
+                      <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
+                        {jc.expectedDelivery ? formatDate(jc.expectedDelivery) : "—"}
+                      </td>
+                      <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
+                        {formatDate(jc.createdAt)}
+                      </td>
+                      <td className="px-3 py-3.5 align-middle whitespace-nowrap tabular-nums">
+                        {formatCurrency(jc.estimatedAmount)}
+                      </td>
+                      <td className="px-3 py-3.5 align-middle">
+                        <JobCardStatusBadge status={jc.status} className="whitespace-nowrap shrink-0" />
+                      </td>
+                      <td className="px-3 py-3.5 align-middle text-muted-foreground max-w-[180px]">
+                        {branchNameById[jc.branchId] ?? jc.branchId}
+                      </td>
+                      <td className="px-3 py-3.5 align-middle text-center">
+                        <div className="inline-flex items-center justify-center gap-1">
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                            <Link href={`/job-cards/${jc.id}`}>
+                              <ClipboardList className="w-3.5 h-3.5 mr-1" />
+                              Job card
+                            </Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setRecentBookingPreview(jc)}
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-1" />
+                            View
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
+        <div>
+          <p className="text-xs font-semibold flex items-center gap-2 mb-3">
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
+            Branch Performance (30 days)
+          </p>
+          <StaggerGrid className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {branchPerformance.map(
+              ({ branch, code, revenue, bookings, completed, completionRate }) => (
+                <Card key={branch.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-sm font-semibold truncate">{branch.name}</p>
+                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">{code}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Revenue</p>
+                        <p className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          {formatCurrency(revenue)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Bookings</p>
+                        <p className="font-medium tabular-nums">{bookings}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Completed</p>
+                        <p className="font-medium tabular-nums">{completed}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Completion</p>
+                        <p className="font-medium text-blue-600 dark:text-blue-400 tabular-nums">
+                          {completionRate}%
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            )}
+          </StaggerGrid>
+        </div>
+
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Quick actions
+          </p>
+          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {(
+              [
+                { href: "/job-cards", title: "Manage Job Cards", desc: "View and assign jobs", icon: Wrench },
+                { href: "/services", title: "Service Packages", desc: "Manage services", icon: Calendar },
+                { href: "/customers", title: "Users", desc: "Manage customers & staff", icon: Users },
+                { href: "/reports", title: "Analytics", desc: "View detailed reports", icon: BarChart3 },
+              ] as const
+            ).map((item) => (
+              <Link key={item.href} href={item.href} className="block h-full min-h-[140px]">
+                <Card className="h-full translate-y-0 transform-gpu will-change-transform transition-[transform,box-shadow] duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)] motion-safe:hover:-translate-y-1 hover:shadow-md">
+                  <div className="flex h-full min-h-[140px] flex-col items-center justify-center gap-3 px-5 py-8 text-center">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </StaggerGrid>
+        </div>
+      </div>
 
       <Dialog
         open={recentBookingPreview !== null}

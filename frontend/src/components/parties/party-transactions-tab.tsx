@@ -36,7 +36,7 @@ function SortableHeader({
       <button
         type="button"
         onClick={onClick}
-        className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:text-foreground/80 transition-colors"
+        className="inline-flex items-center gap-1.5 font-semibold text-foreground transition-colors hover:text-foreground/80"
       >
         {label}
         <ArrowUpDown
@@ -45,6 +45,33 @@ function SortableHeader({
         />
       </button>
     </th>
+  );
+}
+
+function StatusBadge({ row }: { row: PartyTransactionRow }) {
+  if (!row.status) return null;
+  return (
+    <Badge
+      variant={
+        row.statusTone === "success"
+          ? "success"
+          : row.statusTone === "warning"
+            ? "warning"
+            : "secondary"
+      }
+      className="h-5 shrink-0 px-1.5 text-[10px]"
+    >
+      {row.status}
+    </Badge>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex min-h-[160px] flex-col items-center justify-center px-6 py-10 text-center md:min-h-[280px] md:py-16">
+      <PartyTransactionsEmptyIcon className="mb-4 h-[54px] w-[54px] shrink-0" />
+      <p className="text-sm text-[#858D9D]">No transactions for the selected time period</p>
+    </div>
   );
 }
 
@@ -74,9 +101,53 @@ export function PartyTransactionsTab({ rows }: PartyTransactionsTabProps) {
     return copy;
   }, [rows, sortKey, sortDir]);
 
+  const goTo = (href?: string) => {
+    if (href) router.push(href);
+  };
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background">
-      <div className="overflow-x-auto">
+      <div className="space-y-2 p-3 md:hidden">
+        {sortedRows.length === 0 ? (
+          <EmptyState />
+        ) : (
+          sortedRows.map((r) => (
+            <div
+              key={r.id}
+              role={r.href ? "button" : undefined}
+              tabIndex={r.href ? 0 : undefined}
+              onClick={() => goTo(r.href)}
+              onKeyDown={(e) => {
+                if (r.href && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  goTo(r.href);
+                }
+              }}
+              className={cn(
+                "rounded-lg border border-border bg-card p-3 text-sm shadow-sm",
+                r.href && "cursor-pointer transition-colors hover:border-primary/30 hover:bg-muted/40"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground">{formatDate(r.at)}</span>
+                <StatusBadge row={r} />
+              </div>
+              <p className="mt-1 text-sm font-medium leading-tight">{r.typeLabel}</p>
+              <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{r.reference}</p>
+              <p className="mt-1.5 text-sm font-bold tabular-nums">
+                {formatInrTable(r.amount)}
+                {r.unpaidAmount != null && r.unpaidAmount > 0.01 ? (
+                  <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">
+                    {formatInrTable(r.unpaidAmount)} unpaid
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr>
@@ -99,12 +170,7 @@ export function PartyTransactionsTab({ rows }: PartyTransactionsTabProps) {
             {sortedRows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="border-t border-border bg-background p-0">
-                  <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-16 text-center">
-                    <PartyTransactionsEmptyIcon className="mb-4 h-[54px] w-[54px] shrink-0" />
-                    <p className="text-sm text-[#858D9D]">
-                      No transactions for the selected time period
-                    </p>
-                  </div>
+                  <EmptyState />
                 </td>
               </tr>
             ) : (
@@ -117,18 +183,18 @@ export function PartyTransactionsTab({ rows }: PartyTransactionsTabProps) {
                   )}
                   tabIndex={r.href ? 0 : undefined}
                   role={r.href ? "link" : undefined}
-                  onClick={() => r.href && router.push(r.href)}
+                  onClick={() => goTo(r.href)}
                   onKeyDown={(e) => {
                     if (r.href && (e.key === "Enter" || e.key === " ")) {
                       e.preventDefault();
-                      router.push(r.href);
+                      goTo(r.href);
                     }
                   }}
                 >
                   <td className={cn(tdClass, "whitespace-nowrap")}>{formatDate(r.at)}</td>
                   <td className={tdClass}>{r.typeLabel}</td>
                   <td className={cn(tdClass, "font-mono text-xs")}>{r.reference}</td>
-                  <td className={cn(tdClass, "tabular-nums font-medium")}>
+                  <td className={cn(tdClass, "font-medium tabular-nums")}>
                     {formatInrTable(r.amount)}
                     {r.unpaidAmount != null && r.unpaidAmount > 0.01 && (
                       <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
@@ -137,19 +203,7 @@ export function PartyTransactionsTab({ rows }: PartyTransactionsTabProps) {
                     )}
                   </td>
                   <td className={tdClass}>
-                    {r.status ? (
-                      <Badge
-                        variant={
-                          r.statusTone === "success"
-                            ? "success"
-                            : r.statusTone === "warning"
-                              ? "warning"
-                              : "secondary"
-                        }
-                      >
-                        {r.status}
-                      </Badge>
-                    ) : null}
+                    <StatusBadge row={r} />
                   </td>
                 </tr>
               ))

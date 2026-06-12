@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
-import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
+import { MobileFilterSheet } from "@/components/shared/mobile-filter-sheet";
+import { KPICard } from "@/components/shared/kpi-card";
 import {
   DesktopTableWrap,
   MobileCardList,
@@ -43,6 +44,8 @@ import {
   X,
   Pencil,
   Trash2,
+  SlidersHorizontal,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -122,12 +125,22 @@ export default function PayrollPage() {
   const todayYear = today.getFullYear();
   const recordsFilterCount = useMemo(() => {
     let n = 0;
+    if (showBranchPicker && branchFilter !== "all") n += 1;
     if (filterMonth !== todayMonth) n += 1;
     if (filterYear !== todayYear) n += 1;
     if (statusFilter !== "ALL") n += 1;
     if (pageSize !== 10) n += 1;
     return n;
-  }, [filterMonth, filterYear, statusFilter, pageSize, todayMonth, todayYear]);
+  }, [
+    showBranchPicker,
+    branchFilter,
+    filterMonth,
+    filterYear,
+    statusFilter,
+    pageSize,
+    todayMonth,
+    todayYear,
+  ]);
 
   useEffect(() => {
     if (!showBranchPicker) {
@@ -257,16 +270,39 @@ export default function PayrollPage() {
   const viewLabel = `Today (${formatDate(viewDate)})`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <PageHeader
         title="Salary & Payroll"
         description="Manage staff salaries, bonuses, and disbursements. Configure pay rules by role and experience band."
+        hideDescriptionOnMobile
+        inlineActionsOnMobile
+        actions={
+          <Button
+            type="button"
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={handleGenerate}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Generate Payroll
+          </Button>
+        }
       />
 
-      <Card>
-        <CardContent className="p-4 flex flex-col gap-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-            <div className="space-y-1.5 min-w-[160px]">
+      <div className="space-y-1 md:hidden">
+        <Input
+          type="date"
+          value={viewDate}
+          onChange={(e) => setViewDate(e.target.value)}
+          className="h-9"
+        />
+        <p className="text-[11px] leading-tight text-muted-foreground">{viewLabel}</p>
+      </div>
+
+      <Card className="hidden md:block">
+        <CardContent className="flex flex-col gap-2 p-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-end">
+            <div className="min-w-[160px] space-y-1.5">
               <Label className="text-xs text-muted-foreground">Date</Label>
               <Input
                 type="date"
@@ -276,7 +312,7 @@ export default function PayrollPage() {
               />
             </div>
             {showBranchPicker ? (
-              <div className="space-y-1.5 min-w-[180px]">
+              <div className="min-w-[180px] space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Branch</Label>
                 <Select value={branchFilter} onValueChange={setBranchFilter}>
                   <SelectTrigger>
@@ -292,20 +328,7 @@ export default function PayrollPage() {
                   </SelectContent>
                 </Select>
               </div>
-            ) : (
-              <div className="space-y-1.5 min-w-[180px]">
-                <Label className="text-xs text-muted-foreground">Branch</Label>
-                <p className="text-sm font-medium h-10 flex items-center">{viewingLabel}</p>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" size="sm" disabled>
-                Compare
-              </Button>
-              <Button type="button" variant="secondary" size="sm" disabled>
-                Full
-              </Button>
-            </div>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
@@ -317,12 +340,13 @@ export default function PayrollPage() {
               Reset
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Showing: {viewLabel} &middot;{" "}
-            {branchFilter === "all"
-              ? "All branches"
-              : branches.find((b) => b.id === branchFilter)?.name ?? branchFilter}
-          </p>
+          {showBranchPicker ? (
+            <p className="text-xs text-muted-foreground">
+              Showing: {viewLabel} &middot; {branchScopeLabel}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Showing: {viewLabel}</p>
+          )}
         </CardContent>
       </Card>
 
@@ -332,218 +356,104 @@ export default function PayrollPage() {
           <TabsTrigger value="structures">Salary Structures</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="records" className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-5 flex flex-col justify-center min-h-[120px]">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Gross earnings
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-2xl font-bold tabular-nums">{formatCurrency(kpis.gross)}</p>
-                  <TrendingUp className="w-8 h-8 text-emerald-500 opacity-90" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5 flex flex-col justify-center min-h-[120px]">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Total deductions
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-2xl font-bold tabular-nums">
-                    {formatCurrency(kpis.deductions)}
-                  </p>
-                  <TrendingDown className="w-8 h-8 text-red-500 opacity-90" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5 flex flex-col justify-center min-h-[120px]">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Net payout
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Total salary after additions and deductions
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-2xl font-bold tabular-nums">{formatCurrency(kpis.net)}</p>
-                  <Wallet className="w-8 h-8 text-blue-500 opacity-90" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-5 flex flex-col justify-center min-h-[120px]">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Disbursements
-                </p>
-                <div className="mt-3 space-y-1 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Paid</span>
-                    <span className="font-semibold tabular-nums">{formatCurrency(kpis.paid)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Pending</span>
-                    <span className="font-semibold tabular-nums">
-                      {formatCurrency(kpis.pending)}
-                    </span>
-                  </div>
-                </div>
-                <CreditCard className="w-8 h-8 text-amber-500 opacity-90 mt-2 self-end" />
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardContent className="p-4 flex flex-col gap-4">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:flex-wrap">
-                <div className="flex-1 min-w-[200px] space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Search records</Label>
-                  <Input
-                    placeholder="Search records…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <MobileFilterTrigger
-                  onClick={() => setRecordsFilterOpen(true)}
-                  activeCount={recordsFilterCount}
-                  className="md:hidden"
+        <TabsContent value="records" className="flex flex-col gap-3 md:gap-4">
+          <div className="order-1 space-y-2 md:order-3">
+            <div className="flex flex-col gap-2 md:hidden">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search records…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-9 pl-9"
                 />
-                <div className="hidden md:grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Month</Label>
-                    <Select
-                      value={String(filterMonth)}
-                      onValueChange={(v) => setFilterMonth(Number(v))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MONTHS.map((m) => (
-                          <SelectItem key={m.v} value={String(m.v)}>
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Year</Label>
-                    <Select
-                      value={String(filterYear)}
-                      onValueChange={(v) => setFilterYear(Number(v))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[2024, 2025, 2026, 2027].map((y) => (
-                          <SelectItem key={y} value={String(y)}>
-                            {y}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select
-                      value={statusFilter}
-                      onValueChange={(v) => setStatusFilter(v as PayrollRecordStatus | "ALL")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUS_OPTIONS.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s === "ALL" ? "All status" : s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Show</Label>
-                    <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[10, 25, 50].map((n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n} records
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 justify-end xl:ml-auto">
-                  <Button type="button" variant="outline" onClick={() => recalculateAll()}>
-                    <RotateCw className="w-4 h-4 mr-2" />
-                    Recalculate All
-                  </Button>
-                  <Button type="button" onClick={handleGenerate}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Generate Payroll
-                  </Button>
-                </div>
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant={recordsFilterCount > 0 ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  onClick={() => setRecordsFilterOpen(true)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                  Filters
+                  {recordsFilterCount > 0 ? (
+                    <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-semibold leading-none">
+                      {recordsFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  onClick={() => recalculateAll()}
+                >
+                  <RotateCw className="h-3.5 w-3.5 shrink-0" />
+                  Recalculate
+                </Button>
+              </div>
+            </div>
 
-          <Card>
-            <CardContent className="p-0">
-              <div className="px-4 py-3 border-b">
-                <h2 className="text-sm font-semibold">
-                  Payroll Records ({filteredRecords.length})
-                </h2>
-              </div>
-              <>
-                {filteredRecords.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-16 px-4">
-                    No payroll records found. Click &quot;Generate Payroll&quot; to create rows
-                    from active staff and salary structures for the selected month.
-                  </p>
-                ) : (
-                  <>
-                  <MobileCardList className="p-3">
-                    {pagedRecords.map((r) => (
-                      <MobileRowCard key={r.id}>
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium leading-snug">{r.employeeName}</p>
-                          {statusBadge(r.status)}
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {MONTHS.find((m) => m.v === r.periodMonth)?.label.slice(0, 3)} {r.periodYear}
-                          {" · "}
-                          {r.attendanceDays} days
-                        </p>
-                        <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(r.netSalary)}</p>
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                          <span>Base: {formatCurrency(r.baseSalary)}</span>
-                          <span className="text-red-600/90">Ded: {formatCurrency(r.absenceDeduction)}</span>
-                        </div>
-                        {r.status === "PENDING" && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="mt-3 w-full"
-                            onClick={() => {
-                              setRecordStatus(r.id, "PAID");
-                              toast.success("Marked as paid.");
-                            }}
-                          >
-                            Mark paid
-                          </Button>
-                        )}
-                      </MobileRowCard>
-                    ))}
-                  </MobileCardList>
+            <Card>
+              <CardContent className="p-0">
+                <div className="border-b px-4 py-2.5 md:py-3">
+                  <h2 className="text-sm font-semibold">
+                    Payroll Records{" "}
+                    <span className="text-muted-foreground">({filteredRecords.length})</span>
+                  </h2>
+                </div>
+                <>
+                  {filteredRecords.length === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      No payroll records found. Tap &quot;Generate Payroll&quot; to create rows
+                      for the selected month.
+                    </p>
+                  ) : (
+                    <>
+                      <MobileCardList className="space-y-2 p-3 pb-20">
+                        {pagedRecords.map((r) => (
+                          <MobileRowCard key={r.id} className="p-3 shadow-none">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold leading-tight text-foreground">
+                                {r.employeeName}
+                              </p>
+                              {statusBadge(r.status)}
+                            </div>
+                            <p className="mt-1 text-base font-bold tabular-nums">
+                              {formatCurrency(r.netSalary)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Base {formatCurrency(r.baseSalary)} · Ded{" "}
+                              <span className="text-red-600/90">
+                                {formatCurrency(r.absenceDeduction)}
+                              </span>
+                            </p>
+                            <div className="mt-1.5 flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-muted-foreground">
+                                {MONTHS.find((m) => m.v === r.periodMonth)?.label.slice(0, 3)}{" "}
+                                {r.periodYear} · {r.attendanceDays} days
+                              </span>
+                              {r.status === "PENDING" ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 shrink-0 px-2.5 text-xs"
+                                  onClick={() => {
+                                    setRecordStatus(r.id, "PAID");
+                                    toast.success("Marked as paid.");
+                                  }}
+                                >
+                                  Mark paid
+                                </Button>
+                              ) : null}
+                            </div>
+                          </MobileRowCard>
+                        ))}
+                      </MobileCardList>
                   <DesktopTableWrap>
                   <table className="w-full min-w-[1000px] text-sm">
                     <thead>
@@ -619,6 +529,144 @@ export default function PayrollPage() {
                   </>
                 )}
               </>
+            </CardContent>
+          </Card>
+          </div>
+
+          <div className="order-2 grid grid-cols-2 gap-2 md:order-1 xl:grid-cols-4 md:gap-3">
+            <KPICard
+              size="compact"
+              title="Gross earnings"
+              value={formatCurrency(kpis.gross)}
+              icon={TrendingUp}
+              tone="emerald"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Total deductions"
+              value={formatCurrency(kpis.deductions)}
+              icon={TrendingDown}
+              tone="rose"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Net payout"
+              value={formatCurrency(kpis.net)}
+              subtitle="After deductions"
+              icon={Wallet}
+              tone="blue"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+            />
+            <KPICard
+              size="compact"
+              title="Disbursements"
+              value={formatCurrency(kpis.paid)}
+              subtitle={`Pending ${formatCurrency(kpis.pending)}`}
+              icon={CreditCard}
+              tone="amber"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-sm leading-tight tabular-nums sm:text-lg md:text-xl"
+            />
+          </div>
+
+          <Card className="order-3 hidden md:order-2 md:block">
+            <CardContent className="flex flex-col gap-3 p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-end">
+                <div className="min-w-[200px] flex-1 space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Search records</Label>
+                  <Input
+                    placeholder="Search records…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Month</Label>
+                    <Select
+                      value={String(filterMonth)}
+                      onValueChange={(v) => setFilterMonth(Number(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MONTHS.map((m) => (
+                          <SelectItem key={m.v} value={String(m.v)}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Year</Label>
+                    <Select
+                      value={String(filterYear)}
+                      onValueChange={(v) => setFilterYear(Number(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[2024, 2025, 2026, 2027].map((y) => (
+                          <SelectItem key={y} value={String(y)}>
+                            {y}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Status</Label>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(v) => setStatusFilter(v as PayrollRecordStatus | "ALL")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s === "ALL" ? "All status" : s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Show</Label>
+                    <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[10, 25, 50].map((n) => (
+                          <SelectItem key={n} value={String(n)}>
+                            {n} records
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 xl:ml-auto">
+                  <Button type="button" variant="outline" onClick={() => recalculateAll()}>
+                    <RotateCw className="mr-2 h-4 w-4" />
+                    Recalculate All
+                  </Button>
+                  <Button type="button" onClick={handleGenerate}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Generate Payroll
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -812,12 +860,31 @@ export default function PayrollPage() {
         title="Payroll filters"
         activeCount={recordsFilterCount}
         onReset={() => {
+          if (showBranchPicker) setBranchFilter("all");
           setFilterMonth(todayMonth);
           setFilterYear(todayYear);
           setStatusFilter("ALL");
           setPageSize(10);
         }}
       >
+        {showBranchPicker ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Branch</p>
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="h-10 w-full bg-background">
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <p className="text-sm font-medium">Month</p>

@@ -21,7 +21,7 @@ export function ServiceAddonCard({
 
   return (
     <Card className="overflow-hidden border-border/80 shadow-sm hover:shadow-md transition-shadow duration-500">
-      <CardContent className="p-4 sm:p-5 flex flex-col h-full">
+      <CardContent className="flex h-full flex-col p-3 sm:p-5">
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="font-semibold text-sm leading-snug pr-2">{service.name}</h3>
           <Badge className="shrink-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300">
@@ -57,24 +57,24 @@ export function ServiceAddonCard({
           <Clock className="h-3.5 w-3.5" />
           Duration: {formatServiceDurationLabel(service)}
         </p>
-        <div className="mt-auto flex flex-col gap-2 pt-4 sm:flex-row">
+        <div className="mt-auto flex flex-row gap-2 pt-3">
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            className="h-8 min-w-0 flex-1 gap-1 border-emerald-300 px-2 text-emerald-700 hover:bg-emerald-50 sm:flex-none sm:px-3"
             onClick={onEdit}
           >
-            <Pencil className="h-3.5 w-3.5 mr-1.5" />
-            Edit
+            <Pencil className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Edit</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 sm:w-auto"
+            className="h-8 min-w-0 flex-1 gap-1 border-destructive/30 px-2 text-destructive hover:bg-destructive/10 sm:flex-none sm:px-3"
             onClick={onDelete}
           >
-            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-            Delete
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Delete</span>
           </Button>
         </div>
       </CardContent>

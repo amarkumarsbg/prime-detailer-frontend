@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -37,7 +38,13 @@ function shouldHideBottomNav(pathname: string): boolean {
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
+  const toggleMobileOpen = useSidebarStore((s) => s.toggleMobileOpen);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname, setMobileOpen]);
 
   if (shouldHideBottomNav(pathname)) return null;
 
@@ -54,6 +61,7 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setMobileOpen(false)}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground"
@@ -66,9 +74,13 @@ export function MobileBottomNav() {
         })}
         <button
           type="button"
-          onClick={() => setMobileOpen(true)}
-          className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Open menu"
+          onClick={toggleMobileOpen}
+          aria-expanded={mobileOpen}
+          className={cn(
+            "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
+            mobileOpen ? "text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >
           <Menu className="size-5" aria-hidden />
           <span>More</span>

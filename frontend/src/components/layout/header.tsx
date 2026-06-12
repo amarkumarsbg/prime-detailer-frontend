@@ -3,7 +3,6 @@
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useSettingsStore } from "@/store/settings-store";
-import { useSidebarStore } from "@/store/sidebar-store";
 import { useScopedNotifications } from "@/hooks/use-scoped-data";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
 import { canOrgWideRole } from "@/lib/branch-selection";
@@ -34,7 +33,6 @@ import {
   Moon,
   Sun,
   User,
-  Menu,
   Wrench,
   Building2,
 } from "lucide-react";
@@ -45,7 +43,6 @@ export function Header() {
   const { user, currentBranch, logout, setBranch } = useAuthStore();
   const branchesFromStore = useBranchStore((s) => s.branches);
   const businessName = useSettingsStore((s) => s.businessName);
-  const toggleMobileOpen = useSidebarStore((s) => s.toggleMobileOpen);
   const scopedNotifications = useScopedNotifications();
   const unreadCount = scopedNotifications.filter((n) => !n.read).length;
   const router = useRouter();
@@ -127,7 +124,7 @@ export function Header() {
         </div>
       </Link>
 
-      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center md:flex md:shrink-0 md:min-w-0 md:max-w-none">
+      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-8 sm:max-md:pl-10 max-md:flex max-md:items-center max-md:justify-end max-md:translate-x-2 sm:max-md:translate-x-3 md:flex md:shrink-0 md:min-w-0 md:max-w-none md:translate-x-0">
         <Select
           value={currentBranch?.id ?? ALL_BRANCHES_BRANCH.id}
           onValueChange={(id) => {
@@ -142,7 +139,7 @@ export function Header() {
         >
           <SelectTrigger
             title={currentBranch?.name}
-            className="h-9 min-h-9 w-full max-w-full md:w-max md:max-w-[min(100vw-5rem,17.5rem)] justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm ring-offset-background max-md:rounded-lg max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:ring-0 max-md:hover:bg-accent/80 max-md:focus:ring-0 max-md:focus-visible:ring-0 max-md:focus-visible:ring-offset-0 md:border md:border-border md:bg-muted/50 md:shadow-sm md:hover:bg-muted/50 [&>span]:min-w-0 max-sm:[&>span]:max-w-[5.5rem] max-md:[&>span]:truncate md:[&>span]:line-clamp-none md:[&>span]:break-words md:[&>span]:whitespace-normal"
+            className="h-9 min-h-9 w-full max-w-full max-md:w-auto max-md:max-w-[min(100%,12rem)] md:w-max md:max-w-[min(100vw-5rem,17.5rem)] justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm ring-offset-background max-md:rounded-lg max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:ring-0 max-md:hover:bg-accent/80 max-md:focus:ring-0 max-md:focus-visible:ring-0 max-md:focus-visible:ring-offset-0 md:border md:border-border md:bg-muted/50 md:shadow-sm md:hover:bg-muted/50 [&>span]:min-w-0 max-sm:[&>span]:max-w-[5.5rem] max-md:[&>span]:truncate md:[&>span]:line-clamp-none md:[&>span]:break-words md:[&>span]:whitespace-normal"
           >
             <Building2 className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
             <SelectValue placeholder="Branch" />
@@ -246,15 +243,6 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        <button
-          type="button"
-          onClick={toggleMobileOpen}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-accent transition-colors md:hidden"
-          aria-label="Open menu"
-        >
-          <Menu className="size-5 shrink-0" />
-        </button>
       </div>
     </header>
   );
