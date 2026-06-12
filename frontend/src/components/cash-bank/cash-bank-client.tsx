@@ -17,6 +17,11 @@ import {
   Wallet,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -503,7 +508,43 @@ export function CashBankClient() {
                       </p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-border">
+                    <>
+                    <MobileCardList>
+                      {filteredTx.map((t) => (
+                        <MobileRowCard key={t.id}>
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(t.date), "dd/MM/yyyy")}
+                            </span>
+                            <span className="text-xs font-medium">{rowTypeLabel(t.rowType)}</span>
+                          </div>
+                          <p className="mt-2 font-medium">{t.party ?? "—"}</p>
+                          <p className="mt-1 font-mono text-xs text-muted-foreground">{t.txnNo ?? "—"}</p>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                            {t.paid != null && (
+                              <div>
+                                <span className="text-muted-foreground">Paid</span>
+                                <p className="font-semibold tabular-nums text-red-600">{formatCurrency(t.paid)}</p>
+                              </div>
+                            )}
+                            {t.received != null && (
+                              <div>
+                                <span className="text-muted-foreground">Received</span>
+                                <p className="font-semibold tabular-nums text-emerald-600">{formatCurrency(t.received)}</p>
+                              </div>
+                            )}
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Balance</span>
+                              <p className="font-bold tabular-nums">{formatInrDetailed(t.balanceAfter)}</p>
+                            </div>
+                          </div>
+                          {t.notes && (
+                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{t.notes}</p>
+                          )}
+                        </MobileRowCard>
+                      ))}
+                    </MobileCardList>
+                    <DesktopTableWrap className="rounded-lg border border-border">
                       <table className="w-full min-w-[720px] text-sm">
                         <thead>
                           <tr className="border-b border-border bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -534,7 +575,8 @@ export function CashBankClient() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </DesktopTableWrap>
+                    </>
                   )}
                 </div>
               </TabsContent>

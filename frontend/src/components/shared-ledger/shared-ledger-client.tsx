@@ -52,6 +52,11 @@ import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { useSettingsStore } from "@/store/settings-store";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { pushActivityLog } from "@/lib/activity-log-helper";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { formatCurrency, cn, formatDate } from "@/lib/utils";
 import type { Expense, ExpensePaymentMethod, Invoice, PaymentMethod } from "@/types";
 
@@ -539,7 +544,72 @@ export function SharedLedgerClient() {
                 </Card>
 
                 <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
-                  <div className="overflow-x-auto">
+                  <MobileCardList className="p-3">
+                    {transactions.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-muted-foreground">
+                        No transactions in this period.
+                      </p>
+                    ) : (
+                      transactions.map((row) => {
+                        const inv =
+                          selected.kind === "customer"
+                            ? invoices.find((i) => i.id === row.id)
+                            : null;
+                        const exp =
+                          selected.kind === "supplier"
+                            ? expenses.find((e) => e.id === row.id)
+                            : null;
+                        return (
+                          <MobileRowCard key={row.id}>
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-xs text-muted-foreground">{formatDate(row.at)}</span>
+                              <Badge
+                                variant={row.statusTone === "success" ? "default" : "secondary"}
+                                className={cn(
+                                  row.statusTone === "success" &&
+                                    "bg-emerald-600 hover:bg-emerald-600 text-white"
+                                )}
+                              >
+                                {row.status}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 font-medium">{row.typeLabel}</p>
+                            <p className="mt-1 font-mono text-xs text-muted-foreground">{row.reference}</p>
+                            <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(row.amount)}</p>
+                            {(inv || exp) && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {inv && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => router.push(`/billing/${inv.id}`)}
+                                  >
+                                    Open invoice
+                                  </Button>
+                                )}
+                                {exp && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() =>
+                                      router.push(`/expenses?highlight=${encodeURIComponent(exp.id)}`)
+                                    }
+                                  >
+                                    Open expense
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </MobileRowCard>
+                        );
+                      })
+                    )}
+                  </MobileCardList>
+                  <DesktopTableWrap>
                     <table className="w-full min-w-[640px] border-collapse text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -667,7 +737,7 @@ export function SharedLedgerClient() {
                         )}
                       </tbody>
                     </table>
-                  </div>
+                  </DesktopTableWrap>
                 </div>
 
                 <p className="text-center text-xs text-muted-foreground">

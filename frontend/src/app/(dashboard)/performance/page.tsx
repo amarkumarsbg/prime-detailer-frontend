@@ -3,6 +3,11 @@
 import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/shared/page-header";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { KPICard } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -771,7 +776,41 @@ export default function PerformancePage() {
             </p>
           </div>
           <Card>
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0">
+              <MobileCardList className="p-3">
+                {branchTableRows.map((row) => (
+                  <MobileRowCard key={row.branch}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="inline-flex items-center gap-1 font-medium">
+                        {row.rank === 1 && <Medal className="size-4 text-amber-500" />}
+                        #{row.rank} · {row.branch}
+                      </span>
+                      <Badge variant="success" className="font-normal">
+                        {row.eff.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Jobs</span>
+                        <p className="font-semibold tabular-nums">{row.jobs}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Revenue</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(row.revenue)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">On-time</span>
+                        <p className="font-semibold tabular-nums">{row.onTime.toFixed(1)}%</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Rewards</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(row.rewards)}</p>
+                      </div>
+                    </div>
+                  </MobileRowCard>
+                ))}
+              </MobileCardList>
+              <DesktopTableWrap>
               <table className="w-full text-sm min-w-[720px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -815,6 +854,7 @@ export default function PerformancePage() {
                   ))}
                 </tbody>
               </table>
+              </DesktopTableWrap>
             </CardContent>
           </Card>
         </TabsContent>
@@ -827,12 +867,40 @@ export default function PerformancePage() {
                 {floorManagersDemo.length} floor manager · {periodSubtitle}
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0">
               {floorManagersDemo.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
                   No floor manager activity for this branch in the selected period.
                 </p>
               ) : (
+              <>
+              <MobileCardList className="p-3">
+                {floorManagersDemo.map((fm, i) => (
+                  <MobileRowCard key={fm.email}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium leading-snug inline-flex items-center gap-1">
+                          {i === 0 ? <Medal className="size-4 text-amber-500 shrink-0" /> : null}
+                          #{i + 1} {fm.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{fm.branch}</p>
+                      </div>
+                      <Badge variant="success">{fm.eff.toFixed(1)}%</Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Jobs</span>
+                        <p className="font-semibold tabular-nums">{fm.jobs}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Revenue</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(fm.revenue)}</p>
+                      </div>
+                    </div>
+                  </MobileRowCard>
+                ))}
+              </MobileCardList>
+              <DesktopTableWrap>
               <table className="w-full text-sm min-w-[800px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase text-muted-foreground">
@@ -887,6 +955,8 @@ export default function PerformancePage() {
                   ))}
                 </tbody>
               </table>
+              </DesktopTableWrap>
+              </>
               )}
             </CardContent>
           </Card>
@@ -1054,7 +1124,38 @@ export default function PerformancePage() {
                   </span>
                 </p>
               </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
+              <CardContent className="p-0">
+                <MobileCardList className="p-3">
+                  {sortedFloorLeaderboard.map((row, idx) => (
+                    <MobileRowCard key={row.key}>
+                      <div className="flex items-start gap-3">
+                        {idx === 0 ? (
+                          <Medal className="size-5 text-amber-500 shrink-0" />
+                        ) : (
+                          <span className="w-5 text-center text-sm font-medium tabular-nums">#{idx + 1}</span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium leading-snug">{row.name}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{row.branch}</p>
+                        </div>
+                        <Badge variant="success" className="shrink-0 font-normal tabular-nums">
+                          {row.efficiency.toFixed(1)}%
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Jobs</span>
+                          <p className="font-semibold tabular-nums">{row.jobs}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Paid revenue</span>
+                          <p className="font-semibold tabular-nums">{formatCurrency(row.paidRevenue)}</p>
+                        </div>
+                      </div>
+                    </MobileRowCard>
+                  ))}
+                </MobileCardList>
+                <DesktopTableWrap>
                 <table className="w-full text-sm min-w-[980px]">
                   <thead>
                     <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -1129,6 +1230,7 @@ export default function PerformancePage() {
                     ))}
                   </tbody>
                 </table>
+                </DesktopTableWrap>
               </CardContent>
             </Card>
           ) : (
@@ -1142,7 +1244,38 @@ export default function PerformancePage() {
                   </span>
                 </p>
               </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
+              <CardContent className="p-0">
+                <MobileCardList className="p-3">
+                  {sortedSupervisorLeaderboard.map((row, idx) => (
+                    <MobileRowCard key={row.key}>
+                      <div className="flex items-start gap-3">
+                        {idx === 0 ? (
+                          <Medal className="size-5 text-amber-500 shrink-0" />
+                        ) : (
+                          <span className="w-5 text-center text-sm font-medium tabular-nums">#{idx + 1}</span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium leading-snug">{row.supervisor}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{row.branch}</p>
+                        </div>
+                        <Badge variant="success" className="shrink-0 font-normal tabular-nums">
+                          {row.efficiency.toFixed(1)}%
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Jobs</span>
+                          <p className="font-semibold tabular-nums">{row.jobs}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Paid revenue</span>
+                          <p className="font-semibold tabular-nums">{formatCurrency(row.paid)}</p>
+                        </div>
+                      </div>
+                    </MobileRowCard>
+                  ))}
+                </MobileCardList>
+                <DesktopTableWrap>
                 <table className="w-full text-sm min-w-[900px]">
                   <thead>
                     <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -1188,6 +1321,7 @@ export default function PerformancePage() {
                     ))}
                   </tbody>
                 </table>
+                </DesktopTableWrap>
               </CardContent>
             </Card>
           )}
@@ -1287,12 +1421,47 @@ export default function PerformancePage() {
                 Showing {jobDetailsSummary.n} of {jobDetailsSummary.n} jobs · Click a row to expand
               </p>
             </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0">
               {jobDetailDemo.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
                   No jobs to show for this branch in the selected period.
                 </p>
               ) : (
+              <>
+              <MobileCardList className="p-3">
+                {jobDetailDemo.map((j) => {
+                  const open = expandedJobDetailId === j.id;
+                  return (
+                    <MobileRowCard
+                      key={j.id}
+                      onClick={() =>
+                        setExpandedJobDetailId((cur) => (cur === j.id ? null : j.id))
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold">{j.id}</span>
+                        <Badge variant="success">{j.status}</Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {j.date} · {j.branch}
+                      </p>
+                      <div className="mt-3 flex items-center justify-between text-sm">
+                        <span className="font-bold tabular-nums">{formatCurrency(j.amount)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Reward {formatCurrency(j.reward)}
+                        </span>
+                      </div>
+                      {open && (
+                        <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+                          <p>{j.supervisor} · {j.team}</p>
+                          <p>{j.timeSavedLabel} · {j.durationLine}</p>
+                        </div>
+                      )}
+                    </MobileRowCard>
+                  );
+                })}
+              </MobileCardList>
+              <DesktopTableWrap>
               <table className="w-full text-sm min-w-[960px]">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -1532,6 +1701,8 @@ export default function PerformancePage() {
                   })}
                 </tbody>
               </table>
+              </DesktopTableWrap>
+              </>
               )}
             </CardContent>
           </Card>

@@ -34,7 +34,7 @@ export function ScrollToTopButton({
       variant="default"
       size="icon"
       className={cn(
-        "fixed bottom-6 right-6 z-40 h-11 w-11 rounded-full shadow-lg md:right-8",
+        "fixed bottom-[5.75rem] right-4 z-40 h-11 w-11 rounded-full shadow-lg md:bottom-6 md:right-8",
         "transition-opacity duration-200",
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       )}

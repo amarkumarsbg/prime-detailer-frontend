@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
+import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
 import { KPICard } from "@/components/shared/kpi-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { useParties } from "@/hooks/use-parties";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { partyDisplayBalance, balanceFlow } from "@/lib/party/ledger-math";
@@ -91,6 +103,10 @@ export function PartiesPageClient() {
   const [balanceFilter, setBalanceFilter] = useState<"all" | "collect" | "pay">("all");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const activeFilterCount = searchCategory !== "all" ? 1 : 0;
 
   const partiesWithBalance = useMemo(
     () =>
@@ -175,10 +191,18 @@ export function PartiesPageClient() {
     toast.success("Exported CSV");
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Hide "${name}" from the parties list?`)) return;
-    await removeParty(id);
-    toast.success("Party removed from list");
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await removeParty(deleteTarget.id);
+      toast.success("Party removed from list");
+      setDeleteTarget(null);
+    } catch {
+      toast.error("Could not remove party. Is the API running?");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (partiesLoading) {
@@ -263,19 +287,19 @@ export function PartiesPageClient() {
         />
       </div>
 
-      <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 min-w-0 items-center gap-2">
+      <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex w-full min-w-0 flex-col gap-2 md:flex-1 md:flex-row md:items-center">
           <Input
-            placeholder="Search"
+            placeholder="Search parties"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="max-w-xs"
+            className="w-full md:max-w-xs"
           />
           <Select
             value={searchCategory}
             onValueChange={(v) => setSearchCategory(v as SearchCategory)}
           >
-            <SelectTrigger className="w-[180px] shrink-0">
+            <SelectTrigger className="hidden w-[180px] shrink-0 md:flex">
               <SelectValue placeholder="Search Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -287,13 +311,41 @@ export function PartiesPageClient() {
               <SelectItem value="supplier">Suppliers only</SelectItem>
             </SelectContent>
           </Select>
+          <MobileFilterTrigger
+            onClick={() => setFilterSheetOpen(true)}
+            activeCount={activeFilterCount}
+          />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" onClick={exportFilteredCsv}>
+        <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center md:shrink-0">
+          <Button variant="outline" className="w-full md:w-auto" onClick={exportFilteredCsv}>
             Export CSV
           </Button>
-          <Button onClick={() => router.push("/parties/new")}>Create Party</Button>
+          <Button className="w-full md:w-auto" onClick={() => router.push("/parties/new")}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Party
+          </Button>
         </div>
+      </div>
+
+      <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch] md:hidden">
+        {(
+          [
+            { value: "all" as const, label: "All types" },
+            { value: "customer" as const, label: "Customers" },
+            { value: "supplier" as const, label: "Suppliers" },
+          ] as const
+        ).map((opt) => (
+          <Button
+            key={opt.value}
+            type="button"
+            size="sm"
+            variant={typeFilter === opt.value ? "default" : "outline"}
+            className="shrink-0"
+            onClick={() => setTypeFilter(opt.value)}
+          >
+            {opt.label}
+          </Button>
+        ))}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -305,7 +357,83 @@ export function PartiesPageClient() {
           />
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-y-contain">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 space-y-3 md:hidden">
+              {filtered.map((p) => {
+                const flow = balanceFlow(p.kind, p.balance);
+                const goToParty = () => router.push(`/parties/${encodeURIComponent(p.id)}`);
+                return (
+                  <div
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={goToParty}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        goToParty();
+                      }
+                    }}
+                    className="rounded-lg border border-border bg-card p-4 text-sm shadow-sm cursor-pointer transition-colors hover:bg-muted/40 hover:border-primary/30"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold leading-snug">{p.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {p.kind === "customer" ? "Customer" : "Supplier"}
+                          {p.category ? ` · ${p.category}` : ""}
+                        </p>
+                        {p.mobile ? (
+                          <a
+                            href={`tel:${p.mobile.replace(/\s/g, "")}`}
+                            className="mt-0.5 block text-xs text-primary"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {p.mobile}
+                          </a>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p
+                          className={`text-base font-bold tabular-nums ${
+                            flow === "in"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : flow === "out"
+                                ? "text-rose-600 dark:text-rose-400"
+                                : "text-foreground"
+                          }`}
+                        >
+                          {formatInrTable(p.balance)}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {flow === "in" ? "To collect" : flow === "out" ? "To pay" : "Settled"}
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className="mt-3 flex gap-2 border-t border-border/80 pt-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button variant="outline" size="sm" className="flex-1" asChild>
+                        <Link href={`/parties/${encodeURIComponent(p.id)}/edit`}>
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                          Edit
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-y-contain">
               <table className="w-full table-fixed border-collapse border border-border text-sm min-w-[280px]">
                 <thead>{tableHeaderRow}</thead>
                 <tbody>
@@ -359,7 +487,7 @@ export function PartiesPageClient() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
-                                onClick={() => handleDelete(p.id, p.name)}
+                                onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete
@@ -383,6 +511,83 @@ export function PartiesPageClient() {
           </>
         )}
       </div>
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}
+      >
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-w-md")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "space-y-0")}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle>Remove party?</DialogTitle>
+                <DialogDescription>
+                  This hides the party from your list. Ledger history is kept in the database.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          {deleteTarget ? (
+            <div className="space-y-3 px-6 py-4">
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
+                <p className="font-medium leading-snug">{deleteTarget.name}</p>
+              </div>
+              <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                You can create the party again later if needed.
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void confirmDelete()}
+            >
+              {deleting ? "Removing…" : "Remove party"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <MobileFilterSheet
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        title="Party filters"
+        activeCount={activeFilterCount}
+        onReset={() => setSearchCategory("all")}
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Search in</p>
+          <Select
+            value={searchCategory}
+            onValueChange={(v) => setSearchCategory(v as SearchCategory)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Search in" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All fields</SelectItem>
+              <SelectItem value="name">Party name</SelectItem>
+              <SelectItem value="mobile">Mobile number</SelectItem>
+              <SelectItem value="category">Category</SelectItem>
+              <SelectItem value="customer">Customers only</SelectItem>
+              <SelectItem value="supplier">Suppliers only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </MobileFilterSheet>
     </div>
   );
 }

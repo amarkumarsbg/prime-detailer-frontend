@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { KPICard } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -322,7 +327,41 @@ export default function AttendancePage() {
               </Select>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
+              <MobileCardList>
+                {recordsForDate.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No attendance records for this date
+                  </p>
+                ) : (
+                  recordsForDate.map((r) => {
+                    const shift = getShiftStatusDisplay(r);
+                    return (
+                      <MobileRowCard key={r.id}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium leading-snug">{r.staffName}</p>
+                          <Badge variant={shift.variant}>{shift.label}</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{r.staffRole}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Check-in</span>
+                            <p className="font-medium">{r.checkIn ?? "—"}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Check-out</span>
+                            <p className="font-medium">{r.checkOut ?? "—"}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Duration</span>
+                            <p className="font-medium">{formatDuration(r.durationMinutes)}</p>
+                          </div>
+                        </div>
+                      </MobileRowCard>
+                    );
+                  })
+                )}
+              </MobileCardList>
+              <DesktopTableWrap>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
@@ -374,7 +413,7 @@ export default function AttendancePage() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </DesktopTableWrap>
             </CardContent>
           </Card>
         </TabsContent>
@@ -410,7 +449,39 @@ export default function AttendancePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <MobileCardList className="p-3">
+                {staffSummary.map((s) => (
+                  <MobileRowCard key={s.id}>
+                    <p className="font-medium leading-snug">{s.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{roleDisplayLabel(s.role)}</p>
+                    <div className="mt-3 grid grid-cols-5 gap-1 text-center text-xs">
+                      <div>
+                        <span className="text-muted-foreground">P</span>
+                        <p className="font-semibold tabular-nums">{s.present}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">A</span>
+                        <p className="font-semibold tabular-nums">{s.absent}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">L</span>
+                        <p className="font-semibold tabular-nums">{s.late}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">H</span>
+                        <p className="font-semibold tabular-nums">{s.halfDay}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Avg</span>
+                        <p className="font-semibold tabular-nums">
+                          {s.avgHours === "0" ? "—" : `${s.avgHours}h`}
+                        </p>
+                      </div>
+                    </div>
+                  </MobileRowCard>
+                ))}
+              </MobileCardList>
+              <DesktopTableWrap>
                 <table className="w-full caption-bottom border-collapse text-sm tabular-nums">
                   <caption className="sr-only">
                     Staff attendance counts for the rolling seven-day period ending on the selected date
@@ -472,7 +543,7 @@ export default function AttendancePage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DesktopTableWrap>
               <p className="text-xs text-muted-foreground px-4 py-3 border-t border-border bg-muted/20">
                 P = Present · A = Absent · L = Late · H = Half day · Avg = mean hours when checked in (7-day window)
               </p>

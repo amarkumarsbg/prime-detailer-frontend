@@ -4,6 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -101,6 +111,8 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   const [txnTypeFilter, setTxnTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [tab, setTab] = useState("transactions");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const t = searchParams.get("tab");
@@ -196,12 +208,19 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
     toast.success("Downloaded CSV");
   };
 
-  const handleDelete = async () => {
+  const confirmDelete = async () => {
     if (!party) return;
-    if (!confirm(`Hide "${party.name}" from the parties list?`)) return;
-    await removeParty(party.id);
-    toast.success("Party removed");
-    router.push("/parties");
+    setDeleting(true);
+    try {
+      await removeParty(party.id);
+      toast.success("Party removed");
+      setDeleteOpen(false);
+      router.push("/parties");
+    } catch {
+      toast.error("Could not remove party");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (partyLoading) {
@@ -308,7 +327,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                 size="sm"
                 variant="outline"
                 className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                onClick={handleDelete}
+                onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -450,6 +469,52 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
           </TabsContent>
         </div>
       </Tabs>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => !open && !deleting && setDeleteOpen(false)}>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-w-md")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "space-y-0")}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle>Remove party?</DialogTitle>
+                <DialogDescription>
+                  This hides the party from your list. Ledger history is kept in the database.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          {party ? (
+            <div className="space-y-3 px-6 py-4">
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
+                <p className="font-medium leading-snug">{party.name}</p>
+              </div>
+              <p className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                You can create the party again later if needed.
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void confirmDelete()}
+            >
+              {deleting ? "Removing…" : "Remove party"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

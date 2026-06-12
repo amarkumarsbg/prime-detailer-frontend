@@ -24,7 +24,13 @@ export function PageHeader({ title, description, actions, className }: PageHeade
         )}
       </div>
       {actions && (
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:min-w-0 sm:justify-end">
+        <div
+          className={cn(
+            "flex w-full flex-wrap items-center gap-2 sm:w-auto sm:min-w-0 sm:justify-end",
+            "max-md:sticky max-md:top-0 max-md:z-10 max-md:-mx-4 max-md:mb-1 max-md:border-b max-md:border-border/60",
+            "max-md:bg-background/95 max-md:px-4 max-md:py-2.5 max-md:backdrop-blur-sm max-md:supports-[backdrop-filter]:bg-background/80"
+          )}
+        >
           {actions}
         </div>
       )}

@@ -140,7 +140,10 @@ export function Header() {
           }}
           disabled={!canSelectOrgWide && selectableBranches.length === 0}
         >
-          <SelectTrigger className="h-9 min-h-9 w-full max-w-full md:w-max md:max-w-[min(100vw-5rem,17.5rem)] justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm ring-offset-background max-md:rounded-lg max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:ring-0 max-md:hover:bg-accent/80 max-md:focus:ring-0 max-md:focus-visible:ring-0 max-md:focus-visible:ring-offset-0 md:border md:border-border md:bg-muted/50 md:shadow-sm md:hover:bg-muted/50 [&>span]:min-w-0 max-md:[&>span]:truncate md:[&>span]:line-clamp-none md:[&>span]:break-words md:[&>span]:whitespace-normal">
+          <SelectTrigger
+            title={currentBranch?.name}
+            className="h-9 min-h-9 w-full max-w-full md:w-max md:max-w-[min(100vw-5rem,17.5rem)] justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm ring-offset-background max-md:rounded-lg max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:ring-0 max-md:hover:bg-accent/80 max-md:focus:ring-0 max-md:focus-visible:ring-0 max-md:focus-visible:ring-offset-0 md:border md:border-border md:bg-muted/50 md:shadow-sm md:hover:bg-muted/50 [&>span]:min-w-0 max-sm:[&>span]:max-w-[5.5rem] max-md:[&>span]:truncate md:[&>span]:line-clamp-none md:[&>span]:break-words md:[&>span]:whitespace-normal"
+          >
             <Building2 className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
             <SelectValue placeholder="Branch" />
           </SelectTrigger>

@@ -2241,6 +2241,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         >
           {useBookingWizard && (
             <>
+              <div className="sm:hidden shrink-0 rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Step {jobCreateStep + 1} of {jobWizardStepCount}
+                </p>
+                <p className="mt-0.5 text-sm font-medium leading-snug">
+                  {JOB_WIZARD_LABEL[jobWizardStepId]}
+                </p>
+              </div>
               <div
                 className={cn(
                   "hidden sm:block overflow-x-auto overflow-y-visible pb-1.5 -mx-1 px-1 [scrollbar-width:thin] shrink-0",

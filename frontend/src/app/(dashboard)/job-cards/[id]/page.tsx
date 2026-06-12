@@ -1147,8 +1147,19 @@ export default function JobCardDetailPage() {
     );
   }
 
+  const showMobileActionBar =
+    currentStatus !== "CANCELLED" &&
+    (currentStatus === "DELIVERED" || currentStatusIndex < WORKFLOW_STATUSES.length - 1);
+
   return (
-    <div className="space-y-4 sm:space-y-6 pb-10 sm:pb-12">
+    <div
+      className={cn(
+        "space-y-4 sm:space-y-6",
+        showMobileActionBar
+          ? "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"
+          : "pb-10 sm:pb-12"
+      )}
+    >
       <Breadcrumbs items={[
         { label: "Job Cards", href: "/job-cards" },
         { label: jobCard.jobNumber },
@@ -1372,7 +1383,21 @@ export default function JobCardDetailPage() {
       <Tabs value={detailTab} onValueChange={setDetailTab} className="space-y-0">
         <Card className="border-border/80 shadow-sm overflow-hidden">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-1 px-2 sm:px-4 py-2 border-b border-border/70 bg-muted/25">
-            <TabsList className="w-full xl:w-auto justify-start rounded-none border-0 bg-transparent p-0 h-auto gap-0 overflow-x-auto scrollbar-none flex flex-nowrap">
+            <div className="md:hidden w-full px-1 pb-1">
+              <Select value={detailTab} onValueChange={setDetailTab}>
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue placeholder="Section" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="overview">Overview</SelectItem>
+                  <SelectItem value="tasks">Tasks ({totalCount})</SelectItem>
+                  <SelectItem value="notes">Notes</SelectItem>
+                  <SelectItem value="timeline">Timeline</SelectItem>
+                  <SelectItem value="photos">Photos ({detailPhotoCount})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <TabsList className="hidden md:flex w-full xl:w-auto justify-start rounded-none border-0 bg-transparent p-0 h-auto gap-0 overflow-x-auto scrollbar-none flex-nowrap">
               <TabsTrigger
                 value="overview"
                 className={cn(
@@ -3032,6 +3057,42 @@ export default function JobCardDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {showMobileActionBar ? (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] border-t border-border bg-background/95 px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+          <div className="mx-auto flex max-w-lg flex-col gap-2">
+            {currentStatus === "DELIVERED" ? (
+              <Button type="button" className="w-full" onClick={handleGenerateInvoice}>
+                <FileText className="w-4 h-4 mr-2" />
+                {invoiceForJob ? "View invoice" : "Generate Invoice"}
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                {!hasMechanicAssigned ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setShowQuickAssignDialog(true)}
+                  >
+                    <User className="w-4 h-4 mr-2" />
+                    Assign
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  className={cn("min-w-0", hasMechanicAssigned ? "flex-1" : "flex-[1.5]")}
+                  onClick={handleUpdateStatus}
+                  disabled={updateStatusDisabled}
+                  title={updateStatusDisabledTitle}
+                >
+                  Update Status
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

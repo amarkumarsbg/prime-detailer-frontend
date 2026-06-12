@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { MobileFilterSheet, MobileFilterTrigger } from "@/components/shared/mobile-filter-sheet";
+import {
+  DesktopTableWrap,
+  MobileCardList,
+  MobileRowCard,
+} from "@/components/shared/mobile-table-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -111,6 +117,17 @@ export default function PayrollPage() {
   const [formBase, setFormBase] = useState("");
   const [formBonus, setFormBonus] = useState("");
   const [formAbsence, setFormAbsence] = useState("");
+  const [recordsFilterOpen, setRecordsFilterOpen] = useState(false);
+  const todayMonth = today.getMonth() + 1;
+  const todayYear = today.getFullYear();
+  const recordsFilterCount = useMemo(() => {
+    let n = 0;
+    if (filterMonth !== todayMonth) n += 1;
+    if (filterYear !== todayYear) n += 1;
+    if (statusFilter !== "ALL") n += 1;
+    if (pageSize !== 10) n += 1;
+    return n;
+  }, [filterMonth, filterYear, statusFilter, pageSize, todayMonth, todayYear]);
 
   useEffect(() => {
     if (!showBranchPicker) {
@@ -388,7 +405,12 @@ export default function PayrollPage() {
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+                <MobileFilterTrigger
+                  onClick={() => setRecordsFilterOpen(true)}
+                  activeCount={recordsFilterCount}
+                  className="md:hidden"
+                />
+                <div className="hidden md:grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Month</Label>
                     <Select
@@ -480,13 +502,49 @@ export default function PayrollPage() {
                   Payroll Records ({filteredRecords.length})
                 </h2>
               </div>
-              <div className="overflow-x-auto">
+              <>
                 {filteredRecords.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-16 px-4">
                     No payroll records found. Click &quot;Generate Payroll&quot; to create rows
                     from active staff and salary structures for the selected month.
                   </p>
                 ) : (
+                  <>
+                  <MobileCardList className="p-3">
+                    {pagedRecords.map((r) => (
+                      <MobileRowCard key={r.id}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium leading-snug">{r.employeeName}</p>
+                          {statusBadge(r.status)}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {MONTHS.find((m) => m.v === r.periodMonth)?.label.slice(0, 3)} {r.periodYear}
+                          {" · "}
+                          {r.attendanceDays} days
+                        </p>
+                        <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(r.netSalary)}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                          <span>Base: {formatCurrency(r.baseSalary)}</span>
+                          <span className="text-red-600/90">Ded: {formatCurrency(r.absenceDeduction)}</span>
+                        </div>
+                        {r.status === "PENDING" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 w-full"
+                            onClick={() => {
+                              setRecordStatus(r.id, "PAID");
+                              toast.success("Marked as paid.");
+                            }}
+                          >
+                            Mark paid
+                          </Button>
+                        )}
+                      </MobileRowCard>
+                    ))}
+                  </MobileCardList>
+                  <DesktopTableWrap>
                   <table className="w-full min-w-[1000px] text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40 text-left">
@@ -557,8 +615,10 @@ export default function PayrollPage() {
                       ))}
                     </tbody>
                   </table>
+                  </DesktopTableWrap>
+                  </>
                 )}
-              </div>
+              </>
             </CardContent>
           </Card>
         </TabsContent>
@@ -655,7 +715,32 @@ export default function PayrollPage() {
           </Dialog>
 
           <Card>
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0">
+              <MobileCardList className="p-3">
+                {salaryStructures.map((s) => (
+                  <MobileRowCard key={s.id}>
+                    <p className="font-medium leading-snug">{s.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {roleDisplayLabel(s.role)} · {s.experienceBand}
+                    </p>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Base</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(s.baseSalary)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Bonus/day</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(s.attendanceBonusPerDay)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Absence/day</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(s.absenceDeductionPerDay)}</p>
+                      </div>
+                    </div>
+                  </MobileRowCard>
+                ))}
+              </MobileCardList>
+              <DesktopTableWrap>
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left">
@@ -715,10 +800,90 @@ export default function PayrollPage() {
                   ))}
                 </tbody>
               </table>
+              </DesktopTableWrap>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <MobileFilterSheet
+        open={recordsFilterOpen}
+        onOpenChange={setRecordsFilterOpen}
+        title="Payroll filters"
+        activeCount={recordsFilterCount}
+        onReset={() => {
+          setFilterMonth(todayMonth);
+          setFilterYear(todayYear);
+          setStatusFilter("ALL");
+          setPageSize(10);
+        }}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Month</p>
+            <Select value={String(filterMonth)} onValueChange={(v) => setFilterMonth(Number(v))}>
+              <SelectTrigger className="h-10 w-full bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTHS.map((m) => (
+                  <SelectItem key={m.v} value={String(m.v)}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Year</p>
+            <Select value={String(filterYear)} onValueChange={(v) => setFilterYear(Number(v))}>
+              <SelectTrigger className="h-10 w-full bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Status</p>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as PayrollRecordStatus | "ALL")}
+          >
+            <SelectTrigger className="h-10 w-full bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s === "ALL" ? "All status" : s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Page size</p>
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+            <SelectTrigger className="h-10 w-full bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 25, 50].map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n} records
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </MobileFilterSheet>
     </div>
   );
 }
