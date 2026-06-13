@@ -425,8 +425,33 @@ export default function DashboardPage() {
     };
   }, [scopedJobCards, user?.id]);
 
+  const compactAlertLabel = (id: string, shortLabel: string) => {
+    const labels: Record<string, string> = {
+      overdue: "Overdue",
+      stock: "Low Stock",
+      payments: "Pending",
+      reminders: "Reminders",
+      inactive: "Inactive",
+    };
+    return labels[id] ?? shortLabel;
+  };
+
   const alertCardClassName =
-    "group flex w-full min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left shadow-sm transition-shadow hover:shadow-md cursor-pointer";
+    "group flex min-w-0 w-full items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-2 text-left shadow-sm transition-shadow hover:shadow-md cursor-pointer active:scale-[0.98]";
+
+  const mobileAlertFilterMap: Record<string, string> = {
+    overdue: DASHBOARD_FILTER.OVERDUE,
+    stock: DASHBOARD_FILTER.LOW_STOCK,
+    payments: DASHBOARD_FILTER.PENDING_PAYMENT,
+    reminders: DASHBOARD_FILTER.DUE_SOON,
+    inactive: DASHBOARD_FILTER.INACTIVE,
+  };
+
+  const handleMobileAlertClick = (alertId: string, href: string) => {
+    const filter = mobileAlertFilterMap[alertId];
+    if (filter) setActiveFilter(filter);
+    router.push(href);
+  };
 
   const branchNameById = useMemo(
     () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
@@ -461,85 +486,57 @@ export default function DashboardPage() {
 
       {alerts.length > 0 &&
         (reduceMotion ? (
-          <div className="space-y-2">
-            {alerts.map((alert) => {
-              const filterMap: Record<string, string> = {
-                overdue: DASHBOARD_FILTER.OVERDUE,
-                stock: DASHBOARD_FILTER.LOW_STOCK,
-                payments: DASHBOARD_FILTER.PENDING_PAYMENT,
-                reminders: DASHBOARD_FILTER.DUE_SOON,
-                inactive: DASHBOARD_FILTER.INACTIVE,
-              };
-              const filter = filterMap[alert.id];
-              return (
-                <button
-                  key={alert.id}
-                  type="button"
-                  onClick={() => {
-                    if (filter) setActiveFilter(filter);
-                    router.push(alert.href);
-                  }}
-                  className={alertCardClassName}
+          <div className="grid grid-cols-2 gap-2">
+            {alerts.map((alert) => (
+              <button
+                key={alert.id}
+                type="button"
+                onClick={() => handleMobileAlertClick(alert.id, alert.href)}
+                className={alertCardClassName}
+              >
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${alert.bgColor}`}
                 >
-                  <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${alert.bgColor}`}
-                  >
-                    <alert.icon className={`w-4 h-4 ${alert.color}`} />
-                  </div>
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="text-sm font-semibold leading-tight">
-                      <span className={alert.color}>{alert.count}</span>{" "}
-                      <span className="text-foreground">{alert.shortLabel}</span>
-                    </p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground" />
-                </button>
-              );
-            })}
+                  <alert.icon className={`w-3.5 h-3.5 ${alert.color}`} />
+                </div>
+                <p className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug">
+                  <span className={alert.color}>{alert.count}</span>{" "}
+                  <span className="text-foreground">
+                    {compactAlertLabel(alert.id, alert.shortLabel)}
+                  </span>
+                </p>
+              </button>
+            ))}
           </div>
         ) : (
           <motion.div
             variants={alertStaggerContainer}
             initial="hidden"
             animate="show"
-            className="space-y-2"
+            className="grid grid-cols-2 gap-2"
           >
-            {alerts.map((alert) => {
-              const filterMap: Record<string, string> = {
-                overdue: DASHBOARD_FILTER.OVERDUE,
-                stock: DASHBOARD_FILTER.LOW_STOCK,
-                payments: DASHBOARD_FILTER.PENDING_PAYMENT,
-                reminders: DASHBOARD_FILTER.DUE_SOON,
-                inactive: DASHBOARD_FILTER.INACTIVE,
-              };
-              const filter = filterMap[alert.id];
-              return (
-                <motion.button
-                  key={alert.id}
-                  type="button"
-                  variants={alertStaggerItem}
-                  onClick={() => {
-                    if (filter) setActiveFilter(filter);
-                    router.push(alert.href);
-                  }}
-                  whileTap={{ scale: 0.99 }}
-                  className={alertCardClassName}
+            {alerts.map((alert) => (
+              <motion.button
+                key={alert.id}
+                type="button"
+                variants={alertStaggerItem}
+                onClick={() => handleMobileAlertClick(alert.id, alert.href)}
+                whileTap={{ scale: 0.98 }}
+                className={alertCardClassName}
+              >
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${alert.bgColor}`}
                 >
-                  <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${alert.bgColor}`}
-                  >
-                    <alert.icon className={`w-4 h-4 ${alert.color}`} />
-                  </div>
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="text-sm font-semibold leading-tight">
-                      <span className={alert.color}>{alert.count}</span>{" "}
-                      <span className="text-foreground">{alert.shortLabel}</span>
-                    </p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground" />
-                </motion.button>
-              );
-            })}
+                  <alert.icon className={`w-3.5 h-3.5 ${alert.color}`} />
+                </div>
+                <p className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug">
+                  <span className={alert.color}>{alert.count}</span>{" "}
+                  <span className="text-foreground">
+                    {compactAlertLabel(alert.id, alert.shortLabel)}
+                  </span>
+                </p>
+              </motion.button>
+            ))}
           </motion.div>
         ))}
 

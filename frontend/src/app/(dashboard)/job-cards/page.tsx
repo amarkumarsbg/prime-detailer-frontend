@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
@@ -26,7 +26,7 @@ import {
   jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime, cn } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
@@ -105,6 +105,20 @@ export default function JobCardsPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [collapsedKanbanSections, setCollapsedKanbanSections] = useState<Set<JobCardStatus>>(
+    () => new Set(KANBAN_COLUMNS.slice(1))
+  );
+  const kanbanCollapseSeeded = useRef(false);
+
+  const toggleKanbanSection = useCallback((status: JobCardStatus) => {
+    kanbanCollapseSeeded.current = true;
+    setCollapsedKanbanSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
 
   const branchNameById = useMemo(
     () => Object.fromEntries(branches.map((b) => [b.id, b.name])),
@@ -206,6 +220,18 @@ export default function JobCardsPage() {
     });
     return map;
   }, [jobCardsForView]);
+
+  useEffect(() => {
+    if (kanbanCollapseSeeded.current) return;
+
+    const firstWithJobs = KANBAN_COLUMNS.find((status) => (kanbanData[status]?.length ?? 0) > 0);
+    if (!firstWithJobs) return;
+
+    setCollapsedKanbanSections(
+      new Set(KANBAN_COLUMNS.filter((status) => status !== firstWithJobs))
+    );
+    kanbanCollapseSeeded.current = true;
+  }, [kanbanData]);
 
   const filteredJobCardsForListTab = useMemo(() => {
     if (activeTab === "ALL") return jobCardsForList;
@@ -445,24 +471,61 @@ export default function JobCardsPage() {
         <>
           {/* Mobile: stacked full-width stage columns; md+: horizontal board */}
           <div className="flex flex-col gap-4 md:flex-row md:gap-3 md:overflow-x-auto pb-4 -mx-1 px-1">
-          {KANBAN_COLUMNS.map((status) => (
-            <div key={status} className="w-full md:shrink-0 md:w-[280px]">
+          {KANBAN_COLUMNS.map((status) => {
+            const sectionJobs = kanbanData[status] ?? [];
+            const sectionCount = sectionJobs.length;
+            const isCollapsed = collapsedKanbanSections.has(status);
+
+            return (
+            <div
+              key={status}
+              className={cn(
+                "w-full md:shrink-0 md:w-[280px]",
+                sectionCount === 0 && "max-md:hidden"
+              )}
+            >
               <div className={`rounded-xl border border-border/80 bg-card shadow-sm border-t-4 ${KANBAN_COLORS[status]}`}>
-                <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/80 bg-muted/20">
+                <button
+                  type="button"
+                  onClick={() => toggleKanbanSection(status)}
+                  aria-expanded={!isCollapsed}
+                  className="md:hidden flex w-full items-center justify-between px-3 py-2.5 border-b border-border/80 bg-muted/20 text-left transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                        isCollapsed && "-rotate-90"
+                      )}
+                    />
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground truncate">
+                      {TAB_LABELS[status]}
+                    </h3>
+                  </div>
+                  <span className="flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-background border border-border text-xs font-semibold tabular-nums shrink-0">
+                    {sectionCount}
+                  </span>
+                </button>
+                <div className="hidden md:flex items-center justify-between px-3 py-2.5 border-b border-border/80 bg-muted/20">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
                     {TAB_LABELS[status]}
                   </h3>
                   <span className="flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-background border border-border text-xs font-semibold tabular-nums">
-                    {kanbanData[status]?.length ?? 0}
+                    {sectionCount}
                   </span>
                 </div>
-                <div className="p-2 space-y-2 md:max-h-[calc(100vh-260px)] md:overflow-y-auto">
-                  {(kanbanData[status] ?? []).length === 0 ? (
+                <div
+                  className={cn(
+                    "p-2 space-y-2 md:max-h-[calc(100vh-260px)] md:overflow-y-auto",
+                    isCollapsed && "max-md:hidden"
+                  )}
+                >
+                  {sectionCount === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-1 py-10 text-xs text-muted-foreground">
                       <span>No jobs in this stage</span>
                     </div>
                   ) : (
-                    (kanbanData[status] ?? []).map((jc) => (
+                    sectionJobs.map((jc) => (
                       <div
                         key={jc.id}
                         onClick={() => router.push(`/job-cards/${jc.id}`)}
@@ -492,7 +555,8 @@ export default function JobCardsPage() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
           </div>
         </>
       )}
