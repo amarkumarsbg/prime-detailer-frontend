@@ -140,16 +140,6 @@ const QUICK_INTERNAL_NOTES = [
   "Low fuel",
 ] as const;
 
-const CHECK_IN_VIEWS = [
-  { id: "front", label: "Front View" },
-  { id: "rear", label: "Rear View" },
-  { id: "left", label: "Left Side" },
-  { id: "right", label: "Right Side" },
-  { id: "interior", label: "Interior" },
-] as const;
-
-type CheckInViewId = (typeof CHECK_IN_VIEWS)[number]["id"];
-
 function highEndComparisonTag(name: string): string | undefined {
   const n = name.toLowerCase();
   if (n.includes("ppf")) return "Best Protection";
@@ -563,14 +553,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInDamages, setCheckInDamages] = useState("");
   const [checkInNotesExtra, setCheckInNotesExtra] = useState("");
   const [checkInPhotos, setCheckInPhotos] = useState<
-    { id: string; file: File; previewUrl: string; label: string; viewId?: CheckInViewId }[]
+    { id: string; file: File; previewUrl: string; label: string }[]
   >([]);
   const [checkInPhotoError, setCheckInPhotoError] = useState(false);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const checkInFileRef = useRef<HTMLInputElement>(null);
   const checkInCameraRef = useRef<HTMLInputElement>(null);
-  const checkInViewFileRefs = useRef<Partial<Record<CheckInViewId, HTMLInputElement>>>({});
-  const [checkInCaptureViewId, setCheckInCaptureViewId] = useState<CheckInViewId | null>(null);
   const checkInJobIdRef = useRef<string | null>(null);
   const isSubmittingJobRef = useRef(false);
 
@@ -1847,10 +1835,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (jid) navigateToCreatedJobCard(jid);
   };
 
-  const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>, viewId?: CheckInViewId) => {
+  const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
-    let resolvedViewId: CheckInViewId | undefined;
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) {
         toast.error("Choose image files only.");
@@ -1861,38 +1848,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         continue;
       }
       const previewUrl = URL.createObjectURL(file);
-      setCheckInPhotos((prev) => {
-        const targetViewId =
-          viewId ??
-          checkInCaptureViewId ??
-          resolvedViewId ??
-          CHECK_IN_VIEWS.find((v) => !prev.some((p) => p.viewId === v.id))?.id;
-        resolvedViewId = targetViewId;
-        const viewLabel = targetViewId
-          ? CHECK_IN_VIEWS.find((v) => v.id === targetViewId)?.label
-          : undefined;
-        const label = viewLabel ?? (file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ") || "Photo");
-        const next = targetViewId ? prev.filter((p) => p.viewId !== targetViewId) : prev;
-        return [
-          ...next,
-          {
-            id: `ph-ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            file,
-            previewUrl,
-            label,
-            viewId: targetViewId,
-          },
-        ];
-      });
+      const label = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ") || "Photo";
+      setCheckInPhotos((prev) => [
+        ...prev,
+        {
+          id: `ph-ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          file,
+          previewUrl,
+          label,
+        },
+      ]);
     }
     setCheckInPhotoError(false);
-    setCheckInCaptureViewId(null);
     if (checkInFileRef.current) checkInFileRef.current.value = "";
     if (checkInCameraRef.current) checkInCameraRef.current.value = "";
-    const clearViewId = viewId ?? checkInCaptureViewId ?? resolvedViewId;
-    if (clearViewId && checkInViewFileRefs.current[clearViewId]) {
-      checkInViewFileRefs.current[clearViewId]!.value = "";
-    }
   };
 
   const removeCheckInPhoto = (photoId: string) => {
@@ -5222,10 +5191,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
               <div className="space-y-3">
                 <Label className="text-base">
-                  Inspection checklist <span className="text-destructive">*</span>
+                  Before photos <span className="text-destructive">*</span>
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Capture at least one photo. Check off each view as you document the vehicle.
+                  Add at least one photo of the vehicle. You can upload multiple images.
                 </p>
                 <input
                   ref={checkInCameraRef}
@@ -5243,73 +5212,29 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   className="sr-only"
                   onChange={(e) => handleCheckInFiles(e)}
                 />
-                <ul className="space-y-2">
-                  {CHECK_IN_VIEWS.map((view) => {
-                    const photo = checkInPhotos.find((p) => p.viewId === view.id);
-                    const done = Boolean(photo);
-                    return (
-                      <li
-                        key={view.id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg border p-3",
-                          done ? "border-emerald-300/80 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20" : "border-border"
-                        )}
+                {checkInPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {checkInPhotos.map((photo) => (
+                      <div
+                        key={photo.id}
+                        className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
                       >
-                        <div
-                          className={cn(
-                            "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
-                            done ? "border-emerald-600 bg-emerald-600 text-white" : "border-muted-foreground/40"
-                          )}
-                          aria-hidden
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photo.previewUrl} alt={photo.label} className="h-full w-full object-cover" />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute right-1 top-1 h-6 w-6 opacity-90"
+                          aria-label={`Remove ${photo.label}`}
+                          onClick={() => removeCheckInPhoto(photo.id)}
                         >
-                          {done ? <Check className="h-3 w-3" /> : null}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">{view.label}</p>
-                          {photo && (
-                            <div className="mt-1.5 flex items-center gap-2">
-                              <div className="relative h-10 w-10 rounded overflow-hidden border bg-muted shrink-0">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={photo.previewUrl} alt="" className="h-full w-full object-cover" />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs text-destructive"
-                                onClick={() => removeCheckInPhoto(photo.id)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <input
-                          ref={(el) => {
-                            if (el) checkInViewFileRefs.current[view.id] = el;
-                          }}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="sr-only"
-                          onChange={(e) => handleCheckInFiles(e, view.id)}
-                        />
-                        {!done && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0 h-8 text-xs"
-                            onClick={() => checkInViewFileRefs.current[view.id]?.click()}
-                          >
-                            <Camera className="h-3.5 w-3.5 mr-1" />
-                            Photo
-                          </Button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button type="button" size="sm" onClick={() => checkInCameraRef.current?.click()}>
                     <Camera className="w-4 h-4 mr-2" />
