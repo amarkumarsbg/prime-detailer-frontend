@@ -27,13 +27,16 @@ import { useAppointmentStore } from "@/store/appointment-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
-import { pushActivityLog } from "@/lib/activity-log-helper";
-import {
-  buildJobCardFromAppointment,
-  findCatalogServiceForAppointment,
-  resolveJobBranchId,
-} from "@/lib/job-from-appointment";
+import { findCatalogServiceForAppointment } from "@/lib/job-from-appointment";
 import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
+import { getAppointmentDisplayId, resolveAppointmentKind } from "@/lib/appointment-ids";
+import {
+  appointmentsScheduledToday,
+  upcomingReservations,
+  isActiveReservation,
+} from "@/lib/appointment-reminders";
+import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
+import { useReservationReminders } from "@/hooks/use-reservation-reminders";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import type { Appointment, JobCard, JobCardStatus } from "@/types";
@@ -109,14 +112,13 @@ const STATUS_OPTIONS: { value: JobCardStatus | "ALL"; label: string }[] = [
 
 export default function BookingsPage() {
   const router = useRouter();
-  const { jobCards, addJobCard, getNextJobNumber } = useJobCardStore();
+  const { jobCards } = useJobCardStore();
   const invoices = useInvoiceStore((s) => s.invoices);
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const authUser = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker } = useBranchScope();
   const appointments = useAppointmentStore((s) => s.appointments);
-  const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
@@ -130,6 +132,30 @@ export default function BookingsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  useReservationReminders();
+
+  const bookingReservations = useMemo(
+    () =>
+      appointments
+        .filter((a) => resolveAppointmentKind(a) === "BOOKING")
+        .sort((a, b) => {
+          const da = `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`);
+          if (da !== 0) return da;
+          return a.bookingId.localeCompare(b.bookingId);
+        }),
+    [appointments]
+  );
+
+  const todaysBookingCount = useMemo(
+    () => appointmentsScheduledToday(bookingReservations).length,
+    [bookingReservations]
+  );
+
+  const upcomingBookingCount = useMemo(
+    () => upcomingReservations(bookingReservations).length,
+    [bookingReservations]
+  );
 
   const activeFilterCount = useMemo(() => {
     let n = 0;
@@ -188,63 +214,34 @@ export default function BookingsPage() {
   );
 
   const confirmedAppointmentsNeedingJob = useMemo(() => {
-    return appointments
+    return bookingReservations
       .filter(
         (a) =>
-          a.status === "CONFIRMED" &&
-          !a.jobCardId &&
+          isActiveReservation(a) &&
+          (a.status === "CONFIRMED" || a.status === "SCHEDULED") &&
           !isAppointmentSlotElapsed(a.date, a.time)
-      )
-      .sort((a, b) => {
-        const da = `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`);
-        if (da !== 0) return da;
-        return a.bookingId.localeCompare(b.bookingId);
-      });
-  }, [appointments]);
+      );
+  }, [bookingReservations]);
 
   const createJobFromAppointment = async (apt: Appointment) => {
-    if (apt.status !== "CONFIRMED" || apt.jobCardId) return;
+    if (apt.jobCardId) return;
     setCreatingFromAppointmentId(apt.id);
     try {
-      const jobId = `jc-apt-${Date.now().toString(36)}`;
-      const jobNumber = getNextJobNumber();
-      const branchId = resolveJobBranchId(currentBranch, branches);
-      const vehicle = vehicles.find((v) => v.id === apt.vehicleId);
-      const job = buildJobCardFromAppointment({
+      const job = await convertAppointmentToJobCard({
         apt,
-        jobId,
-        jobNumber,
-        branchId,
-        vehicle,
+        vehicles,
         catalog,
+        branches,
+        currentBranch,
         createdBy: authUser?.id ?? "usr-004",
       });
-      await addJobCard(job);
-      await updateAppointment(apt.id, { jobCardId: job.id, status: "IN_PROGRESS" });
-
       if (!findCatalogServiceForAppointment(catalog, apt.serviceType)) {
         toast.info("Custom service line", {
           description: `No catalog match for "${apt.serviceType}" — check prices on the job card.`,
         });
       }
-
-      pushActivityLog({
-        action: "CREATED",
-        entityType: "JOB_CARD",
-        entityId: job.id,
-        entityLabel: job.jobNumber,
-        details: `${job.jobNumber} created from appointment ${apt.bookingId}`,
-      });
-      pushActivityLog({
-        action: "STATUS_CHANGED",
-        entityType: "APPOINTMENT",
-        entityId: apt.id,
-        entityLabel: apt.bookingId,
-        details: `Linked to job ${job.jobNumber}`,
-      });
-
       toast.success("Job card created", {
-        description: `${apt.bookingId} → ${job.jobNumber}`,
+        description: `${getAppointmentDisplayId(apt)} → ${job.jobNumber}`,
       });
       router.push(`/job-cards/${job.id}`);
     } catch {
@@ -405,7 +402,85 @@ export default function BookingsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Today&apos;s bookings</p>
+            <p className="text-2xl font-bold tabular-nums mt-2">{todaysBookingCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Upcoming</p>
+            <p className="text-2xl font-bold tabular-nums mt-2">{upcomingBookingCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Awaiting arrival</p>
+            <p className="text-2xl font-bold tabular-nums mt-2">{confirmedAppointmentsNeedingJob.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active jobs</p>
+            <p className="text-2xl font-bold tabular-nums mt-2">{searchFilteredBookings.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="min-w-0 border-border/80 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">All bookings</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Pre-service reservations — create a job card when the customer arrives.
+          </p>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {bookingReservations.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">No bookings yet. Use New Booking to add one.</p>
+          ) : (
+            <div className="divide-y divide-border rounded-lg border border-border">
+              {bookingReservations.map((apt) => (
+                <div key={apt.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-semibold text-primary">{getAppointmentDisplayId(apt)}</p>
+                    <p className="font-medium mt-1">{apt.customerName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {apt.date} · {apt.time} · {apt.serviceType}
+                    </p>
+                    {apt.jobCardId ? (
+                      <p className="text-xs text-emerald-600 mt-1">Converted to job card</p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    {apt.jobCardId ? (
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/job-cards/${apt.jobCardId}`}>View job</Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={creatingFromAppointmentId === apt.id}
+                        onClick={() => void createJobFromAppointment(apt)}
+                      >
+                        {creatingFromAppointmentId === apt.id ? (
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-1" />
+                        )}
+                        Create job card
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 hidden">
         <Card className="border-emerald-200/60 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/40 h-full">
           <CardContent className="p-4 sm:p-5 flex flex-col h-full min-h-[9rem]">
             <div className="flex items-center gap-3 min-h-8">
@@ -500,13 +575,9 @@ export default function BookingsPage() {
               <CalendarRange className="size-4" aria-hidden />
             </span>
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-base">Confirmed appointments</CardTitle>
+              <CardTitle className="text-base">Arriving today — create job card</CardTitle>
               <p className="text-sm text-muted-foreground max-md:hidden">
-                After you confirm a booking on{" "}
-                <Link href="/appointments" className="text-primary underline-offset-4 hover:underline">
-                  Appointments
-                </Link>
-                , it appears here until you start a job card.
+                When the customer arrives, start the job card from their booking.
               </p>
             </div>
           </div>
@@ -527,7 +598,7 @@ export default function BookingsPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-mono text-xs font-semibold text-primary">
-                        {apt.bookingId}
+                        {getAppointmentDisplayId(apt)}
                       </span>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {apt.date} · {apt.time}
@@ -579,7 +650,7 @@ export default function BookingsPage() {
                     {confirmedAppointmentsNeedingJob.map((apt) => (
                       <tr key={apt.id} className="border-b border-border/80 last:border-0">
                         <td className="p-3 font-mono text-xs font-semibold text-primary whitespace-nowrap">
-                          {apt.bookingId}
+                          {getAppointmentDisplayId(apt)}
                         </td>
                         <td className="p-3 text-muted-foreground whitespace-nowrap">
                           {apt.date} · {apt.time}

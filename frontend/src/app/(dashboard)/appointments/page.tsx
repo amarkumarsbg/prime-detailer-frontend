@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -58,12 +59,19 @@ import {
   Calendar,
   Check,
   XCircle,
+  Loader2,
+  ClipboardList,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import type { Appointment, AppointmentStatus, Vehicle, VehicleSegment } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { buildBookingWhatsAppMessageCompact } from "@/lib/booking-confirmation-message";
+import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
+import { getNextAppointmentNumber, getAppointmentDisplayId } from "@/lib/appointment-ids";
+import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
+import { findCatalogServiceForAppointment } from "@/lib/job-from-appointment";
+import { useReservationReminders } from "@/hooks/use-reservation-reminders";
+import { useAuthStore } from "@/store/auth-store";
 import {
   sendCustomerWhatsApp,
   openWhatsAppComposer,
@@ -71,7 +79,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
-import { notifyAppointmentScheduledWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import {
   isAppointmentSlotInPast,
   localTodayDateInputMin,
@@ -102,6 +110,9 @@ const APPOINTMENT_VEHICLE_SEGMENTS: { value: VehicleSegment; label: string }[] =
 ];
 
 export default function AppointmentsPage() {
+  const router = useRouter();
+  const authUser = useAuthStore((s) => s.user);
+  const currentBranch = useAuthStore((s) => s.currentBranch);
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
@@ -122,7 +133,11 @@ export default function AppointmentsPage() {
   const businessEmail = useSettingsStore((s) => s.businessEmail);
   const businessAddress = useSettingsStore((s) => s.businessAddress);
   const businessWebsite = useSettingsStore((s) => s.businessWebsite);
+  const businessName = useSettingsStore((s) => s.businessName);
   const branches = useBranchStore((s) => s.branches);
+  const [creatingJobForId, setCreatingJobForId] = useState<string | null>(null);
+
+  useReservationReminders();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
@@ -302,18 +317,19 @@ export default function AppointmentsPage() {
 
     const mechanic = formMechanicId ? staff.find((s) => s.id === formMechanicId) : undefined;
     const now = new Date().toISOString();
-    const y = new Date().getFullYear();
-    let maxBooking = 0;
-    for (const a of appointments) {
-      const m = a.bookingId.match(/^BK-(\d{4})-(\d+)/);
-      if (m && Number(m[1]) === y)
-        maxBooking = Math.max(maxBooking, Number(m[2]));
-    }
-    const bookingId = `BK-${y}-${String(maxBooking + 1).padStart(4, "0")}`;
+    const allAppointments = useAppointmentStore.getState().appointments;
+    const appointmentNumber = getNextAppointmentNumber(allAppointments);
+    const branchId =
+      viewingLabel !== "All branches"
+        ? branches.find((b) => b.name === viewingLabel)?.id
+        : branches.find((b) => b.isActive)?.id;
 
     const newApt: Appointment = {
       id: `apt-${Date.now()}`,
-      bookingId,
+      bookingId: appointmentNumber,
+      appointmentNumber,
+      kind: "APPOINTMENT",
+      branchId,
       customerId,
       customerName,
       customerPhone,
@@ -325,35 +341,21 @@ export default function AppointmentsPage() {
       mechanicName: mechanic?.name,
       date: formDate,
       time: formTime,
-      status: "SCHEDULED",
-      whatsappSent: false,
+      status: "CONFIRMED",
+      whatsappSent: true,
       createdAt: now,
       notes: formNotes.trim() || undefined,
       customerFirstName,
     };
 
-    addAppointment(newApt);
-    const waTermsUrl = businessWebsite?.trim()
-      ? /^https?:\/\//i.test(businessWebsite.trim())
-        ? businessWebsite.trim()
-        : `https://${businessWebsite.trim()}`
-      : undefined;
-    notifyAppointmentScheduledWhatsApp(newApt, {
-      branchName:
-        viewingLabel !== "All branches"
-          ? viewingLabel
-          : branches.find((b) => b.isActive)?.name ?? "Main workshop",
-      address: businessAddress,
-      phone: businessPhone,
-      email: businessEmail,
-      termsUrl: waTermsUrl,
-    });
+    await addAppointment(newApt);
+    notifyReservationConfirmedWhatsApp(newApt, businessName);
 
     const [yy, mm, dd] = formDate.split("-").map(Number);
     const scheduledDay = new Date(yy, mm - 1, dd);
 
-    toast.success("Appointment scheduled", {
-      description: `${bookingId} · ${format(scheduledDay, "d MMM yyyy")} ${formTime}`,
+    toast.success("Appointment created", {
+      description: `${appointmentNumber} · ${format(scheduledDay, "d MMM yyyy")} ${formTime}`,
     });
     setDialogOpen(false);
     resetAppointmentForm();
@@ -370,18 +372,22 @@ export default function AppointmentsPage() {
   const termsUrl = useMemo(() => {
     const w = businessWebsite?.trim();
     if (!w) return undefined;
-    return /^https?:\/\//i.test(w) ? w : `https://${w}`;
+    const base = /^https?:\/\//i.test(w) ? w : `https://${w}`;
+    const normalized = base.replace(/\/$/, "");
+    if (/terms/i.test(normalized)) return normalized;
+    return `${normalized}/terms-conditions`;
   }, [businessWebsite]);
 
   const businessPayload = useMemo(
     () => ({
       branchName: branchLabel,
+      businessName,
       address: businessAddress,
       phone: businessPhone,
       email: businessEmail,
       termsUrl,
     }),
-    [branchLabel, businessAddress, businessPhone, businessEmail, termsUrl]
+    [branchLabel, businessName, businessAddress, businessPhone, businessEmail, termsUrl]
   );
 
   const sendBookingConfirmationWhatsApp = async (apt: Appointment, messageText: string) => {
@@ -394,7 +400,7 @@ export default function AppointmentsPage() {
       useNotificationStore.getState().addNotification({
         type: "whatsapp_sent",
         title: channel === "api" ? "Booking confirmation sent" : "Booking — WhatsApp composer",
-        message: `${apt.bookingId} → ${phone}`,
+        message: `${getAppointmentDisplayId(apt)} → ${phone}`,
         href: "/appointments",
       });
     };
@@ -426,9 +432,37 @@ export default function AppointmentsPage() {
     if (apt.status !== "SCHEDULED") return;
     const next: Appointment = { ...apt, status: "CONFIRMED" };
     await updateAppointment(apt.id, { status: "CONFIRMED" });
-    toast.success("Booking confirmed");
-    const messageText = buildBookingWhatsAppMessageCompact(next, businessPayload);
+    toast.success("Appointment confirmed");
+    const messageText = buildReservationConfirmedMessage(next, businessName);
     await sendBookingConfirmationWhatsApp(next, messageText);
+  };
+
+  const createJobFromAppointment = async (apt: Appointment) => {
+    if (apt.jobCardId || (apt.status !== "CONFIRMED" && apt.status !== "SCHEDULED")) return;
+    setCreatingJobForId(apt.id);
+    try {
+      const job = await convertAppointmentToJobCard({
+        apt,
+        vehicles,
+        catalog,
+        branches,
+        currentBranch,
+        createdBy: authUser?.id ?? "usr-004",
+      });
+      if (!findCatalogServiceForAppointment(catalog, apt.serviceType)) {
+        toast.info("Custom service line", {
+          description: `No catalog match for "${apt.serviceType}" — check prices on the job card.`,
+        });
+      }
+      toast.success("Job card created", {
+        description: `${getAppointmentDisplayId(apt)} → ${job.jobNumber}`,
+      });
+      router.push(`/job-cards/${job.id}`);
+    } catch {
+      toast.error("Could not create job card");
+    } finally {
+      setCreatingJobForId(null);
+    }
   };
 
   const monthStart = startOfMonth(currentMonth);
@@ -955,7 +989,7 @@ export default function AppointmentsPage() {
                           </div>
                           <p className="text-sm font-medium">{apt.customerName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {apt.bookingId} &middot; {apt.vehicleRegNumber} &middot; {apt.serviceType}
+                            {getAppointmentDisplayId(apt)} &middot; {apt.vehicleRegNumber} &middot; {apt.serviceType}
                           </p>
                           <div className="flex flex-col gap-2 mt-3">
                             {apt.mechanicName && (
@@ -972,6 +1006,21 @@ export default function AppointmentsPage() {
                                   Confirm booking
                                 </Button>
                               )}
+                              {(apt.status === "CONFIRMED" || apt.status === "SCHEDULED") && !apt.jobCardId && (
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs"
+                                  disabled={creatingJobForId === apt.id}
+                                  onClick={() => void createJobFromAppointment(apt)}
+                                >
+                                  {creatingJobForId === apt.id ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <ClipboardList className="w-3 h-3 mr-1" />
+                                  )}
+                                  Create job card
+                                </Button>
+                              )}
                               {(apt.status === "CONFIRMED" || apt.status === "IN_PROGRESS") && !apt.whatsappSent && (
                                 <Button
                                   size="sm"
@@ -980,7 +1029,7 @@ export default function AppointmentsPage() {
                                   onClick={() =>
                                     void sendBookingConfirmationWhatsApp(
                                       apt,
-                                      buildBookingWhatsAppMessageCompact(apt, businessPayload)
+                                      buildReservationConfirmedMessage(apt, businessName)
                                     )
                                   }
                                 >
@@ -1028,7 +1077,7 @@ export default function AppointmentsPage() {
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sc.bg} ${sc.text}`}>
                             {apt.status.replace(/_/g, " ")}
                           </span>
-                          <span className="text-xs text-muted-foreground font-mono">{apt.bookingId}</span>
+                          <span className="text-xs text-muted-foreground font-mono">{getAppointmentDisplayId(apt)}</span>
                           {apt.whatsappSent && (
                             <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                               <Check className="w-3 h-3" /> WhatsApp sent
@@ -1050,6 +1099,21 @@ export default function AppointmentsPage() {
                             Confirm booking
                           </Button>
                         )}
+                        {(apt.status === "CONFIRMED" || apt.status === "SCHEDULED") && !apt.jobCardId && (
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs"
+                            disabled={creatingJobForId === apt.id}
+                            onClick={() => void createJobFromAppointment(apt)}
+                          >
+                            {creatingJobForId === apt.id ? (
+                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            ) : (
+                              <ClipboardList className="w-3.5 h-3.5 mr-1.5" />
+                            )}
+                            Create job card
+                          </Button>
+                        )}
                         {(apt.status === "CONFIRMED" || apt.status === "IN_PROGRESS") && !apt.whatsappSent && (
                           <Button
                             size="sm"
@@ -1058,7 +1122,7 @@ export default function AppointmentsPage() {
                             onClick={() =>
                               void sendBookingConfirmationWhatsApp(
                                 apt,
-                                buildBookingWhatsAppMessageCompact(apt, businessPayload)
+                                buildReservationConfirmedMessage(apt, businessName)
                               )
                             }
                           >

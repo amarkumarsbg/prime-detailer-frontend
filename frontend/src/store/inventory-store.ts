@@ -3,6 +3,12 @@
 import { create } from "zustand";
 import type { Invoice, JobCard, Part, ProductPurchase, StockMovement } from "@/types";
 import { deductionsForJob, type ConsumptionDeduction } from "@/lib/inventory/consumption";
+import {
+  deductCanonicalSecondary,
+  formatAvailableStock,
+  getCanonicalStockSecondary,
+  initializeDualUnitStock,
+} from "@/lib/inventory/multi-unit";
 import { isMlTrackedPart, litresToMl } from "@/lib/inventory-units";
 import { deleteCollectionDocument, postCollectionSnapshot } from "@/lib/collection-sync";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
@@ -46,14 +52,19 @@ function validateDeductions(parts: Part[], lines: ConsumptionDeduction[]): strin
   for (const d of lines) {
     const p = parts.find((x) => x.id === d.partId);
     if (!p) return `Unknown part: ${d.partId}`;
+    const before = getCanonicalStockSecondary(p);
     if (d.ml != null) {
       if (!isMlTrackedPart(p)) return `${p.name} is not tracked in ml`;
-      if ((p.stockQuantityMl ?? 0) < d.ml) {
+      if (before < d.ml) {
         return `Insufficient stock: ${p.name} (need ${d.ml} ml)`;
       }
     }
-    if (d.count != null && p.quantity < d.count) {
-      return `Insufficient stock: ${p.name} (need ${d.count} ${p.primaryUnit})`;
+    if (d.secondaryUnits != null && before < d.secondaryUnits) {
+      const unit = d.displayUnit ?? p.secondaryUnit;
+      return `Insufficient stock: ${p.name} — only ${formatAvailableStock(p, unit)} available`;
+    }
+    if (d.primaryCount != null && p.quantity < d.primaryCount) {
+      return `Insufficient stock: ${p.name} (need ${d.primaryCount} ${p.primaryUnit})`;
     }
   }
   return null;
@@ -64,23 +75,44 @@ function applyDeductionToParts(parts: Part[], lines: ConsumptionDeduction[]): Pa
   for (const d of lines) {
     const idx = next.findIndex((x) => x.id === d.partId);
     if (idx < 0) continue;
-    let p = next[idx];
-    if (d.ml != null && isMlTrackedPart(p)) {
-      p = {
-        ...p,
-        stockQuantityMl: Math.max(0, (p.stockQuantityMl ?? 0) - d.ml),
-      };
-      next[idx] = p;
+    const p = next[idx];
+    const amount = d.ml ?? d.secondaryUnits ?? 0;
+    if (d.ml != null || d.secondaryUnits != null) {
+      next[idx] = deductCanonicalSecondary(p, amount);
+      continue;
     }
-    if (d.count != null) {
-      p = next[idx];
+    if (d.primaryCount != null) {
       next[idx] = {
         ...p,
-        quantity: Math.max(0, p.quantity - d.count),
+        quantity: Math.max(0, p.quantity - d.primaryCount),
       };
     }
   }
   return next;
+}
+
+function movementFromDeduction(
+  d: ConsumptionDeduction,
+  part: Part | undefined,
+  base: Omit<
+    StockMovement,
+    "quantity" | "unit" | "stockBeforeSecondary" | "stockAfterSecondary" | "displayQuantity" | "displayUnit"
+  >
+): StockMovement {
+  const before = part ? getCanonicalStockSecondary(part) : 0;
+  const delta = d.ml ?? d.secondaryUnits ?? d.primaryCount ?? 0;
+  const after = Math.max(0, before - delta);
+  const unit = d.displayUnit ?? (d.ml != null ? "ML" : part?.secondaryUnit ?? part?.primaryUnit ?? "Piece");
+  const qty = d.displayQuantity ?? d.ml ?? d.secondaryUnits ?? d.primaryCount ?? 0;
+  return {
+    ...base,
+    quantity: qty,
+    unit,
+    stockBeforeSecondary: before,
+    stockAfterSecondary: after,
+    displayQuantity: d.displayQuantity ?? qty,
+    displayUnit: unit,
+  };
 }
 
 export const useInventoryStore = create<InventoryStore>((set, get) => ({
@@ -90,7 +122,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
 
   addPart: (part) => {
     set((state) => ({
-      parts: [part, ...state.parts],
+      parts: [initializeDualUnitStock(part), ...state.parts],
     }));
     persistInventorySnapshot(get);
   },
@@ -164,6 +196,8 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   recordStockAdjustment: (input) => {
     const { partId, direction, amountMl, amountCount, reason, performedBy } = input;
     set((state) => {
+      const beforePart = state.parts.find((x) => x.id === partId);
+      const before = beforePart ? getCanonicalStockSecondary(beforePart) : 0;
       const parts = state.parts.map((p) => {
         if (p.id !== partId) return p;
         if (amountMl != null && isMlTrackedPart(p)) {
@@ -175,13 +209,20 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         }
         if (amountCount != null) {
           const delta = direction === "IN" ? amountCount : -amountCount;
+          if (p.stockQuantitySecondary != null) {
+            return deductCanonicalSecondary(
+              { ...p, stockQuantitySecondary: (p.stockQuantitySecondary ?? 0) + delta },
+              0
+            );
+          }
           return { ...p, quantity: Math.max(0, p.quantity + delta) };
         }
         return p;
       });
-      const p = state.parts.find((x) => x.id === partId);
+      const afterPart = parts.find((x) => x.id === partId);
+      const after = afterPart ? getCanonicalStockSecondary(afterPart) : before;
       const qty = amountMl ?? amountCount ?? 0;
-      const unit = amountMl != null ? "ML" : p?.primaryUnit ?? "Piece";
+      const unit = amountMl != null ? "ML" : afterPart?.primaryUnit ?? "Piece";
       const movement: StockMovement = {
         id: `sm-${Date.now()}`,
         partId,
@@ -191,6 +232,10 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         reason,
         performedBy,
         createdAt: new Date().toISOString(),
+        stockBeforeSecondary: before,
+        stockAfterSecondary: after,
+        displayQuantity: qty,
+        displayUnit: unit,
       };
       return {
         parts,
@@ -208,7 +253,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     if (!jobCard) {
       return { ok: false, error: "Job card not found for this invoice." };
     }
-    const lines = deductionsForJob(jobCard, catalog);
+    const lines = deductionsForJob(jobCard, catalog, get().parts);
     if (lines.length === 0) {
       return { ok: true };
     }
@@ -216,24 +261,21 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     if (err) {
       return { ok: false, error: err };
     }
-    const newParts = applyDeductionToParts(get().parts, lines);
+    const currentParts = get().parts;
+    const newParts = applyDeductionToParts(currentParts, lines);
     const createdAt = new Date().toISOString();
     const newMovements: StockMovement[] = lines.map((d, i) => {
-      const p = get().parts.find((x) => x.id === d.partId);
-      const qty = d.ml ?? d.count ?? 0;
-      const unit = d.ml != null ? "ML" : p?.primaryUnit ?? "Piece";
-      return {
+      const p = currentParts.find((x) => x.id === d.partId);
+      return movementFromDeduction(d, p, {
         id: `sm-inv-${invoice.id}-${i}-${Date.now()}`,
         partId: d.partId,
-        type: "OUT" as const,
-        quantity: qty,
-        unit,
+        type: "OUT",
         reason: `Invoice ${invoice.invoiceNumber}`,
         invoiceId: invoice.id,
         jobCardId: jobCard.id,
         performedBy,
         createdAt,
-      };
+      });
     });
     set({
       parts: newParts,
@@ -248,7 +290,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     if (jobCard.inventoryConsumedAt) {
       return { ok: true };
     }
-    const lines = deductionsForJob(jobCard, catalog);
+    const lines = deductionsForJob(jobCard, catalog, get().parts);
     if (lines.length === 0) {
       return { ok: true };
     }
@@ -256,23 +298,20 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     if (err) {
       return { ok: false, error: err };
     }
-    const newParts = applyDeductionToParts(get().parts, lines);
+    const currentParts = get().parts;
+    const newParts = applyDeductionToParts(currentParts, lines);
     const createdAt = new Date().toISOString();
     const newMovements: StockMovement[] = lines.map((d, i) => {
-      const p = get().parts.find((x) => x.id === d.partId);
-      const qty = d.ml ?? d.count ?? 0;
-      const unit = d.ml != null ? "ML" : p?.primaryUnit ?? "Piece";
-      return {
+      const p = currentParts.find((x) => x.id === d.partId);
+      return movementFromDeduction(d, p, {
         id: `sm-ready-${jobCard.id}-${i}-${Date.now()}`,
         partId: d.partId,
-        type: "OUT" as const,
-        quantity: qty,
-        unit,
+        type: "OUT",
         reason: `Job ready — ${jobCard.jobNumber}`,
         jobCardId: jobCard.id,
         performedBy,
         createdAt,
-      };
+      });
     });
     set({
       parts: newParts,

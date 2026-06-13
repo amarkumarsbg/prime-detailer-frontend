@@ -132,7 +132,16 @@ export function buildInvoiceFromJobCard(
     });
   }
 
-  const lineItems: InvoiceLineItem[] = [...catalogLines, ...programLines];
+  const partLines: InvoiceLineItem[] = (job.parts ?? []).map((p, i) => ({
+    id: `li-${invoiceId}-part-${i}`,
+    description: `${p.name} — ${p.quantity} ${p.unit}`,
+    type: "PARTS" as const,
+    quantity: p.quantity,
+    unitPrice: p.unitPrice,
+    total: p.lineTotal,
+  }));
+
+  const lineItems: InvoiceLineItem[] = [...catalogLines, ...programLines, ...partLines];
 
   const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
   const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
@@ -204,6 +213,7 @@ export type CreateInvoiceForJobResult =
 
 function jobHasInvoiceableLines(job: JobCard): boolean {
   if (job.services.length > 0) return true;
+  if ((job.parts?.length ?? 0) > 0) return true;
   const hesCatalog = useHighEndServiceStore.getState().services;
   for (const hesId of job.highEndServiceIds ?? []) {
     const cfg = hesCatalog.find((h) => h.id === hesId);

@@ -299,6 +299,20 @@ export interface ServiceItem {
   durationMinutes?: number;
 }
 
+/** Parts / materials added manually on a job card (inventory deducted at Ready). */
+export interface JobCardPartItem {
+  id: string;
+  jobCardId: string;
+  partId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  /** Line total excl. GST */
+  lineTotal: number;
+}
+
 export interface InspectionPhoto {
   id: string;
   type: InspectionPhotoType;
@@ -337,6 +351,8 @@ export interface JobCard {
   expectedDelivery: string;
   actualDelivery?: string;
   services: ServiceItem[];
+  /** Optional parts selected at job creation (in addition to service consumption profiles). */
+  parts?: JobCardPartItem[];
   estimatedAmount: number;
   incentivePercent: number;
   incentiveAmount: number;
@@ -515,13 +531,21 @@ export interface Part {
   /** Manufacturer or product brand (optional). */
   brand?: string;
   sku: string;
+  /** Optional barcode for search / scanning. */
+  barcode?: string;
   category: PartCategory;
-  /** Count-based stock (pieces, sets, kg, etc.). Not used when stockQuantityMl is set. */
+  /** Primary-unit stock count (e.g. BOX). Synced from stockQuantitySecondary for dual-unit parts. */
   quantity: number;
   primaryUnit: string;
   secondaryUnit: string;
+  /** 1 primaryUnit = conversionFactor secondaryUnit (e.g. 1 BOX = 100 PCS). */
   conversionFactor: number;
+  /** Sale price per primary unit (e.g. ₹500/BOX). */
   unitPrice: number;
+  /** Sale price per secondary unit (e.g. ₹5/PCS). Derived from unitPrice ÷ conversionFactor when omitted. */
+  unitPriceSecondary?: number;
+  /** Canonical on-hand stock in secondary units (PCS, ML, GM). Authoritative for dual-unit parts. */
+  stockQuantitySecondary?: number;
   /** Reorder threshold for count-based parts. */
   reorderLevel: number;
   supplier: string;
@@ -550,6 +574,13 @@ export interface StockMovement {
   vendor?: string;
   performedBy: string;
   createdAt: string;
+  /** Canonical stock before movement (secondary units / ml). */
+  stockBeforeSecondary?: number;
+  /** Canonical stock after movement (secondary units / ml). */
+  stockAfterSecondary?: number;
+  /** User-facing consumed/adjusted quantity in the movement unit. */
+  displayQuantity?: number;
+  displayUnit?: string;
 }
 
 export interface ProductPurchase {
@@ -571,9 +602,17 @@ export type AppointmentStatus =
   | "CANCELLED"
   | "NOT_ATTENDED";
 
+/** Pre-service reservation channel — booking (BK-*) vs appointment (AP-*). */
+export type AppointmentKind = "BOOKING" | "APPOINTMENT";
+
 export interface Appointment {
   id: string;
+  /** Booking reference for customer bookings (BK-2026-00125). */
   bookingId: string;
+  /** Appointment reference when kind is APPOINTMENT (AP-2026-00045). */
+  appointmentNumber?: string;
+  kind?: AppointmentKind;
+  branchId?: string;
   customerId: string;
   customerName: string;
   customerPhone: string;
@@ -590,6 +629,9 @@ export interface Appointment {
   jobCardId?: string;
   notes?: string;
   whatsappSent: boolean;
+  /** Day-of reminder sent (booking / appointment date). */
+  reminderSent?: boolean;
+  reminderSentAt?: string;
   createdAt: string;
   /** First name for "Hi *Name*" in confirmation WhatsApp */
   customerFirstName?: string;

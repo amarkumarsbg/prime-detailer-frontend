@@ -6,10 +6,21 @@ import type {
   VehicleSegment,
 } from "@/types";
 
+import {
+  hasDualUnitPart,
+  quantityToCanonicalSecondary,
+} from "@/lib/inventory/multi-unit";
+
 export type ConsumptionDeduction = {
   partId: string;
   ml?: number;
-  count?: number;
+  /** Canonical secondary-unit deduction (PCS, GM, etc.). */
+  secondaryUnits?: number;
+  /** Primary-unit count for simple single-unit parts. */
+  primaryCount?: number;
+  /** Original consumption unit for audit display. */
+  displayUnit?: string;
+  displayQuantity?: number;
 };
 
 const ML_UNITS = new Set(["ML", "L", "LITRE", "LITRES"]);
@@ -65,35 +76,77 @@ export function consumptionLineToDeduction(
     return { partId: line.partId, ml: quantity };
   }
   if (COUNT_UNITS.has(u) || !ML_UNITS.has(u)) {
-    return { partId: line.partId, count: quantity };
+    return { partId: line.partId, primaryCount: quantity };
   }
-  return { partId: line.partId, count: quantity };
+  return { partId: line.partId, primaryCount: quantity };
+}
+
+/** Build deduction from a job-card part line using part unit conversion. */
+export function jobCardPartToDeduction(
+  part: Part,
+  quantity: number,
+  unit: string
+): ConsumptionDeduction {
+  const canonical = quantityToCanonicalSecondary(part, quantity, unit);
+  if (part.stockQuantityMl != null && part.primaryUnit === "Litre") {
+    return {
+      partId: part.id,
+      ml: canonical,
+      displayUnit: unit,
+      displayQuantity: quantity,
+    };
+  }
+  if (hasDualUnitPart(part)) {
+    return {
+      partId: part.id,
+      secondaryUnits: canonical,
+      displayUnit: unit,
+      displayQuantity: quantity,
+    };
+  }
+  return {
+    partId: part.id,
+    primaryCount: quantity,
+    displayUnit: unit,
+    displayQuantity: quantity,
+  };
 }
 
 function mergeDeductions(lines: ConsumptionDeduction[]): ConsumptionDeduction[] {
-  const byPart = new Map<string, { ml: number; count: number }>();
+  const byPart = new Map<
+    string,
+    { ml: number; secondaryUnits: number; primaryCount: number; displayUnit?: string; displayQuantity?: number }
+  >();
   for (const line of lines) {
-    const cur = byPart.get(line.partId) ?? { ml: 0, count: 0 };
+    const cur = byPart.get(line.partId) ?? { ml: 0, secondaryUnits: 0, primaryCount: 0 };
     if (line.ml != null) cur.ml += line.ml;
-    if (line.count != null) cur.count += line.count;
+    if (line.secondaryUnits != null) cur.secondaryUnits += line.secondaryUnits;
+    if (line.primaryCount != null) cur.primaryCount += line.primaryCount;
+    if (line.displayUnit) cur.displayUnit = line.displayUnit;
+    if (line.displayQuantity != null) cur.displayQuantity = (cur.displayQuantity ?? 0) + line.displayQuantity;
     byPart.set(line.partId, cur);
   }
   const out: ConsumptionDeduction[] = [];
   for (const [partId, v] of byPart) {
     const o: ConsumptionDeduction = { partId };
     if (v.ml > 0) o.ml = v.ml;
-    if (v.count > 0) o.count = v.count;
-    if (o.ml != null || o.count != null) out.push(o);
+    if (v.secondaryUnits > 0) o.secondaryUnits = v.secondaryUnits;
+    if (v.primaryCount > 0) o.primaryCount = v.primaryCount;
+    if (v.displayUnit) o.displayUnit = v.displayUnit;
+    if (v.displayQuantity != null && v.displayQuantity > 0) o.displayQuantity = v.displayQuantity;
+    if (o.ml != null || o.secondaryUnits != null || o.primaryCount != null) out.push(o);
   }
   return out;
 }
 
-/** All consumption lines for services on a job card (catalog lookup by id). */
+/** All consumption lines for services on a job card (catalog + manual parts lookup). */
 export function deductionsForJob(
   job: JobCard,
-  catalog: ServiceCatalogItem[]
+  catalog: ServiceCatalogItem[],
+  parts: Part[] = []
 ): ConsumptionDeduction[] {
   const catalogById = new Map(catalog.map((c) => [c.id, c]));
+  const partsById = new Map(parts.map((p) => [p.id, p]));
   const raw: ConsumptionDeduction[] = [];
 
   const segment = job.vehicleSegment;
@@ -104,8 +157,33 @@ export function deductionsForJob(
     for (const line of item.consumptionProfile) {
       if (line.requiredPart === false) continue;
       const qty = consumptionQuantityForSegment(line, segment);
-      raw.push(consumptionLineToDeduction(line, qty));
+      const part = partsById.get(line.partId);
+      if (part) {
+        raw.push(jobCardPartToDeduction(part, qty, line.unit));
+      } else {
+        raw.push(consumptionLineToDeduction(line, qty));
+      }
     }
+  }
+
+  for (const partLine of job.parts ?? []) {
+    if (!partLine.partId || partLine.quantity <= 0) continue;
+    const part = partsById.get(partLine.partId);
+    if (part) {
+      raw.push(jobCardPartToDeduction(part, partLine.quantity, partLine.unit));
+      continue;
+    }
+    raw.push(
+      consumptionLineToDeduction(
+        {
+          partId: partLine.partId,
+          partName: partLine.name,
+          quantityPerCar: partLine.quantity,
+          unit: partLine.unit,
+        },
+        partLine.quantity
+      )
+    );
   }
 
   return mergeDeductions(raw);

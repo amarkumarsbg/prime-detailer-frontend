@@ -7,7 +7,9 @@ import type {
   Quotation,
 } from "@/types";
 import type { BookingConfirmationBusiness } from "@/lib/booking-confirmation-message";
-import { buildBookingWhatsAppMessageCompact } from "@/lib/booking-confirmation-message";
+import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
+import { getAppointmentDisplayId } from "@/lib/appointment-ids";
+import { reminderMessageFor } from "@/lib/appointment-reminders";
 import {
   buildInvoiceWhatsAppMessage,
   buildJobDeliveredWhatsAppMessage,
@@ -98,28 +100,61 @@ export function notifyInvoiceCreatedWhatsApp(inv: Invoice, businessName: string)
   });
 }
 
-export function notifyAppointmentScheduledWhatsApp(
+export function notifyReservationConfirmedWhatsApp(
   apt: Appointment,
-  business: BookingConfirmationBusiness
+  businessName: string
 ): void {
   const phone = (apt.whatsappPhone ?? apt.customerPhone)?.trim();
   if (!phone) return;
-  const message = buildBookingWhatsAppMessageCompact(apt, business);
+  const message = buildReservationConfirmedMessage(apt, businessName);
+  const ref = getAppointmentDisplayId(apt);
   void executeCustomerWhatsAppAutomation({
     phone,
     message,
     titles: {
-      api: "Appointment scheduled — WhatsApp sent",
-      composer: "Appointment scheduled — WhatsApp composer",
+      api: "Confirmation sent — WhatsApp",
+      composer: "Confirmation — WhatsApp composer",
     },
-    notificationSummary: `${apt.bookingId} → ${phone}`,
-    href: "/appointments",
-    branchId: branchIdForJobCardId(apt.jobCardId),
+    notificationSummary: `${ref} → ${phone}`,
+    href: apt.kind === "APPOINTMENT" ? "/appointments" : "/bookings",
+    branchId: apt.branchId,
     activityLog: {
       entityType: "APPOINTMENT",
       entityId: apt.id,
-      entityLabel: apt.bookingId,
-      details: `Booking acknowledgement WhatsApp for ${apt.customerName}`,
+      entityLabel: ref,
+      details: `Confirmation WhatsApp for ${apt.customerName}`,
+    },
+  });
+}
+
+/** @deprecated Use notifyReservationConfirmedWhatsApp for new bookings. */
+export function notifyAppointmentScheduledWhatsApp(
+  apt: Appointment,
+  business: BookingConfirmationBusiness
+): void {
+  notifyReservationConfirmedWhatsApp(apt, business.businessName ?? business.branchName);
+}
+
+export function notifyReservationReminderWhatsApp(apt: Appointment): void {
+  const phone = (apt.whatsappPhone ?? apt.customerPhone)?.trim();
+  if (!phone) return;
+  const message = reminderMessageFor(apt);
+  const ref = getAppointmentDisplayId(apt);
+  void executeCustomerWhatsAppAutomation({
+    phone,
+    message,
+    titles: {
+      api: "Booking reminder sent",
+      composer: "Booking reminder — WhatsApp composer",
+    },
+    notificationSummary: `${ref} reminder → ${phone}`,
+    href: apt.kind === "APPOINTMENT" ? "/appointments" : "/bookings",
+    branchId: apt.branchId,
+    activityLog: {
+      entityType: "APPOINTMENT",
+      entityId: apt.id,
+      entityLabel: ref,
+      details: `Day-of reminder WhatsApp for ${apt.customerName}`,
     },
   });
 }

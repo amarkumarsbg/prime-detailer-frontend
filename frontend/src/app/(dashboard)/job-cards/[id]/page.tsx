@@ -29,6 +29,8 @@ import {
   Phone,
   Mail,
   CalendarDays,
+  Package,
+  Plus,
 } from "lucide-react";
 import { TimerControlsBufferCard } from "@/components/job-cards/timer-controls-buffer-card";
 import { ServiceTimerDeliverySummary } from "@/components/job-cards/service-timer-delivery-summary";
@@ -76,6 +78,13 @@ import { useNotificationStore } from "@/store/notification-store";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { pickupBlocksJobAdvance } from "@/lib/pickup-drop-flow";
 import { JobCardPickupPanel } from "@/components/job-cards/job-card-pickup-panel";
+import {
+  JobCardPartsPicker,
+  buildJobCardPartItems,
+  jobCardPartsSubtotal,
+  selectedLinesFromJobParts,
+  type SelectedPartLine,
+} from "@/components/job-cards/job-card-parts-picker";
 import { ApiError } from "@/lib/api-client";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
@@ -283,6 +292,15 @@ export default function JobCardDetailPage() {
   const [highEndChecklistDoneById, setHighEndChecklistDoneById] = useState<Record<string, boolean>>(
     () => jobCard?.highEndServiceCompletedById ?? {}
   );
+  const [partsDialogOpen, setPartsDialogOpen] = useState(false);
+  const [partsDraftLines, setPartsDraftLines] = useState<SelectedPartLine[]>([]);
+
+  const inventoryParts = useInventoryStore((s) => s.parts);
+
+  const canEditParts =
+    currentStatus !== "DELIVERED" &&
+    currentStatus !== "CANCELLED" &&
+    !jobCard?.inventoryConsumedAt;
 
   const persistHighEndCompletion = useCallback(
     (next: Record<string, number>) => {
@@ -762,6 +780,30 @@ export default function JobCardDetailPage() {
       services: next,
       updatedAt: new Date().toISOString(),
     });
+  };
+
+  const openPartsDialog = () => {
+    if (!jobCard) return;
+    setPartsDraftLines(selectedLinesFromJobParts(jobCard.parts ?? []));
+    setPartsDialogOpen(true);
+  };
+
+  const saveJobCardParts = () => {
+    if (!jobCard) return;
+    const items = buildJobCardPartItems(jobCard.id, partsDraftLines, inventoryParts);
+    const oldPartsTotal = jobCardPartsSubtotal(jobCard.parts ?? []);
+    const newPartsTotal = jobCardPartsSubtotal(items);
+    const estimatedAmount =
+      Math.round((jobCard.estimatedAmount - oldPartsTotal + newPartsTotal) * 100) / 100;
+    updateJobCard(jobCard.id, {
+      parts: items.length > 0 ? items : undefined,
+      estimatedAmount,
+      updatedAt: new Date().toISOString(),
+    });
+    setPartsDialogOpen(false);
+    toast.success(
+      items.length > 0 ? `${items.length} part(s) saved on job card` : "Parts removed from job card"
+    );
   };
 
   const setAllServicesComplete = (completed: boolean) => {
@@ -1623,6 +1665,54 @@ export default function JobCardDetailPage() {
                   </CardContent>
                 </Card>
               ) : null}
+              <Card className="border-border/80 shadow-sm">
+                <CardHeader className="pb-3 border-b border-border/60 bg-muted/15 flex flex-row items-center justify-between gap-2 space-y-0">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="w-4 h-4 text-muted-foreground" />
+                    Parts &amp; materials
+                  </CardTitle>
+                  {canEditParts && (
+                    <Button type="button" size="sm" variant="outline" onClick={openPartsDialog}>
+                      <Plus className="w-4 h-4 mr-1.5" />
+                      {(jobCard.parts?.length ?? 0) > 0 ? "Edit parts" : "Add parts"}
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="pt-4">
+                  {(jobCard.parts?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No parts added yet. Optional — add materials from inventory when needed.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {jobCard.parts!.map((part) => (
+                        <div
+                          key={part.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium leading-tight">{part.name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                              SKU {part.sku} · {part.quantity} {part.unit}
+                            </p>
+                          </div>
+                          <p className="font-semibold tabular-nums shrink-0 text-emerald-600">
+                            {formatCurrency(part.lineTotal)}
+                          </p>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground pt-1 text-right tabular-nums">
+                        Parts subtotal: {formatCurrency(jobCardPartsSubtotal(jobCard.parts!))}
+                      </p>
+                    </div>
+                  )}
+                  {jobCard.inventoryConsumedAt ? (
+                    <p className="text-xs text-muted-foreground mt-3 border-t border-border/60 pt-3">
+                      Stock was deducted when this job reached Ready — parts list is read-only.
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
               <Card className="border-border/80 shadow-sm">
                 <CardHeader className="pb-3 border-b border-border/60 bg-muted/15">
                   <CardTitle className="text-base">Quick actions</CardTitle>
@@ -2816,6 +2906,32 @@ export default function JobCardDetailPage() {
               }}
             >
               Continue — update status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={partsDialogOpen} onOpenChange={setPartsDialogOpen}>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
+          <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
+            <DialogTitle>Parts &amp; materials</DialogTitle>
+            <DialogDescription>
+              Optional — search inventory and add parts to this job. Prices and stock update automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-4 min-h-0 flex-1 overflow-y-auto">
+            <JobCardPartsPicker
+              hideIntro
+              selectedLines={partsDraftLines}
+              onSelectedLinesChange={setPartsDraftLines}
+            />
+          </div>
+          <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0 flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPartsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={saveJobCardParts}>
+              Save parts
             </Button>
           </DialogFooter>
         </DialogContent>

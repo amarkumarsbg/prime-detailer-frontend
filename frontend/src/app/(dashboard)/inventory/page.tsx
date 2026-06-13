@@ -17,6 +17,7 @@ import {
   partStockValueInr,
   stockStatusShortLabel,
 } from "@/lib/inventory-units";
+import { formatDualUnitStockEquivalent } from "@/lib/inventory/multi-unit";
 import {
   Dialog,
   DialogContent,
@@ -56,6 +57,8 @@ const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: "Litre", label: "Litre (fluid)" },
   { value: "Roll", label: "Roll" },
   { value: "Box", label: "Box" },
+  { value: "Pack", label: "Pack" },
+  { value: "Carton", label: "Carton" },
   { value: "Pair", label: "Pair" },
 ];
 import { toast } from "sonner";
@@ -111,6 +114,10 @@ export default function InventoryPage() {
   const [addPartPrice, setAddPartPrice] = useState("");
   const [addPartReorder, setAddPartReorder] = useState("");
   const [addPartSupplier, setAddPartSupplier] = useState("");
+  const [addPartBarcode, setAddPartBarcode] = useState("");
+  const [addPartSecondaryUnit, setAddPartSecondaryUnit] = useState("");
+  const [addPartConversionRate, setAddPartConversionRate] = useState("1");
+  const [addPartSecondaryPrice, setAddPartSecondaryPrice] = useState("");
 
   const resetAddPartForm = () => {
     setAddPartName("");
@@ -122,6 +129,10 @@ export default function InventoryPage() {
     setAddPartPrice("");
     setAddPartReorder("");
     setAddPartSupplier("");
+    setAddPartBarcode("");
+    setAddPartSecondaryUnit("");
+    setAddPartConversionRate("1");
+    setAddPartSecondaryPrice("");
   };
 
   const partsForTable = useMemo(() => {
@@ -229,11 +240,17 @@ export default function InventoryPage() {
       className: "whitespace-nowrap",
       render: (item: Part) => {
         const status = getStockStatus(item);
+        const equivalent = formatDualUnitStockEquivalent(item);
         return (
           <div className="inline-flex min-w-[4.5rem] flex-col gap-1">
             <span className="font-semibold text-sm tabular-nums leading-none">
               {formatPartStockQuantity(item)}
             </span>
+            {equivalent ? (
+              <span className="text-[10px] text-muted-foreground leading-none">
+                = {equivalent}
+              </span>
+            ) : null}
             <span
               className={`inline-flex w-fit max-w-full items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${status.className}`}
               title={status.label}
@@ -437,17 +454,42 @@ export default function InventoryPage() {
         Number.isNaN(reorderInput) || reorderInput < 0 ? 0 : Math.round(reorderInput);
       const isKg = addPartUnit === "Kg";
       const isRoll = addPartUnit === "Roll";
+      const isBox = addPartUnit === "Box" || addPartUnit === "Pack" || addPartUnit === "Carton";
+      const secondaryUnit =
+        addPartSecondaryUnit.trim() ||
+        (isKg ? "Grams" : isRoll ? "Sq.ft" : isBox ? "PCS" : addPartUnit);
+      const conversionRaw = Number(addPartConversionRate);
+      const conversionFactor =
+        Number.isFinite(conversionRaw) && conversionRaw > 0
+          ? conversionRaw
+          : isKg
+            ? 1000
+            : isRoll
+              ? 50
+              : isBox
+                ? 100
+                : 1;
+      const secondaryPriceRaw = Number(addPartSecondaryPrice);
+      const unitPriceSecondary =
+        Number.isFinite(secondaryPriceRaw) && secondaryPriceRaw >= 0
+          ? secondaryPriceRaw
+          : conversionFactor > 1
+            ? price / conversionFactor
+            : undefined;
       addPart({
         id,
         name,
         brand,
         sku,
+        barcode: addPartBarcode.trim() || undefined,
         category: addPartCategory,
         quantity: qty,
         primaryUnit: addPartUnit,
-        secondaryUnit: isKg ? "Grams" : isRoll ? "Sq.ft" : addPartUnit,
-        conversionFactor: isKg ? 1000 : isRoll ? 50 : 1,
+        secondaryUnit,
+        conversionFactor,
         unitPrice: price,
+        unitPriceSecondary,
+        stockQuantitySecondary: conversionFactor > 1 ? qty * conversionFactor : undefined,
         reorderLevel: reorder,
         supplier,
         lastRestocked: now,
@@ -653,7 +695,7 @@ export default function InventoryPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="add-part-sku">SKU</Label>
+                      <Label htmlFor="add-part-sku">SKU / Part number</Label>
                       <Input
                         id="add-part-sku"
                         placeholder="e.g. BRK-PAD-001"
@@ -662,6 +704,17 @@ export default function InventoryPage() {
                         onFocus={focusMobileFormField}
                         autoComplete="off"
                         required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-part-barcode">Barcode (optional)</Label>
+                      <Input
+                        id="add-part-barcode"
+                        placeholder="Scan or enter barcode"
+                        value={addPartBarcode}
+                        onChange={(e) => setAddPartBarcode(e.target.value)}
+                        onFocus={focusMobileFormField}
+                        autoComplete="off"
                       />
                     </div>
                     <div className="space-y-2">
@@ -683,7 +736,7 @@ export default function InventoryPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="add-part-unit">Stock unit</Label>
+                      <Label htmlFor="add-part-unit">Primary unit</Label>
                       <Select value={addPartUnit} onValueChange={setAddPartUnit}>
                         <SelectTrigger id="add-part-unit">
                           <SelectValue />
@@ -697,6 +750,33 @@ export default function InventoryPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    {addPartUnit !== "Litre" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="add-part-secondary-unit">Secondary unit (optional)</Label>
+                          <Input
+                            id="add-part-secondary-unit"
+                            placeholder="e.g. PCS, GM, ML"
+                            value={addPartSecondaryUnit}
+                            onChange={(e) => setAddPartSecondaryUnit(e.target.value)}
+                            onFocus={focusMobileFormField}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="add-part-conversion">Conversion (1 primary = ? secondary)</Label>
+                          <Input
+                            id="add-part-conversion"
+                            type="number"
+                            min={1}
+                            step={1}
+                            placeholder="e.g. 100 for 1 BOX = 100 PCS"
+                            value={addPartConversionRate}
+                            onChange={(e) => setAddPartConversionRate(e.target.value)}
+                            onFocus={focusMobileFormField}
+                          />
+                        </div>
+                      </>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="add-part-qty">
                         {addPartUnit === "Litre" ? "Initial stock (litres)" : "Initial quantity"}
@@ -713,18 +793,32 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="add-part-price">Unit Price (₹)</Label>
+                      <Label htmlFor="add-part-price">Primary unit price (₹)</Label>
                       <Input
                         id="add-part-price"
                         type="number"
                         min="0"
                         step="0.01"
-                        placeholder="0"
+                        placeholder="e.g. 500 per BOX"
                         value={addPartPrice}
                         onChange={(e) => setAddPartPrice(e.target.value)}
                         required
                       />
                     </div>
+                    {addPartUnit !== "Litre" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="add-part-secondary-price">Secondary unit price (₹, optional)</Label>
+                        <Input
+                          id="add-part-secondary-price"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Auto from primary ÷ conversion"
+                          value={addPartSecondaryPrice}
+                          onChange={(e) => setAddPartSecondaryPrice(e.target.value)}
+                        />
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="add-part-reorder">
                         {addPartUnit === "Litre" ? "Reorder at (litres)" : `Reorder level (${addPartUnit})`}
@@ -873,11 +967,12 @@ export default function InventoryPage() {
           <DataTable
             data={partsForTable}
             columns={columns}
-            searchPlaceholder="Search SKU, name, supplier…"
-            searchKeys={["name", "sku", "category", "supplier", "brand"]}
+            searchPlaceholder="Search SKU, name, barcode, supplier…"
+            searchKeys={["name", "sku", "barcode", "category", "supplier", "brand"]}
             mobileCardBelow="lg"
             renderMobileCard={(item) => {
               const status = getStockStatus(item);
+              const equivalent = formatDualUnitStockEquivalent(item);
               return (
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -887,6 +982,11 @@ export default function InventoryPage() {
                         <p className="text-xs text-muted-foreground mt-0.5">{item.brand}</p>
                       ) : null}
                       <p className="text-xs text-muted-foreground font-mono mt-0.5">{item.sku}</p>
+                      {item.barcode ? (
+                        <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                          Barcode {item.barcode}
+                        </p>
+                      ) : null}
                       <span className="mt-2 inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
                         {item.category}
                       </span>
@@ -895,6 +995,9 @@ export default function InventoryPage() {
                       <p className="font-semibold text-sm tabular-nums whitespace-nowrap">
                         {formatPartStockQuantity(item)}
                       </p>
+                      {equivalent ? (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">= {equivalent}</p>
+                      ) : null}
                       <span
                         className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${status.className}`}
                       >
@@ -930,8 +1033,22 @@ export default function InventoryPage() {
               <div className="divide-y divide-border">
                 {recentMovements.map((m) => {
                   const part = parts.find((p) => p.id === m.partId);
+                  const displayQty = m.displayQuantity ?? m.quantity;
+                  const displayUnit = m.displayUnit ?? m.unit;
                   const qtyLabel =
-                    m.unit === "ML" ? `${m.quantity.toLocaleString("en-IN")} ml` : `${m.quantity} ${m.unit}`;
+                    displayUnit === "ML"
+                      ? `${displayQty.toLocaleString("en-IN")} ml`
+                      : `${displayQty.toLocaleString("en-IN")} ${displayUnit}`;
+                  const stockUnit =
+                    part && isMlTrackedPart(part)
+                      ? "ml"
+                      : part?.secondaryUnit ?? part?.primaryUnit ?? displayUnit;
+                  const before = m.stockBeforeSecondary;
+                  const after = m.stockAfterSecondary;
+                  const stockAudit =
+                    before != null && after != null
+                      ? `Stock: ${before.toLocaleString("en-IN")} → ${after.toLocaleString("en-IN")} ${stockUnit}`
+                      : null;
                   return (
                     <div key={m.id} className="flex items-center gap-4 p-4">
                       <div
@@ -953,6 +1070,9 @@ export default function InventoryPage() {
                           {qtyLabel} · {part?.name ?? m.partId}
                         </p>
                         <p className="text-xs text-muted-foreground">{m.reason}</p>
+                        {stockAudit ? (
+                          <p className="text-xs text-muted-foreground mt-0.5">{stockAudit}</p>
+                        ) : null}
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
                         {formatDateTime(m.createdAt)}

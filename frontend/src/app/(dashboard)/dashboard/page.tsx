@@ -23,6 +23,13 @@ import { useBranchStore } from "@/store/branch-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useExpenseStore } from "@/store/expense-store";
 import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
+import { useAppointmentStore } from "@/store/appointment-store";
+import { resolveAppointmentKind } from "@/lib/appointment-ids";
+import {
+  appointmentsScheduledToday,
+  upcomingReservations,
+} from "@/lib/appointment-reminders";
+import { useReservationReminders } from "@/hooks/use-reservation-reminders";
 import { useReminderStore } from "@/store/reminder-store";
 import {
   computeBranchScopedDashboardStats,
@@ -140,6 +147,7 @@ export default function DashboardPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const branches = useBranchStore((s) => s.branches);
   const { jobCards } = useJobCardStore();
+  const appointments = useAppointmentStore((s) => s.appointments);
   const invoices = useInvoiceStore((s) => s.invoices);
   const expenses = useExpenseStore((s) => s.expenses);
   const { selectedBranchId, viewingLabel } = useBranchScope();
@@ -151,6 +159,21 @@ export default function DashboardPage() {
   const businessName = useSettingsStore((s) => s.businessName);
   const user = useAuthStore((s) => s.user);
   const dashboardView = getDashboardView(user?.role);
+
+  useReservationReminders();
+
+  const bookingReservations = useMemo(
+    () => appointments.filter((a) => resolveAppointmentKind(a) === "BOOKING"),
+    [appointments]
+  );
+  const todaysBookingReservations = useMemo(
+    () => appointmentsScheduledToday(bookingReservations),
+    [bookingReservations]
+  );
+  const upcomingBookingReservations = useMemo(
+    () => upcomingReservations(bookingReservations),
+    [bookingReservations]
+  );
 
   const [recentBookingPreview, setRecentBookingPreview] = useState<JobCard | null>(null);
 
@@ -539,6 +562,22 @@ export default function DashboardPage() {
             ))}
           </motion.div>
         ))}
+
+      {todaysBookingReservations.length > 0 && (
+        <Card className="border-primary/30 bg-primary/5 shadow-sm">
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <Bell className="h-5 w-5 shrink-0 text-primary" />
+              <p className="text-sm font-medium">
+                Today&apos;s Bookings ({todaysBookingReservations.length})
+              </p>
+            </div>
+            <Button size="sm" className="shrink-0" asChild>
+              <Link href="/bookings">View list</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Today's Jobs — operations first */}
       <Card className="border border-border/60 shadow-sm">
@@ -1147,6 +1186,18 @@ export default function DashboardPage() {
             Overview
           </p>
           <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <KPICard
+              tone="emerald"
+              title="Today's Bookings"
+              value={todaysBookingReservations.length}
+              icon={Bell}
+            />
+            <KPICard
+              tone="blue"
+              title="Upcoming Bookings"
+              value={upcomingBookingReservations.length}
+              icon={Calendar}
+            />
             <KPICard tone="blue" title={"Today's Jobs"} value={executive.todaysJobCount} icon={Calendar} />
             <KPICard tone="amber" title="Pending Bookings" value={executive.pendingBookings} icon={Clock} />
             <KPICard

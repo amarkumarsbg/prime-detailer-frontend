@@ -10,7 +10,9 @@ import {
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
-import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { getNextBookingId } from "@/lib/appointment-ids";
+import { format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -67,6 +69,7 @@ import {
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { CustomerCreditCheckDialog } from "@/components/job-cards/customer-credit-check-dialog";
+import { JobCardPartsPicker, type SelectedPartLine, buildJobCardPartItems, jobCardPartsSubtotal, selectedLinesFromJobParts } from "@/components/job-cards/job-card-parts-picker";
 import { AddAddonDialog } from "@/components/services/add-addon-dialog";
 import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
@@ -84,6 +87,8 @@ import { useWalletStore } from "@/store/wallet-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
 import { useInvoiceStore } from "@/store/invoice-store";
+import { useInventoryStore } from "@/store/inventory-store";
+import { useAppointmentStore } from "@/store/appointment-store";
 import { customerHasPendingInvoiceDues } from "@/lib/party/ledger-math";
 import { useBranchScope } from "@/lib/branch-scope";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -118,6 +123,8 @@ import type {
   MembershipTier,
   MembershipServiceUsage,
   JobCard,
+  JobCardPartItem,
+  Appointment,
 } from "@/types";
 
 const GST_RATE = 0.18;
@@ -255,6 +262,7 @@ type JobWizardStepId =
   | "smartSuggestions"
   | "membership"
   | "serviceSelection"
+  | "partsSelection"
   | "highEndServices"
   | "addons"
   | "pickupDrop"
@@ -271,6 +279,7 @@ const JOB_WIZARD_LABEL: Record<JobWizardStepId, string> = {
   smartSuggestions: "Smart suggestions",
   membership: "Membership",
   serviceSelection: "Service selection",
+  partsSelection: "Parts selection",
   highEndServices: "High-end services",
   addons: "Add-ons",
   pickupDrop: "Pickup & drop",
@@ -336,6 +345,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
   const jobCards = useJobCardStore((s) => s.jobCards);
   const { addJobCard, getNextJobNumber, updateJobCard } = useJobCardStore();
+  const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const { services: highEndServices } = useHighEndServiceStore();
   const { addTransaction } = useWalletStore();
   const { referralRewardAmount, newCustomerDiscount, businessName } = useSettingsStore();
@@ -403,6 +413,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [couponApplied, setCouponApplied] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
+  const [selectedPartLines, setSelectedPartLines] = useState<SelectedPartLine[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [pickupRequired, setPickupRequired] = useState(false);
   const [pickupDriverId, setPickupDriverId] = useState("");
@@ -1095,6 +1106,23 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }, 0);
   }, [selectedHighEndIds, highEndServices]);
 
+  const inventoryParts = useInventoryStore((s) => s.parts);
+
+  const partsSubtotalExclGst = useMemo(() => {
+    if (!isJobCard || selectedPartLines.length === 0) return 0;
+    const items = buildJobCardPartItems("preview", selectedPartLines, inventoryParts);
+    return jobCardPartsSubtotal(items);
+  }, [isJobCard, selectedPartLines, inventoryParts]);
+
+  const selectedPartSummaryLines = useMemo(() => {
+    if (!isJobCard || selectedPartLines.length === 0) return [];
+    return buildJobCardPartItems("preview", selectedPartLines, inventoryParts).map((item) => ({
+      id: item.partId,
+      label: `${item.name} · ${item.quantity} ${item.unit}`,
+      amount: item.lineTotal,
+    }));
+  }, [isJobCard, selectedPartLines, inventoryParts]);
+
   const suggestedJobCardExpectedDelivery = useMemo(() => {
     if (!isJobCard) return null;
     return expectedDeliveryFromHighEndCompletion(
@@ -1138,9 +1166,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return Math.round(catalogSubtotalExclGst * 0.1 * 100) / 100;
   }, [couponApplied, catalogSubtotalExclGst]);
 
-  /** Catalog after coupon + high-end program amounts (all excl. GST). */
+  /** Catalog after coupon + high-end program amounts + parts (all excl. GST). */
   const afterDiscount =
-    Math.max(0, catalogSubtotalExclGst - discountAmount) + highEndSubtotalExclGst;
+    Math.max(0, catalogSubtotalExclGst - discountAmount) +
+    highEndSubtotalExclGst +
+    partsSubtotalExclGst;
   const gstAmount = Math.round(afterDiscount * GST_RATE * 100) / 100;
   const totalPayable = Math.round((afterDiscount + gstAmount) * 100) / 100;
 
@@ -1431,7 +1461,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     });
 
     const estimatedAmount =
-      serviceItems.reduce((s, x) => s + x.price, 0) + highEndSubtotalExclGst;
+      serviceItems.reduce((s, x) => s + x.price, 0) +
+      highEndSubtotalExclGst +
+      (isJobCard ? jobCardPartsSubtotal(buildJobCardPartItems(id, selectedPartLines, inventoryParts)) : 0);
+
+    const jobCardPartItems: JobCardPartItem[] = isJobCard
+      ? buildJobCardPartItems(id, selectedPartLines, inventoryParts)
+      : [];
     const customIncRaw = mechanicIncentivePercentOverride.trim();
     let incentivePercentFinal = catalogAvgIncentivePercent;
     if (customIncRaw !== "") {
@@ -1504,75 +1540,64 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     })();
 
     if (isWalkIn) {
-      const walkInJob: JobCard = {
-        id,
-        jobNumber,
+      const when = new Date(bookingWhen);
+      const aptDate = format(when, "yyyy-MM-dd");
+      const aptTime = format(when, "HH:mm");
+      const bookingId = getNextBookingId(useAppointmentStore.getState().appointments);
+      const aptId = `apt-${Date.now()}`;
+      const serviceTypeLabel =
+        serviceItems.map((s) => s.name).join(" + ") || "Service";
+      const expectedDelDate =
+        expectedDeliveryIso && !Number.isNaN(new Date(expectedDeliveryIso).getTime())
+          ? format(new Date(expectedDeliveryIso), "yyyy-MM-dd")
+          : undefined;
+
+      const newBooking: Appointment = {
+        id: aptId,
+        bookingId,
+        kind: "BOOKING",
         branchId,
         customerId: custId,
         customerName: customerName.trim(),
         customerPhone,
+        whatsappPhone: customerPhone,
         vehicleId: resolvedVehicleId,
         vehicleRegNumber: regStored,
         vehicleMakeModel: `${vehicleBrand} ${vehicleModel}`.trim(),
-        vehicleSegment: seg,
+        serviceType: serviceTypeLabel,
         mechanicId: mechanicId || undefined,
         mechanicName: mechanic?.name,
-        status: "RECEIVED",
-        reportedIssues: pickupRequired ? "Walk-in — pickup requested" : "Walk-in booking",
-        expectedDelivery: expectedDeliveryIso,
-        services: serviceItems,
-        estimatedAmount,
-        incentivePercent: Math.round(incentivePercentFinal * 100) / 100,
-        incentiveAmount: Math.round((estimatedAmount * incentivePercentFinal) / 100 * 100) / 100,
-        termsAndConditions:
-          "Walk-in: vehicle stored securely. Prices subject to inspection. GST as applicable.",
-        notes: bookingNote,
-        ...advanceAmountPatch,
-        createdBy: user?.id ?? "USR-WALKIN",
+        date: aptDate,
+        time: aptTime,
+        status: "CONFIRMED",
+        whatsappSent: true,
         createdAt: now,
-        updatedAt: now,
+        notes: bookingNote,
+        customerFirstName: customerName.trim().split(/\s+/)[0],
+        customerAddress: customerAddress.trim() || undefined,
+        priceSubtotalExGst: afterDiscount,
+        priceGstAmount: gstAmount,
+        priceGrandTotal: totalPayable,
+        advancePaid: summaryAdvanceAmount > 0 ? summaryAdvanceAmount : undefined,
+        expectedDeliveryDate: expectedDelDate,
       };
-      addJobCard(walkInJob);
 
-      if (pickupRequired) {
-        queuePickupDropFromBooking({
-          job: walkInJob,
-          customerAddress,
-          pickupDriverId: pickupDriver?.id,
-          pickupDriverName: pickupDriver?.name,
-          branches,
-        });
-      }
-
-      if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
-        const sub = getActiveMembership(custId, resolvedVehicleId);
-        if (sub) {
-          recordMembershipUsages(
-            sub.id,
-            membershipRedeemServiceIds.map((sid) => ({
-              serviceCatalogId: sid,
-              serviceName: serviceCatalog.find((c) => c.id === sid)?.name,
-              jobCardId: id,
-            }))
-          );
-        }
-      }
+      await addAppointment(newBooking);
+      notifyReservationConfirmedWhatsApp(newBooking, businessName);
 
       pushActivityLog({
         action: "CREATED",
-        entityType: "JOB_CARD",
-        entityId: id,
-        entityLabel: jobNumber,
-        details: `Walk-in booking ${jobNumber} — ${customerName} (${totalPayable} incl. GST)`,
+        entityType: "APPOINTMENT",
+        entityId: aptId,
+        entityLabel: bookingId,
+        details: `Booking ${bookingId} — ${customerName.trim()} (${formatCurrency(totalPayable)} incl. GST)`,
       });
 
       toast.success("Booking created", {
-        description: pickupRequired
-          ? `${jobNumber} · Pickup driver ${pickupDriver?.name ?? "assigned"}`
-          : jobNumber,
+        description: `${bookingId} — confirmation message sent. Create a job card when the customer arrives.`,
       });
-      void sendJobCardCreatedWhatsApp(walkInJob);
-      navigateToCreatedJobCard(id);
+      skipJobCardListRedirectRef.current = true;
+      router.push("/bookings");
       return;
     }
 
@@ -1596,6 +1621,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       odometerReading: odometerReading ? parseInt(odometerReading, 10) : undefined,
       expectedDelivery: expectedDeliveryIso,
       services: serviceItems,
+      parts: jobCardPartItems.length > 0 ? jobCardPartItems : undefined,
       estimatedAmount,
       incentivePercent: Math.round(incentivePercentFinal * 100) / 100,
       incentiveAmount: Math.round((estimatedAmount * incentivePercentFinal) / 100 * 100) / 100,
@@ -1825,6 +1851,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       "membership",
       "serviceSelection",
     ];
+    if (isJobCard) s.push("partsSelection");
     if (highEndServices.length > 0) s.push("highEndServices");
     s.push("addons");
     s.push("pickupDrop");
@@ -2057,6 +2084,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               <dd className="text-right text-xs">{addonLabels.join(", ")}</dd>
             </div>
           )}
+          {selectedPartSummaryLines.length > 0 && (
+            <div className="flex justify-between gap-2 align-start">
+              <dt className="text-muted-foreground shrink-0">Parts</dt>
+              <dd className="text-right text-xs space-y-1 min-w-0">
+                {selectedPartSummaryLines.map((line) => (
+                  <div key={line.id} className="flex justify-end gap-2 flex-wrap">
+                    <span className="truncate max-w-[140px]">{line.label}</span>
+                    <span className="tabular-nums shrink-0">{formatCurrency(line.amount)}</span>
+                  </div>
+                ))}
+              </dd>
+            </div>
+          )}
           {highEndSummaryLines.length > 0 && (
             <div className="flex justify-between gap-2 align-start border-t border-border/60 pt-2 mt-1">
               <dt className="text-muted-foreground shrink-0">High-end (est.)</dt>
@@ -2241,14 +2281,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         >
           {useBookingWizard && (
             <>
-              <div className="sm:hidden shrink-0 rounded-lg border border-border/60 bg-muted/40 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Step {jobCreateStep + 1} of {jobWizardStepCount}
-                </p>
-                <p className="mt-0.5 text-sm font-medium leading-snug">
-                  {JOB_WIZARD_LABEL[jobWizardStepId]}
-                </p>
-              </div>
               <div
                 className={cn(
                   "hidden sm:block overflow-x-auto overflow-y-visible pb-1.5 -mx-1 px-1 [scrollbar-width:thin] shrink-0",
@@ -3727,6 +3759,23 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           </Card>
           )}
 
+          {isJobCard && showJobWizardStep("partsSelection") && (
+          <Card>
+            {!useBookingWizard && (
+              <CardHeader>
+                <CardTitle className="text-lg">Parts Selection</CardTitle>
+              </CardHeader>
+            )}
+            <CardContent className={cn(useBookingWizard && "pt-4 sm:pt-6")}>
+              <JobCardPartsPicker
+                hideIntro={useBookingWizard}
+                selectedLines={selectedPartLines}
+                onSelectedLinesChange={setSelectedPartLines}
+              />
+            </CardContent>
+          </Card>
+          )}
+
           {highEndServices.length > 0 && showJobWizardStep("highEndServices") && (
             <Card>
               <CardHeader>
@@ -4574,7 +4623,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   );
 
   const bookingListHref = isJobCard ? "/job-cards" : "/bookings";
-  const desktopTitle = isJobCard ? "New Job Card" : "Create Walk-In Booking";
+  const desktopTitle = isJobCard ? "New Job Card" : "New Booking";
   const desktopBackLabel = isJobCard ? "Back to Job Cards" : "Back to Bookings";
 
   return (

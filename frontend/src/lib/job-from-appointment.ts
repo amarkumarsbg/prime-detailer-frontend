@@ -1,4 +1,5 @@
 import { isAllBranchesScope } from "@/lib/all-branches";
+import { getAppointmentDisplayId } from "@/lib/appointment-ids";
 import type {
   Appointment,
   Branch,
@@ -114,7 +115,7 @@ export function buildJobCardFromAppointment(params: {
     mechanicId: apt.mechanicId,
     mechanicName: apt.mechanicName,
     status: "RECEIVED",
-    reportedIssues: `From appointment ${apt.bookingId} · ${apt.date} ${apt.time}`,
+    reportedIssues: `From ${getAppointmentDisplayId(apt)} · ${apt.date} ${apt.time}`,
     expectedDelivery,
     services: [serviceItem],
     estimatedAmount: estimatedAmount || linePrice,
@@ -122,7 +123,7 @@ export function buildJobCardFromAppointment(params: {
     incentiveAmount,
     notes: combinedNotes,
     appointmentId: apt.id,
-    appointmentBookingRef: apt.bookingId,
+    appointmentBookingRef: getAppointmentDisplayId(apt),
     createdBy,
     createdAt: now,
     updatedAt: now,

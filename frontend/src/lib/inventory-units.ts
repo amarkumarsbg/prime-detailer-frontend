@@ -1,4 +1,5 @@
 import type { Part } from "@/types";
+import { formatDualUnitStock, hasDualUnitPart, getCanonicalStockSecondary } from "@/lib/inventory/multi-unit";
 
 const ML_PER_L = 1000;
 
@@ -28,14 +29,9 @@ export function formatMlAndLitres(ml: number): string {
   return `${ml.toLocaleString("en-IN")} ml (${formatLitresFromMl(ml)})`;
 }
 
-/** Compact on-hand label for tables and cards (e.g. `45 pcs`, `12.5 L`). */
+/** Compact on-hand label for tables and cards (e.g. `45 pcs`, `12.5 L`, `9 BOX + 85 PCS`). */
 export function formatPartStockQuantity(part: Part): string {
-  if (isMlTrackedPart(part)) {
-    return formatLitresFromMl(part.stockQuantityMl ?? 0);
-  }
-  const qty = part.quantity.toLocaleString("en-IN");
-  const unit = part.primaryUnit.trim() || "units";
-  return `${qty} ${unit}`;
+  return formatDualUnitStock(part);
 }
 
 export function stockStatusShortLabel(label: string): string {
@@ -78,10 +74,30 @@ export function getStockStatus(part: Part): {
     };
   }
 
-  if (part.quantity === 0) {
+  if (part.quantity === 0 && !hasDualUnitPart(part)) {
     return {
       label: "Out of Stock",
       className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    };
+  }
+  if (hasDualUnitPart(part) && getCanonicalStockSecondary(part) <= 0) {
+    return {
+      label: "Out of Stock",
+      className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    };
+  }
+  if (hasDualUnitPart(part)) {
+    const sec = getCanonicalStockSecondary(part);
+    const threshold = (part.reorderLevel || 0) * part.conversionFactor;
+    if (sec <= threshold) {
+      return {
+        label: "Low Stock",
+        className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+      };
+    }
+    return {
+      label: "In Stock",
+      className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
     };
   }
   if (part.quantity <= part.reorderLevel) {
