@@ -55,10 +55,12 @@ export async function executeCustomerWhatsAppAutomation(opts: {
     }
   } catch (e) {
     if (isWhatsAppNotConfiguredError(e)) {
-      openWhatsAppComposer(phone, opts.message);
+      const { usedClipboard } = openWhatsAppComposer(phone, opts.message);
       if (opts.composerToast !== false) {
         toast.info(opts.titles.composer, {
-          description: "Finish sending in WhatsApp, or configure Twilio on the server.",
+          description: usedClipboard
+            ? "Full message copied — paste in WhatsApp. Or configure Twilio on the server."
+            : "Finish sending in WhatsApp, or configure Twilio on the server.",
         });
       }
       pushStaffNotify("composer");

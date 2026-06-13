@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { buildJobCardCustomerWhatsAppMessage, appendAdvanceAckToJobMessage } from "@/lib/whatsapp-customer-messages";
 import {
   sendCustomerWhatsApp,
   openWhatsAppComposer,
@@ -12,6 +11,10 @@ import { ApiError } from "@/lib/api-client";
 import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
 import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { getNextBookingId } from "@/lib/appointment-ids";
+import {
+  buildJobCardCreationConfirmationMessage,
+  getBookingConfirmationBusiness,
+} from "@/lib/booking-confirmation-message";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,6 +45,7 @@ import {
   Percent,
   Wrench,
   ListChecks,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,6 +132,76 @@ import type {
 } from "@/types";
 
 const GST_RATE = 0.18;
+
+const QUICK_INTERNAL_NOTES = [
+  "Scratch on bumper",
+  "Customer waiting",
+  "Urgent delivery",
+  "Low fuel",
+] as const;
+
+const CHECK_IN_VIEWS = [
+  { id: "front", label: "Front View" },
+  { id: "rear", label: "Rear View" },
+  { id: "left", label: "Left Side" },
+  { id: "right", label: "Right Side" },
+  { id: "interior", label: "Interior" },
+] as const;
+
+type CheckInViewId = (typeof CHECK_IN_VIEWS)[number]["id"];
+
+function highEndComparisonTag(name: string): string | undefined {
+  const n = name.toLowerCase();
+  if (n.includes("ppf")) return "Best Protection";
+  if (n.includes("graphene")) return "Longest Durability";
+  if (n.includes("ceramic") || n.includes("ceram")) return "Best Shine";
+  return undefined;
+}
+
+function wizardTrackerMilestone(stepId: JobWizardStepId, forJobCard: boolean): number {
+  if (stepId === "customer") return 0;
+  if (stepId === "vehicle" || stepId === "schedule" || stepId === "smartSuggestions" || stepId === "membership") {
+    return 1;
+  }
+  if (stepId === "serviceSelection" || stepId === "highEndServices" || stepId === "addons") return 2;
+  if (forJobCard && stepId === "partsSelection") return 3;
+  if (
+    stepId === "pickupDrop" ||
+    stepId === "mechanic" ||
+    stepId === "notes" ||
+    stepId === "notesAndJobDetails" ||
+    stepId === "jobDetails"
+  ) {
+    return forJobCard ? 4 : 3;
+  }
+  if (stepId === "jobSummary") return forJobCard ? 5 : 4;
+  return 0;
+}
+
+function wizardTrackerLabels(forJobCard: boolean): string[] {
+  return forJobCard
+    ? ["Customer", "Vehicle", "Services", "Parts", "Details", "Review"]
+    : ["Customer", "Vehicle", "Services", "Details", "Review"];
+}
+
+function mechanicAvailabilityLabel(
+  mechanicId: string,
+  staffActive: boolean | undefined,
+  jobCards: JobCard[]
+): { label: string; className: string } {
+  if (staffActive === false) {
+    return { label: "On Leave", className: "bg-muted text-muted-foreground" };
+  }
+  const busy = jobCards.some(
+    (j) =>
+      j.mechanicId === mechanicId &&
+      ["AWAITING_SERVICE", "INSPECTION", "QUALITY_CHECK", "RECEIVED"].includes(j.status)
+  );
+  if (busy) {
+    return { label: "Busy", className: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" };
+  }
+  return { label: "Available", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300" };
+}
 
 /** When booking opts into pickup, mirror into Pickup & Drop operations list. */
 function queuePickupDropFromBooking(params: {
@@ -310,10 +384,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     router.replace(`/job-cards/${jobId}`);
   }, [router]);
 
-  const sendJobCardCreatedWhatsApp = useCallback(async (job: JobCard) => {
+  const sendJobCardCreatedWhatsApp = useCallback(async (job: JobCard, message: string) => {
     const phone = job.customerPhone?.trim();
     if (!phone) return;
-    const message = appendAdvanceAckToJobMessage(buildJobCardCustomerWhatsAppMessage(job), job);
     const notify = (channel: "api" | "composer") => {
       useNotificationStore.getState().addNotification({
         type: "whatsapp_sent",
@@ -330,9 +403,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       notify("api");
     } catch (e) {
       if (isWhatsAppNotConfiguredError(e)) {
-        openWhatsAppComposer(phone, message);
+        const { usedClipboard } = openWhatsAppComposer(phone, message);
         toast.info("WhatsApp opened", {
-          description: "Finish sending in the app, or configure Twilio on the server.",
+          description: usedClipboard
+            ? "Full message copied — paste in WhatsApp. Or configure Twilio on the server."
+            : "Finish sending in the app, or configure Twilio on the server.",
         });
         notify("composer");
         return;
@@ -348,7 +423,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const { services: highEndServices } = useHighEndServiceStore();
   const { addTransaction } = useWalletStore();
-  const { referralRewardAmount, newCustomerDiscount, businessName } = useSettingsStore();
+  const {
+    referralRewardAmount,
+    newCustomerDiscount,
+    businessName,
+    businessAddress,
+    businessPhone,
+    businessEmail,
+    businessWebsite,
+  } = useSettingsStore();
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
@@ -407,6 +490,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [selectedMainIds, setSelectedMainIds] = useState<string[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [mechanicId, setMechanicId] = useState("");
+  const [mechanicSearch, setMechanicSearch] = useState("");
   /** Empty = use catalog average; otherwise custom % of job estimate for incentive on this card. */
   const [mechanicIncentivePercentOverride, setMechanicIncentivePercentOverride] = useState("");
   const [couponCode, setCouponCode] = useState("");
@@ -479,12 +563,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInDamages, setCheckInDamages] = useState("");
   const [checkInNotesExtra, setCheckInNotesExtra] = useState("");
   const [checkInPhotos, setCheckInPhotos] = useState<
-    { id: string; file: File; previewUrl: string; label: string }[]
+    { id: string; file: File; previewUrl: string; label: string; viewId?: CheckInViewId }[]
   >([]);
   const [checkInPhotoError, setCheckInPhotoError] = useState(false);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const checkInFileRef = useRef<HTMLInputElement>(null);
   const checkInCameraRef = useRef<HTMLInputElement>(null);
+  const checkInViewFileRefs = useRef<Partial<Record<CheckInViewId, HTMLInputElement>>>({});
+  const [checkInCaptureViewId, setCheckInCaptureViewId] = useState<CheckInViewId | null>(null);
   const checkInJobIdRef = useRef<string | null>(null);
   const isSubmittingJobRef = useRef(false);
 
@@ -1579,11 +1665,25 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         priceGstAmount: gstAmount,
         priceGrandTotal: totalPayable,
         advancePaid: summaryAdvanceAmount > 0 ? summaryAdvanceAmount : undefined,
+        advancePolicyNote:
+          "An advance payment of 30% is required to confirm and pre-schedule your service slot.",
         expectedDeliveryDate: expectedDelDate,
+        deliveryExpectationNote:
+          "we will try our 100% to deliver it on Saturday Evening.",
       };
 
       await addAppointment(newBooking);
-      notifyReservationConfirmedWhatsApp(newBooking, businessName);
+      notifyReservationConfirmedWhatsApp(
+        newBooking,
+        getBookingConfirmationBusiness({
+          businessName,
+          businessAddress,
+          businessPhone,
+          businessEmail,
+          businessWebsite,
+          acceptanceOutlet: "Visit Outlet",
+        })
+      );
 
       pushActivityLog({
         action: "CREATED",
@@ -1689,7 +1789,27 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       details: `Job ${jobNumber} created for ${customerName.trim()} — ${vehicleNumber}`,
     });
 
-    void sendJobCardCreatedWhatsApp(newJobCard);
+    void sendJobCardCreatedWhatsApp(
+      newJobCard,
+      buildJobCardCreationConfirmationMessage({
+        job: newJobCard,
+        business: getBookingConfirmationBusiness({
+          businessName,
+          businessAddress,
+          businessPhone,
+          businessEmail,
+          businessWebsite,
+          acceptanceOutlet: "Visit Outlet",
+        }),
+        customerAddress: customerAddress.trim() || undefined,
+        priceSubtotalExGst: afterDiscount,
+        priceGstAmount: gstAmount,
+        priceGrandTotal: totalPayable,
+        advancePaid: summaryAdvanceAmount > 0 ? summaryAdvanceAmount : undefined,
+        appointmentDate: format(new Date(), "yyyy-MM-dd"),
+        appointmentTime: format(new Date(), "HH:mm"),
+      })
+    );
 
     setCheckInJob({
       id,
@@ -1727,9 +1847,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (jid) navigateToCreatedJobCard(jid);
   };
 
-  const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>, viewId?: CheckInViewId) => {
     const files = e.target.files;
     if (!files?.length) return;
+    let resolvedViewId: CheckInViewId | undefined;
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) {
         toast.error("Choose image files only.");
@@ -1740,20 +1861,38 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         continue;
       }
       const previewUrl = URL.createObjectURL(file);
-      const label = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ") || "Photo";
-      setCheckInPhotos((prev) => [
-        ...prev,
-        {
-          id: `ph-ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          file,
-          previewUrl,
-          label,
-        },
-      ]);
+      setCheckInPhotos((prev) => {
+        const targetViewId =
+          viewId ??
+          checkInCaptureViewId ??
+          resolvedViewId ??
+          CHECK_IN_VIEWS.find((v) => !prev.some((p) => p.viewId === v.id))?.id;
+        resolvedViewId = targetViewId;
+        const viewLabel = targetViewId
+          ? CHECK_IN_VIEWS.find((v) => v.id === targetViewId)?.label
+          : undefined;
+        const label = viewLabel ?? (file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ") || "Photo");
+        const next = targetViewId ? prev.filter((p) => p.viewId !== targetViewId) : prev;
+        return [
+          ...next,
+          {
+            id: `ph-ci-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            file,
+            previewUrl,
+            label,
+            viewId: targetViewId,
+          },
+        ];
+      });
     }
     setCheckInPhotoError(false);
+    setCheckInCaptureViewId(null);
     if (checkInFileRef.current) checkInFileRef.current.value = "";
     if (checkInCameraRef.current) checkInCameraRef.current.value = "";
+    const clearViewId = viewId ?? checkInCaptureViewId ?? resolvedViewId;
+    if (clearViewId && checkInViewFileRefs.current[clearViewId]) {
+      checkInViewFileRefs.current[clearViewId]!.value = "";
+    }
   };
 
   const removeCheckInPhoto = (photoId: string) => {
@@ -1871,6 +2010,46 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
   const jobWizardStepId = wizardSteps[jobCreateStep] ?? "customer";
   const jobWizardStepCount = wizardSteps.length;
+  const wizardProgressPercent = Math.round(((jobCreateStep + 1) / Math.max(jobWizardStepCount, 1)) * 100);
+
+  const wizardSelectionSummary = useMemo(() => {
+    const parts: string[] = [];
+    const svcCount = selectedMainIds.length;
+    if (svcCount > 0) parts.push(`${svcCount} Service${svcCount !== 1 ? "s" : ""}`);
+    if (selectedPartLines.length > 0) {
+      parts.push(`${selectedPartLines.length} Part${selectedPartLines.length !== 1 ? "s" : ""}`);
+    }
+    if (selectedAddonIds.length > 0) {
+      parts.push(`${selectedAddonIds.length} Add-on${selectedAddonIds.length !== 1 ? "s" : ""}`);
+    }
+    return parts.join(" • ");
+  }, [selectedMainIds.length, selectedPartLines.length, selectedAddonIds.length]);
+
+  const filteredMechanics = useMemo(() => {
+    const q = mechanicSearch.trim().toLowerCase();
+    if (!q) return mechanics;
+    return mechanics.filter((m) => m.name.toLowerCase().includes(q));
+  }, [mechanics, mechanicSearch]);
+
+  const goToJobWizardStep = useCallback(
+    (stepId: JobWizardStepId) => {
+      const idx = wizardSteps.indexOf(stepId);
+      if (idx >= 0) setJobCreateStep(idx);
+    },
+    [wizardSteps]
+  );
+
+  const appendQuickInternalNote = useCallback((text: string) => {
+    setInternalNotes((prev) => (prev.trim() ? `${prev.trim()}\n${text}` : text));
+  }, []);
+
+  const selectedMechanicName = useMemo(
+    () => mechanics.find((m) => m.id === mechanicId)?.name ?? "Not assigned",
+    [mechanics, mechanicId]
+  );
+
+  const wizardTrackerIndex = wizardTrackerMilestone(jobWizardStepId, isJobCard);
+  const wizardTrackerSteps = wizardTrackerLabels(isJobCard);
 
   const notesStepNextBlocked =
     isJobCard && jobWizardStepId === "notesAndJobDetails" && !jobCardExpectedDeliveryReady;
@@ -2017,6 +2196,177 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       return Math.max(0, n);
     });
   };
+
+  const renderWizardReviewSections = () => (
+    <Card className="border-primary/20 bg-muted/20">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Review &amp; create</CardTitle>
+        <p className="text-xs text-muted-foreground font-normal">
+          Confirm each section below. Tap Edit to jump back without losing your progress.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2.5 text-sm">
+        <div className="rounded-lg border border-border/80 bg-card p-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => goToJobWizardStep("customer")}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          </div>
+          <p className="font-medium">{customerName.trim() || "Not selected"}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {customerPhone.length >= 10 ? customerPhone : "Phone not set"}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border/80 bg-card p-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vehicle</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => goToJobWizardStep("vehicle")}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          </div>
+          <p className="font-medium">
+            {vehicleBrand || "—"} {vehicleModel}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">{vehicleNumber || "No registration"}</p>
+        </div>
+
+        <div className="rounded-lg border border-border/80 bg-card p-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Services</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => goToJobWizardStep("serviceSelection")}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          </div>
+          <p>{mainLabels.length ? mainLabels.join(", ") : "None selected"}</p>
+          {addonLabels.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">Add-ons: {addonLabels.join(", ")}</p>
+          )}
+          {highEndSummaryLines.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              High-end: {highEndSummaryLines.map((l) => l.name).join(", ")}
+            </p>
+          )}
+        </div>
+
+        {isJobCard && (
+          <div className="rounded-lg border border-border/80 bg-card p-3">
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parts</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => goToJobWizardStep("partsSelection")}
+              >
+                <Pencil className="mr-1 h-3 w-3" />
+                Edit
+              </Button>
+            </div>
+            <p>
+              {selectedPartSummaryLines.length > 0
+                ? selectedPartSummaryLines.map((l) => l.label).join(", ")
+                : "None selected"}
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-border/80 bg-card p-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mechanic</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => goToJobWizardStep("mechanic")}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          </div>
+          <p>{selectedMechanicName}</p>
+        </div>
+
+        <div className="rounded-lg border border-border/80 bg-card p-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pickup &amp; Drop</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => goToJobWizardStep("pickupDrop")}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          </div>
+          <p>{pickupRequired ? "Pickup requested" : "Not required"}</p>
+          {pickupRequired && customerAddress.trim() && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{customerAddress.trim()}</p>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border/80 bg-card p-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Payment</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => {
+                const el = document.getElementById("advance-amount-summary");
+                el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                if (el instanceof HTMLInputElement) el.focus();
+              }}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              Edit
+            </Button>
+          </div>
+          <div className="flex justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-semibold tabular-nums">{formatCurrency(totalPayable)}</span>
+          </div>
+          {summaryAdvanceAmount > 0 && (
+            <div className="flex justify-between gap-2 text-xs mt-1">
+              <span className="text-muted-foreground">Advance</span>
+              <span className="tabular-nums">{formatCurrency(summaryAdvanceAmount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-2 text-xs mt-1">
+            <span className="text-muted-foreground">Balance</span>
+            <span className="font-medium tabular-nums">{formatCurrency(balanceAfterAdvance)}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   const renderSummaryCard = (branchBlockId: string) => (
     <Card
@@ -2261,7 +2611,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         onSubmit={handleSubmit}
         className={cn(
           useBookingWizard
-            ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden overflow-x-hidden lg:flex-row lg:items-stretch lg:gap-3 lg:overflow-hidden"
+            ? cn(
+                "flex min-h-0 flex-1 flex-col overflow-x-hidden",
+                isDesktopWide
+                  ? "h-full overflow-hidden lg:flex-row lg:items-stretch lg:gap-3"
+                  : "h-auto overflow-visible"
+              )
             : "lg:flex lg:flex-row lg:items-start lg:gap-8",
           useBookingWizard &&
             !isDesktopWide &&
@@ -2276,7 +2631,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             useBookingWizard &&
               isDesktopWide &&
               "min-h-0 flex-1 gap-2 overflow-hidden py-2 sm:px-4 max-lg:overflow-y-auto max-lg:overflow-x-hidden lg:min-w-0",
-            useBookingWizard && !isDesktopWide && "min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+            useBookingWizard && !isDesktopWide && "min-h-0 flex-1 overflow-x-hidden"
           )}
         >
           {useBookingWizard && (
@@ -2345,6 +2700,39 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       </div>
                     );
                   })}
+                </div>
+              </div>
+              <div className="shrink-0 space-y-2">
+                <div className="hidden sm:flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      style={{ width: `${wizardProgressPercent}%` }}
+                      role="progressbar"
+                      aria-valuenow={wizardProgressPercent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Wizard progress"
+                    />
+                  </div>
+                  <span className="text-[10px] font-medium tabular-nums text-muted-foreground shrink-0">
+                    {wizardProgressPercent}%
+                  </span>
+                </div>
+                <div className="hidden sm:flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                  {wizardTrackerSteps.map((label, idx) => (
+                    <span key={label} className="flex items-center gap-1">
+                      {idx > 0 && <span aria-hidden>→</span>}
+                      <span
+                        className={cn(
+                          idx === wizardTrackerIndex && "font-semibold text-primary",
+                          idx < wizardTrackerIndex && "text-foreground/70"
+                        )}
+                      >
+                        {label}
+                      </span>
+                    </span>
+                  ))}
                 </div>
               </div>
             </>
@@ -3689,11 +4077,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   {filteredMainServices.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-6 text-center">No services match filters.</p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
                       {filteredMainServices.map((s) => {
                         const pr = priceForService(s, vehicleSegment);
                         const on = selectedMainIds.includes(s.id);
-                        const hasParts = Boolean(s.consumptionProfile?.length);
                         return (
                           <div
                             key={s.id}
@@ -3707,47 +4094,40 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                               }
                             }}
                             className={cn(
-                              "rounded-xl border-2 p-4 text-left transition-all flex flex-col cursor-pointer min-h-0",
+                              "rounded-xl border-2 p-3 text-left transition-all flex flex-col cursor-pointer min-h-0",
                               on
-                                ? "border-primary bg-primary/5 shadow-sm"
+                                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/15"
                                 : "border-border bg-card hover:border-primary/25"
                             )}
                           >
-                            <Badge variant="secondary" className="w-fit mb-2 text-[10px] font-normal">
-                              {s.category}
-                            </Badge>
-                            <p className="font-semibold text-base leading-tight">{s.name}</p>
-                            <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
-                              {s.description}
-                            </p>
-                            <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
-                              <div>
-                                <p className="text-lg font-bold text-emerald-600 tabular-nums">
-                                  {formatCurrency(pr)}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">+ 18.00% GST</p>
-                              </div>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <Clock className="w-3.5 h-3.5" />
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-semibold text-sm leading-tight flex-1">{s.name}</p>
+                              {on && (
+                                <Badge className="shrink-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0">
+                                  <Check className="h-3 w-3 mr-0.5" />
+                                  Selected
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <p className="text-base font-bold text-emerald-600 tabular-nums">{formatCurrency(pr)}</p>
+                              <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+                                <Clock className="w-3 h-3" />
                                 {formatServiceDurationLabel(s)}
                               </div>
                             </div>
-                            {!hasParts && (
-                              <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
-                                <Info className="w-3 h-3 shrink-0" />
-                                No parts configured
-                              </p>
-                            )}
-                            <span
-                              role="link"
-                              className="text-xs text-primary mt-2 text-left hover:underline"
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={on ? "default" : "outline"}
+                              className="mt-2.5 h-8 w-full text-xs"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPricingService(s);
+                                toggleMain(s.id);
                               }}
                             >
-                              View pricing for other vehicle types
-                            </span>
+                              {on ? "Selected" : "Select"}
+                            </Button>
                           </div>
                         );
                       })}
@@ -3769,6 +4149,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <CardContent className={cn(useBookingWizard && "pt-4 sm:pt-6")}>
               <JobCardPartsPicker
                 hideIntro={useBookingWizard}
+                collapseSelected={useBookingWizard}
                 selectedLines={selectedPartLines}
                 onSelectedLinesChange={setSelectedPartLines}
               />
@@ -3793,6 +4174,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                   {highEndServices.map((hes) => {
                     const isSelected = selectedHighEndIds.includes(hes.id);
+                    const comparisonTag = highEndComparisonTag(hes.name);
                     return (
                       <div
                         key={hes.id}
@@ -3819,14 +4201,30 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                             )}
                           />
                           <div className="min-w-0 flex-1">
-                            <p
-                              className={cn(
-                                "text-sm font-medium",
-                                isSelected ? "text-amber-700 dark:text-amber-400" : ""
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p
+                                className={cn(
+                                  "text-sm font-medium",
+                                  isSelected ? "text-amber-700 dark:text-amber-400" : ""
+                                )}
+                              >
+                                {hes.name}
+                              </p>
+                              {comparisonTag && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] font-medium border-amber-300/80 text-amber-800 dark:text-amber-300"
+                                >
+                                  {comparisonTag}
+                                </Badge>
                               )}
-                            >
-                              {hes.name}
-                            </p>
+                              {isSelected && (
+                                <Badge className="text-[9px] bg-amber-500 text-white px-1.5 py-0">
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />
+                                  Selected
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
                               Schedule:{" "}
                               {hes.reminderIntervals.map((m) => formatHighEndIntervalMonths(m)).join(", ")}
@@ -4197,72 +4595,78 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
           {showJobWizardStep("mechanic") && (
           <Card className="min-w-0 border-border/90">
-            <CardHeader className="pb-3 shrink-0">
-              <CardTitle className="text-lg">Assign mechanic (optional)</CardTitle>
-              <p className="text-sm text-muted-foreground font-normal">
-                Tap a mechanic to assign. Custom incentive % is optional — empty uses the catalog average from selected
-                services ({catalogAvgIncentivePercent.toFixed(1)}%). Leave unassigned if you prefer to set this on the
-                job card later.
-                {mechanics.length > 4 ? (
-                  <span className="mt-1 block text-xs">Scroll the list below if there are many mechanics.</span>
-                ) : null}
+            <CardHeader className="space-y-0 py-3 pb-2">
+              <CardTitle className="text-base">Assign mechanic</CardTitle>
+              <p className="text-xs text-muted-foreground font-normal pt-1">
+                Optional · tap to assign · incentive defaults to {catalogAvgIncentivePercent.toFixed(1)}%
               </p>
             </CardHeader>
-            <CardContent className="space-y-4 min-w-0">
+            <CardContent className="space-y-3 min-w-0 pt-0">
               {mechanics.length === 0 ? (
-                <p className="text-sm text-muted-foreground rounded-xl border border-dashed border-border/80 bg-muted/30 px-4 py-6 text-center">
-                  No mechanics in staff. Add staff with role Mechanic in Settings.
+                <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border/80 bg-muted/30 px-3 py-4 text-center">
+                  No mechanics found. Add staff with role Mechanic in Settings.
                 </p>
               ) : (
-                <div
-                  className={cn(
-                    "min-h-0 max-h-[min(72vh,780px)] space-y-3 overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-y rounded-lg border border-border/40 bg-muted/10 py-2 pl-1 pr-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
-                    compactJobCardDesktop && "max-h-[min(65vh,640px)]"
-                  )}
-                >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 min-w-0">
-                    {mechanics.map((m) => {
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-9 h-9"
+                      placeholder="Search mechanic…"
+                      value={mechanicSearch}
+                      onChange={(e) => setMechanicSearch(e.target.value)}
+                    />
+                  </div>
+                  {filteredMechanics.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-3">No mechanics match your search.</p>
+                  ) : (
+                <div className="space-y-2 md:max-h-[min(65vh,640px)] md:overflow-y-auto md:overscroll-y-contain md:rounded-lg md:border md:border-border/40 md:bg-muted/10 md:py-2 md:pl-1 md:pr-2 md:[-webkit-overflow-scrolling:touch]">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 min-w-0">
+                    {filteredMechanics.map((m) => {
                       const selected = mechanicId === m.id;
+                      const availability = mechanicAvailabilityLabel(m.id, m.isActive, jobCards);
                       return (
                         <div
                           key={m.id}
                           className={cn(
-                            "rounded-2xl border-2 bg-card p-4 shadow-sm transition-all min-w-0",
+                            "rounded-xl border-2 bg-card p-3 transition-all min-w-0",
                             selected
-                              ? "border-primary ring-2 ring-primary/20"
+                              ? "border-primary ring-1 ring-primary/20"
                               : "border-border hover:border-primary/35"
                           )}
                         >
                           <button
                             type="button"
                             onClick={() => setMechanicId(m.id)}
-                            className="flex w-full items-start gap-3 text-left"
+                            className="flex w-full items-center gap-2.5 text-left"
                           >
                             <div
                               className={cn(
-                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
                                 selected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                               )}
                             >
-                              <Wrench className="h-5 w-5" />
+                              <Wrench className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold leading-snug">{m.name}</p>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">Mechanic</p>
+                              <p className="text-sm font-semibold leading-snug truncate">{m.name}</p>
+                              <Badge className={cn("mt-0.5 text-[9px] font-normal px-1.5 py-0", availability.className)}>
+                                {availability.label}
+                              </Badge>
                             </div>
                             {selected ? (
-                              <Check className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                              <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                             ) : null}
                           </button>
                           {selected ? (
-                            <div className="mt-4 space-y-2 border-t border-border/70 pt-4">
+                            <div className="mt-2.5 flex items-center gap-2 border-t border-border/70 pt-2.5">
                               <Label
                                 htmlFor={`mechanic-incentive-${m.id}`}
-                                className="flex items-center gap-1.5 text-xs font-medium"
+                                className="sr-only"
                               >
-                                <Percent className="h-3.5 w-3.5" />
-                                Custom incentive (% of estimate)
+                                Custom incentive percent
                               </Label>
+                              <Percent className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                               <Input
                                 id={`mechanic-incentive-${m.id}`}
                                 type="number"
@@ -4270,16 +4674,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                 max={100}
                                 step={0.5}
                                 inputMode="decimal"
-                                placeholder={catalogAvgIncentivePercent.toFixed(1)}
-                                className="h-9 text-sm"
+                                placeholder={`Incentive % (default ${catalogAvgIncentivePercent.toFixed(1)})`}
+                                className="h-8 flex-1 text-xs"
                                 value={mechanicIncentivePercentOverride}
                                 onChange={(e) => setMechanicIncentivePercentOverride(e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
                               />
-                              <p className="text-[10px] text-muted-foreground leading-snug">
-                                Empty = use catalog average ({catalogAvgIncentivePercent.toFixed(1)}% from selected
-                                services).
-                              </p>
                             </div>
                           ) : null}
                         </div>
@@ -4291,18 +4691,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="text-muted-foreground"
+                      className="h-8 text-xs text-muted-foreground"
                       onClick={() => setMechanicId("")}
                     >
-                      Clear mechanic selection
+                      Clear selection
                     </Button>
                   ) : null}
                 </div>
+                  )}
+                </>
               )}
               {isJobCard && (
-                <div className="rounded-2xl border border-border/80 bg-muted/20 p-4 space-y-2">
-                  <Label htmlFor="odometerReading" className="text-sm font-medium">
-                    Odometer reading (optional)
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5">
+                  <Label htmlFor="odometerReading" className="text-xs font-medium shrink-0">
+                    Odometer (optional)
                   </Label>
                   <Input
                     id="odometerReading"
@@ -4310,7 +4712,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     placeholder="e.g. 25000"
                     value={odometerReading}
                     onChange={(e) => setOdometerReading(e.target.value)}
-                    className="max-w-md"
+                    className="h-8 max-w-full sm:max-w-[10rem] text-sm"
                   />
                 </div>
               )}
@@ -4326,6 +4728,21 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Internal Notes (Not visible to customer)</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_INTERNAL_NOTES.map((note) => (
+                    <Button
+                      key={note}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => appendQuickInternalNote(note)}
+                    >
+                      <Check className="h-3 w-3 mr-1 text-primary" />
+                      {note}
+                    </Button>
+                  ))}
+                </div>
                 <Textarea
                   value={internalNotes}
                   onChange={(e) => setInternalNotes(e.target.value)}
@@ -4488,18 +4905,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </Card>
           )}
 
-          {useBookingWizard && showJobWizardStep("jobSummary") && (
-            <Card className="hidden lg:block border-dashed border-primary/25 bg-muted/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Review &amp; create</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                {isJobCard
-                  ? "Use the job summary on the right to apply a coupon, select a branch, then create the job card."
-                  : "Use the booking summary on the right to apply a coupon, select a branch, then create the booking."}
-              </CardContent>
-            </Card>
-          )}
+          {useBookingWizard && showJobWizardStep("jobSummary") && renderWizardReviewSections()}
         </div>
 
         {useBookingWizard && (
@@ -4509,15 +4915,24 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               compactJobCardDesktop ? "pt-2 pb-0.5" : "pt-2.5 pb-0.5"
             )}
           >
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={jobCreateStep === 0}
-              onClick={goBackJobWizard}
-            >
-              Back
-            </Button>
+            <div className="flex items-center gap-3 min-w-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={jobCreateStep === 0}
+                onClick={goBackJobWizard}
+              >
+                Back
+              </Button>
+              {wizardSelectionSummary && (
+                <p className="text-xs text-muted-foreground truncate hidden lg:block">{wizardSelectionSummary}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {wizardSelectionSummary && (
+                <p className="text-xs text-muted-foreground truncate lg:hidden">{wizardSelectionSummary}</p>
+              )}
             {jobCreateStep < jobWizardStepCount - 1 ? (
               <Button
                 type="button"
@@ -4533,6 +4948,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 Review the summary, select branch, then create the {isJobCard ? "job card" : "booking"}.
               </span>
             )}
+            </div>
           </div>
         )}
 
@@ -4570,6 +4986,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   <p className="text-base font-bold text-primary tabular-nums leading-tight sm:text-lg">
                     {formatCurrency(balanceAfterAdvance)}
                   </p>
+                  {wizardSelectionSummary && (
+                    <p className="text-[10px] text-muted-foreground leading-snug mt-0.5 truncate">
+                      {wizardSelectionSummary}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {jobCreateStep > 0 && (
@@ -4606,7 +5027,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                           bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
                         }
                       >
-                        Create
+                        {isJobCard ? "Create Job Card" : "Create Booking"}
                       </Button>
                     </>
                   )}
@@ -4672,9 +5093,41 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               <DialogTitle className="pr-10 text-base leading-tight sm:pr-8 sm:text-xl">
                 {desktopTitle}
               </DialogTitle>
-              <p className="text-xs font-medium text-foreground sm:hidden">
-                Step {jobCreateStep + 1} of {jobWizardStepCount} — {JOB_WIZARD_LABEL[jobWizardStepId]}
-              </p>
+              <div className="space-y-1.5 sm:hidden">
+                <p className="text-xs font-medium text-foreground">
+                  Step {jobCreateStep + 1} of {jobWizardStepCount} — {JOB_WIZARD_LABEL[jobWizardStepId]}
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      style={{ width: `${wizardProgressPercent}%` }}
+                      role="progressbar"
+                      aria-valuenow={wizardProgressPercent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    />
+                  </div>
+                  <span className="text-[10px] font-medium tabular-nums text-muted-foreground shrink-0">
+                    {wizardProgressPercent}%
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 text-[9px] text-muted-foreground leading-snug">
+                  {wizardTrackerSteps.map((label, idx) => (
+                    <span key={label} className="flex items-center gap-0.5">
+                      {idx > 0 && <span aria-hidden>→</span>}
+                      <span
+                        className={cn(
+                          idx === wizardTrackerIndex && "font-semibold text-primary",
+                          idx < wizardTrackerIndex && "text-foreground/80"
+                        )}
+                      >
+                        {label}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
               <DialogDescription className="max-md:sr-only md:block md:text-sm text-muted-foreground">
                 Tap Next to move through each section — one screen at a time on mobile.
               </DialogDescription>
@@ -4767,32 +5220,102 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </DialogHeader>
 
             <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="text-base">
-                  Before Photos <span className="text-destructive">*</span>
+                  Inspection checklist <span className="text-destructive">*</span>
                 </Label>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    ref={checkInCameraRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="sr-only"
-                    onChange={handleCheckInFiles}
-                  />
-                  <input
-                    ref={checkInFileRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="sr-only"
-                    onChange={handleCheckInFiles}
-                  />
-                  <Button type="button" onClick={() => checkInCameraRef.current?.click()}>
+                <p className="text-xs text-muted-foreground">
+                  Capture at least one photo. Check off each view as you document the vehicle.
+                </p>
+                <input
+                  ref={checkInCameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  onChange={(e) => handleCheckInFiles(e)}
+                />
+                <input
+                  ref={checkInFileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="sr-only"
+                  onChange={(e) => handleCheckInFiles(e)}
+                />
+                <ul className="space-y-2">
+                  {CHECK_IN_VIEWS.map((view) => {
+                    const photo = checkInPhotos.find((p) => p.viewId === view.id);
+                    const done = Boolean(photo);
+                    return (
+                      <li
+                        key={view.id}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg border p-3",
+                          done ? "border-emerald-300/80 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20" : "border-border"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                            done ? "border-emerald-600 bg-emerald-600 text-white" : "border-muted-foreground/40"
+                          )}
+                          aria-hidden
+                        >
+                          {done ? <Check className="h-3 w-3" /> : null}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{view.label}</p>
+                          {photo && (
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <div className="relative h-10 w-10 rounded overflow-hidden border bg-muted shrink-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={photo.previewUrl} alt="" className="h-full w-full object-cover" />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-destructive"
+                                onClick={() => removeCheckInPhoto(photo.id)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          ref={(el) => {
+                            if (el) checkInViewFileRefs.current[view.id] = el;
+                          }}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="sr-only"
+                          onChange={(e) => handleCheckInFiles(e, view.id)}
+                        />
+                        {!done && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 h-8 text-xs"
+                            onClick={() => checkInViewFileRefs.current[view.id]?.click()}
+                          >
+                            <Camera className="h-3.5 w-3.5 mr-1" />
+                            Photo
+                          </Button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button type="button" size="sm" onClick={() => checkInCameraRef.current?.click()}>
                     <Camera className="w-4 h-4 mr-2" />
                     Take Photo
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => checkInFileRef.current?.click()}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => checkInFileRef.current?.click()}>
                     <Upload className="w-4 h-4 mr-2" />
                     Upload Photos
                   </Button>
@@ -4801,26 +5324,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   <p className="text-sm text-destructive rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
                     Required: Please upload at least one before photo of the vehicle
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground">Upload photos of the vehicle from all sides as needed.</p>
-                {checkInPhotos.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {checkInPhotos.map((p) => (
-                      <div key={p.id} className="relative group w-20 h-20 rounded-md overflow-hidden border bg-muted">
-                        {/* Preview uses blob/object URLs — next/image unsupported without config */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.previewUrl} alt="" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          className="absolute top-0.5 right-0.5 rounded-full bg-background/90 p-0.5 shadow border opacity-90 hover:opacity-100"
-                          onClick={() => removeCheckInPhoto(p.id)}
-                          aria-label="Remove photo"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
 

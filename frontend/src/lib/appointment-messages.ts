@@ -1,6 +1,11 @@
 import { format, parseISO } from "date-fns";
 import type { Appointment } from "@/types";
 import { getAppointmentDisplayId, resolveAppointmentKind } from "@/lib/appointment-ids";
+import {
+  buildBookingWhatsAppMessageCompact,
+  getBookingConfirmationBusiness,
+  type BookingConfirmationBusiness,
+} from "@/lib/booking-confirmation-message";
 
 function firstName(apt: Appointment): string {
   if (apt.customerFirstName?.trim()) return apt.customerFirstName.trim();
@@ -52,10 +57,25 @@ export function buildAppointmentConfirmedMessage(apt: Appointment, businessName:
   ].join("\n");
 }
 
-export function buildReservationConfirmedMessage(apt: Appointment, businessName: string): string {
-  return resolveAppointmentKind(apt) === "APPOINTMENT"
-    ? buildAppointmentConfirmedMessage(apt, businessName)
-    : buildBookingConfirmedMessage(apt, businessName);
+export function buildReservationConfirmedMessage(
+  apt: Appointment,
+  business: BookingConfirmationBusiness | string
+): string {
+  if (resolveAppointmentKind(apt) === "BOOKING") {
+    const biz =
+      typeof business === "string"
+        ? getBookingConfirmationBusiness({
+            businessName: business,
+            businessAddress: "",
+            businessPhone: "",
+            businessEmail: "",
+          })
+        : business;
+    return buildBookingWhatsAppMessageCompact(apt, biz);
+  }
+  const businessName =
+    typeof business === "string" ? business : business.businessName ?? business.branchName;
+  return buildAppointmentConfirmedMessage(apt, businessName);
 }
 
 export function buildBookingReminderMessage(apt: Appointment): string {

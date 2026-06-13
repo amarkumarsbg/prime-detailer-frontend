@@ -1,5 +1,5 @@
 import { format, parseISO } from "date-fns";
-import type { Appointment } from "@/types";
+import type { Appointment, JobCard } from "@/types";
 
 const OUR_SERVICES_LINE =
   "Foam Wash | Steam Wash | Underbody Cleaning | Interior Deep Dry Clean | Odour Removal | Rubbing Polish | Clay Bar Treatment | Headlight Restoration | Nitrogen Fill | Teflon Coating | 9H Ceramic | 3M Ceramic | Meguiar's Ceramic | 10H Ceramic | Graphene | PPF (TPU).";
@@ -36,6 +36,10 @@ function formatInrPlain(amount: number): string {
 function firstName(apt: Appointment): string {
   if (apt.customerFirstName?.trim()) return apt.customerFirstName.trim();
   return apt.customerName.split(/\s+/)[0] ?? apt.customerName;
+}
+
+function greetingName(apt: Appointment): string {
+  return firstName(apt).toUpperCase();
 }
 
 /** Vehicle line for booking details — make/model (COLOUR), registration omitted when colour is set. */
@@ -116,28 +120,58 @@ function regardsTeamLine(business: BookingConfirmationBusiness): string {
 }
 
 function outletAtLine(business: BookingConfirmationBusiness): string {
-  return (business.branchName || business.studioName || "Visit Outlet").trim();
+  return (business.acceptanceOutlet ?? business.studioName ?? "Visit Outlet").trim();
 }
 
 export type BookingConfirmationBusiness = {
-  /** Outlet label after @ in opening line (e.g. "Visit Outlet"). */
+  /** Label after @ in opening line (e.g. "Visit Outlet"). */
+  acceptanceOutlet?: string;
+  /** Branch / studio label (legacy; not used in @ line when acceptanceOutlet is set). */
   branchName: string;
   /** Business / studio name for Regards block (e.g. "The Detailing Gang"). */
   businessName?: string;
-  /** @deprecated Use branchName */
+  /** @deprecated Use acceptanceOutlet */
   studioName?: string;
   address: string;
   phone: string;
   email: string;
-  /** Full terms URL (e.g. https://example.com/terms-conditions) */
+  /** Full terms URL (e.g. https://www.thedetailinggang.com/terms-conditions) */
   termsUrl?: string;
 };
+
+/** Build business footer block from app settings + optional branch label. */
+export function getBookingConfirmationBusiness(opts: {
+  businessName: string;
+  businessAddress: string;
+  businessPhone: string;
+  businessEmail: string;
+  businessWebsite?: string;
+  branchLabel?: string;
+  acceptanceOutlet?: string;
+}): BookingConfirmationBusiness {
+  let termsUrl: string | undefined;
+  const w = opts.businessWebsite?.trim();
+  if (w) {
+    const base = /^https?:\/\//i.test(w) ? w : `https://${w}`;
+    const normalized = base.replace(/\/$/, "");
+    termsUrl = /terms/i.test(normalized) ? normalized : `${normalized}/terms-conditions`;
+  }
+  return {
+    acceptanceOutlet: opts.acceptanceOutlet ?? "Visit Outlet",
+    branchName: opts.branchLabel?.trim() || "Visit Outlet",
+    businessName: opts.businessName,
+    address: opts.businessAddress,
+    phone: opts.businessPhone,
+    email: opts.businessEmail,
+    termsUrl,
+  };
+}
 
 export function buildBookingConfirmationMessage(
   apt: Appointment,
   business: BookingConfirmationBusiness
 ): string {
-  const name = firstName(apt);
+  const name = greetingName(apt);
   const outlet = outletAtLine(business);
   const wa = (apt.whatsappPhone ?? apt.customerPhone).trim();
   const mobile = apt.customerPhone.trim();
@@ -183,26 +217,79 @@ export function buildBookingConfirmationMessage(
   ].join("\n");
 }
 
-const WHATSAPP_BOOKING_BODY_SAFE_MAX = 4000;
-
-function clipLine(s: string, max: number): string {
-  const t = s.trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, Math.max(0, max - 1))}…`;
-}
-
 /**
- * WhatsApp body — uses the full booking confirmation template; clips only if extremely long.
+ * WhatsApp body — full booking confirmation template (split into ≤1600-char parts at send time).
  */
 export function buildBookingWhatsAppMessageCompact(
   apt: Appointment,
   business: BookingConfirmationBusiness
 ): string {
-  const body = buildBookingConfirmationMessage(apt, business);
-  if (body.length > WHATSAPP_BOOKING_BODY_SAFE_MAX) {
-    return clipLine(body, WHATSAPP_BOOKING_BODY_SAFE_MAX);
-  }
-  return body;
+  return buildBookingConfirmationMessage(apt, business);
+}
+
+export type JobCardCreationConfirmationInput = {
+  job: JobCard;
+  business: BookingConfirmationBusiness;
+  customerAddress?: string;
+  vehicleColor?: string;
+  priceSubtotalExGst: number;
+  priceGstAmount: number;
+  priceGrandTotal: number;
+  advancePaid?: number;
+  /** yyyy-MM-dd — visit / job intake date */
+  appointmentDate: string;
+  /** HH:mm */
+  appointmentTime: string;
+  bookingPricingLine?: string;
+};
+
+/** Full TDG-style confirmation when a job card is created (same template as bookings). */
+export function buildJobCardCreationConfirmationMessage(
+  input: JobCardCreationConfirmationInput
+): string {
+  const { job } = input;
+  const serviceType =
+    job.services
+      .map((s) => s.name)
+      .filter(Boolean)
+      .join(" + ") || "Service";
+  const expectedDeliveryDate =
+    job.expectedDelivery && !Number.isNaN(Date.parse(job.expectedDelivery))
+      ? format(parseISO(job.expectedDelivery), "yyyy-MM-dd")
+      : undefined;
+
+  const apt: Appointment = {
+    id: job.id,
+    bookingId: job.jobNumber,
+    customerId: job.customerId,
+    customerName: job.customerName,
+    customerPhone: job.customerPhone,
+    whatsappPhone: job.customerPhone,
+    vehicleId: job.vehicleId,
+    vehicleRegNumber: job.vehicleRegNumber,
+    vehicleMakeModel: job.vehicleMakeModel,
+    vehicleColor: input.vehicleColor,
+    serviceType,
+    date: input.appointmentDate,
+    time: input.appointmentTime,
+    status: "CONFIRMED",
+    whatsappSent: true,
+    createdAt: job.createdAt,
+    customerFirstName: job.customerName.trim().split(/\s+/)[0],
+    customerAddress: input.customerAddress,
+    bookingPricingLine: input.bookingPricingLine,
+    priceSubtotalExGst: input.priceSubtotalExGst,
+    priceGstAmount: input.priceGstAmount,
+    priceGrandTotal: input.priceGrandTotal,
+    advancePaid: input.advancePaid,
+    advancePolicyNote:
+      "An advance payment of 30% is required to confirm and pre-schedule your service slot.",
+    expectedDeliveryDate,
+    deliveryExpectationNote:
+      "we will try our 100% to deliver it on Saturday Evening.",
+  };
+
+  return buildBookingWhatsAppMessageCompact(apt, input.business);
 }
 
 /** Digits only for wa.me (e.g. 919369111655) */

@@ -1,5 +1,6 @@
 import twilio from "twilio";
 import { env } from "../config/env.js";
+import { splitWhatsAppMessage } from "./whatsapp-message-split.js";
 
 let client: ReturnType<typeof twilio> | null = null;
 
@@ -169,42 +170,76 @@ export async function sendWhatsAppMessage(
 
   const isTemplate = typeof messageBodyOrTemplate === "object" && messageBodyOrTemplate !== null;
 
-  const msg = isTemplate
-    ? await getClient().messages.create({
-        from,
-        to,
-        contentSid: messageBodyOrTemplate.contentSid.trim(),
-        ...(messageBodyOrTemplate.contentVariables &&
-        Object.keys(messageBodyOrTemplate.contentVariables).length > 0
-          ? {
-              contentVariables: JSON.stringify(messageBodyOrTemplate.contentVariables),
-            }
-          : {}),
-      })
-    : await getClient().messages.create({
-        from,
-        to,
-        body: messageBodyOrTemplate,
-      });
+  if (isTemplate) {
+    const msg = await getClient().messages.create({
+      from,
+      to,
+      contentSid: messageBodyOrTemplate.contentSid.trim(),
+      ...(messageBodyOrTemplate.contentVariables &&
+      Object.keys(messageBodyOrTemplate.contentVariables).length > 0
+        ? {
+            contentVariables: JSON.stringify(messageBodyOrTemplate.contentVariables),
+          }
+        : {}),
+    });
+    const out: TwilioWhatsAppSendResult = {
+      sid: msg.sid,
+      status: msg.status ?? "unknown",
+      twilioErrorCode: typeof msg.errorCode === "number" ? msg.errorCode : null,
+      twilioErrorMessage: (msg.errorMessage as string | null) ?? null,
+    };
+    const later = await fetchMessageOutcome(msg.sid);
+    if (later.status) out.status = later.status;
+    if (later.errorCode !== undefined && later.errorCode !== null) out.twilioErrorCode = later.errorCode;
+    if (later.errorMessage !== undefined && later.errorMessage) out.twilioErrorMessage = later.errorMessage;
+    if (process.env.NODE_ENV !== "production") {
+      const err =
+        out.twilioErrorCode != null && out.twilioErrorCode !== 0
+          ? ` error=${out.twilioErrorCode} ${out.twilioErrorMessage ?? ""}`
+          : "";
+      console.info(`[twilio/whatsapp] sid=${out.sid} status=${out.status} from=${from} to=${to}${err}`);
+    }
+    return out;
+  }
 
-  const out: TwilioWhatsAppSendResult = {
-    sid: msg.sid,
-    status: msg.status ?? "unknown",
-    twilioErrorCode: typeof msg.errorCode === "number" ? msg.errorCode : null,
-    twilioErrorMessage: (msg.errorMessage as string | null) ?? null,
+  const parts = splitWhatsAppMessage(messageBodyOrTemplate);
+  let out: TwilioWhatsAppSendResult = {
+    sid: "",
+    status: "unknown",
   };
 
-  const later = await fetchMessageOutcome(msg.sid);
-  if (later.status) out.status = later.status;
-  if (later.errorCode !== undefined && later.errorCode !== null) out.twilioErrorCode = later.errorCode;
-  if (later.errorMessage !== undefined && later.errorMessage) out.twilioErrorMessage = later.errorMessage;
+  for (let i = 0; i < parts.length; i++) {
+    const msg = await getClient().messages.create({
+      from,
+      to,
+      body: parts[i]!,
+    });
+    out = {
+      sid: msg.sid,
+      status: msg.status ?? "unknown",
+      twilioErrorCode: typeof msg.errorCode === "number" ? msg.errorCode : null,
+      twilioErrorMessage: (msg.errorMessage as string | null) ?? null,
+    };
+    const later = await fetchMessageOutcome(msg.sid);
+    if (later.status) out.status = later.status;
+    if (later.errorCode !== undefined && later.errorCode !== null) out.twilioErrorCode = later.errorCode;
+    if (later.errorMessage !== undefined && later.errorMessage) out.twilioErrorMessage = later.errorMessage;
 
-  if (process.env.NODE_ENV !== "production") {
-    const err =
-      out.twilioErrorCode != null && out.twilioErrorCode !== 0
-        ? ` error=${out.twilioErrorCode} ${out.twilioErrorMessage ?? ""}`
-        : "";
-    console.info(`[twilio/whatsapp] sid=${out.sid} status=${out.status} from=${from} to=${to}${err}`);
+    if (process.env.NODE_ENV !== "production") {
+      const err =
+        out.twilioErrorCode != null && out.twilioErrorCode !== 0
+          ? ` error=${out.twilioErrorCode} ${out.twilioErrorMessage ?? ""}`
+          : "";
+      const partTag = parts.length > 1 ? ` part=${i + 1}/${parts.length}` : "";
+      console.info(
+        `[twilio/whatsapp] sid=${out.sid} status=${out.status} from=${from} to=${to}${partTag}${err}`
+      );
+    }
+
+    if (i < parts.length - 1) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
   }
+
   return out;
 }

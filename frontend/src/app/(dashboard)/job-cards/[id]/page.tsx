@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   MessageCircle,
   ArrowLeftRight,
   Clock,
@@ -42,6 +43,7 @@ import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -133,7 +135,7 @@ const WORKFLOW_STATUSES: JobCardStatus[] = [
 const WORKFLOW_LABELS: Record<JobCardStatus, string> = {
   RECEIVED: "Received",
   INSPECTION: "Inspection",
-  AWAITING_SERVICE: "In Service",
+  AWAITING_SERVICE: "Service",
   QUALITY_CHECK: "QC",
   READY: "Ready",
   DELIVERED: "Delivered",
@@ -149,6 +151,13 @@ const STATUS_LABELS: Record<JobCardStatus, string> = {
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
 };
+
+function formatSegmentLabel(segment: string): string {
+  return segment
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function normalizeJobCardStatus(raw: string | undefined): JobCardStatus {
   if (!raw) return "RECEIVED";
@@ -1196,181 +1205,170 @@ export default function JobCardDetailPage() {
   return (
     <div
       className={cn(
-        "space-y-4 sm:space-y-6",
+        "min-w-0 max-w-full overflow-x-hidden space-y-4 sm:space-y-6",
         showMobileActionBar
           ? "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12"
           : "pb-10 sm:pb-12"
       )}
     >
-      <Breadcrumbs items={[
-        { label: "Job Cards", href: "/job-cards" },
-        { label: jobCard.jobNumber },
-      ]} />
+      <div className="hidden md:block">
+        <Breadcrumbs
+          items={[
+            { label: "Job Cards", href: "/job-cards" },
+            { label: jobCard.jobNumber },
+          ]}
+        />
+      </div>
 
-      {currentStatus !== "CANCELLED" && (
-        <Card>
-          <CardContent className="!pt-6 !pb-5 !px-4 sm:!pt-8 sm:!pb-6 sm:!px-10">
-            {jobCard && (
-              <JobCardPickupPanel jobCardId={jobCard.id} branchId={jobCard.branchId} />
-            )}
-            <div className="sm:hidden">
-              {WORKFLOW_STATUSES.map((status, index) => {
-                const isLast = index === WORKFLOW_STATUSES.length - 1;
-                const isCompleted =
-                  index < currentStatusIndex ||
-                  (currentStatus === "DELIVERED" && isLast && index === currentStatusIndex);
-                const isCurrent =
-                  index === currentStatusIndex && !(currentStatus === "DELIVERED" && isLast);
-
-                return (
-                  <div key={status} className="flex gap-3">
-                    <div className="flex flex-col items-center shrink-0">
-                      <div
-                        className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors ${
-                          isCompleted
-                            ? "bg-primary border-primary text-primary-foreground"
-                            : isCurrent
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
-                        }`}
-                      >
-                        {isCompleted ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <span className="text-xs font-medium">{index + 1}</span>
-                        )}
-                      </div>
-                      {!isLast && (
-                        <div
-                          className={`w-0.5 h-6 shrink-0 my-0.5 ${isCompleted ? "bg-primary" : "bg-muted"}`}
-                          aria-hidden
-                        />
-                      )}
-                    </div>
-                    <div className={`min-w-0 pt-1.5 ${isLast ? "pb-0" : "pb-3"}`}>
-                      <span
-                        className={`text-sm leading-snug block ${
-                          isCurrent || (currentStatus === "DELIVERED" && isLast)
-                            ? "font-semibold text-foreground"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {WORKFLOW_LABELS[status]}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+      {/* Page chrome: job context bar + workflow stepper (no horizontal overflow) */}
+      <div className="min-w-0 max-w-full overflow-x-hidden space-y-3 sm:space-y-4">
+        <div className="sticky top-0 z-30 -mt-4 border-b border-border/80 bg-background/98 py-2.5 backdrop-blur-sm sm:mt-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 md:hidden" asChild>
+              <Link href="/job-cards" aria-label="Back to job cards">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-mono text-sm font-bold leading-tight">{jobCard.jobNumber}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                Current status: {STATUS_LABELS[currentStatus]}
+              </p>
             </div>
-            <div className="hidden sm:block overflow-x-auto overflow-y-visible sm:mx-0 sm:px-0 sm:pb-0 [scrollbar-width:thin]">
-              <div className="flex items-center justify-start min-w-0 sm:min-w-0 sm:w-full gap-x-4">
-                {WORKFLOW_STATUSES.map((status, index) => {
-                  const isLast = index === WORKFLOW_STATUSES.length - 1;
-                  const isCompleted =
-                    index < currentStatusIndex ||
-                    (currentStatus === "DELIVERED" && isLast && index === currentStatusIndex);
-                  const isCurrent =
-                    index === currentStatusIndex && !(currentStatus === "DELIVERED" && isLast);
+            <JobCardStatusBadge status={currentStatus} className="shrink-0 text-[10px]" />
+          </div>
+        </div>
 
-                  return (
-                    <div key={status} className="flex items-center shrink-0">
-                      <div className="flex flex-col items-center w-28 px-1">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                            isCompleted
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : isCurrent
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
-                          }`}
-                        >
-                          {isCompleted ? (
-                            <Check className="w-5 h-5" />
-                          ) : (
-                            <span className="text-xs font-medium">{index + 1}</span>
-                          )}
+        {currentStatus !== "CANCELLED" && (
+          <Card className="min-w-0 overflow-hidden border-border/80 shadow-sm">
+            <CardContent className="!px-3 !py-3 sm:!px-4 sm:!py-4">
+              {jobCard && (
+                <JobCardPickupPanel jobCardId={jobCard.id} branchId={jobCard.branchId} />
+              )}
+              <div
+                className="w-full max-w-full overflow-hidden pt-1"
+                role="navigation"
+                aria-label="Job workflow progress"
+              >
+                <div className="flex w-full min-w-0 items-start overflow-hidden">
+                  {WORKFLOW_STATUSES.map((status, index) => {
+                    const isLast = index === WORKFLOW_STATUSES.length - 1;
+                    const isCompleted =
+                      index < currentStatusIndex ||
+                      (currentStatus === "DELIVERED" && isLast && index === currentStatusIndex);
+                    const isCurrent =
+                      index === currentStatusIndex && !(currentStatus === "DELIVERED" && isLast);
+
+                    return (
+                      <Fragment key={status}>
+                        <div className="flex min-w-0 flex-1 flex-col items-center px-0.5">
+                          <div
+                            className={cn(
+                              "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-8 sm:w-8",
+                              isCompleted
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : isCurrent
+                                  ? "border-primary bg-primary/10 text-primary"
+                                  : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
+                            )}
+                          >
+                            {isCompleted ? (
+                              <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            ) : (
+                              <span className="text-[10px] font-medium sm:text-xs">{index + 1}</span>
+                            )}
+                          </div>
+                          <span
+                            className={cn(
+                              "mt-1 w-full text-center text-[8px] leading-[1.2] line-clamp-2 sm:text-[10px] sm:leading-tight",
+                              isCurrent || (currentStatus === "DELIVERED" && isLast)
+                                ? "font-semibold text-foreground"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {WORKFLOW_LABELS[status]}
+                          </span>
                         </div>
-                        <span
-                          className={`text-xs mt-1.5 text-center leading-snug ${
-                            isCurrent || (currentStatus === "DELIVERED" && isLast)
-                              ? "font-semibold text-foreground"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {WORKFLOW_LABELS[status]}
-                        </span>
-                      </div>
-                      {!isLast && (
-                        <div
-                          className={`h-0.5 w-10 sm:flex-1 sm:min-w-8 sm:max-w-40 shrink-0 ${
-                            isCompleted ? "bg-primary" : "bg-muted"
-                          }`}
-                          aria-hidden
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="mt-5 space-y-2">
-              {currentStatus === "DELIVERED" ? (
-                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    This job is delivered — you can create the tax invoice or open it if it already exists.
-                  </p>
-                  <Button
-                    type="button"
-                    className="w-full sm:w-auto shrink-0"
-                    onClick={handleGenerateInvoice}
-                    title="Creates the invoice if needed and opens billing to print or record payment."
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    {invoiceForJob ? "View invoice" : "Generate Invoice"}
-                  </Button>
+                        {!isLast && (
+                          <div
+                            className={cn(
+                              "mt-3.5 h-0.5 min-w-[3px] max-w-4 flex-[0.35_0_6px] shrink-0 rounded-full sm:max-w-5",
+                              isCompleted ? "bg-primary" : "bg-muted"
+                            )}
+                            aria-hidden
+                          />
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </div>
-              ) : (
-                <>
-                  {advanceBlockedByMechanic && (
-                    <p className="text-sm text-amber-600 dark:text-amber-500">
-                      Assign a mechanic before moving to In Service — use the button below or the summary header.
+              </div>
+              <div className="mt-3 space-y-2 sm:mt-4">
+                {currentStatus === "DELIVERED" ? (
+                  <div className="hidden flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
+                    <p className="text-sm text-muted-foreground">
+                      This job is delivered — you can create the tax invoice or open it if it already exists.
                     </p>
-                  )}
-                  <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
-                    {!hasMechanicAssigned && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full sm:w-auto"
-                        onClick={() => setShowQuickAssignDialog(true)}
-                      >
-                        <User className="w-4 h-4 mr-2" />
-                        Assign mechanic
-                      </Button>
-                    )}
                     <Button
                       type="button"
-                      className="w-full sm:w-auto"
-                      onClick={handleUpdateStatus}
-                      disabled={updateStatusDisabled}
-                      title={updateStatusDisabledTitle}
+                      className="w-full shrink-0 sm:w-auto"
+                      onClick={handleGenerateInvoice}
+                      title="Creates the invoice if needed and opens billing to print or record payment."
                     >
-                      Update Status
-                    </Button>
-                    <Button
-                      className="w-full sm:w-auto"
-                      variant="destructive"
-                      onClick={handleCancel}
-                    >
-                      Cancel
+                      <FileText className="w-4 h-4 mr-2" />
+                      {invoiceForJob ? "View invoice" : "Generate Invoice"}
                     </Button>
                   </div>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                ) : (
+                  <>
+                    {advanceBlockedByMechanic && (
+                      <p className="text-sm text-amber-600 dark:text-amber-500">
+                        Assign a mechanic before moving to In Service — use the button below or the summary header.
+                      </p>
+                    )}
+                    <div className="hidden flex-col gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                      {!hasMechanicAssigned && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full sm:w-auto"
+                          onClick={() => setShowQuickAssignDialog(true)}
+                        >
+                          <User className="w-4 h-4 mr-2" />
+                          Assign mechanic
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        className="w-full sm:w-auto"
+                        onClick={handleUpdateStatus}
+                        disabled={updateStatusDisabled}
+                        title={updateStatusDisabledTitle}
+                      >
+                        Update Status
+                      </Button>
+                      <Button className="w-full sm:w-auto" variant="destructive" onClick={handleCancel}>
+                        Cancel
+                      </Button>
+                    </div>
+                    <div className="md:hidden">
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-destructive"
+                        onClick={handleCancel}
+                      >
+                        Cancel job
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {jobCard.serviceTimerStartedAt &&
         currentStatus !== "CANCELLED" &&
@@ -1395,19 +1393,26 @@ export default function JobCardDetailPage() {
       {/* Job header — competitor-style context row */}
       <Card className="overflow-hidden border-border/80 shadow-sm">
         <div className="h-1.5 bg-linear-to-r from-emerald-600/90 via-emerald-500/70 to-primary/60" aria-hidden />
-        <CardContent className="pt-5 pb-5 sm:p-6">
-          <Button variant="ghost" size="sm" className="-ml-2 h-8 text-muted-foreground hover:text-foreground mb-2" asChild>
+        <CardContent className="pt-4 pb-4 sm:pt-5 sm:pb-5 sm:p-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 mb-2 hidden h-8 text-muted-foreground hover:text-foreground md:inline-flex"
+            asChild
+          >
             <Link href="/job-cards">
               <ArrowLeft className="w-4 h-4 mr-1.5" />
               All job cards
             </Link>
           </Button>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Job card</p>
-          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mt-1">
-            <h1 className="text-2xl sm:text-3xl font-bold font-mono tracking-tight">
+          <p className="hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:block">
+            Job card
+          </p>
+          <div className="mt-0 flex flex-col gap-2 sm:mt-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <h1 className="text-xl font-bold font-mono tracking-tight sm:text-2xl md:text-3xl">
               {jobCard.jobNumber}
             </h1>
-            <JobCardStatusBadge status={currentStatus} />
+            <JobCardStatusBadge status={currentStatus} className="hidden sm:inline-flex" />
           </div>
           <div className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -1539,41 +1544,54 @@ export default function JobCardDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div className="lg:col-span-5 space-y-4">
               <Card className="border-border/80 shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/60 bg-muted/20">
+                <CardHeader className="pb-3 border-b border-border/60 bg-muted/20 flex flex-row items-center justify-between gap-2 space-y-0">
                   <CardTitle className="text-base flex items-center gap-2">
                     <User className="w-4 h-4 text-muted-foreground" />
                     Customer details
                   </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Name</p>
-                    <p className="font-semibold mt-0.5">{jobCard.customerName}</p>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      type="button"
+                      onClick={handleWhatsAppNotify}
+                      title="WhatsApp customer"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Open customer">
+                      <Link href={`/customers/${jobCard.customerId}`}>
+                        <User className="h-4 w-4" />
+                      </Link>
+                    </Button>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <Phone className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Phone</p>
-                      <p className="font-medium mt-0.5 tabular-nums">{jobCard.customerPhone}</p>
-                    </div>
+                </CardHeader>
+                <CardContent className="pt-3 space-y-2">
+                  <p className="font-semibold leading-tight">{jobCard.customerName}</p>
+                  <div className="flex items-center gap-2 text-sm min-w-0">
+                    <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="font-medium tabular-nums truncate">{jobCard.customerPhone}</span>
                   </div>
                   {customerRecord?.email ? (
-                    <div className="flex items-start gap-3">
-                      <Mail className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">Email</p>
-                        <p className="font-medium mt-0.5 truncate">{customerRecord.email}</p>
-                      </div>
+                    <div className="flex items-center gap-2 text-sm min-w-0">
+                      <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <span className="truncate text-muted-foreground">{customerRecord.email}</span>
                     </div>
                   ) : null}
                 </CardContent>
               </Card>
               <Card className="border-border/80 shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/60 bg-muted/20">
+                <CardHeader className="pb-3 border-b border-border/60 bg-muted/20 flex flex-row items-center justify-between gap-2 space-y-0">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Car className="w-4 h-4 text-muted-foreground" />
                     Vehicle
                   </CardTitle>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild title="Open vehicle">
+                    <Link href={`/vehicles/${jobCard.vehicleId}`}>
+                      <Car className="h-4 w-4" />
+                    </Link>
+                  </Button>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-3">
                   <div>
@@ -1587,11 +1605,27 @@ export default function JobCardDetailPage() {
                 </CardContent>
               </Card>
               <Card className="border-border/80 shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/60 bg-muted/20">
+                <CardHeader className="pb-3 border-b border-border/60 bg-muted/20 flex flex-row items-center justify-between gap-2 space-y-0">
                   <CardTitle className="text-base flex items-center gap-2">
                     <CalendarDays className="w-4 h-4 text-muted-foreground" />
                     Schedule
                   </CardTitle>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {jobCard.quotationId ? (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Quotation">
+                        <Link href={`/billing?quotationId=${jobCard.quotationId}`}>
+                          <FileText className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {jobCard.appointmentBookingRef ? (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" asChild title={jobCard.appointmentBookingRef}>
+                        <Link href="/appointments">
+                          <CalendarDays className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-3 text-sm">
                   <div className="flex justify-between gap-4">
@@ -1610,39 +1644,65 @@ export default function JobCardDetailPage() {
                 <CardHeader className="pb-3 border-b border-border/60 bg-muted/15">
                   <CardTitle className="text-base">Job summary</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-4 grid sm:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimate</p>
-                    <p className="font-semibold mt-1 tabular-nums">{formatCurrency(jobCard.estimatedAmount)}</p>
+                <CardContent className="pt-3 space-y-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="secondary" className="tabular-nums font-semibold">
+                      {formatCurrency(jobCard.estimatedAmount)}
+                    </Badge>
+                    <Badge variant="outline">{formatSegmentLabel(jobCard.vehicleSegment)}</Badge>
+                    <Badge variant="outline">{currentMechanicName ?? "No mechanic"}</Badge>
+                    <Badge variant="outline" className="tabular-nums">
+                      {jobCard.incentivePercent}% incentive
+                    </Badge>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Incentive</p>
-                    <p className="font-semibold mt-1 tabular-nums">
-                      {jobCard.incentivePercent}% ({formatCurrency(jobCard.incentiveAmount)})
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Segment</p>
-                    <p className="font-semibold mt-1">{jobCard.vehicleSegment.replace(/_/g, " ")}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Mechanic</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <p className="font-semibold">{currentMechanicName ?? "—"}</p>
-                      {currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            currentMechanicName ? setShowSwitchDialog(true) : setShowQuickAssignDialog(true)
-                          }
-                          className="text-primary hover:text-primary/80 transition-colors p-1"
-                          title={currentMechanicName ? "Switch mechanic" : "Assign mechanic"}
-                        >
-                          <ArrowLeftRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                  <div className="hidden sm:grid sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimate</p>
+                      <p className="font-semibold mt-1 tabular-nums">{formatCurrency(jobCard.estimatedAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Incentive</p>
+                      <p className="font-semibold mt-1 tabular-nums">
+                        {jobCard.incentivePercent}% ({formatCurrency(jobCard.incentiveAmount)})
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Segment</p>
+                      <p className="font-semibold mt-1">{formatSegmentLabel(jobCard.vehicleSegment)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Mechanic</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <p className="font-semibold">{currentMechanicName ?? "—"}</p>
+                        {currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              currentMechanicName ? setShowSwitchDialog(true) : setShowQuickAssignDialog(true)
+                            }
+                            className="text-primary hover:text-primary/80 transition-colors p-1"
+                            title={currentMechanicName ? "Switch mechanic" : "Assign mechanic"}
+                          >
+                            <ArrowLeftRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  {currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs sm:hidden"
+                      onClick={() =>
+                        currentMechanicName ? setShowSwitchDialog(true) : setShowQuickAssignDialog(true)
+                      }
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5 mr-1" />
+                      {currentMechanicName ? "Switch mechanic" : "Assign mechanic"}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
               {invoiceForJob ? (
@@ -1713,56 +1773,18 @@ export default function JobCardDetailPage() {
                   ) : null}
                 </CardContent>
               </Card>
-              <Card className="border-border/80 shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/60 bg-muted/15">
-                  <CardTitle className="text-base">Quick actions</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" type="button" onClick={handleWhatsAppNotify}>
-                    <MessageCircle className="w-4 h-4 mr-1.5" />
-                    WhatsApp
-                  </Button>
-                  {jobCard.quotationId && (
-                    <Link href={`/billing?quotationId=${jobCard.quotationId}`}>
-                      <Button variant="outline" size="sm" type="button">
-                        <FileText className="w-4 h-4 mr-1.5" />
-                        Quotation
-                      </Button>
-                    </Link>
-                  )}
-                  {jobCard.appointmentBookingRef && (
-                    <Link href="/appointments">
-                      <Button variant="outline" size="sm" type="button">
-                        <CalendarDays className="w-4 h-4 mr-1.5" />
-                        {jobCard.appointmentBookingRef}
-                      </Button>
-                    </Link>
-                  )}
-                  <Link href={`/customers/${jobCard.customerId}`}>
-                    <Button variant="outline" size="sm" type="button">
-                      <User className="w-4 h-4 mr-1.5" />
-                      Customer
-                    </Button>
-                  </Link>
-                  <Link href={`/vehicles/${jobCard.vehicleId}`}>
-                    <Button variant="outline" size="sm" type="button">
-                      <Car className="w-4 h-4 mr-1.5" />
-                      Vehicle
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
               {jobCard.termsAndConditions ? (
-                <Card className="border-border/80 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Terms &amp; conditions</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                <details className="group rounded-xl border border-border/80 bg-card shadow-sm">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-base font-medium [&::-webkit-details-marker]:hidden">
+                    <span>Terms &amp; conditions</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="border-t border-border/60 px-4 pb-4 pt-3">
                     <p className="text-sm whitespace-pre-wrap text-muted-foreground leading-relaxed">
                       {jobCard.termsAndConditions}
                     </p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </details>
               ) : null}
             </div>
           </div>

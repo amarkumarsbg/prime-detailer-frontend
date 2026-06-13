@@ -102,11 +102,11 @@ export function notifyInvoiceCreatedWhatsApp(inv: Invoice, businessName: string)
 
 export function notifyReservationConfirmedWhatsApp(
   apt: Appointment,
-  businessName: string
+  business: BookingConfirmationBusiness | string
 ): void {
   const phone = (apt.whatsappPhone ?? apt.customerPhone)?.trim();
   if (!phone) return;
-  const message = buildReservationConfirmedMessage(apt, businessName);
+  const message = buildReservationConfirmedMessage(apt, business);
   const ref = getAppointmentDisplayId(apt);
   void executeCustomerWhatsAppAutomation({
     phone,

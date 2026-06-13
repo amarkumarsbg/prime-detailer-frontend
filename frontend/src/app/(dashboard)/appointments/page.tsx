@@ -67,6 +67,7 @@ import type { Appointment, AppointmentStatus, Vehicle, VehicleSegment } from "@/
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
+import { getBookingConfirmationBusiness } from "@/lib/booking-confirmation-message";
 import { getNextAppointmentNumber, getAppointmentDisplayId } from "@/lib/appointment-ids";
 import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
 import { findCatalogServiceForAppointment } from "@/lib/job-from-appointment";
@@ -349,7 +350,7 @@ export default function AppointmentsPage() {
     };
 
     await addAppointment(newApt);
-    notifyReservationConfirmedWhatsApp(newApt, businessName);
+    notifyReservationConfirmedWhatsApp(newApt, businessPayload);
 
     const [yy, mm, dd] = formDate.split("-").map(Number);
     const scheduledDay = new Date(yy, mm - 1, dd);
@@ -369,25 +370,18 @@ export default function AppointmentsPage() {
     return branches[0]?.name ?? "Main workshop";
   }, [viewingLabel, branches]);
 
-  const termsUrl = useMemo(() => {
-    const w = businessWebsite?.trim();
-    if (!w) return undefined;
-    const base = /^https?:\/\//i.test(w) ? w : `https://${w}`;
-    const normalized = base.replace(/\/$/, "");
-    if (/terms/i.test(normalized)) return normalized;
-    return `${normalized}/terms-conditions`;
-  }, [businessWebsite]);
-
   const businessPayload = useMemo(
-    () => ({
-      branchName: branchLabel,
-      businessName,
-      address: businessAddress,
-      phone: businessPhone,
-      email: businessEmail,
-      termsUrl,
-    }),
-    [branchLabel, businessName, businessAddress, businessPhone, businessEmail, termsUrl]
+    () =>
+      getBookingConfirmationBusiness({
+        businessName,
+        businessAddress,
+        businessPhone,
+        businessEmail,
+        businessWebsite,
+        branchLabel,
+        acceptanceOutlet: "Visit Outlet",
+      }),
+    [branchLabel, businessName, businessAddress, businessPhone, businessEmail, businessWebsite]
   );
 
   const sendBookingConfirmationWhatsApp = async (apt: Appointment, messageText: string) => {
@@ -433,7 +427,7 @@ export default function AppointmentsPage() {
     const next: Appointment = { ...apt, status: "CONFIRMED" };
     await updateAppointment(apt.id, { status: "CONFIRMED" });
     toast.success("Appointment confirmed");
-    const messageText = buildReservationConfirmedMessage(next, businessName);
+    const messageText = buildReservationConfirmedMessage(next, businessPayload);
     await sendBookingConfirmationWhatsApp(next, messageText);
   };
 
@@ -1029,7 +1023,7 @@ export default function AppointmentsPage() {
                                   onClick={() =>
                                     void sendBookingConfirmationWhatsApp(
                                       apt,
-                                      buildReservationConfirmedMessage(apt, businessName)
+                                      buildReservationConfirmedMessage(apt, businessPayload)
                                     )
                                   }
                                 >
@@ -1122,7 +1116,7 @@ export default function AppointmentsPage() {
                             onClick={() =>
                               void sendBookingConfirmationWhatsApp(
                                 apt,
-                                buildReservationConfirmedMessage(apt, businessName)
+                                buildReservationConfirmedMessage(apt, businessPayload)
                               )
                             }
                           >

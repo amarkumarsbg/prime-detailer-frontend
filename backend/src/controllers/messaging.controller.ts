@@ -13,8 +13,8 @@ import { isResendConfigured, sendViaResend } from "../services/resend-send.js";
 const postWhatsAppSchema = z
   .object({
     phone: z.string().min(8).max(32),
-    /** Free-form body (session messages / sandbox). */
-    message: z.string().min(1).max(4096).optional(),
+    /** Free-form body (session messages / sandbox). Split server-side when >1600 chars. */
+    message: z.string().min(1).max(16_384).optional(),
     /** Twilio Content Template SID (HX…). Mutually exclusive with `message`. */
     contentSid: z.string().min(1).optional(),
     /** Template variables; serialized to JSON for Twilio (e.g. { "1": "22 July 2026", "2": "3:15pm" }). */

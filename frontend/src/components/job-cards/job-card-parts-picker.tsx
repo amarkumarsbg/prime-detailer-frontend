@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Package, X, AlertTriangle } from "lucide-react";
+import { Search, Package, X, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,15 +87,19 @@ export function JobCardPartsPicker({
   selectedLines,
   onSelectedLinesChange,
   hideIntro = false,
+  collapseSelected = false,
 }: {
   selectedLines: SelectedPartLine[];
   onSelectedLinesChange: (lines: SelectedPartLine[]) => void;
   /** Hide title/help when the parent already shows step or dialog context. */
   hideIntro?: boolean;
+  /** Collapse selected parts into an accordion to save vertical space in wizards. */
+  collapseSelected?: boolean;
 }) {
   const parts = useInventoryStore((s) => s.parts);
   const [partSearch, setPartSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+  const [selectedExpanded, setSelectedExpanded] = useState(!collapseSelected);
   /** Lets users clear/retype qty without snapping back to 1 mid-edit. */
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
 
@@ -175,6 +179,81 @@ export function JobCardPartsPicker({
     onSelectedLinesChange(selectedLines.filter((l) => l.partId !== partId));
   };
 
+  const renderSelectedPartControls = ({
+    part,
+    line,
+    qtyValue,
+    lineTotal,
+    units,
+  }: {
+    part: Part;
+    line: SelectedPartLine;
+    qtyValue: string;
+    lineTotal: number;
+    units: string[];
+  }) => {
+    const unitPrice = getUnitPrice(part, line.unit);
+    return (
+      <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+        {units.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Unit</span>
+            <Select value={line.unit} onValueChange={(unit) => updateLine(part.id, { unit })}>
+              <SelectTrigger className="h-8 w-[5.5rem] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {units.map((u) => (
+                  <SelectItem key={u} value={u}>
+                    {u}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-muted-foreground" htmlFor={`part-qty-${part.id}`}>
+            Qty
+          </label>
+          <Input
+            id={`part-qty-${part.id}`}
+            type="text"
+            inputMode="decimal"
+            value={qtyValue}
+            onChange={(e) => setQtyDraft(part.id, e.target.value)}
+            onBlur={(e) => commitQty(part.id, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitQty(part.id, (e.target as HTMLInputElement).value);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className="h-8 w-20 text-sm tabular-nums"
+          />
+          <span className="text-xs text-muted-foreground">{line.unit}</span>
+        </div>
+        <div className="text-right min-w-[5.5rem]">
+          <p className="text-sm font-semibold tabular-nums text-emerald-600">{formatCurrency(lineTotal)}</p>
+          <p className="text-[10px] text-muted-foreground">
+            @ {formatCurrency(unitPrice)}/{line.unit}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => removePart(part.id)}
+          aria-label={`Remove ${part.name}`}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
       {!hideIntro && (
@@ -188,111 +267,128 @@ export function JobCardPartsPicker({
       )}
 
       {selectedPartRows.length > 0 && (
-        <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Selected parts ({selectedPartRows.length})
-          </p>
-          <div className="space-y-2">
-            {selectedPartRows.map(({ line, part }) => {
-              const stock = getStockStatus(part);
-              const qtyValue = qtyDrafts[part.id] ?? String(line.quantity);
-              const qtyNumeric = effectiveQuantity(part.id, line.quantity);
-              const unitPrice = getUnitPrice(part, line.unit);
-              const lineTotal = Math.round(qtyNumeric * unitPrice * 100) / 100;
-              const stockCheck = validateStockConsumption(part, qtyNumeric, line.unit);
-              const units = getSelectableUnits(part);
-              const equivalent = formatDualUnitStockEquivalent(part);
-              return (
-                <div
-                  key={part.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium leading-tight">{part.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      SKU {part.sku}
-                      {part.barcode ? ` · ${part.barcode}` : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Available: {formatAvailableStock(part, line.unit)}
-                      {equivalent ? ` (= ${equivalent})` : ""}
-                    </p>
-                    {!stockCheck.ok && (
-                      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3 shrink-0" />
-                        {stockCheck.message}
-                      </p>
-                    )}
-                    <Badge variant="outline" className={cn("mt-1.5 text-[10px]", stock.className)}>
-                      {stockStatusShortLabel(stock.label)}
-                    </Badge>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                    {units.length > 1 && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Unit</span>
-                        <Select
-                          value={line.unit}
-                          onValueChange={(unit) => updateLine(part.id, { unit })}
-                        >
-                          <SelectTrigger className="h-8 w-[5.5rem] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {units.map((u) => (
-                              <SelectItem key={u} value={u}>
-                                {u}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5">
-                      <label className="text-xs text-muted-foreground" htmlFor={`part-qty-${part.id}`}>
-                        Qty
-                      </label>
-                      <Input
-                        id={`part-qty-${part.id}`}
-                        type="text"
-                        inputMode="decimal"
-                        value={qtyValue}
-                        onChange={(e) => setQtyDraft(part.id, e.target.value)}
-                        onBlur={(e) => commitQty(part.id, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            commitQty(part.id, (e.target as HTMLInputElement).value);
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        className="h-8 w-20 text-sm tabular-nums"
-                      />
-                      <span className="text-xs text-muted-foreground">{line.unit}</span>
-                    </div>
-                    <div className="text-right min-w-[5.5rem]">
-                      <p className="text-sm font-semibold tabular-nums text-emerald-600">
-                        {formatCurrency(lineTotal)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        @ {formatCurrency(unitPrice)}/{line.unit}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0"
-                      onClick={() => removePart(part.id)}
-                      aria-label={`Remove ${part.name}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+        <div className="rounded-xl border border-primary/20 bg-primary/5 overflow-hidden">
+          {collapseSelected ? (
+            <>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-primary/10 transition-colors"
+                onClick={() => setSelectedExpanded((v) => !v)}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Selected parts ({selectedPartRows.length})
+                  </p>
+                  {!selectedExpanded && selectedPartRows[0] && (
+                    <p className="text-sm font-medium truncate mt-0.5">{selectedPartRows[0].part.name}</p>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+                {selectedExpanded ? (
+                  <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+              </button>
+              {selectedExpanded && (
+                <div className="space-y-2 border-t border-primary/15 p-3 pt-2">
+                  {selectedPartRows.map(({ line, part }) => {
+                    const stock = getStockStatus(part);
+                    const qtyValue = qtyDrafts[part.id] ?? String(line.quantity);
+                    const qtyNumeric = effectiveQuantity(part.id, line.quantity);
+                    const unitPrice = getUnitPrice(part, line.unit);
+                    const lineTotal = Math.round(qtyNumeric * unitPrice * 100) / 100;
+                    const stockCheck = validateStockConsumption(part, qtyNumeric, line.unit);
+                    const units = getSelectableUnits(part);
+                    const equivalent = formatDualUnitStockEquivalent(part);
+                    return (
+                      <div
+                        key={part.id}
+                        className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium leading-tight">{part.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            SKU {part.sku}
+                            {part.barcode ? ` · ${part.barcode}` : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Available: {formatAvailableStock(part, line.unit)}
+                            {equivalent ? ` (= ${equivalent})` : ""}
+                          </p>
+                          {!stockCheck.ok && (
+                            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              {stockCheck.message}
+                            </p>
+                          )}
+                          <Badge variant="outline" className={cn("mt-1.5 text-[10px]", stock.className)}>
+                            {stockStatusShortLabel(stock.label)}
+                          </Badge>
+                        </div>
+                        {renderSelectedPartControls({
+                          part,
+                          line,
+                          qtyValue,
+                          lineTotal,
+                          units,
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-2 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Selected parts ({selectedPartRows.length})
+              </p>
+              {selectedPartRows.map(({ line, part }) => {
+                const stock = getStockStatus(part);
+                const qtyValue = qtyDrafts[part.id] ?? String(line.quantity);
+                const qtyNumeric = effectiveQuantity(part.id, line.quantity);
+                const unitPrice = getUnitPrice(part, line.unit);
+                const lineTotal = Math.round(qtyNumeric * unitPrice * 100) / 100;
+                const stockCheck = validateStockConsumption(part, qtyNumeric, line.unit);
+                const units = getSelectableUnits(part);
+                const equivalent = formatDualUnitStockEquivalent(part);
+                return (
+                  <div
+                    key={part.id}
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-tight">{part.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        SKU {part.sku}
+                        {part.barcode ? ` · ${part.barcode}` : ""}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Available: {formatAvailableStock(part, line.unit)}
+                        {equivalent ? ` (= ${equivalent})` : ""}
+                      </p>
+                      {!stockCheck.ok && (
+                        <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          {stockCheck.message}
+                        </p>
+                      )}
+                      <Badge variant="outline" className={cn("mt-1.5 text-[10px]", stock.className)}>
+                        {stockStatusShortLabel(stock.label)}
+                      </Badge>
+                    </div>
+                    {renderSelectedPartControls({
+                      part,
+                      line,
+                      qtyValue,
+                      lineTotal,
+                      units,
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
