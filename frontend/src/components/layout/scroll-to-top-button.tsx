@@ -51,7 +51,7 @@ export function ScrollToTopButton({
       variant="default"
       size="icon"
       className={cn(
-        "fixed z-40 rounded-full shadow-md transition-opacity duration-200",
+        "fixed z-40 hidden rounded-full shadow-md transition-opacity duration-200 md:inline-flex",
         isJobCardDetail ? "h-7 w-7 md:h-9 md:w-9" : "h-8 w-8 md:h-10 md:w-10",
         useLeftPosition ? "left-3 right-auto md:left-auto" : "right-3 md:right-8",
         isJobCardDetail
