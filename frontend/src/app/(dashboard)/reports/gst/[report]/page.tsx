@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Gstr1SalesReport } from "@/components/reports/gstr1-sales-report";
 import { Gstr2PurchaseReport } from "@/components/reports/gstr2-purchase-report";
 import { Gstr3bReport } from "@/components/reports/gstr3b-report";
@@ -11,6 +10,7 @@ import { GstPurchaseHsnReport } from "@/components/reports/gst-purchase-hsn-repo
 import { GstSalesHsnReport } from "@/components/reports/gst-sales-hsn-report";
 import { HsnWiseSalesSummaryReport } from "@/components/reports/hsn-wise-sales-summary-report";
 import { PageHeader } from "@/components/shared/page-header";
+import { TaxWithholdingReport } from "@/components/reports/tax-withholding-report";
 import { ArrowLeft } from "lucide-react";
 
 const GST_META: Record<
@@ -126,6 +126,19 @@ export default function GstReportPage() {
     );
   }
 
+  if (
+    slug === "tds-payable" ||
+    slug === "tds-receivable" ||
+    slug === "tcs-payable" ||
+    slug === "tcs-receivable"
+  ) {
+    return (
+      <div className="space-y-6">
+        <TaxWithholdingReport variant={slug} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -138,21 +151,6 @@ export default function GstReportPage() {
       </div>
 
       <PageHeader title={meta.title} description={meta.description} />
-
-      {meta.kind === "tax" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Not tracked yet</CardTitle>
-            <CardDescription>
-              TDS/TCS amounts will appear here once withheld tax is captured on expenses and
-              receipts.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm tabular-nums text-muted-foreground">₹0.00</p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

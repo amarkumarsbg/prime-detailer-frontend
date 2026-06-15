@@ -30,6 +30,9 @@ import {
   GSTR2_DUMMY_PURCHASE_ROWS,
   type Gstr2PurchaseDummyRow,
 } from "@/lib/reports/gstr2-purchase-dummy-data";
+import { buildGstr2PurchaseRows } from "@/lib/reports/purchase-report-data";
+import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
+import { useInventoryStore } from "@/store/inventory-store";
 import { formatInrFull } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -178,8 +181,10 @@ const selectItemClass =
   "cursor-pointer focus:bg-muted/70 focus:text-foreground data-[highlighted]:bg-muted/70 data-[state=checked]:bg-transparent data-[state=checked]:font-medium";
 
 export function Gstr2PurchaseReport() {
+  const purchases = useInventoryStore((s) => s.productPurchases);
+  const parts = useInventoryStore((s) => s.parts);
   const [favourite, setFavourite] = useState(false);
-  const [period, setPeriod] = useState<string>("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [mainTab, setMainTab] = useState("purchase");
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailYour, setEmailYour] = useState("agenciessamriddhi@gmail.com");
@@ -204,8 +209,10 @@ export function Gstr2PurchaseReport() {
   };
 
   const filteredPurchase = useMemo(() => {
+    const live = buildGstr2PurchaseRows(purchases, parts, period);
+    if (live.length > 0) return live;
     return GSTR2_DUMMY_PURCHASE_ROWS.filter((r) => inDatePreset(r.invoiceDate, period));
-  }, [period]);
+  }, [purchases, parts, period]);
 
   const downloadCsv = () => {
     const rows = mainTab === "purchase" ? filteredPurchase : [];

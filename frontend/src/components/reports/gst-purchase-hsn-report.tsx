@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { ReportPageChrome } from "@/components/reports/report-page-chrome";
 import { ReportTableEmpty } from "@/components/reports/report-table-empty";
+import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
+import { buildGstPurchaseHsnRows } from "@/lib/reports/purchase-report-data";
+import { useInventoryStore } from "@/store/inventory-store";
 import {
   GST_PURCHASE_HSN_DUMMY,
   filterPurchaseHsnByPeriod,
@@ -13,12 +16,15 @@ import { toast } from "sonner";
 const FAV_KEY = "prime-detailer-gst-purchase-hsn-favourite";
 
 export function GstPurchaseHsnReport() {
-  const [period, setPeriod] = useState("week");
+  const purchases = useInventoryStore((s) => s.productPurchases);
+  const parts = useInventoryStore((s) => s.parts);
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
 
-  const rows = useMemo(
-    () => filterPurchaseHsnByPeriod(GST_PURCHASE_HSN_DUMMY, period),
-    [period]
-  );
+  const rows = useMemo(() => {
+    const live = buildGstPurchaseHsnRows(purchases, parts, period);
+    if (live.length > 0) return live;
+    return filterPurchaseHsnByPeriod(GST_PURCHASE_HSN_DUMMY, period);
+  }, [purchases, parts, period]);
 
   const downloadCsv = () => {
     if (rows.length === 0) {

@@ -17,6 +17,9 @@ export const REPORT_PERIOD_OPTIONS = [
 
 export type ReportPeriodPreset = (typeof REPORT_PERIOD_OPTIONS)[number]["value"];
 
+/** Default period for report screens — shows FY data including seeded demo invoices. */
+export const DEFAULT_REPORT_PERIOD: ReportPeriodPreset = "fy";
+
 function startOfDay(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);

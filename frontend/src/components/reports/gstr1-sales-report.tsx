@@ -17,7 +17,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GSTR1_DUMMY_INVOICE_ROWS, type Gstr1InvoiceDummyRow } from "@/lib/reports/gstr1-dummy-data";
+import { buildGstr1InvoiceRows } from "@/lib/reports/gst-invoice-aggregates";
+import { dateInPreset } from "@/lib/reports/report-period-presets";
+import { useScopedInvoices } from "@/hooks/use-scoped-data";
+import type { Gstr1InvoiceDummyRow } from "@/lib/reports/gstr1-dummy-data";
 import { formatInrFull } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -31,6 +34,11 @@ import {
 import { toast } from "sonner";
 
 const FAV_KEY = "prime-detailer-gstr1-favourite";
+
+function mapGstr1Period(preset: string): string {
+  if (preset === "fq") return "quarter";
+  return preset;
+}
 
 function fmtInvoiceDate(iso: string) {
   try {
@@ -54,10 +62,17 @@ function downloadBlob(content: Blob, filename: string) {
 }
 
 export function Gstr1SalesReport() {
-  const rows = useMemo(() => GSTR1_DUMMY_INVOICE_ROWS, []);
+  const invoices = useScopedInvoices();
   const [favourite, setFavourite] = useState(false);
-  const [dateRange, setDateRange] = useState("last30");
+  const [dateRange, setDateRange] = useState("fy");
   const [viewMode, setViewMode] = useState("invoice");
+
+  const rows = useMemo(() => {
+    const filtered = invoices.filter((inv) =>
+      dateInPreset(inv.createdAt, mapGstr1Period(dateRange))
+    );
+    return buildGstr1InvoiceRows(filtered);
+  }, [invoices, dateRange]);
 
   useEffect(() => {
     try {

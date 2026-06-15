@@ -1,4 +1,5 @@
 import type { Invoice, InvoiceLineItem } from "@/types";
+import type { Gstr1InvoiceDummyRow } from "@/lib/reports/gstr1-dummy-data";
 
 const DEFAULT_HSN = "998714";
 
@@ -86,4 +87,31 @@ export function buildGstr1SalesRows(invoices: Invoice[]): Gstr1LineRow[] {
       taxAmount: Math.round((inv.taxAmount ?? 0) * 100) / 100,
       grandTotal: inv.grandTotal,
     }));
+}
+
+/** GSTR-1 table rows from saved sales invoices (bootstrap / database). */
+export function buildGstr1InvoiceRows(invoices: Invoice[]): Gstr1InvoiceDummyRow[] {
+  return [...invoices]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((inv) => {
+      const taxPercent = inv.taxRate ?? 0;
+      const taxableValue = Math.round((inv.subtotal ?? 0) * 100) / 100;
+      const taxAmount = Math.round((inv.taxAmount ?? 0) * 100) / 100;
+      const halfTax = Math.round((taxAmount / 2) * 100) / 100;
+      return {
+        id: inv.id,
+        gstin: "—",
+        customerName: inv.customerName,
+        stateCode: "29",
+        stateName: "Karnataka",
+        invoiceNumber: inv.invoiceNumber,
+        invoiceDate: inv.createdAt,
+        invoiceValue: inv.grandTotal,
+        taxPercent,
+        taxableValue,
+        cgst: halfTax,
+        sgst: halfTax,
+        igst: 0,
+      };
+    });
 }

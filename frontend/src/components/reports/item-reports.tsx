@@ -15,13 +15,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useInventoryStore } from "@/store/inventory-store";
+import { useCustomerStore } from "@/store/customer-store";
 import {
   dateInPreset,
+  DEFAULT_REPORT_PERIOD,
   reportSelectItemClass,
 } from "@/lib/reports/report-period-presets";
 import {
   aggregateItemSalesPurchase,
+  buildItemReportByPartyRows,
   isLowStockPart,
   movementQtyDisplay,
   partNumericStock,
@@ -30,8 +35,6 @@ import {
 } from "@/lib/reports/item-report-helpers";
 import { formatDate, formatInrFull } from "@/lib/utils";
 import type { Part, PartCategory } from "@/types";
-import { useCustomerStore } from "@/store/customer-store";
-import { useInventoryStore } from "@/store/inventory-store";
 import { BarChart3, Package, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,14 +49,19 @@ function categoryOptions(parts: Part[]): { value: string; label: string }[] {
 export function ItemReportByParty() {
   const parts = useInventoryStore((s) => s.parts);
   const customers = useCustomerStore((s) => s.customers);
-  const [period, setPeriod] = useState("week");
+  const invoices = useScopedInvoices();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [category, setCategory] = useState<string>(CATEGORY_ALL);
   const [party, setParty] = useState<string>("all");
 
   const catOpts = useMemo(() => categoryOptions(parts), [parts]);
+  const rows = useMemo(() => {
+    if (party === "all") return [];
+    return buildItemReportByPartyRows(party, invoices, period, category, parts);
+  }, [party, invoices, period, category, parts]);
 
   const downloadCsv = () => {
-    toast.message("No rows to export");
+    toast.message(party === "all" ? "Select a party first" : "Download started");
   };
 
   return (
@@ -109,11 +117,30 @@ export function ItemReportByParty() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty
-              colSpan={6}
-              message="No transactions available for selected party"
-              icon={Search}
-            />
+            {party === "all" ? (
+              <ReportTableEmpty
+                colSpan={6}
+                message="Select a party to see item-wise sales"
+                icon={Search}
+              />
+            ) : rows.length === 0 ? (
+              <ReportTableEmpty
+                colSpan={6}
+                message="No transactions available for selected party"
+                icon={Search}
+              />
+            ) : (
+              rows.map((r) => (
+                <tr key={r.itemName} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 font-medium">{r.itemName}</td>
+                  <td className="px-2 py-2 font-mono text-xs">{r.itemCode}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.salesQuantity}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.salesAmount)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.purchaseQuantity}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.purchaseAmount)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -124,7 +151,7 @@ export function ItemReportByParty() {
 export function ItemSalesPurchaseSummaryReport() {
   const parts = useInventoryStore((s) => s.parts);
   const movements = useInventoryStore((s) => s.stockMovements);
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [category, setCategory] = useState<string>(CATEGORY_ALL);
 
   const rows = useMemo(
@@ -253,7 +280,7 @@ export function ItemSalesPurchaseSummaryReport() {
 
 export function LowStockSummaryReport() {
   const parts = useInventoryStore((s) => s.parts);
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
 
   const lowRows = useMemo(() => parts.filter(isLowStockPart), [parts]);
 
@@ -388,7 +415,7 @@ export function RateListReport() {
 export function StockDetailReport() {
   const parts = useInventoryStore((s) => s.parts);
   const movements = useInventoryStore((s) => s.stockMovements);
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [partId, setPartId] = useState<string>("");
 
   const sortedParts = useMemo(

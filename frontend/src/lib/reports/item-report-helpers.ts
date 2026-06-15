@@ -79,6 +79,130 @@ export function isLowStockPart(p: Part): boolean {
     if (rl <= 0) return false;
     return p.stockQuantityMl <= rl;
   }
-  if (p.reorderLevel <= 0) return false;
-  return p.quantity <= p.reorderLevel;
+  const rl = p.reorderLevel ?? 0;
+  if (rl <= 0) return false;
+  return p.quantity <= rl;
+}
+
+export type ItemPartyRow = {
+  itemName: string;
+  itemCode: string;
+  salesQuantity: number;
+  salesAmount: number;
+  purchaseQuantity: number;
+  purchaseAmount: number;
+};
+
+export type PartyItemMovementRow = {
+  partyName: string;
+  salesQty: number;
+  salesAmount: number;
+  purchaseQty: number;
+  purchaseAmount: number;
+};
+
+export function buildItemReportByPartyRows(
+  customerId: string,
+  invoices: import("@/types").Invoice[],
+  period: string,
+  category: string,
+  parts: Part[]
+): ItemPartyRow[] {
+  const allowedParts =
+    category === "all" ? null : new Set(parts.filter((p) => p.category === category).map((p) => p.id));
+  const map = new Map<string, ItemPartyRow>();
+
+  for (const inv of invoices) {
+    if (inv.customerId !== customerId || !dateInPreset(inv.createdAt, period)) continue;
+    for (const li of inv.lineItems) {
+      const key = li.description.trim() || "Item";
+      const code = li.hsnSac?.trim() || "—";
+      const partMatch = parts.find((p) => p.name === key || p.sku === code);
+      if (allowedParts && partMatch && !allowedParts.has(partMatch.id)) continue;
+      const existing = map.get(key);
+      if (existing) {
+        existing.salesQuantity += li.quantity;
+        existing.salesAmount += li.total ?? 0;
+      } else {
+        map.set(key, {
+          itemName: key,
+          itemCode: code,
+          salesQuantity: li.quantity,
+          salesAmount: li.total ?? 0,
+          purchaseQuantity: 0,
+          purchaseAmount: 0,
+        });
+      }
+    }
+  }
+
+  return [...map.values()].sort((a, b) => b.salesAmount - a.salesAmount);
+}
+
+export function buildPartyReportByItemRows(
+  partId: string,
+  part: Part | undefined,
+  movements: StockMovement[],
+  jobCards: import("@/types").JobCard[],
+  purchases: import("@/types").ProductPurchase[],
+  period: string
+): PartyItemMovementRow[] {
+  const map = new Map<string, PartyItemMovementRow>();
+  const unitPrice = part?.unitPrice ?? 0;
+
+  for (const m of movements) {
+    if (m.partId !== partId || !dateInPreset(m.createdAt, period)) continue;
+    const qty = m.unit === "ML" ? m.quantity / 1000 : m.quantity;
+    const amount = Math.round(qty * unitPrice * 100) / 100;
+
+    if (m.type === "OUT" && m.jobCardId) {
+      const jc = jobCards.find((j) => j.id === m.jobCardId);
+      const party = jc?.customerName ?? "Walk-in";
+      const row = map.get(party) ?? {
+        partyName: party,
+        salesQty: 0,
+        salesAmount: 0,
+        purchaseQty: 0,
+        purchaseAmount: 0,
+      };
+      row.salesQty += qty;
+      row.salesAmount += amount;
+      map.set(party, row);
+    }
+
+    if (m.type === "IN") {
+      const party = m.vendor ?? "Supplier";
+      const row = map.get(party) ?? {
+        partyName: party,
+        salesQty: 0,
+        salesAmount: 0,
+        purchaseQty: 0,
+        purchaseAmount: 0,
+      };
+      row.purchaseQty += qty;
+      row.purchaseAmount += amount;
+      map.set(party, row);
+    }
+  }
+
+  for (const p of purchases) {
+    if (p.partId !== partId || !dateInPreset(p.purchasedAt, period)) continue;
+    const qty = p.quantityMl / 1000;
+    const amount = Math.round(qty * (p.unitCost ?? unitPrice) * 100) / 100;
+    const party = p.vendorName;
+    const row = map.get(party) ?? {
+      partyName: party,
+      salesQty: 0,
+      salesAmount: 0,
+      purchaseQty: 0,
+      purchaseAmount: 0,
+    };
+    row.purchaseQty += qty;
+    row.purchaseAmount += amount;
+    map.set(party, row);
+  }
+
+  return [...map.values()]
+    .filter((r) => r.salesQty > 0 || r.purchaseQty > 0)
+    .sort((a, b) => b.salesAmount + b.purchaseAmount - (a.salesAmount + a.purchaseAmount));
 }

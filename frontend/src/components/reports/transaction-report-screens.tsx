@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ReportPageChrome } from "@/components/reports/report-page-chrome";
 import { ReportTableEmpty } from "@/components/reports/report-table-empty";
 import {
@@ -16,28 +16,45 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { reportSelectItemClass } from "@/lib/reports/report-period-presets";
-import { formatInrFull } from "@/lib/utils";
+import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
+import { DEFAULT_REPORT_PERIOD, reportSelectItemClass } from "@/lib/reports/report-period-presets";
+import {
+  accountFilterOptions,
+  buildBillWiseProfitRows,
+  buildCashBankReportRows,
+  buildDaybookRows,
+  buildExpenseCategoryRows,
+  buildExpenseTransactionRows,
+  buildPurchaseSummaryRows,
+  expenseCategoryFilterOptions,
+  uniqueInvoiceCustomers,
+} from "@/lib/reports/transaction-report-data";
+import { useCashBankStore } from "@/store/cash-bank-store";
+import { useInventoryStore } from "@/store/inventory-store";
+import { formatDate, formatInrFull } from "@/lib/utils";
 import { HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const TXN_TYPES = ["All Transactions", "Receipt", "Payment", "Contra", "Journal"] as const;
-const BANKS = ["All bank accounts", "HDFC Current ****4821", "ICICI OD ****0092", "Cash in hand"] as const;
-const EXPENSE_CATS = [
-  "All Expense Categories",
-  "Rent",
-  "Utilities",
-  "Consumables",
-  "Staff welfare",
-] as const;
 
 function noopCsv() {
   toast.message("No rows to export");
 }
 
 export function BillWiseProfitReport() {
-  const [period, setPeriod] = useState("week");
+  const invoices = useScopedInvoices();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [party, setParty] = useState("all");
+
+  const partyOptions = useMemo(() => uniqueInvoiceCustomers(invoices), [invoices]);
+  const rows = useMemo(
+    () => buildBillWiseProfitRows(invoices, period, party),
+    [invoices, period, party]
+  );
+  const netProfit = useMemo(
+    () => Math.round(rows.reduce((s, r) => s + r.profit, 0) * 100) / 100,
+    [rows]
+  );
 
   return (
     <TooltipProvider>
@@ -60,7 +77,7 @@ export function BillWiseProfitReport() {
               </button>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs text-sm" side="bottom">
-              Bill wise Profit report has been updated; profit is calculated using your costing rules in Settings.
+              Profit = taxable sales (subtotal) minus parts line totals on each invoice.
             </TooltipContent>
           </Tooltip>
         }
@@ -73,13 +90,18 @@ export function BillWiseProfitReport() {
               <SelectItem value="all" className={reportSelectItemClass}>
                 All Parties
               </SelectItem>
+              {partyOptions.map((c) => (
+                <SelectItem key={c.id} value={c.id} className={reportSelectItemClass}>
+                  {c.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         }
       >
         <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
           <span className="text-muted-foreground">Net Profit: </span>
-          <span className="font-semibold text-emerald-600 tabular-nums">{formatInrFull(0)}</span>
+          <span className="font-semibold text-emerald-600 tabular-nums">{formatInrFull(netProfit)}</span>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
           <table className="w-full min-w-[800px] border-collapse text-xs sm:text-sm">
@@ -95,7 +117,23 @@ export function BillWiseProfitReport() {
               </tr>
             </thead>
             <tbody>
-              <ReportTableEmpty colSpan={7} />
+              {rows.length === 0 ? (
+                <ReportTableEmpty colSpan={7} />
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.invoiceNumber} className="border-b border-border/80 hover:bg-muted/10">
+                    <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                    <td className="px-2 py-2 font-mono text-xs">{r.invoiceNumber}</td>
+                    <td className="px-2 py-2">{r.partyName}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.invoiceAmount)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.salesAmount)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.purchaseAmount)}</td>
+                    <td className="px-2 py-2 text-right font-medium tabular-nums text-emerald-700">
+                      {formatInrFull(r.profit)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -105,8 +143,16 @@ export function BillWiseProfitReport() {
 }
 
 export function DaybookReport() {
-  const [period, setPeriod] = useState("week");
+  const invoices = useScopedInvoices();
+  const expenses = useScopedExpenses();
+  const cashTxns = useCashBankStore((s) => s.transactions);
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [txnType, setTxnType] = useState<string>(TXN_TYPES[0]);
+
+  const { rows, netAmount } = useMemo(
+    () => buildDaybookRows(invoices, expenses, cashTxns, period, txnType),
+    [invoices, expenses, cashTxns, period, txnType]
+  );
 
   return (
     <ReportPageChrome
@@ -133,7 +179,7 @@ export function DaybookReport() {
     >
       <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
         <span className="text-muted-foreground">Net Amount: </span>
-        <span className="font-semibold text-emerald-600 tabular-nums">{formatInrFull(0)}</span>
+        <span className="font-semibold text-emerald-600 tabular-nums">{formatInrFull(netAmount)}</span>
       </div>
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full min-w-[960px] border-collapse text-xs sm:text-sm">
@@ -150,7 +196,26 @@ export function DaybookReport() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty colSpan={8} />
+            {rows.length === 0 ? (
+              <ReportTableEmpty colSpan={8} />
+            ) : (
+              rows.map((r, i) => (
+                <tr key={`${r.txnNo}-${i}`} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                  <td className="px-2 py-2">{r.partyName}</td>
+                  <td className="px-2 py-2">{r.txnType}</td>
+                  <td className="px-2 py-2 font-mono text-xs">{r.txnNo}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-emerald-700">
+                    {r.moneyIn > 0 ? formatInrFull(r.moneyIn) : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums text-red-600">
+                    {r.moneyOut > 0 ? formatInrFull(r.moneyOut) : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.balanceAmount)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -159,7 +224,18 @@ export function DaybookReport() {
 }
 
 export function PurchaseSummaryReport() {
-  const [period, setPeriod] = useState("week");
+  const purchases = useInventoryStore((s) => s.productPurchases);
+  const parts = useInventoryStore((s) => s.parts);
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
+
+  const rows = useMemo(
+    () => buildPurchaseSummaryRows(purchases, parts, period),
+    [purchases, parts, period]
+  );
+  const total = useMemo(
+    () => Math.round(rows.reduce((s, r) => s + r.purchaseAmount, 0) * 100) / 100,
+    [rows]
+  );
 
   return (
     <ReportPageChrome
@@ -172,7 +248,7 @@ export function PurchaseSummaryReport() {
     >
       <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
         <span className="text-muted-foreground">Total Purchases: </span>
-        <span className="font-semibold text-emerald-600 tabular-nums">{formatInrFull(0)}</span>
+        <span className="font-semibold text-emerald-600 tabular-nums">{formatInrFull(total)}</span>
       </div>
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full min-w-[800px] border-collapse text-xs sm:text-sm">
@@ -187,7 +263,20 @@ export function PurchaseSummaryReport() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty colSpan={6} />
+            {rows.length === 0 ? (
+              <ReportTableEmpty colSpan={6} />
+            ) : (
+              rows.map((r) => (
+                <tr key={r.purchaseNo} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 font-mono text-xs">{r.purchaseNo}</td>
+                  <td className="px-2 py-2">{r.originalInvoiceNo}</td>
+                  <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.purchaseDate)}</td>
+                  <td className="px-2 py-2">{r.partyName}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.purchaseAmount)}</td>
+                  <td className="px-2 py-2 text-muted-foreground">{r.notes}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -196,9 +285,17 @@ export function PurchaseSummaryReport() {
 }
 
 export function CashBankPaymentsReport() {
-  const [period, setPeriod] = useState("week");
-  const [bank, setBank] = useState<string>(BANKS[0]);
+  const accounts = useCashBankStore((s) => s.accounts);
+  const transactions = useCashBankStore((s) => s.transactions);
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
+  const [bank, setBank] = useState("all");
   const [txnType, setTxnType] = useState<string>(TXN_TYPES[0]);
+
+  const bankOptions = useMemo(() => accountFilterOptions(accounts), [accounts]);
+  const { rows, totalPaid, totalReceived, closingBalance } = useMemo(
+    () => buildCashBankReportRows(accounts, transactions, period, bank, txnType),
+    [accounts, transactions, period, bank, txnType]
+  );
 
   return (
     <ReportPageChrome
@@ -215,9 +312,9 @@ export function CashBankPaymentsReport() {
               <SelectValue placeholder="Select Bank Account" />
             </SelectTrigger>
             <SelectContent>
-              {BANKS.map((b) => (
-                <SelectItem key={b} value={b} className={reportSelectItemClass}>
-                  {b}
+              {bankOptions.map((b) => (
+                <SelectItem key={b.value} value={b.value} className={reportSelectItemClass}>
+                  {b.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -252,16 +349,35 @@ export function CashBankPaymentsReport() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty colSpan={8} />
+            {rows.length === 0 ? (
+              <ReportTableEmpty colSpan={8} />
+            ) : (
+              rows.map((r, i) => (
+                <tr key={`${r.txnNo}-${i}`} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                  <td className="px-2 py-2">{r.voucherType}</td>
+                  <td className="px-2 py-2 font-mono text-xs">{r.txnNo}</td>
+                  <td className="px-2 py-2">{r.party}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">
+                    {r.paid > 0 ? formatInrFull(r.paid) : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums text-emerald-700">
+                    {r.received > 0 ? formatInrFull(r.received) : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.balance)}</td>
+                  <td className="px-2 py-2 text-muted-foreground">{r.notes || "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t border-border bg-muted/30 text-xs font-medium">
               <td className="px-2 py-2" colSpan={4}>
                 Total:
               </td>
-              <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(0)}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(0)}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(0)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(totalPaid)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(totalReceived)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(closingBalance)}</td>
               <td className="px-2 py-2" />
             </tr>
           </tfoot>
@@ -272,7 +388,10 @@ export function CashBankPaymentsReport() {
 }
 
 export function ExpenseCategoryReport() {
-  const [period, setPeriod] = useState("week");
+  const expenses = useScopedExpenses();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
+
+  const rows = useMemo(() => buildExpenseCategoryRows(expenses, period), [expenses, period]);
 
   return (
     <ReportPageChrome
@@ -292,7 +411,16 @@ export function ExpenseCategoryReport() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty colSpan={2} />
+            {rows.length === 0 ? (
+              <ReportTableEmpty colSpan={2} />
+            ) : (
+              rows.map((r) => (
+                <tr key={r.category} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 font-medium">{r.category}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -301,8 +429,15 @@ export function ExpenseCategoryReport() {
 }
 
 export function ExpenseTransactionReport() {
-  const [period, setPeriod] = useState("week");
-  const [category, setCategory] = useState<string>(EXPENSE_CATS[0]);
+  const expenses = useScopedExpenses();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
+  const [category, setCategory] = useState("All Expense Categories");
+
+  const categoryOptions = useMemo(() => expenseCategoryFilterOptions(expenses), [expenses]);
+  const rows = useMemo(
+    () => buildExpenseTransactionRows(expenses, period, category),
+    [expenses, period, category]
+  );
 
   return (
     <ReportPageChrome
@@ -318,7 +453,7 @@ export function ExpenseTransactionReport() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {EXPENSE_CATS.map((c) => (
+            {categoryOptions.map((c) => (
               <SelectItem key={c} value={c} className={reportSelectItemClass}>
                 {c}
               </SelectItem>
@@ -339,7 +474,19 @@ export function ExpenseTransactionReport() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty colSpan={5} />
+            {rows.length === 0 ? (
+              <ReportTableEmpty colSpan={5} />
+            ) : (
+              rows.map((r) => (
+                <tr key={r.expenseNumber} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                  <td className="px-2 py-2 font-mono text-xs">{r.expenseNumber}</td>
+                  <td className="px-2 py-2">{r.category}</td>
+                  <td className="px-2 py-2">{r.paymentMode}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

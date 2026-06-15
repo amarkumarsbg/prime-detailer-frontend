@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
+import { dateInPreset, DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
 import { useSettingsStore } from "@/store/settings-store";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -51,7 +52,7 @@ export function ProfitLossReport() {
   const expenses = useScopedExpenses();
 
   const [favourite, setFavourite] = useState(false);
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
 
   useEffect(() => {
     try {
@@ -72,14 +73,16 @@ export function ProfitLossReport() {
   };
 
   const { saleTotal, expenseTotal, netSimplified } = useMemo(() => {
-    const sale = invoices.reduce((s, i) => s + (i.grandTotal ?? 0), 0);
-    const exp = expenses.reduce((s, e) => s + (e.amount ?? 0), 0);
+    const scopedInvoices = invoices.filter((i) => dateInPreset(i.createdAt, period));
+    const scopedExpenses = expenses.filter((e) => dateInPreset(e.date, period));
+    const sale = scopedInvoices.reduce((s, i) => s + (i.grandTotal ?? 0), 0);
+    const exp = scopedExpenses.reduce((s, e) => s + (e.amount ?? 0), 0);
     return {
       saleTotal: Math.round(sale * 100) / 100,
       expenseTotal: Math.round(exp * 100) / 100,
       netSimplified: Math.round((sale - exp) * 100) / 100,
     };
-  }, [invoices, expenses]);
+  }, [invoices, expenses, period]);
 
   const rows: PlRow[] = useMemo(
     () => [

@@ -33,6 +33,18 @@ import {
   reportSelectItemClass,
 } from "@/lib/reports/report-period-presets";
 import {
+  reportMobileActionButtonClass,
+  reportMobileActionsClass,
+  reportMobileBackLinkClass,
+  reportMobileContentClass,
+  reportMobileFavButtonClass,
+  reportMobileFilterSlotClass,
+  reportMobileFiltersRowClass,
+  reportMobileTitleClass,
+  reportMobileTitleRowClass,
+} from "@/lib/reports/report-mobile-ui";
+import { ReportTableScrollHint } from "@/components/reports/report-table-scroll-hint";
+import {
   ArrowLeft,
   CalendarDays,
   ChevronDown,
@@ -45,17 +57,12 @@ import { toast } from "sonner";
 
 type ReportPageChromeProps = {
   title: string;
-  /** localStorage key for favourite toggle */
   favouriteStorageKey: string;
-  /** Shown in email modal body, e.g. "GSTR-3B" */
   emailReportName: string;
   period: string;
   onPeriodChange: (v: string) => void;
-  /** Hide the period dropdown (e.g. Rate List). */
   showPeriod?: boolean;
-  /** Optional row below period (filters). */
   filterSlot?: ReactNode;
-  /** e.g. help icon next to the title */
   titleAccessory?: ReactNode;
   onDownloadCsv?: () => void;
   onPrintPdf?: () => void;
@@ -117,63 +124,75 @@ export function ReportPageChrome({
     setEmailOpen(false);
   };
 
+  const downloadExcel = () => {
+    if (onDownloadCsv) onDownloadCsv();
+    else toast.message("Nothing to export");
+  };
+
   return (
-    <div className="space-y-4 print:space-y-3">
-      <div className="flex flex-col gap-4 print:hidden">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" className="-ml-2 shrink-0" asChild>
-              <Link href="/reports">
+    <div className="space-y-4 print:space-y-3 max-md:space-y-3">
+      <div className="flex flex-col gap-4 print:hidden max-md:gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between max-md:gap-2.5">
+          <div className={reportMobileTitleRowClass}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("-ml-2 shrink-0", reportMobileBackLinkClass)}
+              asChild
+            >
+              <Link href="/reports" aria-label="Back to Reports">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Reports
+                <span>Reports</span>
               </Link>
             </Button>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground md:text-xl">
-              {title}
-            </h1>
+            <h1 className={reportMobileTitleClass}>{title}</h1>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="gap-1.5 border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+              className={cn(
+                "gap-1.5 border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100",
+                reportMobileFavButtonClass
+              )}
               onClick={toggleFavourite}
+              aria-label={favourite ? "Remove from favourites" : "Add to favourites"}
             >
               <Star
                 className={`h-4 w-4 ${favourite ? "fill-amber-400 text-amber-500" : "text-muted-foreground"}`}
               />
-              Favourite
+              <span>Favourite</span>
             </Button>
             {titleAccessory}
           </div>
 
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center lg:justify-end">
+          <div className={reportMobileActionsClass}>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="gap-2 border-sky-200/80"
+              className={cn("gap-2 border-sky-200/80", reportMobileActionButtonClass)}
               onClick={() => setEmailOpen(true)}
             >
-              <Mail className="h-4 w-4" />
-              Email Excel
+              <Mail className="h-4 w-4 shrink-0" />
+              <span>Email</span>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1 border-sky-200/80 bg-background">
-                  <Download className="h-4 w-4" />
-                  Download Excel
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "gap-1 border-sky-200/80 bg-background",
+                    reportMobileActionButtonClass
+                  )}
+                >
+                  <Download className="h-4 w-4 shrink-0" />
+                  <span>Export</span>
+                  <ChevronDown className="hidden h-3.5 w-3.5 opacity-60 md:inline" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (onDownloadCsv) onDownloadCsv();
-                    else toast.message("Nothing to export");
-                  }}
-                >
-                  Download Excel
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={downloadExcel}>Download Excel</DropdownMenuItem>
                 <DropdownMenuItem onClick={printPdf}>Download Pdf</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -181,16 +200,16 @@ export function ReportPageChrome({
               type="button"
               variant="outline"
               size="sm"
-              className="gap-2 border-sky-200/80"
+              className={cn("gap-2 border-sky-200/80", reportMobileActionButtonClass)}
               onClick={printPdf}
             >
-              <Printer className="h-4 w-4" />
-              Print PDF
+              <Printer className="h-4 w-4 shrink-0" />
+              <span>Print</span>
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className={reportMobileFiltersRowClass}>
           {showPeriod && (
             <Select value={period} onValueChange={onPeriodChange}>
               <SelectTrigger className="h-9 w-full border-violet-300/60 bg-background sm:w-[200px]">
@@ -206,11 +225,14 @@ export function ReportPageChrome({
               </SelectContent>
             </Select>
           )}
-          {filterSlot}
+          {filterSlot ? <div className={reportMobileFilterSlotClass}>{filterSlot}</div> : null}
         </div>
       </div>
 
-      {children}
+      <div className={reportMobileContentClass}>
+        <ReportTableScrollHint />
+        {children}
+      </div>
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
         <DialogContent className={cn(dialogMobileSheetContentClasses, "sm:max-w-md")}>

@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
+  reportHubFilterInnerClass,
+  reportHubFilterScrollClass,
+} from "@/lib/reports/report-mobile-ui";
+import {
   ChevronDown,
   ChevronUp,
   FileText,
@@ -24,7 +28,6 @@ type FilterId = "party" | "category" | "payment" | "item" | "invoice" | "summary
 type ReportDef = {
   label: string;
   href: string;
-  /** Used when a filter pill is active */
   filters?: FilterId[];
 };
 
@@ -230,24 +233,23 @@ export function ReportsHub() {
     const cap = sec.collapseAt;
     const isCollapsible = cap != null && sec.items.length > cap;
     const open = expanded[sec.id] ?? false;
-    const shown =
-      !isCollapsible || open ? sec.items : sec.items.slice(0, cap);
+    const shown = !isCollapsible || open ? sec.items : sec.items.slice(0, cap);
 
     return (
       <div
         key={sec.id}
-        className="flex min-h-[220px] flex-col border border-border bg-card"
+        className="flex min-h-[220px] flex-col border border-border bg-card max-md:min-h-0 max-md:rounded-xl max-md:shadow-sm"
       >
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <Icon className="h-5 w-5 text-muted-foreground" aria-hidden />
-          <span className="font-semibold text-foreground">{sec.title}</span>
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 max-md:px-3 max-md:py-2.5">
+          <Icon className="h-5 w-5 text-muted-foreground max-md:h-4 max-md:w-4" aria-hidden />
+          <span className="font-semibold text-foreground max-md:text-sm">{sec.title}</span>
         </div>
-        <ul className="flex flex-1 flex-col gap-0 px-2 py-2">
+        <ul className="flex flex-1 flex-col gap-0 px-2 py-2 max-md:px-1.5">
           {shown.map((item) => (
             <li key={item.label}>
               <Link
                 href={item.href}
-                className="flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-foreground/90 transition-colors hover:bg-muted"
+                className="flex min-h-[44px] items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-foreground/90 transition-colors hover:bg-muted active:bg-muted/80 max-md:px-3 max-md:py-3 max-md:text-[15px]"
               >
                 <span className="leading-snug">{item.label}</span>
                 {sec.id === "favourite" && (
@@ -258,11 +260,11 @@ export function ReportsHub() {
           ))}
         </ul>
         {isCollapsible && (
-          <div className="mt-auto border-t border-border px-3 py-2">
+          <div className="mt-auto border-t border-border px-3 py-2 max-md:py-2.5">
             <button
               type="button"
               onClick={() => toggleSection(sec.id)}
-              className="flex w-full items-center justify-center gap-1 text-sm font-medium text-primary hover:underline"
+              className="flex min-h-[44px] w-full items-center justify-center gap-1 text-sm font-medium text-primary hover:underline"
             >
               {open ? (
                 <>
@@ -281,13 +283,19 @@ export function ReportsHub() {
   };
 
   return (
-    <div className="relative flex min-h-[calc(100vh-8rem)] flex-col gap-6 pb-16">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Reports</h1>
+    <div className="relative flex min-h-[calc(100vh-8rem)] flex-col gap-6 pb-16 max-md:gap-4 max-md:pb-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between max-md:gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground max-md:text-xl">
+          Reports
+        </h1>
         <Button
           type="button"
-          className="shrink-0 bg-violet-600 hover:bg-violet-700"
-          onClick={() => toast.message("CA Reports Sharing", { description: "Share GST report packs with your CA workspace." })}
+          className="shrink-0 bg-violet-600 hover:bg-violet-700 max-md:w-full"
+          onClick={() =>
+            toast.message("CA Reports Sharing", {
+              description: "Share GST report packs with your CA workspace.",
+            })
+          }
         >
           <Share2 className="mr-2 h-4 w-4" />
           CA Reports Sharing
@@ -296,22 +304,24 @@ export function ReportsHub() {
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-muted-foreground">Filter By</span>
-        <div className="flex flex-wrap gap-2">
-          {FILTER_PILLS.map((p) => (
-            <button
-              key={p.id ?? "all"}
-              type="button"
-              onClick={() => setActiveFilter((cur) => (cur === p.id ? null : p.id))}
-              className={cn(
-                "rounded-full border px-4 py-1.5 text-sm transition-colors",
-                activeFilter === p.id
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className={reportHubFilterScrollClass}>
+          <div className={reportHubFilterInnerClass}>
+            {FILTER_PILLS.map((p) => (
+              <button
+                key={p.id ?? "all"}
+                type="button"
+                onClick={() => setActiveFilter((cur) => (cur === p.id ? null : p.id))}
+                className={cn(
+                  "shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors max-md:px-3 max-md:py-2 max-md:text-xs",
+                  activeFilter === p.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-foreground hover:bg-muted"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -322,30 +332,30 @@ export function ReportsHub() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search reports…"
-          className="pl-9"
+          className="h-11 pl-9 max-md:h-10"
           aria-label="Find report"
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
           .filter((s) => ["favourite", "gst", "transaction"].includes(s.id))
           .map(renderSectionCard)}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
           .filter((s) => ["item", "party"].includes(s.id))
           .map(renderSectionCard)}
       </div>
 
       {visibleSections.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground py-8">
           No reports match your search or filter.
         </p>
       )}
 
-      <div className="pointer-events-none fixed bottom-6 right-6 flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="pointer-events-none fixed bottom-6 right-6 hidden items-center gap-2 text-sm text-muted-foreground md:flex">
         <span>Find Report</span>
         <kbd className="rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs">Ctrl</kbd>
         <span className="text-xs">+</span>

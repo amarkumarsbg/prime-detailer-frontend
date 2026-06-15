@@ -18,15 +18,21 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  AGEING_DUMMY_ROWS,
-  OUTSTANDING_DUMMY_ROWS,
-  type AgeingBucketRow,
-  type OutstandingPartyRow,
-} from "@/lib/reports/party-outstanding-dummy";
-import { reportSelectItemClass } from "@/lib/reports/report-period-presets";
+  buildOutstandingPartyRows,
+  buildReceivableAgeingRows,
+  buildSalesSummaryCategoryRows,
+} from "@/lib/reports/party-report-data";
+import { DEFAULT_REPORT_PERIOD, reportSelectItemClass } from "@/lib/reports/report-period-presets";
+import { useScopedExpenses, useScopedInvoices, useScopedJobCards } from "@/hooks/use-scoped-data";
+import { useParties } from "@/hooks/use-parties";
+import { PartyLedgerTab } from "@/components/parties/party-ledger-tab";
+import {
+  buildPartyStatement,
+  buildPartySummary,
+} from "@/lib/party/ledger-math";
+import { buildPartyReportByItemRows } from "@/lib/reports/item-report-helpers";
 import { useInventoryStore } from "@/store/inventory-store";
-import { useCustomerStore } from "@/store/customer-store";
-import { cn, formatInrFull } from "@/lib/utils";
+import { cn, formatDate, formatInrFull } from "@/lib/utils";
 import {
   AlertCircle,
   CircleDollarSign,
@@ -63,17 +69,19 @@ function DashOrMoney({
 }
 
 export function AgeingReport() {
-  const [period, setPeriod] = useState("today");
+  const invoices = useScopedInvoices();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [q, setQ] = useState("");
 
   const rows = useMemo(() => {
+    const base = buildReceivableAgeingRows(invoices);
     const s = q.trim().toLowerCase();
-    if (!s) return AGEING_DUMMY_ROWS;
-    return AGEING_DUMMY_ROWS.filter((r) => r.partyName.toLowerCase().includes(s));
-  }, [q]);
+    if (!s) return base;
+    return base.filter((r) => r.partyName.toLowerCase().includes(s));
+  }, [invoices, q]);
 
   const footer = useMemo(() => {
-    const z = (fn: (r: AgeingBucketRow) => number | null) =>
+    const z = (fn: (r: (typeof rows)[number]) => number | null) =>
       rows.reduce((s, r) => s + (fn(r) ?? 0), 0);
     return {
       byTomorrow: z((r) => r.byTomorrow),
@@ -245,7 +253,10 @@ export function AgeingReport() {
 
 export function PartyReportByItem() {
   const parts = useInventoryStore((s) => s.parts);
-  const [period, setPeriod] = useState("week");
+  const movements = useInventoryStore((s) => s.stockMovements);
+  const purchases = useInventoryStore((s) => s.productPurchases);
+  const jobCards = useScopedJobCards();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [partId, setPartId] = useState<string>("");
 
   const sortedParts = useMemo(
@@ -253,8 +264,14 @@ export function PartyReportByItem() {
     [parts]
   );
 
+  const rows = useMemo(() => {
+    if (!partId) return [];
+    const part = parts.find((p) => p.id === partId);
+    return buildPartyReportByItemRows(partId, part, movements, jobCards, purchases, period);
+  }, [partId, parts, movements, jobCards, purchases, period]);
+
   const downloadCsv = () => {
-    toast.message("Select an item first.");
+    toast.message(partId ? "Download started" : "Select an item first.");
   };
 
   return (
@@ -301,12 +318,22 @@ export function PartyReportByItem() {
                 message="Select an Item first to see the reports"
                 icon={Search}
               />
-            ) : (
+            ) : rows.length === 0 ? (
               <ReportTableEmpty
                 colSpan={5}
                 message="No party movements for this item in the selected period."
                 icon={Search}
               />
+            ) : (
+              rows.map((r) => (
+                <tr key={r.partyName} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 font-medium">{r.partyName}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.salesQty.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.salesAmount)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.purchaseQty.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.purchaseAmount)}</td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -316,13 +343,32 @@ export function PartyReportByItem() {
 }
 
 export function PartyLedgerStatementReport() {
-  const customers = useCustomerStore((s) => s.customers);
-  const [period, setPeriod] = useState("today");
+  const { parties } = useParties();
+  const invoices = useScopedInvoices();
+  const expenses = useScopedExpenses();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [partyId, setPartyId] = useState<string>("");
 
   const sorted = useMemo(
-    () => [...customers].sort((a, b) => a.name.localeCompare(b.name)),
-    [customers]
+    () => [...parties].sort((a, b) => a.name.localeCompare(b.name)),
+    [parties]
+  );
+
+  const selectedParty = useMemo(
+    () => parties.find((p) => p.id === partyId),
+    [parties, partyId]
+  );
+
+  const statementLines = useMemo(
+    () =>
+      selectedParty ? buildPartyStatement(selectedParty, invoices, expenses, period) : [],
+    [selectedParty, invoices, expenses, period]
+  );
+
+  const summary = useMemo(
+    () =>
+      selectedParty ? buildPartySummary(selectedParty, invoices, expenses, period) : null,
+    [selectedParty, invoices, expenses, period]
   );
 
   const downloadCsv = () => {
@@ -352,9 +398,9 @@ export function PartyLedgerStatementReport() {
               <SelectItem value="none" className={reportSelectItemClass}>
                 Select party by name ...
               </SelectItem>
-              {sorted.map((c) => (
-                <SelectItem key={c.id} value={c.id} className={reportSelectItemClass}>
-                  {c.name}
+              {sorted.map((p) => (
+                <SelectItem key={p.id} value={p.id} className={reportSelectItemClass}>
+                  {p.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -368,7 +414,7 @@ export function PartyLedgerStatementReport() {
           <div>
             <p className="text-xs text-muted-foreground">Total Receivable Amount</p>
             <p className="text-lg font-semibold tabular-nums text-foreground">
-              {partyId ? formatInrFull(125000) : "₹ —"}
+              {summary ? formatInrFull(summary.totalReceivableOrPayable) : "₹ —"}
             </p>
           </div>
         </div>
@@ -377,7 +423,7 @@ export function PartyLedgerStatementReport() {
           <div>
             <p className="text-xs font-medium text-amber-600">Overdue Amount</p>
             <p className="text-lg font-semibold tabular-nums text-foreground">
-              {partyId ? formatInrFull(47400.6) : "₹ —"}
+              {summary ? formatInrFull(summary.overdueAmount) : "₹ —"}
             </p>
           </div>
         </div>
@@ -386,7 +432,7 @@ export function PartyLedgerStatementReport() {
           <div>
             <p className="text-xs text-muted-foreground">Total Sales Amount</p>
             <p className="text-lg font-semibold tabular-nums text-foreground">
-              {partyId ? formatInrFull(248000) : "₹ —"}
+              {summary ? formatInrFull(summary.totalSalesOrPurchases) : "₹ —"}
             </p>
           </div>
         </div>
@@ -395,7 +441,7 @@ export function PartyLedgerStatementReport() {
           <div>
             <p className="text-xs text-muted-foreground">Total Received Amount</p>
             <p className="text-lg font-semibold tabular-nums text-foreground">
-              {partyId ? formatInrFull(120599.4) : "₹ —"}
+              {summary ? formatInrFull(summary.totalReceivedOrPaid) : "₹ —"}
             </p>
           </div>
         </div>
@@ -407,10 +453,12 @@ export function PartyLedgerStatementReport() {
             <Search className="h-14 w-14 opacity-25 text-sky-500/80" aria-hidden />
             <p className="text-sm">Select a Party first to see the reports</p>
           </div>
-        ) : (
+        ) : statementLines.length <= 2 ? (
           <p className="p-6 text-sm text-muted-foreground">
             No ledger entries for this party in the selected period.
           </p>
+        ) : (
+          <PartyLedgerTab lines={statementLines} />
         )}
       </div>
     </ReportPageChrome>
@@ -424,28 +472,33 @@ const CATEGORY_FILTER = [
 ] as const;
 
 export function PartyWiseOutstandingReport() {
-  const [period, setPeriod] = useState("today");
+  const { parties } = useParties();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [category, setCategory] = useState("all");
   const [tab, setTab] = useState<"all" | "collect" | "pay">("all");
 
+  const allRows = useMemo(
+    () => buildOutstandingPartyRows(parties, category),
+    [parties, category]
+  );
+
   const { toCollect, toPay, filteredRows } = useMemo(() => {
-    const rows: OutstandingPartyRow[] = OUTSTANDING_DUMMY_ROWS;
-    const collect = rows
+    const collect = allRows
       .filter((r) => r.closingBalance != null && r.closingBalance > 0)
       .reduce((s, r) => s + (r.closingBalance ?? 0), 0);
-    const pay = rows
+    const pay = allRows
       .filter((r) => r.closingBalance != null && r.closingBalance < 0)
       .reduce((s, r) => s + Math.abs(r.closingBalance ?? 0), 0);
 
-    let view = rows;
+    let view = allRows;
     if (tab === "collect") {
-      view = rows.filter((r) => r.closingBalance != null && r.closingBalance > 0);
+      view = allRows.filter((r) => r.closingBalance != null && r.closingBalance > 0);
     } else if (tab === "pay") {
-      view = rows.filter((r) => r.closingBalance != null && r.closingBalance < 0);
+      view = allRows.filter((r) => r.closingBalance != null && r.closingBalance < 0);
     }
 
     return { toCollect: collect, toPay: pay, filteredRows: view };
-  }, [tab]);
+  }, [allRows, tab]);
 
   const downloadCsv = () => {
     toast.message("Download started.");
@@ -563,10 +616,16 @@ export function PartyWiseOutstandingReport() {
 }
 
 export function SalesSummaryCategoryWiseReport() {
-  const [period, setPeriod] = useState("week");
+  const invoices = useScopedInvoices();
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
+
+  const rows = useMemo(
+    () => buildSalesSummaryCategoryRows(invoices, period),
+    [invoices, period]
+  );
 
   const downloadCsv = () => {
-    toast.message("No rows to export");
+    toast.message(rows.length ? "Download started" : "No rows to export");
   };
 
   return (
@@ -594,7 +653,23 @@ export function SalesSummaryCategoryWiseReport() {
             </tr>
           </thead>
           <tbody>
-            <ReportTableEmpty colSpan={9} />
+            {rows.length === 0 ? (
+              <ReportTableEmpty colSpan={9} />
+            ) : (
+              rows.map((r) => (
+                <tr key={r.invoiceNo} className="border-b border-border/80 hover:bg-muted/10">
+                  <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                  <td className="px-2 py-2 font-mono text-xs">{r.invoiceNo}</td>
+                  <td className="px-2 py-2">{r.partySale}</td>
+                  <td className="px-2 py-2">{r.createdBy}</td>
+                  <td className="px-2 py-2">{r.dueDate}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.amount)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.balance)}</td>
+                  <td className="px-2 py-2">{r.invoiceType}</td>
+                  <td className="px-2 py-2">{r.invoiceStatus}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

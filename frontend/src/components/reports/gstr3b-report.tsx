@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ReportPageChrome } from "@/components/reports/report-page-chrome";
 import { computeGstr3bOutwardFromInvoices } from "@/lib/reports/gstr3b-from-invoices";
+import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
 import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import { toast } from "sonner";
 
@@ -25,7 +26,7 @@ const ROWS_31 = [
 ] as const;
 
 export function Gstr3bReport() {
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const invoices = useScopedInvoices();
 
   const outward = useMemo(

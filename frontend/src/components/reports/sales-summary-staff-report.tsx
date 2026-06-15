@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useScopedInvoices } from "@/hooks/use-scoped-data";
+import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
 import type { Invoice, InvoiceStatus } from "@/types";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -126,7 +127,7 @@ export function SalesSummaryStaffReport() {
   const [favourite, setFavourite] = useState(false);
   const [partyQ, setPartyQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("all");
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [invType, setInvType] = useState("all");
   const [invStatus, setInvStatus] = useState("all");
 
