@@ -175,27 +175,24 @@ export default function ServicesPage() {
 
   const headerActions = (
     <>
-      <div className="flex items-center gap-2 sm:hidden">
-        {mainTab === "packages" ? (
-          <Button
-            size="sm"
-            className="shrink-0 whitespace-nowrap"
-            onClick={() => setPackageDialogOpen(true)}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Service
-          </Button>
-        ) : null}
-        {mainTab === "addons" ? (
-          <Button
-            size="sm"
-            className="shrink-0 whitespace-nowrap"
-            onClick={() => setAddonDialogOpen(true)}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Add-on
-          </Button>
-        ) : null}
+      <div className="flex items-center gap-1.5 sm:hidden">
+        <Button
+          size="sm"
+          className="h-9 shrink-0 px-2.5"
+          onClick={() => setPackageDialogOpen(true)}
+        >
+          <Plus className="mr-1 h-4 w-4" />
+          Service
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 shrink-0 px-2.5"
+          onClick={() => setAddonDialogOpen(true)}
+        >
+          <Plus className="mr-1 h-4 w-4" />
+          Add-on
+        </Button>
       </div>
       <div className="hidden gap-2 sm:flex">
         <Button className="gap-2" onClick={() => setPackageDialogOpen(true)}>
@@ -219,7 +216,16 @@ export default function ServicesPage() {
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4 md:gap-6">
-      <div className="order-2 hidden grid-cols-2 gap-2 sm:grid-cols-3 md:order-1 md:grid lg:grid-cols-5 md:gap-3">
+      <PageHeader
+        title="Services"
+        description="Manage service packages, add-ons, and categories."
+        hideDescriptionOnMobile
+        inlineActionsOnMobile
+        className="mb-0 max-md:mb-0"
+        actions={headerActions}
+      />
+
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 scrollbar-none sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5 sm:gap-3">
         <KPICard
           size="compact"
           title="Packages"
@@ -228,6 +234,7 @@ export default function ServicesPage() {
           tone="violet"
           titleClassName="text-[11px] leading-tight sm:text-xs"
           valueClassName="text-lg sm:text-xl"
+          className="min-w-[9.5rem] shrink-0 sm:min-w-0"
         />
         <KPICard
           size="compact"
@@ -237,6 +244,7 @@ export default function ServicesPage() {
           tone="emerald"
           titleClassName="text-[11px] leading-tight sm:text-xs"
           valueClassName="text-lg sm:text-xl"
+          className="min-w-[9.5rem] shrink-0 sm:min-w-0"
         />
         <KPICard
           size="compact"
@@ -246,7 +254,7 @@ export default function ServicesPage() {
           tone="amber"
           titleClassName="text-[11px] leading-tight sm:text-xs"
           valueClassName="text-lg sm:text-xl"
-          className="col-span-2 sm:col-span-1"
+          className="min-w-[9.5rem] shrink-0 sm:min-w-0"
         />
         <KPICard
           size="compact"
@@ -256,6 +264,7 @@ export default function ServicesPage() {
           tone="blue"
           titleClassName="text-[11px] leading-tight sm:text-xs"
           valueClassName="text-lg sm:text-xl"
+          className="min-w-[9.5rem] shrink-0 sm:min-w-0"
         />
         <KPICard
           size="compact"
@@ -265,7 +274,7 @@ export default function ServicesPage() {
           tone="emerald"
           titleClassName="text-[11px] leading-tight sm:text-xs"
           valueClassName="text-lg sm:text-xl"
-          className="col-span-2 sm:col-span-1"
+          className="min-w-[9.5rem] shrink-0 sm:min-w-0 sm:col-span-3 lg:col-span-1"
         />
       </div>
 
@@ -275,24 +284,16 @@ export default function ServicesPage() {
           setMainTab(v);
           setPage(1);
         }}
-        className="w-full md:order-2"
+        className="w-full"
       >
-        <div className="space-y-2">
-          <PageHeader
-            title="Service Management"
-            description="Manage service packages, add-ons, and categories."
-            hideDescriptionOnMobile
-            inlineActionsOnMobile
-            actions={headerActions}
-          />
-
+        <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <TabsList className="h-auto min-w-0 flex-1 flex-wrap justify-start gap-1 rounded-lg bg-muted p-1 sm:flex-none sm:rounded-none sm:bg-transparent sm:p-0">
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-muted p-1 sm:flex sm:w-auto sm:flex-none sm:rounded-none sm:bg-transparent sm:p-0">
               <TabsTrigger
                 value="packages"
-                className="gap-1.5 rounded-md px-2.5 py-1.5 text-xs data-[state=active]:shadow-sm sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-emerald-600 sm:data-[state=active]:shadow-none data-[state=active]:text-emerald-700"
+                className="min-h-10 gap-1 rounded-lg px-2 py-2 text-xs data-[state=active]:shadow-sm sm:min-h-0 sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-emerald-600 sm:data-[state=active]:shadow-none data-[state=active]:text-emerald-700"
               >
-                Packages
+                <span className="truncate">Packages</span>
                 <span className="rounded-full bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground sm:hidden">
                   {packages.length}
                 </span>
@@ -300,9 +301,9 @@ export default function ServicesPage() {
               </TabsTrigger>
               <TabsTrigger
                 value="addons"
-                className="gap-1.5 rounded-md px-2.5 py-1.5 text-xs data-[state=active]:shadow-sm sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-emerald-600 sm:data-[state=active]:shadow-none data-[state=active]:text-emerald-700"
+                className="min-h-10 gap-1 rounded-lg px-2 py-2 text-xs data-[state=active]:shadow-sm sm:min-h-0 sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-emerald-600 sm:data-[state=active]:shadow-none data-[state=active]:text-emerald-700"
               >
-                Add-ons
+                <span className="truncate">Add-ons</span>
                 <span className="rounded-full bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground sm:hidden">
                   {addons.length}
                 </span>
@@ -310,9 +311,9 @@ export default function ServicesPage() {
               </TabsTrigger>
               <TabsTrigger
                 value="categories"
-                className="gap-1.5 rounded-md px-2.5 py-1.5 text-xs data-[state=active]:shadow-sm sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-violet-600 sm:data-[state=active]:shadow-none data-[state=active]:text-violet-700"
+                className="min-h-10 gap-1 rounded-lg px-2 py-2 text-xs data-[state=active]:shadow-sm sm:min-h-0 sm:rounded-none sm:border-b-2 sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2 sm:text-sm sm:data-[state=active]:border-violet-600 sm:data-[state=active]:shadow-none data-[state=active]:text-violet-700"
               >
-                Categories
+                <span className="truncate">Categories</span>
                 <span className="rounded-full bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground sm:hidden">
                   {categoryRecords.length}
                 </span>
@@ -343,10 +344,16 @@ export default function ServicesPage() {
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-9 pl-9"
-              placeholder="Search services or add-ons…"
+              className="h-10 pl-9 sm:h-9"
+              placeholder={
+                mainTab === "categories"
+                  ? "Search categories…"
+                  : mainTab === "addons"
+                    ? "Search add-ons…"
+                    : "Search services…"
+              }
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -356,7 +363,7 @@ export default function ServicesPage() {
           </div>
         </div>
 
-        <TabsContent value="packages" className="mt-3 space-y-4 sm:mt-6 sm:space-y-6">
+        <TabsContent value="packages" className="mt-3 space-y-3 sm:mt-6 sm:space-y-6">
           {pagedPackages.length === 0 ? (
             <EmptyServicesState
               label="services"
@@ -364,7 +371,7 @@ export default function ServicesPage() {
               addLabel="Add Service"
             />
           ) : null}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pagedPackages.map((service) => (
               <ServicePackageCard
                 key={service.id}
@@ -392,7 +399,7 @@ export default function ServicesPage() {
           />
         </TabsContent>
 
-        <TabsContent value="addons" className="mt-3 space-y-4 sm:mt-6 sm:space-y-6">
+        <TabsContent value="addons" className="mt-3 space-y-3 sm:mt-6 sm:space-y-6">
           {pagedAddons.length === 0 ? (
             <EmptyServicesState
               label="add-ons"
@@ -400,7 +407,7 @@ export default function ServicesPage() {
               addLabel="Add Add-on"
             />
           ) : null}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pagedAddons.map((service) => (
               <ServiceAddonCard
                 key={service.id}
@@ -428,56 +435,6 @@ export default function ServicesPage() {
         <TabsContent value="categories" className="mt-3 sm:mt-6">
           <ServiceCategoriesTab search={search} />
         </TabsContent>
-
-        <div className="grid grid-cols-2 gap-2 pb-3 pt-4 sm:grid-cols-3 md:hidden">
-          <KPICard
-            size="compact"
-            title="Packages"
-            value={kpis.packages}
-            icon={Package}
-            tone="violet"
-            titleClassName="text-[11px] leading-tight"
-            valueClassName="text-lg"
-          />
-          <KPICard
-            size="compact"
-            title="Active packages"
-            value={kpis.activePackages}
-            icon={CircleCheck}
-            tone="emerald"
-            titleClassName="text-[11px] leading-tight"
-            valueClassName="text-lg"
-          />
-          <KPICard
-            size="compact"
-            title="High-end"
-            value={kpis.highEndPackages}
-            icon={Star}
-            tone="amber"
-            titleClassName="text-[11px] leading-tight"
-            valueClassName="text-lg"
-            className="col-span-2 sm:col-span-1"
-          />
-          <KPICard
-            size="compact"
-            title="Add-ons"
-            value={kpis.addons}
-            icon={Puzzle}
-            tone="blue"
-            titleClassName="text-[11px] leading-tight"
-            valueClassName="text-lg"
-          />
-          <KPICard
-            size="compact"
-            title="Active add-ons"
-            value={kpis.activeAddons}
-            icon={CircleCheck}
-            tone="emerald"
-            titleClassName="text-[11px] leading-tight"
-            valueClassName="text-lg"
-            className="col-span-2 sm:col-span-1"
-          />
-        </div>
       </Tabs>
 
       <EditServiceCatalogDialog
@@ -529,10 +486,11 @@ export default function ServicesPage() {
               </p>
             </div>
           ) : null}
-          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 max-md:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
+              className="max-md:flex-1"
               disabled={deleting}
               onClick={() => setDeleteTarget(null)}
             >
@@ -541,10 +499,11 @@ export default function ServicesPage() {
             <Button
               type="button"
               variant="destructive"
+              className="max-md:flex-1"
               disabled={deleting}
               onClick={() => void confirmDelete()}
             >
-              {deleting ? "Deleting…" : "Delete permanently"}
+              {deleting ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -601,8 +560,8 @@ function PaginationBar({
   const singlePage = totalPages <= 1;
 
   return (
-    <div className="flex flex-col items-center justify-between gap-3 border-t border-border/60 pt-2 sm:flex-row">
-      <p className="text-xs text-muted-foreground sm:text-sm">
+    <div className="flex flex-col items-stretch justify-between gap-2.5 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:gap-3">
+      <p className="text-center text-xs text-muted-foreground sm:text-left sm:text-sm">
         {singlePage
           ? `Showing all ${total} ${label}`
           : `Showing ${start}–${end} of ${total} ${label}`}
@@ -617,7 +576,7 @@ function PaginationBar({
                 onPage(1);
               }}
             >
-              <SelectTrigger className="h-8 w-[120px] text-xs md:hidden">
+              <SelectTrigger className="h-9 w-[120px] text-xs md:hidden sm:h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -630,17 +589,19 @@ function PaginationBar({
           <Button
             variant="outline"
             size="sm"
+            className="h-9 min-w-[4.5rem] sm:h-8"
             disabled={page <= 1}
             onClick={() => onPage(page - 1)}
           >
-            Previous
+            Prev
           </Button>
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="min-w-[3rem] text-center text-xs tabular-nums text-muted-foreground">
             {page} / {totalPages}
           </span>
           <Button
             variant="outline"
             size="sm"
+            className="h-9 min-w-[4.5rem] sm:h-8"
             disabled={page >= totalPages}
             onClick={() => onPage(page + 1)}
           >

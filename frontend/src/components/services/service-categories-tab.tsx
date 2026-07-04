@@ -10,11 +10,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import type { ServiceCategoryRecord } from "@/types";
 import { Plus, Pencil, Tag } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function slugify(name: string): string {
@@ -46,16 +49,16 @@ export function ServiceCategoriesTab({ search }: { search: string }) {
   }, [categories, search]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <div className="space-y-3 sm:space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold">Service Categories</h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+          <p className="mt-1 hidden max-w-xl text-xs text-muted-foreground sm:block">
             Manage company-specific categories. Bike-only categories restrict services to bike vehicle type.
           </p>
         </div>
         <Button
-          className="gap-2 shrink-0"
+          className="h-10 w-full gap-2 shrink-0 sm:h-9 sm:w-auto"
           onClick={() => setCreateOpen(true)}
         >
           <Plus className="h-4 w-4" />
@@ -63,38 +66,52 @@ export function ServiceCategoriesTab({ search }: { search: string }) {
         </Button>
       </div>
 
-      <div className="space-y-2">
-        {filtered.map((c) => (
-          <div
-            key={c.id}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-              <Tag className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm">{c.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                <span className="font-mono">{c.slug}</span>
-                <span className="mx-2">·</span>
-                order: {c.order}
-                {c.bikeOnly && (
-                  <span className="ml-2 text-amber-700 dark:text-amber-400">· bike-only</span>
-                )}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => setEditRow(c)}
-              aria-label={`Edit ${c.name}`}
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+          <p className="text-sm text-muted-foreground">No categories found.</p>
+          <Button className="mt-3 gap-2" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Create Category
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((c) => (
+            <div
+              key={c.id}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:px-4"
             >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                <Tag className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="truncate text-sm font-semibold">{c.name}</p>
+                  {c.bikeOnly ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                      Bike-only
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  <span className="font-mono">{c.slug}</span>
+                  <span className="mx-1.5">·</span>
+                  order {c.order}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-muted-foreground sm:h-8 sm:w-8"
+                onClick={() => setEditRow(c)}
+                aria-label={`Edit ${c.name}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <CategoryFormDialog
         open={createOpen}
@@ -132,7 +149,7 @@ function CategoryFormDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={cn(dialogMobileSheetContentClasses, "sm:max-w-md")}>
         {open ? (
           <CategoryFormFields
             key={initial?.id ?? "create"}
@@ -182,7 +199,7 @@ function CategoryFormFields({
 
   return (
     <>
-      <DialogHeader>
+      <DialogHeader className={dialogMobileSheetHeaderClasses}>
         <DialogTitle className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-violet-100 text-violet-700">
             <Tag className="h-4 w-4" />
@@ -190,7 +207,7 @@ function CategoryFormFields({
           {initial ? "Edit Category" : "Add New Category"}
         </DialogTitle>
       </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">
         <div className="space-y-2">
           <Label>
             Category Name <span className="text-destructive">*</span>
@@ -208,7 +225,7 @@ function CategoryFormFields({
         </div>
         <div className="space-y-2">
           <Label>
-            # Slug (identifier) <span className="text-destructive">*</span>
+            Slug (identifier) <span className="text-destructive">*</span>
           </Label>
           <Input
             value={slug}
@@ -233,7 +250,7 @@ function CategoryFormFields({
           />
           <p className="text-xs text-muted-foreground">Lower number = appears first</p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:bg-amber-950/20 dark:border-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-800 dark:bg-amber-950/20">
           <div className="flex gap-3">
             <Checkbox
               id="bike-only"
@@ -241,20 +258,23 @@ function CategoryFormFields({
               onCheckedChange={(c) => setBikeOnly(c === true)}
             />
             <div>
-              <Label htmlFor="bike-only" className="text-amber-950 dark:text-amber-100 font-semibold cursor-pointer">
+              <Label
+                htmlFor="bike-only"
+                className="cursor-pointer font-semibold text-amber-950 dark:text-amber-100"
+              >
                 Bike-only category
               </Label>
-              <p className="text-xs text-amber-900/90 dark:text-amber-200/90 mt-1">
+              <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-200/90">
                 Services in this category will only be available for bike vehicle type.
               </p>
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+        <DialogFooter className="gap-2 border-0 p-0 sm:justify-end">
+          <Button type="button" variant="outline" className="max-md:flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit">
+          <Button type="submit" className="max-md:flex-1">
             {initial ? "Update Category" : "Create Category"}
           </Button>
         </DialogFooter>
