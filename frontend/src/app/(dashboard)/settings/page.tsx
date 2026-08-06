@@ -96,6 +96,11 @@ export default function SettingsPage() {
   const [businessEmail, setBusinessEmail] = useState(settings.businessEmail);
   const [businessAddress, setBusinessAddress] = useState(settings.businessAddress);
   const [gstin, setGstin] = useState(settings.gstin);
+  const [bankName, setBankName] = useState(settings.bankName);
+  const [bankBranch, setBankBranch] = useState(settings.bankBranch);
+  const [bankAccountNumber, setBankAccountNumber] = useState(settings.bankAccountNumber);
+  const [bankIfsc, setBankIfsc] = useState(settings.bankIfsc);
+  const [bankUpi, setBankUpi] = useState(settings.bankUpi);
 
   const [defaultTaxRate, setDefaultTaxRate] = useState("18");
   const [taxRates, setTaxRates] = useState([
@@ -164,7 +169,18 @@ export default function SettingsPage() {
 
   const handleSave = (section: string) => {
     if (section === "Business profile") {
-      settings.setBusinessProfile({ businessName, businessPhone, businessEmail, businessAddress, gstin });
+      settings.setBusinessProfile({
+        businessName,
+        businessPhone,
+        businessEmail,
+        businessAddress,
+        gstin,
+        bankName,
+        bankBranch,
+        bankAccountNumber,
+        bankIfsc,
+        bankUpi,
+      });
     }
     toast.success(`${section} saved successfully`);
   };
@@ -223,6 +239,35 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />GSTIN</Label>
                   <Input value={gstin} onChange={(e) => setGstin(e.target.value)} className="font-mono" />
+                </div>
+                <div className="border-t border-border pt-4 mt-4 space-y-4">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Bank & UPI Details (For Payment QR)</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Bank Name</Label>
+                      <Input value={bankName} onChange={(e) => setBankName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Branch Name</Label>
+                      <Input value={bankBranch} onChange={(e) => setBankBranch(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Account Number</Label>
+                      <Input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>IFSC Code</Label>
+                      <Input value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value)} className="font-mono" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-primary font-medium">Merchant UPI ID (e.g. name@bank)</Label>
+                      <Input value={bankUpi} onChange={(e) => setBankUpi(e.target.value)} placeholder="name@bank" className="font-semibold" />
+                    </div>
+                  </div>
                 </div>
                 <Separator />
                 <Button onClick={() => handleSave("Business profile")}>

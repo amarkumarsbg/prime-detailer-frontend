@@ -359,6 +359,9 @@ export type CreateBookingVariant = "walk-in" | "job-card";
 export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }) {
   const isWalkIn = variant === "walk-in";
   const isJobCard = variant === "job-card";
+  const bookingListHref = isJobCard ? "/job-cards" : "/bookings";
+  const desktopTitle = isJobCard ? "New Job Card" : "New Booking";
+  const desktopBackLabel = isJobCard ? "Back to Job Cards" : "Back to Bookings";
   /** Shared stepped flow, summary panel, dialog on smaller viewports */
   const useBookingWizard = isJobCard || isWalkIn;
   const router = useRouter();
@@ -2338,28 +2341,21 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   );
 
   const renderSummaryCard = (branchBlockId: string) => (
-    <Card
-      className={cn(
-        "border-border/80 shadow-sm",
-        compactJobCardDesktop && "flex h-full min-h-0 flex-col overflow-hidden"
-      )}
-    >
+    <Card className="border-border/80 shadow-sm">
       <CardHeader
         className={cn(
           "pb-2",
-          compactJobCardDesktop ? "px-4 pt-3 sm:px-4" : "px-4 pt-3 sm:px-6 sm:pt-5"
+          compactJobCardDesktop ? "px-3 pt-2.5 pb-1" : "px-4 pt-3 sm:px-6 sm:pt-5"
         )}
       >
-        <CardTitle className={cn(compactJobCardDesktop ? "text-sm" : "text-base")}>
+        <CardTitle className={cn(compactJobCardDesktop ? "text-xs font-semibold" : "text-base")}>
           {isJobCard ? "Job summary" : "Booking summary"}
         </CardTitle>
       </CardHeader>
       <CardContent
         className={cn(
-          "pb-2 text-sm",
-          compactJobCardDesktop
-            ? "min-h-0 flex-1 space-y-2.5 overflow-y-auto text-xs sm:px-4"
-            : "space-y-2 px-4 sm:space-y-3 sm:px-6 sm:pb-4"
+          "pb-2 text-sm space-y-2 px-4 sm:space-y-3 sm:px-6 sm:pb-4",
+          compactJobCardDesktop ? "text-[11px] px-3 pb-2 pt-0.5 space-y-1.5" : ""
         )}
       >
         <dl className={cn("space-y-1", compactJobCardDesktop && "space-y-0.5")}>
@@ -2417,7 +2413,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </div>
           )}
           {highEndSummaryLines.length > 0 && (
-            <div className="flex justify-between gap-2 align-start border-t border-border/60 pt-2 mt-1">
+            <div className={cn("flex justify-between gap-2 align-start border-t border-border/60 pt-2 mt-1", compactJobCardDesktop && "pt-1 mt-0.5")}>
               <dt className="text-muted-foreground shrink-0">High-end (est.)</dt>
               <dd className="text-right text-xs space-y-1 min-w-0">
                 {highEndSummaryLines.map((line) => (
@@ -2443,26 +2439,26 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </dd>
           </div>
         </dl>
-        <Separator />
+        <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
         <div className="flex items-center gap-2">
           <Ticket className="w-4 h-4 text-violet-500" />
-          <span className="font-medium text-sm">Discount coupon</span>
+          <span className={cn("font-medium text-sm", compactJobCardDesktop && "text-xs")}>Discount coupon</span>
         </div>
         <div className="flex gap-2">
           <Input
             placeholder="ENTER CODE"
             value={couponCode}
             onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-            className="uppercase text-xs"
+            className={cn("uppercase text-xs", compactJobCardDesktop && "h-8 text-[11px]")}
           />
-          <Button type="button" variant="secondary" size="sm" onClick={applyCoupon}>
+          <Button type="button" variant="secondary" size="sm" onClick={applyCoupon} className={cn(compactJobCardDesktop && "h-8 px-2.5 text-xs")}>
             Apply
           </Button>
         </div>
-        <Separator />
+        <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
         <div className="flex items-center gap-2">
           <Banknote className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-          <span className="font-medium text-sm">Advance (₹)</span>
+          <span className={cn("font-medium text-sm", compactJobCardDesktop && "text-xs")}>Advance (₹)</span>
         </div>
         <div className="flex gap-2">
           <Input
@@ -2472,7 +2468,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             step={1}
             inputMode="decimal"
             placeholder="Optional amount"
-            className="text-xs tabular-nums"
+            className={cn("text-xs tabular-nums", compactJobCardDesktop && "h-8 text-[11px]")}
             value={advanceAmountInput}
             onChange={(e) => setAdvanceAmountInput(e.target.value)}
           />
@@ -2483,8 +2479,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             total. Saved on the job card for billing. Leave empty if none.
           </p>
         )}
-        <Separator />
-        <div className="space-y-1 text-sm">
+        <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
+        <div className={cn("space-y-1 text-sm", compactJobCardDesktop && "space-y-0.5 text-[11px]")}>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal (excl. GST)</span>
             <span className="tabular-nums">{formatCurrency(afterDiscount)}</span>
@@ -2508,7 +2504,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           <div
             className={cn(
               "flex justify-between font-bold text-primary pt-0.5",
-              compactJobCardDesktop ? "text-sm" : "text-base pt-1",
+              compactJobCardDesktop ? "text-xs" : "text-base pt-1",
               summaryAdvanceAmount > 0 && "border-t border-border/60 mt-1 pt-1.5"
             )}
           >
@@ -2516,9 +2512,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <span className="tabular-nums">{formatCurrency(balanceAfterAdvance)}</span>
           </div>
         </div>
-        <Separator />
-        <div id={branchBlockId} className="space-y-2 scroll-mt-24">
-          <Label className="flex items-center gap-2">
+        <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
+        <div id={branchBlockId} className={cn("space-y-2 scroll-mt-24", compactJobCardDesktop && "space-y-1")}>
+          <Label className={cn("flex items-center gap-2", compactJobCardDesktop && "text-[11px]")}>
             <Building2 className="w-4 h-4" />
             Select branch *
           </Label>
@@ -2528,12 +2524,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             required
             disabled={branchLocked}
           >
-            <SelectTrigger>
+            <SelectTrigger className={cn(compactJobCardDesktop && "h-8 text-[11px]")}>
               <SelectValue placeholder="Please select a branch" />
             </SelectTrigger>
             <SelectContent>
               {activeBranches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
+                <SelectItem key={b.id} value={b.id} className={cn(compactJobCardDesktop && "text-[11px]")}>
                   {b.name}
                 </SelectItem>
               ))}
@@ -2555,12 +2551,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       <CardFooter
         className={cn(
           "hidden shrink-0 border-t border-border px-4 py-3 sm:px-6 md:flex md:flex-col md:gap-2",
-          compactJobCardDesktop && "py-2.5"
+          compactJobCardDesktop && "px-3 py-1.5 md:gap-1.5"
         )}
       >
         <Button
           type="submit"
-          className="w-full"
+          className={cn("w-full", compactJobCardDesktop && "h-8.5 text-xs")}
           disabled={bookingWizardIncomplete}
           title={
             bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
@@ -2568,7 +2564,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         >
           {isJobCard ? "Create job card" : "Create booking"}
         </Button>
-        <Button type="button" variant="outline" className="w-full" asChild>
+        <Button type="button" variant="outline" className={cn("w-full", compactJobCardDesktop && "h-8.5 text-xs")} asChild>
           <Link href={isJobCard ? "/job-cards" : "/bookings"}>Cancel</Link>
         </Button>
       </CardFooter>
@@ -2594,117 +2590,29 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       >
         <div
           className={cn(
-            "min-w-0 flex-1 space-y-6 lg:min-w-0",
+            "min-w-0 flex-1 lg:min-w-0",
+            !useBookingWizard && "space-y-6",
             useBookingWizard &&
-              "flex flex-col overflow-x-hidden px-3 py-2 sm:px-6 sm:py-3",
+              "flex flex-col overflow-x-hidden px-3 py-2 sm:px-6 sm:pt-3 sm:pb-0",
             useBookingWizard &&
               isDesktopWide &&
-              "min-h-0 flex-1 gap-2 overflow-hidden py-2 sm:px-4 max-lg:overflow-y-auto max-lg:overflow-x-hidden lg:min-w-0",
+              "min-h-0 flex-1 gap-2 overflow-hidden py-2 sm:px-4 sm:pt-2 sm:pb-0 max-lg:overflow-y-auto max-lg:overflow-x-hidden lg:min-w-0",
             useBookingWizard && !isDesktopWide && "min-h-0 flex-1 overflow-x-hidden"
           )}
         >
-          {useBookingWizard && (
-            <>
-              <div
-                className={cn(
-                  "hidden sm:block overflow-x-auto overflow-y-visible pb-1.5 -mx-1 px-1 [scrollbar-width:thin] shrink-0",
-                  compactJobCardDesktop && "pb-1"
-                )}
-              >
-                <div className="flex items-center justify-start min-w-0 w-full gap-x-1 sm:gap-x-2">
-                  {wizardSteps.map((stepId, index) => {
-                    const label = JOB_WIZARD_LABEL[stepId];
-                    const isLast = index === jobWizardStepCount - 1;
-                    const isCompleted = index < jobCreateStep;
-                    const isCurrent = index === jobCreateStep;
-                    return (
-                      <div key={stepId} className="flex items-center shrink-0">
-                        <div
-                          className={cn(
-                            "flex flex-col items-center px-0.5",
-                            compactJobCardDesktop ? "w-[4rem] sm:w-[4.25rem]" : "w-[4.5rem] sm:w-[5.25rem]"
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "rounded-full flex items-center justify-center border-2 transition-colors",
-                              compactJobCardDesktop
-                                ? "w-7 h-7 sm:w-8 sm:h-8"
-                                : "w-9 h-9 sm:w-10 sm:h-10",
-                              isCompleted
-                                ? "bg-primary border-primary text-primary-foreground"
-                                : isCurrent
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
-                            )}
-                          >
-                            {isCompleted ? (
-                              <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-                            ) : (
-                              <span className="text-[10px] sm:text-xs font-medium">{index + 1}</span>
-                            )}
-                          </div>
-                          <span
-                            className={cn(
-                              "text-center leading-tight line-clamp-2",
-                              compactJobCardDesktop
-                                ? "text-[9px] sm:text-[10px] mt-1"
-                                : "text-[10px] sm:text-xs mt-1.5",
-                              isCurrent ? "font-semibold text-foreground" : "text-muted-foreground"
-                            )}
-                          >
-                            {label}
-                          </span>
-                        </div>
-                        {!isLast && (
-                          <div
-                            className={cn(
-                              "h-0.5 w-3 sm:w-4 sm:flex-1 sm:min-w-2 sm:max-w-16 shrink-0",
-                              compactJobCardDesktop ? "-mt-4 sm:-mt-5" : "-mt-5 sm:-mt-6",
-                              isCompleted ? "bg-primary" : "bg-muted"
-                            )}
-                            aria-hidden
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="shrink-0 space-y-2">
-                <div className="hidden sm:flex items-center gap-2">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-300"
-                      style={{ width: `${wizardProgressPercent}%` }}
-                      role="progressbar"
-                      aria-valuenow={wizardProgressPercent}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label="Wizard progress"
-                    />
-                  </div>
-                  <span className="text-[10px] font-medium tabular-nums text-muted-foreground shrink-0">
-                    {wizardProgressPercent}%
-                  </span>
-                </div>
-                <div className="hidden sm:flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
-                  {wizardTrackerSteps.map((label, idx) => (
-                    <span key={label} className="flex items-center gap-1">
-                      {idx > 0 && <span aria-hidden>→</span>}
-                      <span
-                        className={cn(
-                          idx === wizardTrackerIndex && "font-semibold text-primary",
-                          idx < wizardTrackerIndex && "text-foreground/70"
-                        )}
-                      >
-                        {label}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </>
+          {isDesktopWide && (
+            <div className="shrink-0 mb-2.5">
+              <Button variant="ghost" size="sm" className="w-fit -ml-2 h-8 mb-1" asChild>
+                <Link href={bookingListHref}>
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  {desktopBackLabel}
+                </Link>
+              </Button>
+              <h1 className="text-lg font-bold tracking-tight sm:text-xl leading-tight">{desktopTitle}</h1>
+              <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:text-xs">
+                Use Next for each step — summary and Create stay on the right.
+              </p>
+            </div>
           )}
 
           <div
@@ -4934,7 +4842,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             "mt-4 w-full shrink-0 sm:mt-6 lg:mt-0 lg:min-h-0 lg:w-[min(100%,340px)]",
             useBookingWizard &&
               cn(
-                "hidden lg:flex lg:flex-col",
+                "hidden lg:flex lg:flex-col lg:overflow-y-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5",
                 compactJobCardDesktop
                   ? "lg:h-full lg:self-stretch"
                   : "lg:sticky lg:top-4 lg:z-20 lg:self-start"
@@ -5012,28 +4920,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       </form>
   );
 
-  const bookingListHref = isJobCard ? "/job-cards" : "/bookings";
-  const desktopTitle = isJobCard ? "New Job Card" : "New Booking";
-  const desktopBackLabel = isJobCard ? "Back to Job Cards" : "Back to Bookings";
 
   return (
     <>
       {isDesktopWide ? (
-        <div className="flex h-[calc(100dvh-7rem)] max-h-[calc(100dvh-7rem)] flex-col gap-2 overflow-hidden md:gap-3">
-          <div className="flex shrink-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <Button variant="ghost" size="sm" className="w-fit -ml-2 h-8" asChild>
-              <Link href={bookingListHref}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                {desktopBackLabel}
-              </Link>
-            </Button>
-          </div>
-          <div className="shrink-0">
-            <h1 className="text-lg font-bold tracking-tight sm:text-xl">{desktopTitle}</h1>
-            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:text-xs">
-              Use Next for each step — summary and Create stay on the right.
-            </p>
-          </div>
+        <div className="flex h-[calc(100dvh-7rem)] max-h-[calc(100dvh-7rem)] flex-col overflow-hidden">
           <div className="min-h-0 flex-1 overflow-hidden">{bookingForm}</div>
         </div>
       ) : (
