@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { cn, formatDate } from "@/lib/utils";
+import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { buildOwnershipTimeline } from "@/lib/ownership-transfers";
 import type { OwnershipTimelineItem } from "@/lib/ownership-transfers";
 import { toast } from "sonner";
@@ -377,18 +378,12 @@ function VehicleOwnershipSection({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="newCustomer">New Customer</Label>
-              <Select value={newCustomerId} onValueChange={setNewCustomerId}>
-                <SelectTrigger id="newCustomer">
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {otherCustomers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CustomerSearchSelect
+                customers={otherCustomers}
+                selectedCustomerId={newCustomerId}
+                onSelectCustomer={setNewCustomerId}
+                placeholder="Select customer"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="transferReason">Transfer Reason (optional)</Label>

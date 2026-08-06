@@ -33,6 +33,6 @@ export const reportMobileContentClass =
 
 /** Hub filter pills — horizontal scroll on phone */
 export const reportHubFilterScrollClass =
-  "max-md:-mx-4 max-md:overflow-x-auto max-md:px-4 max-md:scrollbar-none";
+  "max-md:-mx-4 max-md:overflow-x-auto max-md:px-4 scrollbar-none";
 
 export const reportHubFilterInnerClass = "flex flex-wrap gap-2 max-md:flex-nowrap max-md:pb-0.5";

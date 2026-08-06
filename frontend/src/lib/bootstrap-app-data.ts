@@ -3,6 +3,7 @@ import { reconcileCurrentBranch } from "./branch-selection";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   ActivityLog,
+  CustomerMessage,
   Appointment,
   Branch,
   Customer,
@@ -38,6 +39,7 @@ import { useQuotationStore } from "@/store/quotation-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useExpenseStore } from "@/store/expense-store";
 import { useActivityLogStore } from "@/store/activity-log-store";
+import { useCommunicationStore } from "@/store/communication-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -148,6 +150,7 @@ export async function bootstrapAppData(): Promise<void> {
       : {}),
   });
   useActivityLogStore.setState({ logs: (c.activityLogs as ActivityLog[]) ?? [] });
+  useCommunicationStore.setState({ messages: (c.communications as CustomerMessage[]) ?? [] });
   useReminderStore.setState({ reminders: (c.serviceReminders as ServiceReminder[]) ?? [] });
   useWalletStore.setState({ transactions: (c.walletTransactions as WalletTransaction[]) ?? [] });
   useServiceCatalogStore.setState({ catalog: (c.serviceCatalog as ServiceCatalogItem[]) ?? [] });

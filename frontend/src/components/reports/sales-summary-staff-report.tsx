@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useScopedInvoices } from "@/hooks/use-scoped-data";
 import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
+import { ReportPeriodSelect } from "@/components/reports/report-period-select";
 import type { Invoice, InvoiceStatus } from "@/types";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -350,20 +351,7 @@ export function SalesSummaryStaffReport() {
             </SelectContent>
           </Select>
 
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="h-9 w-[170px]">
-              <CalendarDays className="mr-2 h-4 w-4 shrink-0 opacity-70" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="yesterday">Yesterday</SelectItem>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="last7">Last 7 days</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="prevMonth">Previous Month</SelectItem>
-            </SelectContent>
-          </Select>
+          <ReportPeriodSelect value={period} onChange={setPeriod} />
 
           <Select value={invType} onValueChange={setInvType}>
             <SelectTrigger className="h-9 w-[160px]">

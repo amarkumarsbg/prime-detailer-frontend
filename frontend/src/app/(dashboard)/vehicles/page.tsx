@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { PageHeader } from "@/components/shared/page-header";
+import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -295,21 +296,12 @@ export default function VehiclesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="customerId">Customer</Label>
-                  <Select
-                    value={watchCustomerId}
-                    onValueChange={(v) => setValue("customerId", v)}
-                  >
-                    <SelectTrigger className={cn(errors.customerId && "border-destructive")}>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CustomerSearchSelect
+                    customers={customers}
+                    selectedCustomerId={watchCustomerId}
+                    onSelectCustomer={(v) => setValue("customerId", v)}
+                    className={cn(errors.customerId && "border-destructive")}
+                  />
                   {errors.customerId && (
                     <p className="text-xs text-destructive">{errors.customerId.message}</p>
                   )}

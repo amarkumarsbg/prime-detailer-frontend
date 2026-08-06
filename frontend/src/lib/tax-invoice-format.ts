@@ -294,7 +294,9 @@ table.inv .disc-lbl { font-size: 8px; font-weight: 600; letter-spacing: 0.04em; 
   <div class="tot-wrap">
     <div class="tot">
       <div class="tot-row"><span>Sub-Total:</span><span>${formatCurrency(invoice.subtotal)}</span></div>
-      ${additionalOff > 0 ? `<div class="tot-row"><span>Additional Discount:</span><span>- ${formatCurrency(additionalOff)}</span></div>` : ""}
+      ${(invoice.discountAmount || 0) > 0 ? `<div class="tot-row"><span>Flat Discount:</span><span>- ${formatCurrency(invoice.discountAmount || 0)}</span></div>` : ""}
+      ${(invoice.rewardDiscount || 0) > 0 ? `<div class="tot-row"><span>Reward Points Discount:</span><span>- ${formatCurrency(invoice.rewardDiscount || 0)}</span></div>` : ""}
+      ${(invoice.referralDiscount || 0) > 0 ? `<div class="tot-row"><span>Referral Discount:</span><span>- ${formatCurrency(invoice.referralDiscount || 0)}</span></div>` : ""}
       <div class="tot-row"><span>Taxable Amount:</span><span>${formatCurrency(taxable)}</span></div>
       <div class="tot-row cgst"><span>CGST (${gstHalfPercentLabel(invoice.taxRate)}):</span><span>${formatCurrency(cgst)}</span></div>
       <div class="tot-row sgst"><span>SGST (${gstHalfPercentLabel(invoice.taxRate)}):</span><span>${formatCurrency(sgst)}</span></div>

@@ -32,6 +32,7 @@ import {
   REPORT_PERIOD_OPTIONS,
   reportSelectItemClass,
 } from "@/lib/reports/report-period-presets";
+import { ReportPeriodSelect } from "./report-period-select";
 import {
   reportMobileActionButtonClass,
   reportMobileActionsClass,
@@ -211,19 +212,7 @@ export function ReportPageChrome({
 
         <div className={reportMobileFiltersRowClass}>
           {showPeriod && (
-            <Select value={period} onValueChange={onPeriodChange}>
-              <SelectTrigger className="h-9 w-full border-violet-300/60 bg-background sm:w-[200px]">
-                <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-primary" />
-                <SelectValue placeholder="Period" />
-              </SelectTrigger>
-              <SelectContent position="popper" className="min-w-[var(--radix-select-trigger-width)]">
-                {REPORT_PERIOD_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value} className={reportSelectItemClass}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ReportPeriodSelect value={period} onChange={onPeriodChange} />
           )}
           {filterSlot ? <div className={reportMobileFilterSlotClass}>{filterSlot}</div> : null}
         </div>

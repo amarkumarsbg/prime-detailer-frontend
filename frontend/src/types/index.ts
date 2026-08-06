@@ -491,6 +491,9 @@ export interface Invoice {
   inventoryDeductedAt?: string;
   /** Saved tax-invoice PDF (base64) — avoids regenerating Chrome PDF on every email. */
   storedPdf?: InvoiceStoredPdf;
+  referralDiscount?: number;
+  referralAdvocateId?: string;
+  referralCodeUsed?: string;
 }
 
 export interface DashboardStats {
@@ -693,6 +696,20 @@ export interface ActivityLog {
   details: string;
   createdAt: string;
 }
+
+export interface CustomerMessage {
+  id: string;
+  type: "whatsapp" | "email" | "sms";
+  recipient: string;
+  subject?: string | null;
+  body: string;
+  status: "sent" | "failed";
+  error?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  createdAt: string;
+}
+
 
 export type ReminderStatus = "UPCOMING" | "DUE" | "OVERDUE" | "COMPLETED" | "DISMISSED";
 export type ReminderType = "GENERAL_SERVICE" | "OIL_CHANGE" | "BRAKE_INSPECTION" | "TIRE_ROTATION" | "AC_SERVICE" | "BATTERY_CHECK" | "INSURANCE" | "PUC" | "PPF_MAINTENANCE" | "CERAMIC_MAINTENANCE";

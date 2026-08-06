@@ -10,6 +10,11 @@ import {
   ChevronDown,
   Download,
   Share2,
+  Gift,
+  Coins,
+  Percent,
+  Ticket,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -146,6 +151,247 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [referenceNumber, setReferenceNumber] = useState("");
 
+  // Local edit states for discounts
+  const [flatDiscountStr, setFlatDiscountStr] = useState(() => invoice ? String(invoice.discountAmount || "") : "");
+  const [pointsRedeemStr, setPointsRedeemStr] = useState(() => {
+    if (!invoice) return "";
+    const dbPts = invoice.rewardDiscount || 0;
+    return dbPts > 200 ? "" : String(dbPts || "");
+  });
+  const [referralCode, setReferralCode] = useState(() => invoice ? String(invoice.referralCodeUsed || "") : "");
+  const [appliedReferrerId, setAppliedReferrerId] = useState(() => invoice ? invoice.referralAdvocateId || "" : "");
+  const [referralDiscountApplied, setReferralDiscountApplied] = useState(() => invoice ? invoice.referralDiscount || 0 : 0);
+  const [referralVerifiedMsg, setReferralVerifiedMsg] = useState("");
+  const [referralErrorMsg, setReferralErrorMsg] = useState("");
+  const [isApplying, setIsApplying] = useState(false);
+
+  const availablePoints = invoiceCustomer?.rewardPoints ?? 0;
+  const maxAllowedPoints = Math.min(200, availablePoints);
+
+  useEffect(() => {
+    if (invoice && typeof window !== "undefined") {
+      const draftFlat = sessionStorage.getItem(`draft-flat-${invoice.id}`);
+      const draftReward = sessionStorage.getItem(`draft-reward-${invoice.id}`);
+      const draftCode = sessionStorage.getItem(`draft-code-${invoice.id}`);
+      const draftAdvocate = sessionStorage.getItem(`draft-advocate-${invoice.id}`);
+      const draftRefDiscount = sessionStorage.getItem(`draft-refdiscount-${invoice.id}`);
+
+      // Exclusivity Priority: 1. Reward draft / Referral draft, 2. Flat draft / DB values
+      const hasRewardDraft = draftReward !== null && Number(draftReward) > 0;
+      const hasReferralDraft = draftCode !== null && draftCode.trim() !== "";
+
+      let finalFlat = "";
+      let finalReward = "";
+      let finalCode = "";
+      let finalAdvocate = "";
+      let finalRefDiscount = 0;
+
+      if (hasRewardDraft || hasReferralDraft) {
+        finalFlat = "";
+        if (hasRewardDraft) {
+          const dbPts = invoice.rewardDiscount || 0;
+          const initialPts = dbPts > 200 ? 0 : dbPts;
+          const parsedDraftReward = (Number(draftReward) <= 200 && Number(draftReward) <= availablePoints) ? draftReward : null;
+          finalReward = parsedDraftReward !== null ? parsedDraftReward : (initialPts > 0 ? String(initialPts) : "");
+        }
+        if (hasReferralDraft) {
+          finalCode = draftCode || "";
+          finalAdvocate = draftAdvocate || "";
+          finalRefDiscount = draftRefDiscount !== null ? Number(draftRefDiscount) : 0;
+        }
+      } else {
+        const dbFlat = invoice.discountAmount || 0;
+        finalFlat = draftFlat !== null ? draftFlat : (dbFlat > 0 ? String(dbFlat) : "");
+        if (Number(finalFlat) > 0) {
+          finalReward = "";
+          finalCode = "";
+          finalAdvocate = "";
+          finalRefDiscount = 0;
+        } else {
+          const dbPts = invoice.rewardDiscount || 0;
+          const initialPts = dbPts > 200 ? 0 : dbPts;
+          finalReward = initialPts > 0 ? String(initialPts) : "";
+
+          finalCode = invoice.referralCodeUsed || "";
+          finalAdvocate = invoice.referralAdvocateId || "";
+          finalRefDiscount = invoice.referralDiscount || 0;
+        }
+      }
+
+      setFlatDiscountStr(finalFlat);
+      setPointsRedeemStr(finalReward);
+      setReferralCode(finalCode);
+      setAppliedReferrerId(finalAdvocate);
+      setReferralDiscountApplied(finalRefDiscount);
+      setReferralVerifiedMsg(
+        finalCode
+          ? (hasReferralDraft ? "Referral code applied (unsaved draft)" : "Referral code applied")
+          : ""
+      );
+      setReferralErrorMsg("");
+    }
+  }, [invoice, availablePoints]);
+
+  const handleFlatDiscountChange = (val: string) => {
+    setFlatDiscountStr(val);
+    if (!invoice) return;
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-flat-${invoice.id}`, val);
+      if (Number(val) > 0) {
+        setPointsRedeemStr("");
+        sessionStorage.setItem(`draft-reward-${invoice.id}`, "");
+
+        // Also clear referral code draft
+        setReferralCode("");
+        setAppliedReferrerId("");
+        setReferralDiscountApplied(0);
+        setReferralVerifiedMsg("");
+        setReferralErrorMsg("");
+        sessionStorage.removeItem(`draft-code-${invoice.id}`);
+        sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
+        sessionStorage.removeItem(`draft-refdiscount-${invoice.id}`);
+      }
+    }
+  };
+
+  const handlePointsRedeemChange = (val: string) => {
+    setPointsRedeemStr(val);
+    if (!invoice) return;
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-reward-${invoice.id}`, val);
+      if (Number(val) > 0) {
+        setFlatDiscountStr("");
+        sessionStorage.setItem(`draft-flat-${invoice.id}`, "");
+      }
+    }
+  };
+
+
+
+  const subtotal = invoice ? invoice.subtotal : 0;
+  const flatDiscount = Number(flatDiscountStr) || 0;
+  const pointsRedeem = Number(pointsRedeemStr) || 0;
+  const referralDiscount = referralDiscountApplied;
+
+  const isPointsDisabled = flatDiscount > 0;
+  const isFlatDisabled = pointsRedeem > 0 || referralDiscountApplied > 0;
+  const isReferralDisabled = flatDiscount > 0;
+
+  const activeFlatDiscount = isFlatDisabled ? 0 : flatDiscount;
+  const activeRewardDiscount = isPointsDisabled ? 0 : ((pointsRedeem > 200 || pointsRedeem > availablePoints) ? 0 : pointsRedeem);
+  const activeReferralDiscount = isReferralDisabled ? 0 : referralDiscount;
+
+  // Derive pointsErrorMsg synchronously during render to prevent render lags
+  const pointsErrorMsg = (() => {
+    if (pointsRedeem > 200) {
+      return "Maximum reward points redemption limit is 200 points.";
+    }
+    if (pointsRedeem > availablePoints) {
+      return `Insufficient points. Customer has ${availablePoints} points.`;
+    }
+    return "";
+  })();
+
+  const discountTotal = activeFlatDiscount + activeRewardDiscount + activeReferralDiscount;
+  const taxableSubtotal = Math.max(0, subtotal - discountTotal);
+  const taxRate = invoice ? invoice.taxRate : 0.18;
+  const taxAmount = Math.round(taxableSubtotal * taxRate * 100) / 100;
+  const grandTotalComputed = Math.round((taxableSubtotal + taxAmount) * 100) / 100;
+  const pointsToEarn = Math.floor(taxableSubtotal / 100);
+
+  const handleVerifyReferralCode = () => {
+    setReferralErrorMsg("");
+    setReferralVerifiedMsg("");
+    if (!invoice) return;
+    
+    if (flatDiscount > 0) {
+      setReferralErrorMsg("Cannot apply referral code while flat discount is active.");
+      return;
+    }
+
+    if (!referralCode.trim()) {
+      setReferralErrorMsg("Enter a referral code first.");
+      return;
+    }
+
+    const trimmed = referralCode.trim();
+    if (invoiceCustomer && trimmed.toLowerCase() === invoiceCustomer.referralCode.toLowerCase()) {
+      setReferralErrorMsg("A customer cannot use their own referral code.");
+      return;
+    }
+
+    const { findByReferralCode } = useCustomerStore.getState();
+    const referrer = findByReferralCode(trimmed);
+    if (!referrer) {
+      setReferralErrorMsg("Invalid referral code.");
+      return;
+    }
+
+    // Valid referral!
+    setAppliedReferrerId(referrer.id);
+    setReferralDiscountApplied(newCustomerDiscount);
+    setReferralVerifiedMsg(`Applied! Referred by ${referrer.name}`);
+    toast.success(`Referral code verified: Referred by ${referrer.name}`);
+
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-code-${invoice.id}`, trimmed);
+      sessionStorage.setItem(`draft-advocate-${invoice.id}`, referrer.id);
+      sessionStorage.setItem(`draft-refdiscount-${invoice.id}`, String(newCustomerDiscount));
+    }
+  };
+
+  const handleRemoveReferral = () => {
+    setReferralCode("");
+    setAppliedReferrerId("");
+    setReferralDiscountApplied(0);
+    setReferralVerifiedMsg("");
+    setReferralErrorMsg("");
+    toast.message("Referral code removed");
+    if (!invoice) return;
+
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem(`draft-code-${invoice.id}`);
+      sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
+      sessionStorage.removeItem(`draft-refdiscount-${invoice.id}`);
+    }
+  };
+
+  const updateInvoiceDiscounts = useInvoiceStore((s) => s.updateInvoice);
+
+  const handleSaveDiscounts = async () => {
+    if (!invoice) return;
+    if (pointsErrorMsg) {
+      toast.error(pointsErrorMsg);
+      return;
+    }
+
+    setIsApplying(true);
+    try {
+      await updateInvoiceDiscounts(invoice.id, {
+        discountAmount: activeFlatDiscount,
+        rewardDiscount: activeRewardDiscount,
+        referralDiscount: activeReferralDiscount,
+        referralAdvocateId: activeReferralDiscount > 0 ? (appliedReferrerId || undefined) : undefined,
+        referralCodeUsed: activeReferralDiscount > 0 ? (referralCode.trim() || undefined) : undefined,
+        taxAmount: taxAmount,
+        grandTotal: grandTotalComputed,
+      });
+      toast.success("Invoice discounts applied successfully");
+
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(`draft-flat-${invoice.id}`);
+        sessionStorage.removeItem(`draft-reward-${invoice.id}`);
+        sessionStorage.removeItem(`draft-code-${invoice.id}`);
+        sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
+        sessionStorage.removeItem(`draft-refdiscount-${invoice.id}`);
+      }
+    } catch (err) {
+      toast.error("Failed to apply discounts to invoice");
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
   const totalPaid = useMemo(
     () => payments.reduce((sum, p) => sum + p.amount, 0),
     [payments]
@@ -154,8 +400,12 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const invoicePdfOpts = useMemo((): InvoicePdfOpts | null => {
     if (!invoice) return null;
+    const sanitizedInvoice = {
+      ...invoice,
+      rewardDiscount: (invoice.rewardDiscount || 0) > 200 ? 0 : invoice.rewardDiscount,
+    };
     return {
-      invoice,
+      invoice: sanitizedInvoice,
       jobCard: jobCard ?? null,
       customerName: invoice.customerName,
       customerPhone: invoice.customerPhone,
@@ -272,6 +522,40 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       });
     } else {
       toast.success("Payment recorded");
+
+      const totalPaidAfter = totalPaidBefore + amount;
+      const latestInvoice = useInvoiceStore.getState().invoices.find(i => i.id === invoice.id) || invoice;
+      const isFullyPaidNow = totalPaidAfter >= latestInvoice.grandTotal - 0.01;
+      if (isFullyPaidNow) {
+        const buyer = useCustomerStore.getState().customers.find(c => c.id === latestInvoice.customerId) || invoiceCustomer;
+        if (buyer) {
+          const pointsRedeemed = latestInvoice.rewardDiscount || 0;
+          const discountAmt = latestInvoice.discountAmount || 0;
+          const refDiscount = latestInvoice.referralDiscount || 0;
+          const taxable = Math.max(0, latestInvoice.subtotal - discountAmt - pointsRedeemed - refDiscount);
+          const pointsEarned = Math.floor(taxable / 100);
+          const nextPoints = Math.max(0, buyer.rewardPoints - pointsRedeemed + pointsEarned);
+
+          await useCustomerStore.getState().updateCustomer(buyer.id, {
+            rewardPoints: nextPoints,
+            totalVisits: (buyer.totalVisits || 0) + 1,
+          });
+
+          toast.success(`Loyalty points updated: ${buyer.name} earned ${pointsEarned} points and redeemed ${pointsRedeemed} points.`);
+        }
+
+        if (latestInvoice.referralAdvocateId) {
+          const advocate = useCustomerStore.getState().customers.find(c => c.id === latestInvoice.referralAdvocateId);
+          if (advocate) {
+            const nextAdvocatePoints = (advocate.rewardPoints || 0) + referralRewardAmount;
+            await useCustomerStore.getState().updateCustomer(advocate.id, {
+              rewardPoints: nextAdvocatePoints,
+            });
+            toast.success(`Referrer credited: ${advocate.name} received ${referralRewardAmount} referral reward points.`);
+          }
+        }
+      }
+
       pushActivityLog({
         action: "PAYMENT_RECEIVED",
         entityType: "INVOICE",
@@ -280,7 +564,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
         details: `${formatCurrency(amount)} received on ${invoice.invoiceNumber}`,
       });
       void notifyCustomerPaymentRecordedWhatsApp({
-        invoice,
+        invoice: latestInvoice,
         amount,
         method: paymentMethod,
         referenceNumber: referenceNumber || undefined,
@@ -539,70 +823,224 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
           )}
         </div>
 
-        <Card className="border-border shadow-sm lg:sticky lg:top-4">
-          <CardHeader className="border-b border-border py-3">
-            <CardTitle className="text-base font-semibold">Payment History</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Invoice Amount</span>
-              <span className="font-semibold tabular-nums">{formatInrTable(invoice.grandTotal)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Initial Amount Received</span>
-              <span className="tabular-nums">{formatInrTable(0)}</span>
-            </div>
-            <Separator />
-            {payments.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No payments recorded yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {payments.map((payment) => (
-                  <div
-                    key={payment.id}
-                    role="link"
-                    tabIndex={0}
-                    className="cursor-pointer rounded-md border border-border p-3 hover:bg-muted/30"
-                    onClick={() =>
-                      router.push(
-                        appendReturnTo(paymentInDetailPath(payment.id), currentReturnPath)
-                      )
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
+        <div className="space-y-4 lg:sticky lg:top-4">
+          {payments.length === 0 && (invoice.status === "DRAFT" || invoice.status === "ISSUED") && (
+            <Card className="border-border shadow-sm">
+              <CardHeader className="border-b border-border py-3 bg-violet-50/40 dark:bg-violet-950/10">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                  Discounts & Rewards
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4 text-sm">
+                {/* Flat Discount Input */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="flat-discount" className="flex items-center gap-1.5 font-medium text-foreground">
+                    <Percent className="w-3.5 h-3.5 text-muted-foreground" />
+                    Flat Discount (₹)
+                  </Label>
+                  <Input
+                    id="flat-discount"
+                    type="number"
+                    min="0"
+                    placeholder="Enter flat discount"
+                    value={flatDiscountStr}
+                    disabled={isFlatDisabled}
+                    onChange={(e) => handleFlatDiscountChange(e.target.value)}
+                  />
+                  {isFlatDisabled && (
+                    <p className="text-[11px] text-amber-600">Disabled because reward points or referral discount is active.</p>
+                  )}
+                </div>
+
+                {/* Reward Points Input */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="reward-points" className="flex items-center justify-between gap-1.5 font-medium text-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-muted-foreground" />
+                      Redeem Reward Points
+                    </span>
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Available: {availablePoints})
+                    </span>
+                  </Label>
+                  <Input
+                    id="reward-points"
+                    type="number"
+                    min="0"
+                    max="200"
+                    placeholder="Enter points"
+                    value={pointsRedeemStr}
+                    disabled={isPointsDisabled}
+                    onChange={(e) => handlePointsRedeemChange(e.target.value)}
+                  />
+                  {isPointsDisabled && (
+                    <p className="text-[11px] text-amber-600">Disabled because flat discount is applied.</p>
+                  )}
+                  {pointsErrorMsg ? (
+                    <p className="text-[11px] text-destructive">{pointsErrorMsg}</p>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">Max 200 points redemption allowed (1 pt = ₹1 discount).</p>
+                  )}
+                </div>
+
+                {/* Referral Code Input */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="referral-code" className="flex items-center gap-1.5 font-medium text-foreground">
+                    <Ticket className="w-3.5 h-3.5 text-muted-foreground" />
+                    Referral Discount Code
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="referral-code"
+                      placeholder="Enter friend's code"
+                      value={referralCode}
+                      onChange={(e) => {
+                        setReferralCode(e.target.value);
+                        if (invoice && typeof window !== "undefined") {
+                          sessionStorage.setItem(`draft-code-${invoice.id}`, e.target.value);
+                        }
+                      }}
+                      disabled={Boolean(appliedReferrerId) || isReferralDisabled}
+                    />
+                    {appliedReferrerId ? (
+                      <Button variant="outline" size="icon" className="shrink-0 text-destructive border-destructive/20 hover:bg-destructive/5" onClick={handleRemoveReferral}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <Button variant="outline" className="shrink-0" onClick={handleVerifyReferralCode} disabled={isReferralDisabled}>
+                        Apply
+                      </Button>
+                    )}
+                  </div>
+                  {isReferralDisabled && (
+                    <p className="text-[11px] text-amber-600">Disabled because flat discount is active.</p>
+                  )}
+                  {referralVerifiedMsg && (
+                    <p className="text-[11px] text-emerald-600 font-medium">{referralVerifiedMsg}</p>
+                  )}
+                  {referralErrorMsg && (
+                    <p className="text-[11px] text-destructive">{referralErrorMsg}</p>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Calculation Summary */}
+                <div className="space-y-2 text-xs">
+                  <p className="font-semibold text-foreground text-sm mb-2">Pre-Invoice Calculation</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-mono">{formatCurrency(subtotal)}</span>
+                  </div>
+                  {activeFlatDiscount > 0 && (
+                    <div className="flex justify-between text-amber-600 font-medium">
+                      <span>Flat Discount</span>
+                      <span className="font-mono">-{formatCurrency(activeFlatDiscount)}</span>
+                    </div>
+                  )}
+                  {activeRewardDiscount > 0 && (
+                    <div className="flex justify-between text-amber-600 font-medium">
+                      <span>Reward Discount ({activeRewardDiscount} pts)</span>
+                      <span className="font-mono">-{formatCurrency(activeRewardDiscount)}</span>
+                    </div>
+                  )}
+                  {activeReferralDiscount > 0 && (
+                    <div className="flex justify-between text-amber-600 font-medium">
+                      <span>Referral Discount</span>
+                      <span className="font-mono">-{formatCurrency(activeReferralDiscount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t border-border pt-1.5 text-[13px]">
+                    <span>Taxable Subtotal</span>
+                    <span className="font-mono">{formatCurrency(taxableSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>GST ({Math.round(taxRate * 100)}%)</span>
+                    <span className="font-mono">{formatCurrency(taxAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-sm border-t border-border pt-1.5 text-primary">
+                    <span>Revised Grand Total</span>
+                    <span className="font-mono">{formatCurrency(grandTotalComputed)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-600 font-medium bg-emerald-500/5 dark:bg-emerald-500/10 p-2 rounded-md mt-2">
+                    <span>Loyalty Points to Earn</span>
+                    <span>{pointsToEarn} points</span>
+                  </div>
+                </div>
+
+                <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium animate-in fade-in duration-200" disabled={isApplying || Boolean(pointsErrorMsg)} onClick={handleSaveDiscounts}>
+                  {isApplying ? "Applying..." : "Apply to Invoice"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="border-border shadow-sm">
+            <CardHeader className="border-b border-border py-3">
+              <CardTitle className="text-base font-semibold">Payment History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Invoice Amount</span>
+                <span className="font-semibold tabular-nums">{formatInrTable(invoice.grandTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Initial Amount Received</span>
+                <span className="tabular-nums">{formatInrTable(0)}</span>
+              </div>
+              <Separator />
+              {payments.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No payments recorded yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {payments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      role="link"
+                      tabIndex={0}
+                      className="cursor-pointer rounded-md border border-border p-3 hover:bg-muted/30"
+                      onClick={() =>
                         router.push(
                           appendReturnTo(paymentInDetailPath(payment.id), currentReturnPath)
-                        );
+                        )
                       }
-                    }}
-                  >
-                    <p className="font-medium">Payment In #{paymentDisplayNumber(payment.id)}</p>
-                    <p className="mt-1 font-semibold tabular-nums">{formatInrTable(payment.amount)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatShortDate(payment.paidAt)}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {payment.method.toLowerCase()}
-                      {payment.referenceNumber ? ` (${payment.referenceNumber})` : ""}
-                    </p>
-                  </div>
-                ))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(
+                            appendReturnTo(paymentInDetailPath(payment.id), currentReturnPath)
+                          );
+                        }
+                      }}
+                    >
+                      <p className="font-medium">Payment In #{paymentDisplayNumber(payment.id)}</p>
+                      <p className="mt-1 font-semibold tabular-nums">{formatInrTable(payment.amount)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{formatShortDate(payment.paidAt)}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {payment.method.toLowerCase()}
+                        {payment.referenceNumber ? ` (${payment.referenceNumber})` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Separator />
+              <div className="flex items-center justify-between gap-2 font-medium">
+                <span>Total Amount Received</span>
+                <span className="tabular-nums">{formatInrTable(totalPaid)}</span>
               </div>
-            )}
-            <Separator />
-            <div className="flex items-center justify-between gap-2 font-medium">
-              <span>Total Amount Received</span>
-              <span className="tabular-nums">{formatInrTable(totalPaid)}</span>
-            </div>
-            {remainingBalance > 0.01 && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">Balance Amount</span>
-                <span className={cn("font-bold tabular-nums text-destructive")}>
-                  {formatInrTable(remainingBalance)}
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              {remainingBalance > 0.01 && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">Balance Amount</span>
+                  <span className={cn("font-bold tabular-nums text-destructive")}>
+                    {formatInrTable(remainingBalance)}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Dialog open={recordDialogOpen} onOpenChange={setRecordDialogOpen}>

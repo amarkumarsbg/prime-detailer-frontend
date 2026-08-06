@@ -4,12 +4,19 @@ import {
   splitWhatsAppMessage,
   WHATSAPP_SESSION_BODY_MAX,
 } from "./whatsapp-message-split";
+import { useCommunicationStore } from "@/store/communication-store";
+import type { CustomerMessage } from "@/types";
 
 /** wa.me `text=` query is length-limited; use clipboard above this threshold. */
 const WA_ME_PREFILL_SAFE_MAX = 1500;
 
-export async function sendCustomerWhatsApp(phone: string, message: string): Promise<void> {
-  await apiPost<{ ok: true }>("/api/messaging/whatsapp", { phone, message });
+export async function sendCustomerWhatsApp(phone: string, message: string): Promise<CustomerMessage | null> {
+  const res = await apiPost<{ ok: true; message?: CustomerMessage }>("/api/messaging/whatsapp", { phone, message });
+  if (res.message) {
+    useCommunicationStore.getState().addMessage(res.message);
+    return res.message;
+  }
+  return null;
 }
 
 export type WhatsAppComposerResult = {

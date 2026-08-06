@@ -14,6 +14,7 @@ import { useBranchStore } from "@/store/branch-store";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedAppointments } from "@/hooks/use-scoped-data";
 import { PageHeader } from "@/components/shared/page-header";
+import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { KPICard } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -525,9 +526,8 @@ export default function AppointmentsPage() {
             <DialogContent className="sm:max-w-xl max-h-[min(90vh,720px)] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Schedule Appointment</DialogTitle>
-                <DialogDescription>
-                  Book a service appointment. Date defaults to the day selected on the calendar (or today).
-                  Use <strong className="text-foreground">New customer</strong> when they are not in the system yet.
+                <DialogDescription className="sr-only">
+                  Form to schedule a new service appointment.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleNewAppointmentSubmit} className="space-y-4 mt-2">
@@ -559,30 +559,14 @@ export default function AppointmentsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="apt-customer">Customer</Label>
-                      <Select
-                        value={formCustomerId}
-                        onValueChange={(v) => {
+                      <CustomerSearchSelect
+                        customers={customers}
+                        selectedCustomerId={formCustomerId}
+                        onSelectCustomer={(v) => {
                           setFormCustomerId(v);
                           setFormVehicleId("");
                         }}
-                      >
-                        <SelectTrigger id="apt-customer">
-                          <SelectValue placeholder="Select customer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customers.length === 0 ? (
-                            <SelectItem value="__no_customers__" disabled>
-                              No customers — use New customer
-                            </SelectItem>
-                          ) : (
-                            customers.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="apt-vehicle">Vehicle</Label>

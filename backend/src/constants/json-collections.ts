@@ -16,6 +16,7 @@ export const ARRAY_JSON_COLLECTIONS = [
   "serviceCategories",
   "notifications",
   "pickupDropRequests",
+  "communications",
 ] as const;
 
 export type ArrayJsonCollection = (typeof ARRAY_JSON_COLLECTIONS)[number];

@@ -9,6 +9,51 @@ import {
   toTwilioWhatsAppAddress,
 } from "../services/twilio-sms.service.js";
 import { isResendConfigured, sendViaResend } from "../services/resend-send.js";
+import { prisma } from "../lib/prisma.js";
+import { upsertCollectionItem } from "../services/collection.service.js";
+
+async function logMessage(params: {
+  type: "whatsapp" | "email" | "sms";
+  recipient: string;
+  subject?: string;
+  body: string;
+  status: "sent" | "failed";
+  error?: string;
+}) {
+  try {
+    let customer: any = null;
+    const allCustomers = await prisma.customer.findMany();
+    if (params.type === "email") {
+      const normEmail = params.recipient.trim().toLowerCase();
+      customer = allCustomers.find((c) => c.email.trim().toLowerCase() === normEmail) || null;
+    } else {
+      const normPhone = params.recipient.replace(/\D/g, "").slice(-10);
+      customer = allCustomers.find((c) => c.phone.replace(/\D/g, "").slice(-10) === normPhone) || null;
+    }
+
+    const id = `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const messagePayload = {
+      id,
+      type: params.type,
+      recipient: params.recipient,
+      subject: params.subject || null,
+      body: params.body,
+      status: params.status,
+      error: params.error || null,
+      customerId: customer?.id || null,
+      customerName: customer?.name || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    await upsertCollectionItem("communications", id, messagePayload);
+    return messagePayload;
+  } catch (err) {
+    console.error("Failed to log message delivery:", err);
+    return null;
+  }
+}
+
 
 const postWhatsAppSchema = z
   .object({
@@ -69,8 +114,16 @@ export async function postTransactionalEmail(req: Request, res: Response, next: 
       attachments: body.attachments,
     });
     if (!out.ok) {
+      const msgLog = await logMessage({
+        type: "email",
+        recipient: body.to,
+        subject: body.subject,
+        body: body.html,
+        status: "failed",
+        error: out.detail,
+      });
       res.status(502).json({
-        data: null,
+        data: { ok: false, message: msgLog },
         error: {
           message: out.detail,
           code: "RESEND_SEND_FAILED",
@@ -78,7 +131,14 @@ export async function postTransactionalEmail(req: Request, res: Response, next: 
       });
       return;
     }
-    res.json({ data: { ok: true as const }, error: null });
+    const msgLog = await logMessage({
+      type: "email",
+      recipient: body.to,
+      subject: body.subject,
+      body: body.html,
+      status: "sent",
+    });
+    res.json({ data: { ok: true as const, message: msgLog }, error: null });
   } catch (e) {
     next(e);
   }
@@ -98,15 +158,42 @@ export async function postWhatsApp(req: Request, res: Response, next: NextFuncti
       });
       return;
     }
-    if (body.message) {
-      await sendWhatsAppMessage(body.phone, body.message);
-    } else {
-      await sendWhatsAppMessage(body.phone, {
-        contentSid: body.contentSid!,
-        contentVariables: body.contentVariables,
+    let bodyText = body.message || "";
+    if (!bodyText && body.contentSid) {
+      bodyText = `Template: ${body.contentSid} with variables: ${JSON.stringify(body.contentVariables || {})}`;
+    }
+    try {
+      if (body.message) {
+        await sendWhatsAppMessage(body.phone, body.message);
+      } else {
+        await sendWhatsAppMessage(body.phone, {
+          contentSid: body.contentSid!,
+          contentVariables: body.contentVariables,
+        });
+      }
+      const msgLog = await logMessage({
+        type: "whatsapp",
+        recipient: body.phone,
+        body: bodyText,
+        status: "sent",
+      });
+      res.json({ data: { ok: true as const, message: msgLog }, error: null });
+    } catch (err: any) {
+      const msgLog = await logMessage({
+        type: "whatsapp",
+        recipient: body.phone,
+        body: bodyText,
+        status: "failed",
+        error: err?.message || String(err),
+      });
+      res.status(502).json({
+        data: { ok: false, message: msgLog },
+        error: {
+          message: err?.message || String(err),
+          code: "WHATSAPP_SEND_FAILED",
+        },
       });
     }
-    res.json({ data: { ok: true as const }, error: null });
   } catch (e) {
     next(e);
   }
@@ -138,8 +225,31 @@ export async function postSmsTest(req: Request, res: Response, next: NextFunctio
       return;
     }
     const to = normalizePhoneToE164(phone);
-    await sendTransactionalSms(to, TEST_SMS_BODY);
-    res.json({ data: { ok: true as const }, error: null });
+    try {
+      await sendTransactionalSms(to, TEST_SMS_BODY);
+      const msgLog = await logMessage({
+        type: "sms",
+        recipient: to,
+        body: TEST_SMS_BODY,
+        status: "sent",
+      });
+      res.json({ data: { ok: true as const, message: msgLog }, error: null });
+    } catch (err: any) {
+      const msgLog = await logMessage({
+        type: "sms",
+        recipient: to,
+        body: TEST_SMS_BODY,
+        status: "failed",
+        error: err?.message || String(err),
+      });
+      res.status(502).json({
+        data: { ok: false, message: msgLog },
+        error: {
+          message: err?.message || String(err),
+          code: "SMS_SEND_FAILED",
+        },
+      });
+    }
   } catch (e) {
     next(e);
   }
@@ -160,18 +270,42 @@ export async function postWhatsAppTest(req: Request, res: Response, next: NextFu
       });
       return;
     }
-    const result = await sendWhatsAppMessage(phone, TEST_WHATSAPP_BODY);
-    res.json({
-      data: {
-        ok: true as const,
-        twilioMessageSid: result.sid,
-        twilioStatus: result.status,
-        whatsappTo: toTwilioWhatsAppAddress(phone),
-        twilioErrorCode: result.twilioErrorCode ?? null,
-        twilioErrorMessage: result.twilioErrorMessage ?? null,
-      },
-      error: null,
-    });
+    try {
+      const result = await sendWhatsAppMessage(phone, TEST_WHATSAPP_BODY);
+      const msgLog = await logMessage({
+        type: "whatsapp",
+        recipient: phone,
+        body: TEST_WHATSAPP_BODY,
+        status: "sent",
+      });
+      res.json({
+        data: {
+          ok: true as const,
+          message: msgLog,
+          twilioMessageSid: result.sid,
+          twilioStatus: result.status,
+          whatsappTo: toTwilioWhatsAppAddress(phone),
+          twilioErrorCode: result.twilioErrorCode ?? null,
+          twilioErrorMessage: result.twilioErrorMessage ?? null,
+        },
+        error: null,
+      });
+    } catch (err: any) {
+      const msgLog = await logMessage({
+        type: "whatsapp",
+        recipient: phone,
+        body: TEST_WHATSAPP_BODY,
+        status: "failed",
+        error: err?.message || String(err),
+      });
+      res.status(502).json({
+        data: { ok: false, message: msgLog },
+        error: {
+          message: err?.message || String(err),
+          code: "WHATSAPP_SEND_FAILED",
+        },
+      });
+    }
   } catch (e) {
     next(e);
   }

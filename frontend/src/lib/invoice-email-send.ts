@@ -1,4 +1,6 @@
 import { apiPost, ApiError } from "./api-client";
+import { useCommunicationStore } from "@/store/communication-store";
+import type { CustomerMessage } from "@/types";
 
 export type InvoiceEmailAttachment = {
   filename: string;
@@ -11,8 +13,13 @@ export async function sendInvoiceEmail(params: {
   html: string;
   text?: string;
   attachments?: InvoiceEmailAttachment[];
-}): Promise<void> {
-  await apiPost<{ ok: true }>("/api/messaging/email", params);
+}): Promise<CustomerMessage | null> {
+  const res = await apiPost<{ ok: true; message?: CustomerMessage }>("/api/messaging/email", params);
+  if (res.message) {
+    useCommunicationStore.getState().addMessage(res.message);
+    return res.message;
+  }
+  return null;
 }
 
 export function isResendNotConfiguredError(e: unknown): boolean {

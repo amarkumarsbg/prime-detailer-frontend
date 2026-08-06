@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { ArrowLeft, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +35,7 @@ import { useVehicleStore } from "@/store/vehicle-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
+import { useCommunicationStore } from "@/store/communication-store";
 import {
   MEMBERSHIP_TIER_DAYS,
   useMembershipStore,
@@ -141,6 +142,13 @@ export default function CustomerDetailPage() {
   const customerWalletTransactions = useMemo(() => {
     return getByCustomer(id);
   }, [id, getByCustomer]);
+
+  const messages = useCommunicationStore((s) => s.messages);
+  const customerMessages = useMemo(() => {
+    return messages
+      .filter((m) => m.customerId === id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [id, messages]);
 
   const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
   const packages = useMembershipStore((s) => s.packages);
@@ -482,6 +490,7 @@ export default function CustomerDetailPage() {
           <TabsTrigger value="service-history">Service History</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="feedback">Feedback</TabsTrigger>
+          <TabsTrigger value="communications">Messages</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -1057,6 +1066,9 @@ export default function CustomerDetailPage() {
         <TabsContent value="feedback" className="space-y-4">
           <CustomerFeedback />
         </TabsContent>
+        <TabsContent value="communications" className="space-y-4">
+          <CustomerCommunications customerId={id} />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -1186,5 +1198,98 @@ function CustomerFeedback() {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function CustomerCommunications({ customerId }: { customerId: string }) {
+  const messages = useCommunicationStore((s) => s.messages);
+  const customerMessages = useMemo(() => {
+    return messages
+      .filter((m) => m.customerId === customerId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [customerId, messages]);
+
+  if (customerMessages.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground">No messages sent to this customer yet.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Message History</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {customerMessages.map((msg) => {
+            const isEmail = msg.type === "email";
+            const isWhatsApp = msg.type === "whatsapp";
+            return (
+              <div key={msg.id} className="p-4 rounded-xl border border-border bg-muted/10 hover:bg-muted/20 transition-colors">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg shrink-0 ${
+                      isWhatsApp 
+                        ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" 
+                        : isEmail 
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" 
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                    }`}>
+                      {isWhatsApp ? (
+                        <MessageSquare className="w-4.5 h-4.5 text-green-600 dark:text-green-400" />
+                      ) : isEmail ? (
+                        <Mail className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <MessageSquare className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm capitalize">{msg.type}</span>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                          msg.status === "sent" 
+                            ? "bg-emerald-150 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400" 
+                            : "bg-rose-150 text-rose-800 dark:bg-rose-950/40 dark:text-rose-400"
+                        }`}>
+                          {msg.status === "sent" ? "Delivered" : "Failed"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{msg.recipient}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">{formatDate(msg.createdAt)}</span>
+                </div>
+                
+                {msg.subject && (
+                  <p className="text-sm font-semibold mt-3">{msg.subject}</p>
+                )}
+                
+                {isEmail ? (
+                  <div 
+                    className="text-sm text-muted-foreground mt-2 border border-border/50 rounded-lg p-3 bg-background/50 overflow-x-auto"
+                    dangerouslySetInnerHTML={{ __html: msg.body }}
+                  />
+                ) : (
+                  <div className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap border border-border/50 rounded-lg p-3 bg-background/50">
+                    {msg.body}
+                  </div>
+                )}
+
+                {msg.error && (
+                  <p className="text-xs text-rose-600 mt-2 font-medium bg-rose-50 dark:bg-rose-950/20 p-2.5 rounded-lg border border-rose-150 dark:border-rose-900/30">
+                    Error: {msg.error}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

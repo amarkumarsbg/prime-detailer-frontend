@@ -54,11 +54,21 @@ export async function replaceCollectionArray(collection: string, items: { id: st
   if (!isArrayCollection(collection)) {
     throw new Error("replaceCollectionArray only for array collections");
   }
+  // Deduplicate items by id to prevent database unique constraint failures
+  const seenIds = new Set<string>();
+  const uniqueItems: typeof items = [];
+  for (const item of items) {
+    if (item && item.id && !seenIds.has(item.id)) {
+      seenIds.add(item.id);
+      uniqueItems.push(item);
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.appJsonRow.deleteMany({ where: { collection } });
-    if (items.length === 0) return;
+    if (uniqueItems.length === 0) return;
     await tx.appJsonRow.createMany({
-      data: items.map((item) => ({
+      data: uniqueItems.map((item) => ({
         collection,
         entityId: item.id,
         payload: item as object,

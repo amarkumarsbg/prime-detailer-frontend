@@ -32,6 +32,7 @@ import {
 } from "@/lib/reports/gstr2-purchase-dummy-data";
 import { buildGstr2PurchaseRows } from "@/lib/reports/purchase-report-data";
 import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
+import { ReportPeriodSelect } from "@/components/reports/report-period-select";
 import { useInventoryStore } from "@/store/inventory-store";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -394,19 +395,7 @@ export function Gstr2PurchaseReport() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="h-9 w-[200px] border-violet-300/60 bg-background">
-              <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-primary" />
-              <SelectValue placeholder="Period" />
-            </SelectTrigger>
-            <SelectContent position="popper" className="min-w-[var(--radix-select-trigger-width)]">
-              {PERIOD_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} className={selectItemClass}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ReportPeriodSelect value={period} onChange={setPeriod} />
         </div>
       </div>
 

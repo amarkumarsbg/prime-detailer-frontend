@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
+import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { DataTable } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { QuotationStatusBadge } from "@/components/shared/status-badge";
@@ -859,24 +860,14 @@ export default function QuotationsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <Select
-                    value={formCustomerId}
-                    onValueChange={(v) => {
+                  <CustomerSearchSelect
+                    customers={customers}
+                    selectedCustomerId={formCustomerId}
+                    onSelectCustomer={(v) => {
                       setFormCustomerId(v);
                       setFormVehicleId("");
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} ({c.phone})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Vehicle</Label>

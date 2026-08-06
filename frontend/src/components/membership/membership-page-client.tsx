@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
+import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import {
   DesktopTableWrap,
   MobileCardList,
@@ -500,19 +501,12 @@ export function MembershipPageClient() {
               <CardContent className="grid gap-4 sm:max-w-lg">
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <Select value={assignCustomerId || "none"} onValueChange={(v) => setAssignCustomerId(v === "none" ? "" : v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Select customer</SelectItem>
-                      {sortedCustomers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CustomerSearchSelect
+                    customers={sortedCustomers}
+                    selectedCustomerId={assignCustomerId}
+                    onSelectCustomer={setAssignCustomerId}
+                    placeholder="Select customer"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Vehicle</Label>

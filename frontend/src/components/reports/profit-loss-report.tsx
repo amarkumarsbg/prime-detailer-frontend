@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { dateInPreset, DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
+import { ReportPeriodSelect } from "@/components/reports/report-period-select";
 import { useSettingsStore } from "@/store/settings-store";
 import { formatInrFull } from "@/lib/utils";
 import {
@@ -154,18 +155,7 @@ export function ProfitLossReport() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="h-9 w-[150px] border-sky-200/80 bg-sky-50/50 dark:border-sky-800 dark:bg-sky-950/30">
-                <CalendarDays className="mr-2 h-4 w-4 shrink-0 opacity-70" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-                <SelectItem value="quarter">This Quarter</SelectItem>
-                <SelectItem value="year">This Year</SelectItem>
-              </SelectContent>
-            </Select>
+            <ReportPeriodSelect value={period} onChange={setPeriod} />
 
             <Button
               type="button"
