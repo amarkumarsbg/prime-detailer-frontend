@@ -25,6 +25,8 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
+import { useAppointmentStore } from "@/store/appointment-store";
+import { useCustomerStore } from "@/store/customer-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { cn } from "@/lib/utils";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
@@ -47,8 +49,10 @@ import { PickupDropJobGroupCard } from "@/components/pickup-drop/pickup-drop-job
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import {
   groupPickupDropByJob,
+  pickupDropAddressFieldLabel,
   pickupDropGroupMatchesFilters,
   PICKUP_DROP_STATUS_LABEL,
+  resolvePickupDropAddressForJobCard,
   validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
 
@@ -99,6 +103,8 @@ export default function PickupDropPage() {
   const { requests, addRequest, assignDriver, advanceStatus } = usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
+  const appointments = useAppointmentStore((s) => s.appointments);
+  const customers = useCustomerStore((s) => s.customers);
   const { selectedBranchId, viewingLabel } = useBranchScope();
 
   const [statusFilter, setStatusFilter] = useState<PickupDropStatus | "ALL">("ALL");
@@ -109,7 +115,7 @@ export default function PickupDropPage() {
   const [bookingId, setBookingId] = useState<string>("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
-  const [newAddress, setNewAddress] = useState("");
+  const [requestAddress, setRequestAddress] = useState("");
   const [newBranchId, setNewBranchId] = useState<string>("");
   const [newScheduledLocal, setNewScheduledLocal] = useState("");
   const [reqType, setReqType] = useState<PickupDropType>("PICKUP");
@@ -171,7 +177,7 @@ export default function PickupDropPage() {
     setBookingId("");
     setNewCustomerName("");
     setNewCustomerPhone("");
-    setNewAddress("");
+    setRequestAddress("");
     setNewBranchId("");
     setNewScheduledLocal("");
     setReqType("PICKUP");
@@ -190,8 +196,11 @@ export default function PickupDropPage() {
     if (createMode === "existing") {
       const jc = scopedJobCards.find((j) => j.id === bookingId);
       if (!jc) return;
-      const br = branches.find((b) => b.id === jc.branchId);
-      const address = br ? `${br.name} — ${br.address}` : "—";
+      const addr = requestAddress.trim();
+      if (!addr) {
+        toast.error(`Enter the ${pickupDropAddressFieldLabel(reqType).toLowerCase()}.`);
+        return;
+      }
       addRequest({
         jobCardId: jc.id,
         jobNumber: jc.jobNumber,
@@ -200,7 +209,7 @@ export default function PickupDropPage() {
         vehicleMakeModel: jc.vehicleMakeModel,
         vehicleRegNumber: jc.vehicleRegNumber,
         customerPhone: jc.customerPhone,
-        address,
+        address: addr,
         scheduledTime: jc.expectedDelivery,
         type: reqType,
         driverId: driver?.id,
@@ -213,13 +222,13 @@ export default function PickupDropPage() {
     }
 
     const name = newCustomerName.trim();
-    const addr = newAddress.trim();
+    const addr = requestAddress.trim();
     if (!name) {
       toast.error("Enter the customer name.");
       return;
     }
     if (!addr) {
-      toast.error("Enter the pickup or drop address.");
+      toast.error(`Enter the ${pickupDropAddressFieldLabel(reqType).toLowerCase()}.`);
       return;
     }
     if (!newBranchId) {
@@ -264,12 +273,14 @@ export default function PickupDropPage() {
     resetForm();
   };
 
+  const addressFieldLabel = pickupDropAddressFieldLabel(reqType);
+
   const canSubmitCreate =
     createMode === "existing"
-      ? !!bookingId
+      ? !!(bookingId && requestAddress.trim())
       : !!(
           newCustomerName.trim() &&
-          newAddress.trim() &&
+          requestAddress.trim() &&
           newBranchId &&
           newScheduledLocal
         );
@@ -475,7 +486,19 @@ export default function PickupDropPage() {
                   variant={createMode === "existing" ? "default" : "ghost"}
                   size="sm"
                   className="flex-1"
-                  onClick={() => setCreateMode("existing")}
+                  onClick={() => {
+                    setCreateMode("existing");
+                    if (bookingId) {
+                      const jc = scopedJobCards.find((j) => j.id === bookingId);
+                      setRequestAddress(
+                        jc
+                          ? resolvePickupDropAddressForJobCard(jc, appointments, customers)
+                          : ""
+                      );
+                    } else {
+                      setRequestAddress("");
+                    }
+                  }}
                 >
                   Existing booking
                 </Button>
@@ -486,6 +509,7 @@ export default function PickupDropPage() {
                   className="flex-1"
                   onClick={() => {
                     setCreateMode("new");
+                    setRequestAddress("");
                     setNewBranchId((prev) => prev || scopedBranches[0]?.id || "");
                     setNewScheduledLocal((prev) => prev || defaultScheduledDatetimeLocal());
                   }}
@@ -546,6 +570,9 @@ export default function PickupDropPage() {
                               type="button"
                               onClick={() => {
                                 setBookingId(jc.id);
+                                setRequestAddress(
+                                  resolvePickupDropAddressForJobCard(jc, appointments, customers)
+                                );
                                 setPopoverOpen(false);
                                 setSearchQuery("");
                               }}
@@ -565,6 +592,18 @@ export default function PickupDropPage() {
                     </PopoverContent>
                   </Popover>
                 )}
+                <div className="grid gap-2">
+                  <Label htmlFor="pd-existing-address">{addressFieldLabel}</Label>
+                  <Textarea
+                    id="pd-existing-address"
+                    value={requestAddress}
+                    onChange={(e) => setRequestAddress(e.target.value)}
+                    rows={3}
+                    className="resize-none border-input"
+                    placeholder="Street, landmark, pincode…"
+                    disabled={!bookingId}
+                  />
+                </div>
               </div>
             ) : (
               <>
@@ -592,11 +631,11 @@ export default function PickupDropPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="pd-new-address">Pickup / drop address</Label>
+                  <Label htmlFor="pd-new-address">{addressFieldLabel}</Label>
                   <Textarea
                     id="pd-new-address"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
+                    value={requestAddress}
+                    onChange={(e) => setRequestAddress(e.target.value)}
                     rows={3}
                     className="resize-none border-input"
                     placeholder="Street, landmark, pincode…"

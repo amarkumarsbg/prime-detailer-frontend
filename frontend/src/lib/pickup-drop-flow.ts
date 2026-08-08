@@ -1,4 +1,32 @@
-import type { JobCard, JobCardStatus, PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
+import type {
+  Appointment,
+  Customer,
+  JobCard,
+  JobCardStatus,
+  PickupDropRequest,
+  PickupDropStatus,
+  PickupDropType,
+} from "@/types";
+
+/** Label for the request-specific address field in the create modal. */
+export function pickupDropAddressFieldLabel(type: PickupDropType): string {
+  return type === "PICKUP" ? "Pickup Address" : "Drop Address";
+}
+
+/** Booking / customer address for pre-fill — does not mutate stored customer data. */
+export function resolvePickupDropAddressForJobCard(
+  jc: JobCard,
+  appointments: Appointment[],
+  customers: Customer[]
+): string {
+  if (jc.appointmentId) {
+    const apt = appointments.find((a) => a.id === jc.appointmentId);
+    const fromBooking = apt?.customerAddress?.trim();
+    if (fromBooking) return fromBooking;
+  }
+  const customer = customers.find((c) => c.id === jc.customerId);
+  return customer?.address?.trim() ?? "";
+}
 
 export const PICKUP_DROP_STATUS_ORDER: PickupDropStatus[] = [
   "PENDING",
