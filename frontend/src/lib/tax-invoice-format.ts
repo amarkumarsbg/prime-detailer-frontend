@@ -168,16 +168,19 @@ export function buildTaxInvoicePrintHtml(
 
   const { cgst, sgst } = splitCgstSgst(invoice.taxAmount);
 
-  // Generate UPI QR Code SVG if a UPI ID is configured and there is a payable amount.
-  const qrAmount = Math.round(remainingBalance > 0 ? remainingBalance : invoice.grandTotal);
+  // Generate UPI QR Code SVG if a UPI ID is configured.
   const rawUpi = business.bankUpi?.trim();
   const isUpiConfigured = rawUpi && rawUpi.length > 0 && !rawUpi.includes("[UPI ID");
 
   let qrCodeSvgHtml = "";
-  if (isUpiConfigured && qrAmount > 0) {
+  if (isUpiConfigured) {
     try {
+      let upiContent = `upi://pay?pa=${encodeURIComponent(rawUpi)}&pn=${encodeURIComponent(business.businessName.trim())}&cu=INR`;
+      if (remainingBalance > 0) {
+        upiContent += `&am=${Math.round(remainingBalance).toFixed(2)}`;
+      }
       const qr = new QRCode({
-        content: `upi://pay?pa=${encodeURIComponent(rawUpi)}&pn=${encodeURIComponent(business.businessName.trim())}&am=${qrAmount.toFixed(2)}&cu=INR`,
+        content: upiContent,
         padding: 0,
         width: 80,
         height: 80,
@@ -491,7 +494,10 @@ table.inv .b { font-weight: 700; color: #171717; }
             </svg>
           </div>
           <p style="font-size: 8px; color: #737373; font-family: monospace; word-break: break-all; margin-bottom: 2px;">UPI ID: ${escapeHtml(rawUpi)}</p>
-          <p style="font-size: 9.5px; font-weight: 700; color: #171717;">Pay Amount: ${formatCurrency(qrAmount)}</p>
+          ${remainingBalance > 0
+            ? `<p style="font-size: 9.5px; font-weight: 700; color: #171717;">Pay Amount: ${formatCurrency(Math.round(remainingBalance))}</p>`
+            : `<p style="font-size: 9.5px; font-weight: 700; color: #171717;">Scan to Pay Custom Amount</p>`
+          }
         </div>
       </div>` : ""}
     </div>
@@ -512,7 +518,7 @@ table.inv .b { font-weight: 700; color: #171717; }
 
       <div style="margin-top: 10px; padding: 8px 10px; border: 1px solid #d4d4d4; border-radius: 4px; background: #fafafa; font-size: 9px;">
         <span style="color:#737373; font-weight: 500; text-transform: uppercase; font-size: 7.5px; display: block; margin-bottom: 2px; letter-spacing: 0.5px;">Total Amount (in words)</span>
-        <span style="font-weight: 700; color: #171717;">${numberToWords(qrAmount)}</span>
+        <span style="font-weight: 700; color: #171717;">${numberToWords(Math.round(invoice.grandTotal))}</span>
       </div>
 
       <div style="margin-top: 14px; border: 1px solid #d4d4d4; border-radius: 4px; padding: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff;">

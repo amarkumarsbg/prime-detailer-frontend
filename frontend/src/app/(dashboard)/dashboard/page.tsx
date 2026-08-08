@@ -59,6 +59,8 @@ import {
   AlertCircle,
   Building2,
   Calendar,
+  CalendarCheck,
+  FileText,
   Users,
   BarChart3,
   Eye,
@@ -1061,12 +1063,32 @@ export default function DashboardPage() {
               </time>
             </p>
           </div>
-          <Link href="/job-cards/new" className="shrink-0">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              New Job Card
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/quotations?new=true">
+              <Button>
+                <FileText className="w-4 h-4 mr-1" />
+                New Quotation
+              </Button>
+            </Link>
+            <Link href="/bookings/walk-in">
+              <Button>
+                <CalendarCheck className="w-4 h-4 mr-1" />
+                New Booking
+              </Button>
+            </Link>
+            <Link href="/appointments?new=true">
+              <Button>
+                <Calendar className="w-4 h-4 mr-1" />
+                New Appointment
+              </Button>
+            </Link>
+            <Link href="/job-cards/new">
+              <Button>
+                <Plus className="w-4 h-4 mr-1" />
+                New Job Card
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {alerts.length > 0 &&

@@ -77,9 +77,6 @@ import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useNotificationStore } from "@/store/notification-store";
-import { usePickupDropStore } from "@/store/pickup-drop-store";
-import { pickupBlocksJobAdvance } from "@/lib/pickup-drop-flow";
-import { JobCardPickupPanel } from "@/components/job-cards/job-card-pickup-panel";
 import {
   JobCardPartsPicker,
   buildJobCardPartItems,
@@ -187,7 +184,6 @@ export default function JobCardDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const { jobCards, updateJobCard } = useJobCardStore();
-  const pickupRequests = usePickupDropStore((s) => s.requests);
   const customers = useCustomerStore((s) => s.customers);
   const staff = useStaffStore((s) => s.staff);
 
@@ -961,12 +957,6 @@ export default function JobCardDetailPage() {
     if (nextIndex < WORKFLOW_STATUSES.length) {
       const nextStatus = WORKFLOW_STATUSES[nextIndex];
 
-      const pickupBlock = pickupBlocksJobAdvance(jobCard.id, pickupRequests, nextStatus);
-      if (pickupBlock) {
-        toast.error("Pickup not complete", { description: pickupBlock });
-        return;
-      }
-
       if (currentStatus === "INSPECTION" && nextStatus === "AWAITING_SERVICE") {
         if (!hasBeforePhoto) {
           setPhotoTab("BEFORE");
@@ -1087,9 +1077,6 @@ export default function JobCardDetailPage() {
       if (nextStatus === "READY") {
         notifyJobReadyWhatsApp(mergedJob, businessName);
       }
-      if (nextStatus === "DELIVERED") {
-        notifyJobDeliveredWhatsApp(mergedJob, businessName);
-      }
 
       if (nextStatus === "DELIVERED") {
         pushActivityLog({
@@ -1160,6 +1147,68 @@ export default function JobCardDetailPage() {
 
   const handleGenerateInvoice = () => {
     if (!jobCard) return;
+
+    if (currentStatus === "READY") {
+      const nowIso = new Date().toISOString();
+      const patch: Partial<JobCard> = {
+        status: "DELIVERED",
+        updatedAt: nowIso,
+        actualDelivery: nowIso,
+      };
+
+      if (jobCard.serviceTimerStartedAt) {
+        const snap = computeServiceTimerSnapshot(jobCard, nowIso);
+        if (snap) {
+          patch.serviceTimerDeliverySnapshot = snap;
+          patch.totalPausedMs = snap.totalPauseMs;
+          patch.timerIsPaused = false;
+          patch.timerPausedAt = undefined;
+        }
+      }
+
+      if (jobCard.highEndServiceIds && jobCard.highEndServiceIds.length > 0) {
+        jobCard.highEndServiceIds.forEach((hesId) => {
+          const config = highEndServiceConfigs.find((c) => c.id === hesId);
+          if (config) {
+            const first =
+              jobCard.highEndFirstFollowUpMonthsByServiceId?.[hesId] ??
+              config.reminderIntervals[0] ??
+              0;
+            const intervals = buildHighEndReminderMonthIntervals(config.reminderIntervals, first);
+            generateHighEndReminders({
+              jobCardId: jobCard.id,
+              serviceName: config.name,
+              serviceDate: nowIso,
+              customerId: jobCard.customerId,
+              customerName: jobCard.customerName,
+              customerPhone: jobCard.customerPhone,
+              vehicleId: jobCard.vehicleId,
+              vehicleRegNumber: jobCard.vehicleRegNumber,
+              vehicleMakeModel: jobCard.vehicleMakeModel,
+              intervalMonths: intervals,
+            });
+          }
+        });
+        toast.success("Maintenance reminders created", {
+          description: `Auto-generated reminders for ${jobCard.highEndServiceIds.length} high-end service(s)`,
+        });
+      }
+
+      updateJobCard(jobCard.id, patch);
+      setCurrentStatus("DELIVERED");
+
+      const mergedJob: JobCard = { ...jobCard, ...patch };
+      notifyJobDeliveredWhatsApp(mergedJob, businessName);
+
+      pushActivityLog({
+        action: "STATUS_CHANGED",
+        entityType: "JOB_CARD",
+        entityId: jobCard.id,
+        entityLabel: jobCard.jobNumber,
+        details: `${jobCard.jobNumber} marked delivered`,
+      });
+    }
+
     const result = createOrGetInvoiceForJob(jobCard.id);
     if (!result.ok) {
       if (result.code === "NOT_DELIVERED") {
@@ -1242,9 +1291,6 @@ export default function JobCardDetailPage() {
         {currentStatus !== "CANCELLED" && (
           <Card className="min-w-0 overflow-hidden border-border/80 shadow-sm">
             <CardContent className="!px-3 !py-3 sm:!px-4 sm:!py-4">
-              {jobCard && (
-                <JobCardPickupPanel jobCardId={jobCard.id} branchId={jobCard.branchId} />
-              )}
               <div
                 className="w-full max-w-full overflow-hidden pt-1"
                 role="navigation"
@@ -1304,10 +1350,12 @@ export default function JobCardDetailPage() {
                 </div>
               </div>
               <div className="mt-3 space-y-2 sm:mt-4">
-                {currentStatus === "DELIVERED" ? (
+                {currentStatus === "DELIVERED" || currentStatus === "READY" ? (
                   <div className="hidden flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
                     <p className="text-sm text-muted-foreground">
-                      This job is delivered — you can create the tax invoice or open it if it already exists.
+                      {currentStatus === "DELIVERED"
+                        ? "This job is delivered — you can create the tax invoice or open it if it already exists."
+                        : "This job is ready — generate the invoice to mark it as delivered."}
                     </p>
                     <Button
                       type="button"
@@ -1511,7 +1559,7 @@ export default function JobCardDetailPage() {
                     Record payment
                   </Link>
                 </Button>
-              ) : currentStatus === "DELIVERED" ? (
+              ) : currentStatus === "DELIVERED" || currentStatus === "READY" ? (
                 <Button size="sm" type="button" onClick={handleGenerateInvoice}>
                   <IndianRupee className="w-4 h-4 mr-1.5" />
                   Generate Invoice
@@ -1522,7 +1570,7 @@ export default function JobCardDetailPage() {
                   variant="outline"
                   className="border-dashed text-muted-foreground"
                   disabled
-                  title="Invoice is available after the job is marked delivered."
+                  title="Invoice is available after the job is marked ready or delivered."
                 >
                   <IndianRupee className="w-4 h-4 mr-1.5" />
                   Billing
@@ -3199,7 +3247,7 @@ export default function JobCardDetailPage() {
       {showMobileActionBar ? (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] border-t border-border bg-background/95 px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm">
           <div className="mx-auto flex max-w-lg flex-col gap-2">
-            {currentStatus === "DELIVERED" ? (
+            {currentStatus === "DELIVERED" || currentStatus === "READY" ? (
               <Button type="button" className="w-full" onClick={handleGenerateInvoice}>
                 <FileText className="w-4 h-4 mr-2" />
                 {invoiceForJob ? "View invoice" : "Generate Invoice"}

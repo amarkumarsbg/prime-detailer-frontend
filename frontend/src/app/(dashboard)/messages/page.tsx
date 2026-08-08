@@ -23,7 +23,7 @@ import {
   ChevronUp,
   FileText,
 } from "lucide-react";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, formatDateTime, cn } from "@/lib/utils";
 import type { CustomerMessage } from "@/types";
 
 export default function MessagesLogPage() {
@@ -213,7 +213,7 @@ export default function MessagesLogPage() {
                   </div>
 
                   <div className="text-right text-xs text-muted-foreground shrink-0 md:self-start">
-                    {formatDate(msg.createdAt)}
+                    {formatDateTime(msg.createdAt)}
                   </div>
                 </div>
 

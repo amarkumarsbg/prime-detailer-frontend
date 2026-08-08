@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -129,6 +129,20 @@ function getServicePrice(
   if (!svc) return 0;
   const price = svc.segmentPricing[segment as keyof typeof svc.segmentPricing];
   return price ?? svc.defaultPrice;
+}
+
+function QuotationFromQueryEffect({ setNewDialogOpen }: { setNewDialogOpen: (open: boolean) => void }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get("new") === "true") {
+      setNewDialogOpen(true);
+      router.replace("/quotations");
+    }
+  }, [searchParams, router, setNewDialogOpen]);
+
+  return null;
 }
 
 export default function QuotationsPage() {
@@ -679,6 +693,9 @@ export default function QuotationsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <Suspense fallback={null}>
+        <QuotationFromQueryEffect setNewDialogOpen={setNewDialogOpen} />
+      </Suspense>
       <PageHeader
         title="Quotations & Estimates"
         description="Create and manage quotations, send estimates via WhatsApp, and convert to job cards"

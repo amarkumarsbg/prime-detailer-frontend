@@ -174,6 +174,22 @@ function wizardTrackerLabels(forJobCard: boolean): string[] {
     : ["Customer", "Vehicle", "Services", "Details", "Review"];
 }
 
+function formatExpectedDeliveryDate(date: Date | string | null | undefined): string {
+  if (!date) return "Not set";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "Not set";
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[d.getMonth()];
+  const day = d.getDate();
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${month} ${day}, ${year}, ${hours}:${minutes} ${ampm}`;
+}
+
 function mechanicAvailabilityLabel(
   mechanicId: string,
   staffActive: boolean | undefined,
@@ -503,6 +519,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [referralCode, setReferralCode] = useState("");
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[] | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [hasManuallySetExpectedDelivery, setHasManuallySetExpectedDelivery] = useState(false);
+
+  const selectedCustomerRecord = useMemo(() => {
+    if (!existingCustomerId) return null;
+    return customers.find((c) => c.id === existingCustomerId) ?? null;
+  }, [existingCustomerId, customers]);
+
+  const customerVisits = selectedCustomerRecord?.totalVisits ?? 0;
+  const customerRewardPoints = selectedCustomerRecord?.rewardPoints ?? 0;
   const [addingNewVehicle, setAddingNewVehicle] = useState(false);
   /** When adding a vehicle for an existing customer with a garage, form opens in a dialog */
   const [addVehiclePopupOpen, setAddVehiclePopupOpen] = useState(false);
@@ -585,13 +610,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       setBranchId(selectedBranchId);
       return;
     }
-    if (branchId) return;
-    if (user?.branchId && activeBranches.some((b) => b.id === user.branchId)) {
-      setBranchId(user.branchId);
-    } else if (activeBranches[0]) {
-      setBranchId(activeBranches[0].id);
+    if (selectedBranchId) {
+      setBranchId(selectedBranchId);
+    } else {
+      setBranchId("");
     }
-  }, [branchLocked, selectedBranchId, branchId, user?.branchId, activeBranches]);
+  }, [branchLocked, selectedBranchId]);
 
   useEffect(() => {
     if (!isJobCard) return;
@@ -1200,14 +1224,46 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }));
   }, [isJobCard, selectedPartLines, inventoryParts]);
 
+  const maxCatalogMinutes = useMemo(() => {
+    if (selectedCatalogItems.length === 0) return 0;
+    return Math.max(...selectedCatalogItems.map((s) => s.durationMinutes ?? 0));
+  }, [selectedCatalogItems]);
+
+  const maxHighEndMinutes = useMemo(() => {
+    return maxHighEndCompletionMinutes(selectedHighEndIds, highEndCompletionMinutesById);
+  }, [selectedHighEndIds, highEndCompletionMinutesById]);
+
+  const totalPlannedCompletionMinutes = useMemo(() => {
+    return Math.max(maxCatalogMinutes, maxHighEndMinutes);
+  }, [maxCatalogMinutes, maxHighEndMinutes]);
+
   const suggestedJobCardExpectedDelivery = useMemo(() => {
     if (!isJobCard) return null;
-    return expectedDeliveryFromHighEndCompletion(
-      new Date(),
-      selectedHighEndIds,
-      highEndCompletionMinutesById
-    );
-  }, [isJobCard, selectedHighEndIds, highEndCompletionMinutesById]);
+    const d = new Date(Date.now() + totalPlannedCompletionMinutes * 60_000);
+    d.setSeconds(0, 0);
+    return d;
+  }, [isJobCard, totalPlannedCompletionMinutes]);
+
+  useEffect(() => {
+    if (!isJobCard) return;
+    if (suggestedJobCardExpectedDelivery && !hasManuallySetExpectedDelivery) {
+      setBookingWhen(datetimeLocalValue(suggestedJobCardExpectedDelivery));
+    }
+  }, [isJobCard, suggestedJobCardExpectedDelivery, hasManuallySetExpectedDelivery]);
+
+  useEffect(() => {
+    if (selectedHighEndIds.length === 0 && selectedCatalogItems.length === 0) {
+      setHasManuallySetExpectedDelivery(false);
+      setBookingWhen("");
+    }
+  }, [selectedHighEndIds.length, selectedCatalogItems.length]);
+
+  const isExpectedDeliveryTooEarly = useMemo(() => {
+    if (!isJobCard || !suggestedJobCardExpectedDelivery || !bookingWhen) return false;
+    const currentVal = new Date(bookingWhen);
+    currentVal.setSeconds(0, 0);
+    return currentVal.getTime() < suggestedJobCardExpectedDelivery.getTime();
+  }, [isJobCard, suggestedJobCardExpectedDelivery, bookingWhen]);
 
   const computedExpectedDelivery = useMemo(() => {
     if (isWalkIn) {
@@ -1217,14 +1273,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         highEndCompletionMinutesById
       );
     }
+    if (isJobCard) {
+      return bookingWhen ? new Date(bookingWhen) : suggestedJobCardExpectedDelivery;
+    }
     if (hasExpectedDeliveryDateSet(bookingWhen)) return new Date(bookingWhen);
     return null;
-  }, [isWalkIn, bookingWhen, selectedHighEndIds, highEndCompletionMinutesById]);
+  }, [isWalkIn, isJobCard, bookingWhen, suggestedJobCardExpectedDelivery, selectedHighEndIds, highEndCompletionMinutesById]);
 
   const jobCardExpectedDeliveryReady =
-    isJobCard &&
-    hasExpectedDeliveryDateSet(bookingWhen) &&
-    !isDatetimeLocalInPast(bookingWhen);
+    !isJobCard ||
+    selectedHighEndIds.length === 0 ||
+    (hasExpectedDeliveryDateSet(bookingWhen) &&
+      !isDatetimeLocalInPast(bookingWhen) &&
+      !isExpectedDeliveryTooEarly);
 
   const highEndSummaryLines = useMemo(
     () =>
@@ -1331,21 +1392,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       toast.error("Select at least one service, add-on, or high-end program.");
       return;
     }
+    if (isJobCard && selectedHighEndIds.length > 0) {
+      if (!hasExpectedDeliveryDateSet(bookingWhen)) {
+        toast.error("Please select an expected delivery date for the high-end service.");
+        return;
+      }
+      if (isDatetimeLocalInPast(bookingWhen)) {
+        toast.error("Expected delivery date must be in the future.");
+        return;
+      }
+    }
     if (isWalkIn && isDatetimeLocalInPast(bookingWhen)) {
       toast.error("Booking cannot be in the past", {
         description: "Choose today with a future time, or a later date.",
-      });
-      return;
-    }
-    if (isJobCard && !hasExpectedDeliveryDateSet(bookingWhen)) {
-      toast.error("Select an expected delivery date", {
-        description: "Set the date on Notes & job details before creating the job card.",
-      });
-      return;
-    }
-    if (isJobCard && isDatetimeLocalInPast(bookingWhen)) {
-      toast.error("Expected delivery cannot be in the past", {
-        description: "Set a future date and time on Notes & job details.",
       });
       return;
     }
@@ -1599,7 +1658,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         .join("\n") || undefined;
 
     const expectedDeliveryIso = isJobCard
-      ? new Date(bookingWhen).toISOString()
+      ? (bookingWhen
+          ? new Date(bookingWhen)
+          : expectedDeliveryFromHighEndCompletion(
+              new Date(),
+              selectedHighEndIds,
+              highEndCompletionMinutesById
+            )
+        ).toISOString()
       : expectedDeliveryFromHighEndCompletion(
           new Date(bookingWhen),
           selectedHighEndIds,
@@ -1748,7 +1814,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     };
     addJobCard(newJobCard);
 
-    if (pickupRequired) {
+    if (pickupRequired && !isJobCard) {
       queuePickupDropFromBooking({
         job: newJobCard,
         customerAddress,
@@ -1965,7 +2031,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (isJobCard) s.push("partsSelection");
     if (highEndServices.length > 0) s.push("highEndServices");
     s.push("addons");
-    s.push("pickupDrop");
+    if (!isJobCard) {
+      s.push("pickupDrop");
+    }
     s.push("mechanic");
     if (isJobCard) {
       s.push("notesAndJobDetails", "jobSummary");
@@ -2024,7 +2092,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const wizardTrackerSteps = wizardTrackerLabels(isJobCard);
 
   const notesStepNextBlocked =
-    isJobCard && jobWizardStepId === "notesAndJobDetails" && !jobCardExpectedDeliveryReady;
+    isJobCard &&
+    ((jobWizardStepId === "highEndServices" && selectedHighEndIds.length > 0) ||
+      jobWizardStepId === "notesAndJobDetails") &&
+    !jobCardExpectedDeliveryReady;
 
   const bookingWizardIncomplete =
     useBookingWizard && jobWizardStepCount > 0 && jobCreateStep < jobWizardStepCount - 1;
@@ -2126,6 +2197,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         }
       }
     }
+    if (jobWizardStepId === "highEndServices" && isJobCard && selectedHighEndIds.length > 0) {
+      if (!hasExpectedDeliveryDateSet(bookingWhen)) {
+        toast.error("Please select an expected delivery date for the high-end service to continue.");
+        return;
+      }
+      if (isDatetimeLocalInPast(bookingWhen)) {
+        toast.error("Expected delivery date must be in the future.");
+        return;
+      }
+    }
     if (jobWizardStepId === "pickupDrop" && pickupRequired) {
       if (!pickupDriverId) {
         toast.error("Assign a pickup driver to continue.");
@@ -2133,16 +2214,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
       if (!customerAddress.trim()) {
         toast.error("Enter the pickup address to continue.");
-        return;
-      }
-    }
-    if (jobWizardStepId === "notesAndJobDetails" && isJobCard) {
-      if (!hasExpectedDeliveryDateSet(bookingWhen)) {
-        toast.error("Select an expected delivery date to continue.");
-        return;
-      }
-      if (isDatetimeLocalInPast(bookingWhen)) {
-        toast.error("Expected delivery must be in the future.");
         return;
       }
     }
@@ -2283,25 +2354,27 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           <p>{selectedMechanicName}</p>
         </div>
 
-        <div className="rounded-lg border border-border/80 bg-card p-3">
-          <div className="mb-1.5 flex items-start justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pickup &amp; Drop</p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => goToJobWizardStep("pickupDrop")}
-            >
-              <Pencil className="mr-1 h-3 w-3" />
-              Edit
-            </Button>
+        {!isJobCard && (
+          <div className="rounded-lg border border-border/80 bg-card p-3">
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pickup &amp; Drop</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => goToJobWizardStep("pickupDrop")}
+              >
+                <Pencil className="mr-1 h-3 w-3" />
+                Edit
+              </Button>
+            </div>
+            <p>{pickupRequired ? "Pickup requested" : "Not required"}</p>
+            {pickupRequired && customerAddress.trim() && (
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{customerAddress.trim()}</p>
+            )}
           </div>
-          <p>{pickupRequired ? "Pickup requested" : "Not required"}</p>
-          {pickupRequired && customerAddress.trim() && (
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{customerAddress.trim()}</p>
-          )}
-        </div>
+        )}
 
         <div className="rounded-lg border border-border/80 bg-card p-3">
           <div className="mb-1.5 flex items-start justify-between gap-2">
@@ -2369,6 +2442,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <dt className="text-muted-foreground">Phone</dt>
             <dd className="text-right">{customerPhone.length >= 10 ? customerPhone : "N/A"}</dd>
           </div>
+          {existingCustomerId && (
+            <>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Total Visits</dt>
+                <dd className="text-right tabular-nums">{customerVisits}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Reward Points</dt>
+                <dd className="text-right tabular-nums text-violet-600 dark:text-violet-400 font-medium">
+                  {customerRewardPoints}
+                </dd>
+              </div>
+            </>
+          )}
           <div className="flex justify-between gap-2">
             <dt className="text-muted-foreground">Vehicle</dt>
             <dd className="text-right truncate max-w-[55%]">
@@ -2431,10 +2518,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </dt>
             <dd className="text-right text-xs">
               {computedExpectedDelivery
-                ? computedExpectedDelivery.toLocaleString(undefined, {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })
+                ? isJobCard
+                  ? formatExpectedDeliveryDate(computedExpectedDelivery)
+                  : computedExpectedDelivery.toLocaleString(undefined, {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })
                 : "Not set"}
             </dd>
           </div>
@@ -2548,26 +2637,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           ) : null}
         </div>
       </CardContent>
-      <CardFooter
-        className={cn(
-          "hidden shrink-0 border-t border-border px-4 py-3 sm:px-6 md:flex md:flex-col md:gap-2",
-          compactJobCardDesktop && "px-3 py-1.5 md:gap-1.5"
-        )}
-      >
-        <Button
-          type="submit"
-          className={cn("w-full", compactJobCardDesktop && "h-8.5 text-xs")}
-          disabled={bookingWizardIncomplete}
-          title={
-            bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
-          }
-        >
-          {isJobCard ? "Create job card" : "Create booking"}
-        </Button>
-        <Button type="button" variant="outline" className={cn("w-full", compactJobCardDesktop && "h-8.5 text-xs")} asChild>
-          <Link href={isJobCard ? "/job-cards" : "/bookings"}>Cancel</Link>
-        </Button>
-      </CardFooter>
+
     </Card>
   );
 
@@ -4209,9 +4279,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                               {(() => {
                                 const mins = highEndCompletionMinutesById[hes.id];
                                 const completionSelectValue =
-                                  mins != null && mins > 0
-                                    ? highEndCompletionSelectValue(mins)
-                                    : "__unset__";
+                                  mins === 0
+                                    ? "__custom__"
+                                    : mins != null && mins > 0
+                                      ? highEndCompletionSelectValue(mins)
+                                      : "__unset__";
                                 return (
                                   <>
                                     <Select
@@ -4235,7 +4307,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                             );
                                           setHighEndCompletionMinutesById((p) => ({
                                             ...p,
-                                            [hes.id]: nonPreset ? Math.round(cur!) : 480,
+                                            [hes.id]: nonPreset ? Math.round(cur!) : 0,
                                           }));
                                           return;
                                         }
@@ -4288,7 +4360,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                             if (raw === "") {
                                               setHighEndCompletionMinutesById((p) => {
                                                 const next = { ...p };
-                                                delete next[hes.id];
+                                                next[hes.id] = 0;
                                                 return next;
                                               });
                                               return;
@@ -4308,7 +4380,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                 );
                               })()}
                               <p className="text-[10px] text-muted-foreground leading-snug">
-                                Plan turnaround time — pick the delivery date on Notes &amp; job details.
+                                Plan turnaround time.
                               </p>
                             </div>
                           </div>
@@ -4323,6 +4395,55 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     {selectedHighEndIds.length} high-end service{selectedHighEndIds.length !== 1 ? "s" : ""}{" "}
                     selected — reminders are created when the job is delivered.
                   </p>
+                )}
+                {isJobCard && selectedHighEndIds.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border space-y-3 max-w-md">
+                    <Label className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                      Expected delivery <span className="text-destructive">*</span>
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      When should the vehicle be ready for the customer? This is mandatory for high-end services.
+                    </p>
+                    {suggestedJobCardExpectedDelivery && (
+                      <p className="text-xs text-muted-foreground/90">
+                        Suggested:{" "}
+                        <span className="font-semibold text-foreground">
+                          {formatExpectedDeliveryDate(suggestedJobCardExpectedDelivery)}
+                        </span>
+                      </p>
+                    )}
+                    <div className="relative">
+                      <Input
+                        id="expected-delivery-when-highend"
+                        type="datetime-local"
+                        min={localDatetimeLocalInputMin()}
+                        value={bookingWhen}
+                        onChange={(e) => {
+                          setHasManuallySetExpectedDelivery(true);
+                          const v = e.target.value;
+                          if (!v) {
+                            setBookingWhen("");
+                            return;
+                          }
+                          if (!isDatetimeLocalInPast(v)) {
+                            setBookingWhen(v);
+                          } else {
+                            setBookingWhen(localDatetimeLocalInputMin());
+                          }
+                        }}
+                        required
+                        className="h-10 pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:bottom-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                      />
+                      <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                    {isExpectedDeliveryTooEarly && suggestedJobCardExpectedDelivery && (
+                      <p className="text-xs text-destructive font-semibold mt-1">
+                        Expected delivery cannot be earlier than the planned completion time (
+                        {formatExpectedDeliveryDate(suggestedJobCardExpectedDelivery)}).
+                      </p>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -4646,119 +4767,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 <CardTitle className="text-lg">Job details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="min-w-0 max-w-md space-y-2">
-                  <Label className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                    Expected delivery <span className="text-destructive">*</span>
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    When should the vehicle be ready for the customer? Select a date to continue.
-                  </p>
-                  {suggestedJobCardExpectedDelivery &&
-                  maxHighEndCompletionMinutes(selectedHighEndIds, highEndCompletionMinutesById) > 0 ? (
-                    <p className="text-xs text-muted-foreground/90">
-                      Suggested from planned completion:{" "}
-                      <span className="font-medium text-foreground">
-                        {suggestedJobCardExpectedDelivery.toLocaleString(undefined, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    </p>
-                  ) : null}
-                  <div className="min-w-0 space-y-3 md:hidden">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="expected-delivery-date" className="text-xs text-muted-foreground">
-                        Date
-                      </Label>
-                      <Input
-                        id="expected-delivery-date"
-                        type="date"
-                        min={bookingScheduleDateMin}
-                        value={splitDatetimeLocal(bookingWhen).date}
-                        onChange={(e) => {
-                          const picked = e.target.value;
-                          if (!picked) {
-                            setBookingWhen("");
-                            return;
-                          }
-                          const prev = splitDatetimeLocal(bookingWhen);
-                          const time =
-                            hasExpectedDeliveryDateSet(bookingWhen) && bookingWhen.includes("T")
-                              ? prev.time
-                              : picked === bookingScheduleDateMin
-                                ? localTimeInputMinNow()
-                                : "18:00";
-                          let next = joinDatetimeLocal(picked, time);
-                          if (
-                            picked === bookingScheduleDateMin &&
-                            next &&
-                            isDatetimeLocalInPast(next)
-                          ) {
-                            next = joinDatetimeLocal(picked, localTimeInputMinNow());
-                          }
-                          setBookingWhen(next);
-                        }}
-                        required
-                        className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="expected-delivery-time" className="text-xs text-muted-foreground">
-                        Time
-                      </Label>
-                      <Input
-                        id="expected-delivery-time"
-                        type="time"
-                        min={
-                          splitDatetimeLocal(bookingWhen).date === bookingScheduleDateMin
-                            ? localTimeInputMinNow()
-                            : undefined
-                        }
-                        value={
-                          hasExpectedDeliveryDateSet(bookingWhen)
-                            ? splitDatetimeLocal(bookingWhen).time
-                            : ""
-                        }
-                        disabled={!hasExpectedDeliveryDateSet(bookingWhen)}
-                        onChange={(e) => {
-                          const { date } = splitDatetimeLocal(bookingWhen);
-                          if (!date) return;
-                          let next = joinDatetimeLocal(date, e.target.value);
-                          if (date === bookingScheduleDateMin && next && isDatetimeLocalInPast(next)) {
-                            next = joinDatetimeLocal(date, localTimeInputMinNow());
-                          }
-                          setBookingWhen(next);
-                        }}
-                        required
-                        className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
-                      />
-                    </div>
-                  </div>
-                  <div className="relative hidden md:block">
-                    <Input
-                      id="expected-delivery-when"
-                      type="datetime-local"
-                      min={localDatetimeLocalInputMin()}
-                      value={bookingWhen}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (!v) {
-                          setBookingWhen("");
-                          return;
-                        }
-                        if (!isDatetimeLocalInPast(v)) {
-                          setBookingWhen(v);
-                        } else {
-                          setBookingWhen(localDatetimeLocalInputMin());
-                        }
-                      }}
-                      required
-                      className="h-10 pr-10 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:bottom-0 [&::-webkit-calendar-picker-indicator]:top-0 [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
-                    />
-                    <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="reportedIssues">Reported issues</Label>
                   <Textarea
@@ -4821,9 +4829,24 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 Next
               </Button>
             ) : (
-              <span className="text-xs text-muted-foreground text-right max-w-[14rem]">
-                Review the summary, select branch, then create the {isJobCard ? "job card" : "booking"}.
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground text-right max-w-[14rem] hidden lg:block mr-2">
+                  Review the summary, select branch, then create the {isJobCard ? "job card" : "booking"}.
+                </span>
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <Link href={isJobCard ? "/job-cards" : "/bookings"}>Cancel</Link>
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={bookingWizardIncomplete}
+                  title={
+                    bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
+                  }
+                >
+                  {isJobCard ? "Create job card" : "Create booking"}
+                </Button>
+              </div>
             )}
             </div>
           </div>

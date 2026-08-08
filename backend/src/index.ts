@@ -22,6 +22,7 @@ import { attendanceRouter } from "./routes/attendance.routes.js";
 import { partyRouter } from "./routes/party.routes.js";
 
 import { prisma } from "./lib/prisma.js";
+import { getCollectionItem } from "./services/collection.service.js";
 
 const app = express();
 
@@ -58,6 +59,47 @@ app.get("/health/db", async (_req, res, next) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ ok: true, database: "up" });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/public/invoices/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const invoice = await getCollectionItem("invoices", id) as any;
+    if (!invoice) {
+      res.status(404).json({ data: null, error: { message: "Invoice not found" } });
+      return;
+    }
+    const jobCard = await getCollectionItem("jobCards", invoice.jobCardId);
+    
+    const allRows = await prisma.appJsonRow.findMany({
+      where: { collection: "invoices" }
+    });
+    const customerInvoices = allRows
+      .map(r => r.payload as any)
+      .filter(inv => inv.customerId === invoice.customerId);
+
+    const branches = await prisma.appJsonRow.findMany({
+      where: { collection: "branches" }
+    }).then(rows => rows.map(r => r.payload));
+
+    const settingsRow = await prisma.appJsonRow.findUnique({
+      where: { collection_entityId: { collection: "settingsMeta", entityId: "SINGLETON" } }
+    });
+    const businessSettings = settingsRow?.payload ?? null;
+
+    res.json({
+      data: {
+        invoice,
+        jobCard,
+        customerInvoices,
+        branches,
+        businessSettings,
+      },
+      error: null
+    });
   } catch (e) {
     next(e);
   }

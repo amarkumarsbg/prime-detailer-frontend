@@ -793,11 +793,48 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
                 <ChevronDown className="ml-1 h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="start">
               <DropdownMenuItem
-                onClick={() => toast.message("Share", { description: "Coming soon." })}
+                onClick={() => {
+                  const customerName = invoice.customerName;
+                  const businessNameVal = businessName || "Prime Detailers";
+                  const invoiceNumber = invoice.invoiceNumber;
+                  const totalAmount = invoice.grandTotal;
+                  const vehicleName = jobCard?.vehicleMakeModel ?? "Vehicle";
+                  const vehicleNumber = invoice.vehicleRegNumber || jobCard?.vehicleRegNumber || "";
+                  const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+                  const publicInvoiceUrl = `${appBaseUrl}/public-invoice/${invoice.id}`;
+
+                  const msg = `Hi ${customerName},
+
+Please find your invoice from ${businessNameVal}.
+
+Invoice: ${invoiceNumber}
+
+Amount: ₹${totalAmount}
+
+Vehicle: ${vehicleName} - ${vehicleNumber}
+
+You can view the invoice here: ${publicInvoiceUrl}
+
+Thank you,
+${businessNameVal}`;
+
+                  openWhatsAppComposer(invoice.customerPhone, msg);
+                }}
               >
-                Copy link
+                <svg
+                  className="mr-0.5 h-4 w-4 shrink-0"
+                  viewBox="0 0 240 241.19"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    fill="#25d366"
+                    fillRule="evenodd"
+                    d="M205,35.05A118.61,118.61,0,0,0,120.46,0C54.6,0,1,53.61,1,119.51a119.5,119.5,0,0,0,16,59.74L0,241.19l63.36-16.63a119.43,119.43,0,0,0,57.08,14.57h0A119.54,119.54,0,0,0,205,35.07v0ZM120.5,219A99.18,99.18,0,0,1,69.91,205.1l-3.64-2.17-37.6,9.85,10-36.65-2.35-3.76A99.37,99.37,0,0,1,190.79,49.27,99.43,99.43,0,0,1,120.49,219ZM175,144.54c-3-1.51-17.67-8.71-20.39-9.71s-4.72-1.51-6.75,1.51-7.72,9.71-9.46,11.72-3.49,2.27-6.45.76-12.63-4.66-24-14.84A91.1,91.1,0,0,1,91.25,113.3c-1.75-3-.19-4.61,1.33-6.07s3-3.48,4.47-5.23a19.65,19.65,0,0,0,3-5,5.51,5.51,0,0,0-.24-5.23C99,90.27,93,75.57,90.6,69.58s-4.89-5-6.73-5.14-3.73-.09-5.7-.09a11,11,0,0,0-8,3.73C67.48,71.05,59.75,78.3,59.75,93s10.69,28.88,12.19,30.9S93,156.07,123,169c7.12,3.06,12.68,4.9,17,6.32a41.18,41.18,0,0,0,18.8,1.17c5.74-.84,17.66-7.21,20.17-14.18s2.5-13,1.75-14.19-2.69-2.06-5.7-3.59l0,0Z"
+                  />
+                </svg>
+                Whatsapp
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -835,8 +872,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
               <CardContent className="space-y-4 pt-4 text-sm">
                 {/* Flat Discount Input */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="flat-discount" className="flex items-center gap-1.5 font-medium text-foreground">
-                    <Percent className="w-3.5 h-3.5 text-muted-foreground" />
+                  <Label htmlFor="flat-discount" className="font-medium text-foreground">
                     Flat Discount (₹)
                   </Label>
                   <Input
@@ -855,13 +891,13 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
                 {/* Reward Points Input */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="reward-points" className="flex items-center justify-between gap-1.5 font-medium text-foreground">
+                  <Label htmlFor="reward-points" className="flex items-center justify-between gap-2 font-medium text-foreground w-full">
                     <span className="flex items-center gap-1.5">
                       <Coins className="w-3.5 h-3.5 text-muted-foreground" />
                       Redeem Reward Points
                     </span>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (Available: {availablePoints})
+                    <span className="text-[10px] text-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/20 px-2 py-0.5 rounded-full font-bold font-mono border border-indigo-100 dark:border-indigo-900/50 shrink-0 whitespace-nowrap">
+                      Available: {availablePoints}
                     </span>
                   </Label>
                   <Input

@@ -28,7 +28,8 @@ import { useStaffStore } from "@/store/staff-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { cn } from "@/lib/utils";
 import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
-import { Plus } from "lucide-react";
+import { Plus, ChevronsUpDown, Search, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -120,6 +121,23 @@ export default function PickupDropPage() {
     [jobCards, selectedBranchId]
   );
 
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredJobCards = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return scopedJobCards;
+    return scopedJobCards.filter(
+      (jc) =>
+        jc.jobNumber.toLowerCase().includes(q) ||
+        jc.customerName.toLowerCase().includes(q)
+    );
+  }, [scopedJobCards, searchQuery]);
+
+  const selectedJobCard = useMemo(() => {
+    return scopedJobCards.find((jc) => jc.id === bookingId);
+  }, [scopedJobCards, bookingId]);
+
   const scopedRequests = useMemo(
     () => filterByBranchId(requests, (r) => r.branchId, selectedBranchId),
     [requests, selectedBranchId]
@@ -159,6 +177,8 @@ export default function PickupDropPage() {
     setReqType("PICKUP");
     setDriverId("unassigned");
     setNotes("");
+    setSearchQuery("");
+    setPopoverOpen(false);
   };
 
   const handleCreate = () => {
@@ -483,22 +503,67 @@ export default function PickupDropPage() {
                     No job cards in this branch. Switch to <strong className="font-medium text-foreground">New customer</strong> to create a request without a job card.
                   </p>
                 ) : (
-                  <Select value={bookingId} onValueChange={setBookingId}>
-                    <SelectTrigger id="pd-booking" className={selectTriggerClass}>
-                      <SelectValue placeholder="Select a job card…" />
-                    </SelectTrigger>
-                    <SelectContent className={selectContentClass}>
-                      {scopedJobCards.map((jc) => (
-                        <SelectItem
-                          key={jc.id}
-                          value={jc.id}
-                          className="cursor-pointer data-[highlighted]:bg-[#1D61D1] data-[highlighted]:text-white"
-                        >
-                          {jc.jobNumber} · {jc.customerName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="pd-booking"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={popoverOpen}
+                        className={cn(
+                          "w-full justify-between font-normal text-slate-800 dark:text-foreground bg-transparent border-input hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors text-left pl-3 pr-2",
+                          selectTriggerClass
+                        )}
+                      >
+                        {selectedJobCard ? (
+                          <span className="truncate">{selectedJobCard.jobNumber} · {selectedJobCard.customerName}</span>
+                        ) : (
+                          <span className="text-muted-foreground">Select a job card…</span>
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-muted-foreground" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      className="w-[var(--radix-popover-trigger-width)] p-0 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md z-[60]"
+                      align="start"
+                    >
+                      <div className="flex items-center border-b border-slate-100 dark:border-slate-800 px-3 py-2 gap-2">
+                        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                        <input
+                          className="flex h-7 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-slate-400 border-0 p-0 focus:ring-0 text-slate-800 dark:text-slate-100"
+                          placeholder="Search job card or customer…"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="max-h-[220px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+                        {filteredJobCards.length === 0 ? (
+                          <div className="py-6 text-center text-xs text-muted-foreground">No job cards found.</div>
+                        ) : (
+                          filteredJobCards.map((jc) => (
+                            <button
+                              key={jc.id}
+                              type="button"
+                              onClick={() => {
+                                setBookingId(jc.id);
+                                setPopoverOpen(false);
+                                setSearchQuery("");
+                              }}
+                              className={cn(
+                                "w-full text-left px-2.5 py-2 text-xs rounded-md transition-colors cursor-pointer flex items-center justify-between outline-none focus:bg-slate-100 dark:focus:bg-slate-800",
+                                bookingId === jc.id
+                                  ? "bg-indigo-50 text-indigo-600 font-bold dark:bg-indigo-950/40 dark:text-indigo-400"
+                                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                              )}
+                            >
+                              <span className="truncate">{jc.jobNumber} · {jc.customerName}</span>
+                              {bookingId === jc.id && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
             ) : (

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -110,6 +110,20 @@ const APPOINTMENT_VEHICLE_SEGMENTS: { value: VehicleSegment; label: string }[] =
   { value: "LUXURY", label: "Luxury" },
   { value: "BIKE", label: "Bike" },
 ];
+
+function AppointmentFromQueryEffect({ setDialogOpen }: { setDialogOpen: (open: boolean) => void }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get("new") === "true") {
+      setDialogOpen(true);
+      router.replace("/appointments");
+    }
+  }, [searchParams, router, setDialogOpen]);
+
+  return null;
+}
 
 export default function AppointmentsPage() {
   const router = useRouter();
@@ -511,6 +525,9 @@ export default function AppointmentsPage() {
   ).length;
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <Suspense fallback={null}>
+        <AppointmentFromQueryEffect setDialogOpen={setDialogOpen} />
+      </Suspense>
       <PageHeader
         title="Appointments"
         inlineActionsOnMobile
