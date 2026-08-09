@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useCustomerStore } from "@/store/customer-store";
+import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { DataTable } from "@/components/shared/data-table";
@@ -79,6 +80,7 @@ export default function VehiclesPage() {
   const customers = useCustomerStore((s) => s.customers);
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const { getBrandNames, getModels } = useVehicleCatalogStore();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const {
@@ -100,7 +102,15 @@ export default function VehiclesPage() {
   const watchCustomerId = watch("customerId");
   const watchFuelType = watch("fuelType");
   const watchSegment = watch("segment");
+  const watchMake = watch("make");
+  const watchModel = watch("model");
   /* eslint-enable react-hooks/incompatible-library */
+
+  const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
+  const modelOptions = useMemo(
+    () => (watchMake ? getModels(watchMake) : []),
+    [getModels, watchMake]
+  );
 
   const onSubmit = (data: AddVehicleFormData) => {
     const dup = findVehicleByNormalizedReg(vehicleList, data.registrationNumber);
@@ -315,14 +325,60 @@ export default function VehiclesPage() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="make">Make</Label>
-                    <Input id="make" placeholder="Maruti" {...register("make")} />
+                    <Select
+                      value={watchMake || undefined}
+                      onValueChange={(value) => {
+                        setValue("make", value, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                        setValue("model", "", {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                    >
+                      <SelectTrigger id="make" className={cn(errors.make && "border-destructive")}>
+                        <SelectValue placeholder="Select make" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {makeOptions.map((make) => (
+                          <SelectItem key={make} value={make}>
+                            {make}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.make && (
                       <p className="text-xs text-destructive">{errors.make.message}</p>
                     )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="model">Model</Label>
-                    <Input id="model" placeholder="Swift" {...register("model")} />
+                    <Select
+                      value={watchModel || undefined}
+                      onValueChange={(value) => {
+                        setValue("model", value, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                      disabled={!watchMake}
+                    >
+                      <SelectTrigger id="model" className={cn(errors.model && "border-destructive")}>
+                        <SelectValue placeholder={watchMake ? "Select model" : "Select make first"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelOptions.map((model) => (
+                          <SelectItem key={model.name} value={model.name}>
+                            {model.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.model && (
                       <p className="text-xs text-destructive">{errors.model.message}</p>
                     )}
