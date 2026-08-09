@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
-import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { DataTable } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { QuotationStatusBadge } from "@/components/shared/status-badge";
@@ -66,6 +65,10 @@ import {
   isValidIndianVehicleRegistration,
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
+import {
+  computeCustomerLookupMatches,
+  queryLooksLikeVehicleReg,
+} from "@/lib/customer-vehicle-lookup";
 import type {
   JobCard,
   Quotation,
@@ -175,7 +178,8 @@ export default function QuotationsPage() {
   const [convertingQuotationId, setConvertingQuotationId] = useState<string | null>(null);
 
   // New quotation form state
-  const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Array<{ id: string; name: string; phone: string }>>([]);
   const [formCustomerId, setFormCustomerId] = useState<string>("");
   const [formVehicleId, setFormVehicleId] = useState<string>("");
   const [formSegment, setFormSegment] = useState<VehicleSegment>("HATCHBACK");
@@ -214,10 +218,17 @@ export default function QuotationsPage() {
     return vehicles.find((v) => v.id === formVehicleId);
   }, [formVehicleId, vehicles]);
 
+  const selectedExistingCustomer = useMemo(
+    () => customers.find((c) => c.id === formCustomerId) ?? null,
+    [customers, formCustomerId]
+  );
+
+  const hasExistingCustomer = Boolean(selectedExistingCustomer);
+
   const effectiveSegment = useMemo((): VehicleSegment => {
-    if (customerMode === "existing" && selectedVehicle) return selectedVehicle.segment;
+    if (hasExistingCustomer && selectedVehicle) return selectedVehicle.segment;
     return formSegment;
-  }, [customerMode, selectedVehicle, formSegment]);
+  }, [hasExistingCustomer, selectedVehicle, formSegment]);
 
   const formCalculations = useMemo(() => {
     const segment = effectiveSegment;
@@ -230,9 +241,9 @@ export default function QuotationsPage() {
     return { subtotal, taxAmount, grandTotal };
   }, [formServiceIds, effectiveSegment, catalog]);
 
-  const segmentSelectLocked = customerMode === "existing" && !!selectedVehicle;
+  const segmentSelectLocked = hasExistingCustomer && !!selectedVehicle;
   const canSelectServices =
-    customerMode === "existing" ? !!formVehicleId : true;
+    hasExistingCustomer ? !!formVehicleId : true;
 
   const kpis = useMemo(() => {
     const total = quotationList.length;
@@ -246,8 +257,56 @@ export default function QuotationsPage() {
     return { total, pendingApproval, approved, converted };
   }, [quotationList]);
 
+  useEffect(() => {
+    const trimmed = lookupQuery.trim();
+    if (!trimmed) {
+      setLookupPanelCustomers([]);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setLookupPanelCustomers(computeCustomerLookupMatches(trimmed, customers, vehicles));
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [lookupQuery, customers, vehicles]);
+
+  useEffect(() => {
+    if (hasExistingCustomer) return;
+    const q = lookupQuery.trim();
+    if (!q) return;
+    const digits = q.replace(/\D/g, "");
+    if (queryLooksLikeVehicleReg(q)) {
+      const reg = sanitizeVehicleRegistrationInput(q);
+      setNewVehicleReg((prev) => (prev === reg ? prev : reg));
+      return;
+    }
+    if (digits.length >= 10) {
+      const p10 = digits.slice(-10);
+      setNewCustomerPhone((prev) => (prev === p10 ? prev : p10));
+    }
+  }, [lookupQuery, hasExistingCustomer]);
+
+  const applySelectedCustomer = (customerId: string) => {
+    const c = customers.find((row) => row.id === customerId);
+    if (!c) return;
+    setFormCustomerId(c.id);
+    setLookupQuery("");
+    const owned = vehicles
+      .filter((v) => v.customerId === c.id)
+      .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+    setFormVehicleId(owned[0]?.id ?? "");
+    setLookupPanelCustomers([]);
+    setNewCustomerNameError("");
+    setNewCustomerPhoneError("");
+  };
+
+  const clearSelectedCustomer = () => {
+    setFormCustomerId("");
+    setFormVehicleId("");
+  };
+
   const resetForm = () => {
-    setCustomerMode("existing");
+    setLookupQuery("");
+    setLookupPanelCustomers([]);
     setFormCustomerId("");
     setFormVehicleId("");
     setFormSegment("HATCHBACK");
@@ -361,7 +420,7 @@ export default function QuotationsPage() {
     let vehicleMakeModel: string;
     let vehicleSegment: VehicleSegment;
 
-    if (customerMode === "existing") {
+    if (hasExistingCustomer) {
       if (!formCustomerId || !formVehicleId) {
         toast.error("Please select customer and vehicle");
         return;
@@ -971,51 +1030,48 @@ export default function QuotationsPage() {
             <DialogTitle>New Quotation</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleNewQuotationSubmit} className="space-y-4">
-            <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/30 p-1">
-              <Button
-                type="button"
-                variant={customerMode === "existing" ? "default" : "ghost"}
-                size="sm"
-                className="flex-1 min-w-[140px]"
-                onClick={() => {
-                  setCustomerMode("existing");
-                  setFormCustomerId("");
-                  setFormVehicleId("");
-                  setNewCustomerNameError("");
-                  setNewCustomerPhoneError("");
+            <div className="space-y-2">
+              <Label htmlFor="quot-customer-lookup">Search Mobile or Vehicle Number</Label>
+              <Input
+                id="quot-customer-lookup"
+                value={lookupQuery}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setLookupQuery(next);
+                  if (!next.trim()) clearSelectedCustomer();
                 }}
-              >
-                Existing customer
-              </Button>
-              <Button
-                type="button"
-                variant={customerMode === "new" ? "default" : "ghost"}
-                size="sm"
-                className="flex-1 min-w-[140px]"
-                onClick={() => {
-                  setCustomerMode("new");
-                  setFormCustomerId("");
-                  setFormVehicleId("");
-                  setNewCustomerNameError("");
-                  setNewCustomerPhoneError("");
-                }}
-              >
-                New prospect
-              </Button>
+                placeholder="Type mobile or vehicle number"
+              />
+              {lookupQuery.trim() ? (
+                <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto">
+                  {lookupPanelCustomers.length > 0 ? (
+                    <div className="space-y-1">
+                      {lookupPanelCustomers.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
+                          onClick={() => applySelectedCustomer(c.id)}
+                        >
+                          <p className="text-sm font-medium text-foreground">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">{c.phone}</p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground px-1">
+                      No customer found. Continue below to create a new prospect.
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
 
-            {customerMode === "existing" && (
+            {hasExistingCustomer && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <CustomerSearchSelect
-                    customers={customers}
-                    selectedCustomerId={formCustomerId}
-                    onSelectCustomer={(v) => {
-                      setFormCustomerId(v);
-                      setFormVehicleId("");
-                    }}
-                  />
+                  <Input value={selectedExistingCustomer?.name ?? ""} disabled />
                 </div>
                 <div className="space-y-2">
                   <Label>Vehicle</Label>
@@ -1042,10 +1098,14 @@ export default function QuotationsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Phone</Label>
+                  <Input value={selectedExistingCustomer?.phone ?? ""} disabled />
+                </div>
               </div>
             )}
 
-            {customerMode === "new" && (
+            {!hasExistingCustomer && (
               <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
                 <p className="text-sm font-medium">Prospect &amp; vehicle</p>
                 <p className="text-xs text-muted-foreground -mt-2">
@@ -1232,7 +1292,7 @@ export default function QuotationsPage() {
               <p className="text-xs text-muted-foreground">
                 {segmentSelectLocked
                   ? "Locked to the selected vehicle’s segment."
-                  : customerMode === "existing" && !formVehicleId
+                  : hasExistingCustomer && !formVehicleId
                   ? "Pick a segment for pricing until you select a vehicle."
                   : "Used for segment-based service prices."}
               </p>

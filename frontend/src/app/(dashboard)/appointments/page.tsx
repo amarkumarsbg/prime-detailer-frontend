@@ -15,7 +15,6 @@ import { useBranchStore } from "@/store/branch-store";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedAppointments } from "@/hooks/use-scoped-data";
 import { PageHeader } from "@/components/shared/page-header";
-import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { KPICard } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +65,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
-import type { Appointment, AppointmentStatus, Vehicle, VehicleSegment } from "@/types";
+import type { Appointment, AppointmentStatus, Customer, Vehicle, VehicleSegment } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
@@ -93,7 +92,12 @@ import {
   findVehicleByNormalizedReg,
   INDIAN_VEHICLE_REG_HINT,
   isValidIndianVehicleRegistration,
+  sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
+import {
+  computeCustomerLookupMatches,
+  queryLooksLikeVehicleReg,
+} from "@/lib/customer-vehicle-lookup";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -164,7 +168,8 @@ export default function AppointmentsPage() {
   useReservationReminders();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[]>([]);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
@@ -211,6 +216,53 @@ export default function AppointmentsPage() {
     () => customers.find((c) => c.id === formCustomerId) ?? null,
     [customers, formCustomerId]
   );
+
+  const hasExistingCustomer = Boolean(selectedExistingCustomer);
+
+  useEffect(() => {
+    const trimmed = lookupQuery.trim();
+    if (!trimmed) {
+      setLookupPanelCustomers([]);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setLookupPanelCustomers(computeCustomerLookupMatches(trimmed, customers, vehicles));
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [lookupQuery, customers, vehicles]);
+
+  useEffect(() => {
+    if (hasExistingCustomer) return;
+    const q = lookupQuery.trim();
+    if (!q) return;
+    const digits = q.replace(/\D/g, "");
+    if (queryLooksLikeVehicleReg(q)) {
+      const reg = sanitizeVehicleRegistrationInput(q);
+      setNewVehicleReg((prev) => (prev === reg ? prev : reg));
+      return;
+    }
+    if (digits.length >= 10) {
+      const p10 = digits.slice(-10);
+      setNewCustomerPhone((prev) => (prev === p10 ? prev : p10));
+    }
+  }, [lookupQuery, hasExistingCustomer]);
+
+  const applySelectedCustomer = (customerId: string) => {
+    const c = customers.find((row) => row.id === customerId);
+    if (!c) return;
+    setFormCustomerId(c.id);
+    setLookupQuery("");
+    const owned = vehicles
+      .filter((v) => v.customerId === c.id)
+      .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+    setFormVehicleId(owned[0]?.id ?? "");
+    setLookupPanelCustomers([]);
+  };
+
+  const clearSelectedCustomer = () => {
+    setFormCustomerId("");
+    setFormVehicleId("");
+  };
 
   const handleExistingCustomerVehicleSelection = (value: string) => {
     if (value === "__add_new_vehicle__") {
@@ -285,7 +337,8 @@ export default function AppointmentsPage() {
   };
 
   const resetAppointmentForm = () => {
-    setCustomerMode("existing");
+    setLookupQuery("");
+    setLookupPanelCustomers([]);
     setNewCustomerName("");
     setNewCustomerPhone("");
     setNewCustomerEmail("");
@@ -353,7 +406,7 @@ export default function AppointmentsPage() {
     let vehicleMakeModel: string;
     let customerFirstName: string | undefined;
 
-    if (customerMode === "existing") {
+    if (hasExistingCustomer) {
       const customer = customers.find((c) => c.id === formCustomerId);
       const vehicle = vehicles.find((v) => v.id === formVehicleId);
       if (!customer || !vehicle) {
@@ -654,40 +707,52 @@ export default function AppointmentsPage() {
               </DialogHeader>
               <form onSubmit={handleNewAppointmentSubmit} className="space-y-4 mt-2">
                 <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Customer</Label>
-                  <div className="flex rounded-lg border border-input bg-muted/30 p-1 gap-1">
-                    <Button
-                      type="button"
-                      variant={customerMode === "existing" ? "default" : "ghost"}
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => setCustomerMode("existing")}
-                    >
-                      Existing customer
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={customerMode === "new" ? "default" : "ghost"}
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => setCustomerMode("new")}
-                    >
-                      New customer
-                    </Button>
-                  </div>
+                  <Label htmlFor="apt-customer-lookup" className="text-muted-foreground">
+                    Search Mobile or Vehicle Number
+                  </Label>
+                  <Input
+                    id="apt-customer-lookup"
+                    value={lookupQuery}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setLookupQuery(next);
+                      if (!next.trim()) clearSelectedCustomer();
+                    }}
+                    placeholder="Type mobile or vehicle number"
+                  />
+                  {lookupQuery.trim() ? (
+                    <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto">
+                      {lookupPanelCustomers.length > 0 ? (
+                        <div className="space-y-1">
+                          {lookupPanelCustomers.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
+                              onClick={() => applySelectedCustomer(c.id)}
+                            >
+                              <p className="text-sm font-medium text-foreground">{c.name}</p>
+                              <p className="text-xs text-muted-foreground">{c.phone}</p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground px-1">
+                          No customer found. Continue below to create a new customer.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
-                {customerMode === "existing" ? (
+                {hasExistingCustomer ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="apt-customer">Customer</Label>
-                      <CustomerSearchSelect
-                        customers={customers}
-                        selectedCustomerId={formCustomerId}
-                        onSelectCustomer={(v) => {
-                          setFormCustomerId(v);
-                          setFormVehicleId("");
-                        }}
+                      <Input
+                        id="apt-customer"
+                        value={selectedExistingCustomer?.name ?? ""}
+                        disabled
                       />
                     </div>
                     <div className="space-y-2">
@@ -729,6 +794,14 @@ export default function AppointmentsPage() {
                           No vehicles yet for this customer. Click + Add New Vehicle.
                         </p>
                       ) : null}
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="apt-customer-phone">Phone</Label>
+                      <Input
+                        id="apt-customer-phone"
+                        value={selectedExistingCustomer?.phone ?? ""}
+                        disabled
+                      />
                     </div>
                   </div>
                 ) : (
