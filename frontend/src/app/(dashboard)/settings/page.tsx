@@ -95,6 +95,7 @@ export default function SettingsPage() {
   const [businessPhone, setBusinessPhone] = useState(settings.businessPhone);
   const [businessEmail, setBusinessEmail] = useState(settings.businessEmail);
   const [businessAddress, setBusinessAddress] = useState(settings.businessAddress);
+  const [gstRegistrationStatus, setGstRegistrationStatus] = useState(settings.gstRegistrationStatus);
   const [gstin, setGstin] = useState(settings.gstin);
   const [bankName, setBankName] = useState(settings.bankName);
   const [bankBranch, setBankBranch] = useState(settings.bankBranch);
@@ -170,6 +171,7 @@ export default function SettingsPage() {
   const handleSave = (section: string) => {
     if (section === "Business profile") {
       settings.setBusinessProfile({
+        gstRegistrationStatus,
         businessName,
         businessPhone,
         businessEmail,
@@ -182,12 +184,22 @@ export default function SettingsPage() {
         bankUpi,
       });
     }
+
+    if (section === "Tax & Billing settings") {
+      settings.setBusinessProfile({
+        gstRegistrationStatus,
+        gstin,
+      });
+    }
+
     toast.success(`${section} saved successfully`);
   };
 
   const handleTaxRateChange = (id: string, rate: string) => {
     setTaxRates((prev) => prev.map((t) => (t.id === id ? { ...t, rate } : t)));
   };
+
+  const isGstRegistered = gstRegistrationStatus === "REGISTERED";
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -237,8 +249,26 @@ export default function SettingsPage() {
                   <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} />
                 </div>
                 <div className="space-y-2">
+                  <Label>GST Registration</Label>
+                  <Select value={gstRegistrationStatus} onValueChange={(value) => setGstRegistrationStatus(value as "REGISTERED" | "NOT_REGISTERED")}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="REGISTERED">GST Registered</SelectItem>
+                      <SelectItem value="NOT_REGISTERED">GST Not Registered</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />GSTIN</Label>
-                  <Input value={gstin} onChange={(e) => setGstin(e.target.value)} className="font-mono" />
+                  <Input
+                    value={gstin}
+                    onChange={(e) => setGstin(e.target.value)}
+                    className="font-mono"
+                    disabled={gstRegistrationStatus === "NOT_REGISTERED"}
+                    placeholder={gstRegistrationStatus === "NOT_REGISTERED" ? "Not required for non-GST business" : undefined}
+                  />
                 </div>
                 <div className="border-t border-border pt-4 mt-4 space-y-4">
                   <h4 className="text-sm font-semibold text-muted-foreground">Bank & UPI Details (For Payment QR)</h4>
@@ -288,9 +318,37 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-5 max-w-xl">
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-semibold">GST Registration</p>
+                      <p className="text-xs text-muted-foreground">Choose whether invoices should be issued as tax invoices or plain invoices.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Registration Status</Label>
+                    <Select value={gstRegistrationStatus} onValueChange={(value) => setGstRegistrationStatus(value as "REGISTERED" | "NOT_REGISTERED")}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="REGISTERED">GST Registered</SelectItem>
+                        <SelectItem value="NOT_REGISTERED">GST Not Registered</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Separator />
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />Default Tax Rate (%)</Label>
-                  <Input type="number" value={defaultTaxRate} onChange={(e) => setDefaultTaxRate(e.target.value)} className="max-w-32" />
+                  <Input
+                    type="number"
+                    value={defaultTaxRate}
+                    onChange={(e) => setDefaultTaxRate(e.target.value)}
+                    className={cn("max-w-32", !isGstRegistered && "opacity-60")}
+                    disabled={!isGstRegistered}
+                  />
                 </div>
                 <Separator />
                 <div className="space-y-3">
@@ -303,7 +361,8 @@ export default function SettingsPage() {
                           type="number"
                           value={t.rate}
                           onChange={(e) => handleTaxRateChange(t.id, e.target.value)}
-                          className="w-20 h-9"
+                          className={cn("w-20 h-9", !isGstRegistered && "opacity-60")}
+                          disabled={!isGstRegistered}
                         />
                         <span className="text-sm text-muted-foreground">%</span>
                       </div>
@@ -311,7 +370,7 @@ export default function SettingsPage() {
                   ))}
                 </div>
                 <Separator />
-                <Button onClick={() => handleSave("Tax configuration")}>
+                <Button onClick={() => handleSave("Tax & Billing settings")}>
                   <Save className="w-4 h-4 mr-2" />Save Changes
                 </Button>
               </div>

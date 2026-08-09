@@ -13,8 +13,14 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useMembershipStore } from "@/store/membership-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useSettingsStore } from "@/store/settings-store";
 
 const TAX_RATE = 0.18;
+
+function currentInvoiceTaxRate(): number {
+  const gstStatus = useSettingsStore.getState().gstRegistrationStatus;
+  return gstStatus === "NOT_REGISTERED" ? 0 : TAX_RATE;
+}
 
 function highEndSubtotalExclGst(job: JobCard): number {
   const hesCatalog = useHighEndServiceStore.getState().services;
@@ -144,7 +150,8 @@ export function buildInvoiceFromJobCard(
   const lineItems: InvoiceLineItem[] = [...catalogLines, ...programLines, ...partLines];
 
   const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
-  const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
+  const effectiveTaxRate = currentInvoiceTaxRate();
+  const taxAmount = Math.round(subtotal * effectiveTaxRate * 100) / 100;
   const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
 
   const createdAt = new Date().toISOString();
@@ -192,7 +199,7 @@ export function buildInvoiceFromJobCard(
     vehicleRegNumber: job.vehicleRegNumber,
     lineItems,
     subtotal,
-    taxRate: TAX_RATE,
+    taxRate: effectiveTaxRate,
     taxAmount,
     discountAmount: 0,
     rewardDiscount: 0,

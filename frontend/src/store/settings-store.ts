@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { putSingletonDocument } from "@/lib/collection-sync";
 
 export interface SerializableAppSettings {
+  gstRegistrationStatus: "REGISTERED" | "NOT_REGISTERED";
   businessName: string;
   businessTagline: string;
   businessPhone: string;
@@ -24,6 +25,7 @@ export interface SerializableAppSettings {
 }
 
 export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
+  gstRegistrationStatus: "REGISTERED",
   businessName: "Prime Detailers",
   businessTagline: "Car Wash & Detailing Studio",
   businessPhone: "+91-80-4123-4567",
@@ -45,6 +47,7 @@ export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
 
 function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings {
   return {
+    gstRegistrationStatus: s.gstRegistrationStatus,
     businessName: s.businessName,
     businessTagline: s.businessTagline,
     businessPhone: s.businessPhone,
@@ -86,6 +89,7 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
     }
   };
   assignStr(
+    "gstRegistrationStatus",
     "businessName",
     "businessTagline",
     "businessPhone",
@@ -101,6 +105,9 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
     "bankIfsc",
     "bankUpi"
   );
+  if (o.gstRegistrationStatus === "REGISTERED" || o.gstRegistrationStatus === "NOT_REGISTERED") {
+    next.gstRegistrationStatus = o.gstRegistrationStatus;
+  }
   const rr = num("referralRewardAmount");
   if (rr !== undefined) next.referralRewardAmount = rr;
   const nd = num("newCustomerDiscount");
@@ -115,6 +122,7 @@ interface SettingsState extends SerializableAppSettings {
     profile: Partial<
       Pick<
         SerializableAppSettings,
+        | "gstRegistrationStatus"
         | "businessName"
         | "businessTagline"
         | "businessPhone"

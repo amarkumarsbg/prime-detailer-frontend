@@ -169,7 +169,7 @@ export function buildPickupDropWhatsAppMessage(
 
 export function buildInvoiceWhatsAppMessage(
   invoice: Invoice,
-  opts: { businessName: string; remainingBalance: number }
+  opts: { businessName: string; remainingBalance: number; invoiceLabel?: string }
 ): string {
   const first = invoice.customerName.trim().split(/\s+/)[0] ?? invoice.customerName;
   const lineSummary = invoice.lineItems
@@ -184,7 +184,7 @@ export function buildInvoiceWhatsAppMessage(
   return [
     `Hi *${first}*,`,
     ``,
-    `Your tax invoice *${invoice.invoiceNumber}* (Job *${invoice.jobNumber}*) from *${opts.businessName}*.`,
+    `Your ${opts.invoiceLabel ?? "tax invoice"} *${invoice.invoiceNumber}* (Job *${invoice.jobNumber}*) from *${opts.businessName}*.`,
     ``,
     `*Vehicle:* ${invoice.vehicleRegNumber}`,
     `${lineSummary}${more}`,

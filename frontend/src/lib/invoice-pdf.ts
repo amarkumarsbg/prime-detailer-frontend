@@ -14,9 +14,13 @@ type ClientPdfEntry = { content: string; filename: string };
 const clientPdfCache = new Map<string, ClientPdfEntry>();
 const prefetchInflight = new Map<string, Promise<ClientPdfEntry | null>>();
 
-export function invoicePdfFilename(invoiceNumber: string): string {
+export function invoicePdfFilename(
+  invoiceNumber: string,
+  gstRegistrationStatus: "REGISTERED" | "NOT_REGISTERED" = "REGISTERED"
+): string {
   const safe = invoiceNumber.replace(/[^\w.-]+/g, "_").slice(0, 48);
-  return `Tax-Invoice-${safe}.pdf`;
+  const prefix = gstRegistrationStatus === "NOT_REGISTERED" ? "Invoice" : "Tax-Invoice";
+  return `${prefix}-${safe}.pdf`;
 }
 
 /** Stable key so repeat emails reuse the cached PDF when the invoice unchanged. */
@@ -24,7 +28,8 @@ export function buildInvoicePdfCacheKey(opts: InvoicePdfOpts): string {
   const inv = opts.invoice;
   const lines = inv.lineItems.map((l) => `${l.id}:${l.total}:${l.unitPrice}`).join(",");
   const pays = inv.payments.map((p) => `${p.id}:${p.amount}`).join(",");
-  return `${inv.id}:${inv.grandTotal}:${inv.subtotal}:${inv.taxAmount}:${inv.status}:${lines}:${pays}`;
+  const gstMode = opts.business.gstRegistrationStatus ?? "REGISTERED";
+  return `${inv.id}:${inv.grandTotal}:${inv.subtotal}:${inv.taxAmount}:${inv.status}:${gstMode}:${lines}:${pays}`;
 }
 
 function buildPrintHtml(opts: InvoicePdfOpts): string {
@@ -89,7 +94,7 @@ export function prefetchInvoicePdf(opts: InvoicePdfOpts): void {
   if (clientPdfCache.has(cacheKey) || prefetchInflight.has(cacheKey)) return;
 
   const html = buildPrintHtml(opts);
-  const filename = invoicePdfFilename(opts.invoice.invoiceNumber);
+  const filename = invoicePdfFilename(opts.invoice.invoiceNumber, opts.business.gstRegistrationStatus);
 
   const task = fetchPrintQualityPdfBase64(html, cacheKey)
     .then(async (content) => {
@@ -111,7 +116,7 @@ export async function ensureInvoicePdfAttachment(opts: InvoicePdfOpts): Promise<
   content: string;
 }> {
   const cacheKey = buildInvoicePdfCacheKey(opts);
-  const filename = invoicePdfFilename(opts.invoice.invoiceNumber);
+  const filename = invoicePdfFilename(opts.invoice.invoiceNumber, opts.business.gstRegistrationStatus);
 
   const fromDb = getStoredPdfAttachment(opts.invoice, cacheKey);
   if (fromDb) {

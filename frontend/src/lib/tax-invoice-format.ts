@@ -51,6 +51,7 @@ export function additionalDiscountTotal(invoice: Invoice): number {
 }
 
 export interface TaxInvoiceBusinessBlock {
+  gstRegistrationStatus?: "REGISTERED" | "NOT_REGISTERED";
   businessName: string;
   businessTagline: string;
   businessAddress: string;
@@ -166,7 +167,13 @@ export function buildTaxInvoicePrintHtml(
     newCustomerDiscount = 0,
   } = opts;
 
-  const { cgst, sgst } = splitCgstSgst(invoice.taxAmount);
+  const isGstRegistered = business.gstRegistrationStatus !== "NOT_REGISTERED";
+  const displayTaxRate = isGstRegistered ? invoice.taxRate : 0;
+  const displayTaxAmount = isGstRegistered ? invoice.taxAmount : 0;
+  const displayGrandTotal = isGstRegistered
+    ? invoice.grandTotal
+    : Math.max(0, invoice.grandTotal - invoice.taxAmount);
+  const { cgst, sgst } = splitCgstSgst(displayTaxAmount);
 
   // Generate UPI QR Code SVG if a UPI ID is configured.
   const rawUpi = business.bankUpi?.trim();
@@ -194,7 +201,7 @@ export function buildTaxInvoicePrintHtml(
       console.error("[tax-invoice-format] Failed to generate QR code SVG", err);
     }
   }
-  const gstPct = Math.round(invoice.taxRate * 100);
+  const gstPct = Math.round(displayTaxRate * 100);
   const bookingRef = jobCard?.jobNumber ?? invoice.jobNumber;
   const bookingWhen = jobCard
     ? formatDateTime(jobCard.createdAt)
@@ -202,7 +209,7 @@ export function buildTaxInvoicePrintHtml(
   const expectedDel = jobCard?.expectedDelivery
     ? formatDate(jobCard.expectedDelivery)
     : "—";
-  const taxable = netTaxableForDisplay(invoice);
+  const taxable = displayGrandTotal - displayTaxAmount;
   const termsText = TAX_INVOICE_DISCLAIMER;
   const notesText =
     [invoice.notes, jobCard?.notes, invoice.termsAndConditions, jobCard?.termsAndConditions]
@@ -213,7 +220,9 @@ export function buildTaxInvoicePrintHtml(
     "We are not liable for mechanical/electrical issues revealed after the service.",
     "Sensitive areas (engine bay, screen, cameras) are avoided; customer presence is required.",
     "Please remove all valuables before handover.",
-    "GST invoices are provided digitally. Services are subject to availability.",
+    isGstRegistered
+      ? "GST invoices are provided digitally. Services are subject to availability."
+      : "Invoices are provided digitally. Services are subject to availability.",
     "Advance payment is non-refundable upon customer cancellation.",
     "Pickup/visit charges: Rs. 200 minimum + Rs. 10/km beyond 10 km.",
     "This is a computer-generated document. No signature is required."
@@ -246,7 +255,8 @@ export function buildTaxInvoicePrintHtml(
       .map((li, idx) => {
         const hsn = li.hsnSac ?? DEFAULT_SERVICE_HSN;
         const disc = li.lineDiscount ?? 0;
-        const gTot = lineGrandWithTax(li, invoice);
+        const lineTaxShare = invoice.subtotal > 0 ? (displayTaxAmount * li.total) / invoice.subtotal : 0;
+        const gTot = li.total + lineTaxShare;
         const discCell =
           disc > 0
             ? li.description.includes("Membership benefit")
@@ -262,7 +272,7 @@ export function buildTaxInvoicePrintHtml(
         <td class="r">${formatCurrency(lineRateDisplay(li))}</td>
         <td class="r">${discCell}</td>
         <td class="r">${formatCurrency(li.total)}</td>
-        <td class="c">${gstPct}%</td>
+        ${isGstRegistered ? `<td class="c">${gstPct}%</td>` : ""}
         <td class="r b">${formatCurrency(gTot)}</td>
       </tr>`;
       })
@@ -277,7 +287,7 @@ export function buildTaxInvoicePrintHtml(
           .join("")
       : "";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tax Invoice ${escapeHtml(invoice.invoiceNumber)}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${isGstRegistered ? "Tax Invoice" : "Invoice"} ${escapeHtml(invoice.invoiceNumber)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -380,7 +390,7 @@ table.inv .b { font-weight: 700; color: #171717; }
       </div>
     </div>
     <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; height: 64px;">
-      <div style="font-size: 20px; font-weight: 700; color: #1e3a8a; letter-spacing: 1.5px; text-transform: uppercase;">${invoice.taxRate > 0 ? "Tax Invoice" : "Bill of Supply"}</div>
+      <div style="font-size: 20px; font-weight: 700; color: #1e3a8a; letter-spacing: 1.5px; text-transform: uppercase;">${isGstRegistered ? "TAX INVOICE" : "INVOICE"}</div>
       <div style="font-size: 8.5px; font-weight: 600; color: #3b82f6; border: 1px solid #3b82f6; padding: 3px 6px; border-radius: 3px; background: #eff6ff; text-transform: uppercase; letter-spacing: 0.5px;">Original for Recipient</div>
     </div>
   </div>
@@ -422,7 +432,7 @@ table.inv .b { font-weight: 700; color: #171717; }
       <p style="font-size: 9.5px; color: #404040; margin-bottom: 2px;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">Booking Ref:</span> <strong>${escapeHtml(bookingRef)}</strong></p>
       <p style="font-size: 9.5px; color: #404040; margin-bottom: 2px;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">Booking Date:</span> <strong>${escapeHtml(bookingWhen)}</strong></p>
       <p style="font-size: 9.5px; color: #404040; margin-bottom: 2px;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">Service Mode:</span> <strong>${escapeHtml(serviceModeLabel)}</strong></p>
-      <p style="font-size: 9.5px; color: #404040;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">GSTIN:</span> <strong>${escapeHtml(business.gstin)}</strong></p>
+      ${isGstRegistered ? `<p style="font-size: 9.5px; color: #404040;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">GSTIN:</span> <strong>${escapeHtml(business.gstin)}</strong></p>` : ""}
     </div>
   </div>
 
@@ -435,7 +445,7 @@ table.inv .b { font-weight: 700; color: #171717; }
         <th style="width:72px">Rate (Rs.)</th>
         <th style="width:64px">Discount</th>
         <th style="width:72px">Price</th>
-        <th style="width:44px">GST %</th>
+        ${isGstRegistered ? `<th style="width:44px">GST %</th>` : ""}
         <th style="width:80px">G-Total</th>
       </tr>
     </thead>
@@ -508,17 +518,17 @@ table.inv .b { font-weight: 700; color: #171717; }
         ${(invoice.discountAmount || 0) > 0 ? `<div class="tot-row"><span>Flat Discount:</span><span>- ${formatCurrency(invoice.discountAmount || 0)}</span></div>` : ""}
         ${(invoice.rewardDiscount || 0) > 0 ? `<div class="tot-row"><span>Reward Points Discount:</span><span>- ${formatCurrency(invoice.rewardDiscount || 0)}</span></div>` : ""}
         ${(invoice.referralDiscount || 0) > 0 ? `<div class="tot-row"><span>Referral Discount:</span><span>- ${formatCurrency(invoice.referralDiscount || 0)}</span></div>` : ""}
-        <div class="tot-row"><span>Taxable Amount:</span><span>${formatCurrency(taxable)}</span></div>
-        <div class="tot-row cgst"><span>CGST (${gstHalfPercentLabel(invoice.taxRate)}):</span><span>${formatCurrency(cgst)}</span></div>
-        <div class="tot-row sgst"><span>SGST (${gstHalfPercentLabel(invoice.taxRate)}):</span><span>${formatCurrency(sgst)}</span></div>
-        <div class="tot-row grand"><span>GRAND TOTAL:</span><span>${formatCurrency(invoice.grandTotal)}</span></div>
+        ${isGstRegistered ? `<div class="tot-row"><span>Taxable Amount:</span><span>${formatCurrency(taxable)}</span></div>` : ""}
+        ${isGstRegistered ? `<div class="tot-row cgst"><span>CGST (${gstHalfPercentLabel(displayTaxRate)}):</span><span>${formatCurrency(cgst)}</span></div>` : ""}
+        ${isGstRegistered ? `<div class="tot-row sgst"><span>SGST (${gstHalfPercentLabel(displayTaxRate)}):</span><span>${formatCurrency(sgst)}</span></div>` : ""}
+        <div class="tot-row grand"><span>GRAND TOTAL:</span><span>${formatCurrency(displayGrandTotal)}</span></div>
         ${totalPaid > 0 ? `<div class="tot-row"><span>Advance Paid:</span><span>${formatCurrency(totalPaid)}</span></div>` : ""}
-        ${remainingBalance > 0 ? `<div class="tot-row balance"><span>Balance Due:</span><span>${formatCurrency(remainingBalance)}</span></div>` : ""}
+        ${remainingBalance > 0 ? `<div class="tot-row balance"><span>Balance Due:</span><span>${formatCurrency(Math.max(0, displayGrandTotal - totalPaid))}</span></div>` : ""}
       </div>
 
       <div style="margin-top: 10px; padding: 8px 10px; border: 1px solid #d4d4d4; border-radius: 4px; background: #fafafa; font-size: 9px;">
         <span style="color:#737373; font-weight: 500; text-transform: uppercase; font-size: 7.5px; display: block; margin-bottom: 2px; letter-spacing: 0.5px;">Total Amount (in words)</span>
-        <span style="font-weight: 700; color: #171717;">${numberToWords(Math.round(invoice.grandTotal))}</span>
+        <span style="font-weight: 700; color: #171717;">${numberToWords(Math.round(displayGrandTotal))}</span>
       </div>
 
       <div style="margin-top: 14px; border: 1px solid #d4d4d4; border-radius: 4px; padding: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff;">
@@ -544,6 +554,7 @@ export function buildInvoiceEmailHtml(opts: {
   customerName: string;
   invoiceNumber: string;
   businessName: string;
+  invoiceLabel?: "Tax Invoice" | "Invoice";
   grandTotal: number;
   remainingBalance: number;
   vehicleRegNumber: string;
@@ -553,6 +564,7 @@ export function buildInvoiceEmailHtml(opts: {
     customerName,
     invoiceNumber,
     businessName,
+    invoiceLabel = "Tax Invoice",
     grandTotal,
     remainingBalance,
     vehicleRegNumber,
@@ -565,12 +577,12 @@ export function buildInvoiceEmailHtml(opts: {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Segoe UI,system-ui,sans-serif;font-size:14px;color:#171717;line-height:1.5;margin:0;padding:24px;">
 <p style="margin:0 0 12px;">Dear ${escapeHtml(customerName)},</p>
-<p style="margin:0 0 12px;color:#404040;">Please find your tax invoice <strong>${escapeHtml(invoiceNumber)}</strong> from <strong>${escapeHtml(businessName)}</strong> attached to this email.</p>
+<p style="margin:0 0 12px;color:#404040;">Please find your ${escapeHtml(invoiceLabel.toLowerCase())} <strong>${escapeHtml(invoiceNumber)}</strong> from <strong>${escapeHtml(businessName)}</strong> attached to this email.</p>
 <p style="margin:0 0 8px;color:#404040;">Vehicle: <strong>${escapeHtml(vehicleRegNumber)}</strong></p>
 <p style="margin:0 0 8px;color:#404040;">Grand total: <strong>${formatCurrency(grandTotal)}</strong></p>
 ${balanceNote}
 <p style="margin:0 0 16px;padding:12px 14px;background:#f5f5f5;border:1px solid #e5e5e5;border-radius:6px;color:#262626;">
-  <strong>Download your invoice:</strong> Open the attachment <strong>${escapeHtml(attachmentFilename)}</strong> to view, save, or print the full tax invoice (line items, GST, and bank details).
+  <strong>Download your invoice:</strong> Open the attachment <strong>${escapeHtml(attachmentFilename)}</strong> to view, save, or print the full invoice document.
 </p>
 <p style="margin:0;color:#737373;font-size:12px;">If you have questions, reply to this email or contact ${escapeHtml(businessName)}.</p>
 </body></html>`;

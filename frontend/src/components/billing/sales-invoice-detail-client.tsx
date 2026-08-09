@@ -68,6 +68,7 @@ import { DetailBackButton } from "@/components/shared/detail-back-button";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import {
+  invoicePdfFilename,
   prefetchInvoicePdf,
   sendInvoiceEmailWithPdf,
   warmInvoicePdfEngine,
@@ -123,6 +124,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const { customers } = useCustomerStore();
   const {
+    gstRegistrationStatus,
     referralRewardAmount,
     newCustomerDiscount,
     businessName,
@@ -297,7 +299,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const discountTotal = activeFlatDiscount + activeRewardDiscount + activeReferralDiscount;
   const taxableSubtotal = Math.max(0, subtotal - discountTotal);
-  const taxRate = invoice ? invoice.taxRate : 0.18;
+  const taxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : invoice ? invoice.taxRate : 0.18;
   const taxAmount = Math.round(taxableSubtotal * taxRate * 100) / 100;
   const grandTotalComputed = Math.round((taxableSubtotal + taxAmount) * 100) / 100;
   const pointsToEarn = Math.floor(taxableSubtotal / 100);
@@ -423,6 +425,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
         businessWhatsApp,
         businessEmail,
         businessWebsite,
+        gstRegistrationStatus,
         gstin,
         companyPan,
         bankName,
@@ -452,6 +455,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     businessWhatsApp,
     businessEmail,
     businessWebsite,
+    gstRegistrationStatus,
     gstin,
     companyPan,
     bankName,
@@ -623,6 +627,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
         businessWhatsApp,
         businessEmail,
         businessWebsite,
+        gstRegistrationStatus,
         gstin,
         companyPan,
         bankName,
@@ -644,9 +649,11 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const handleInvoiceWhatsApp = async () => {
     if (!invoice) return;
+    const invoiceLabel = gstRegistrationStatus === "NOT_REGISTERED" ? "invoice" : "tax invoice";
     const message = buildInvoiceWhatsAppMessage(invoice, {
       businessName,
       remainingBalance,
+      invoiceLabel,
     });
     const phone = invoice.customerPhone;
     const notify = (channel: "api" | "composer") => {
@@ -704,21 +711,24 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       invoice: latestInvoice,
       customerEmail: toEmail,
     };
-    const attachmentFilename = `Tax-Invoice-${invoice.invoiceNumber.replace(/[^\w.-]+/g, "_").slice(0, 48)}.pdf`;
+    const attachmentFilename = invoicePdfFilename(invoice.invoiceNumber, gstRegistrationStatus);
+    const titleCaseLabel = gstRegistrationStatus === "NOT_REGISTERED" ? "Invoice" : "Tax Invoice";
+    const sentenceCaseLabel = gstRegistrationStatus === "NOT_REGISTERED" ? "invoice" : "tax invoice";
     const emailHtml = buildInvoiceEmailHtml({
       customerName: invoice.customerName,
       invoiceNumber: invoice.invoiceNumber,
       businessName,
+      invoiceLabel: titleCaseLabel,
       grandTotal: invoice.grandTotal,
       remainingBalance,
       vehicleRegNumber: invoice.vehicleRegNumber,
       attachmentFilename,
     });
-    const subject = `Tax invoice ${invoice.invoiceNumber} — ${businessName}`;
+    const subject = `${titleCaseLabel} ${invoice.invoiceNumber} — ${businessName}`;
     const text = [
-      buildInvoiceWhatsAppMessage(invoice, { businessName, remainingBalance }),
+      buildInvoiceWhatsAppMessage(invoice, { businessName, remainingBalance, invoiceLabel: sentenceCaseLabel }),
       "",
-      `Your tax invoice is attached as ${attachmentFilename}. Open the PDF to view or download the full invoice.`,
+      `Your ${sentenceCaseLabel} is attached as ${attachmentFilename}. Open the PDF to view or download the full invoice.`,
     ].join("\n");
     const pdfToast = toast.loading("Sending invoice email…");
     const notify = () => {
@@ -875,7 +885,7 @@ ${businessNameVal}`;
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
           {previewHtml ? (
             <iframe
-              title="Tax invoice preview"
+              title={gstRegistrationStatus === "NOT_REGISTERED" ? "Invoice preview" : "Tax invoice preview"}
               className="h-[min(85vh,920px)] w-full border-0"
               srcDoc={previewHtml}
             />

@@ -119,7 +119,7 @@ app.get("/api/public/invoices/:id", async (req, res, next) => {
     }).then(rows => rows.map(r => r.payload));
 
     const settingsRow = await prisma.appJsonRow.findUnique({
-      where: { collection_entityId: { collection: "settingsMeta", entityId: "SINGLETON" } }
+      where: { collection_entityId: { collection: "appSettings", entityId: "default" } }
     });
     const businessSettings = settingsRow?.payload ?? null;
 

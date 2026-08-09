@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const to = body.to?.trim();
   const subject = body.subject?.trim();
   const emailHtml = body.emailHtml?.trim();
-  const filename = body.filename?.trim() || "Tax-Invoice.pdf";
+  const filename = body.filename?.trim() || "Invoice.pdf";
 
   if (!html || !to || !subject || !emailHtml) {
     return Response.json({ error: "html, to, subject, and emailHtml are required" }, { status: 400 });

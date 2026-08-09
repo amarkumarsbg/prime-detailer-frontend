@@ -61,6 +61,14 @@ export default function PublicInvoicePage() {
     const remainingBalance = Math.max(0, invoice.grandTotal - totalPaid);
 
     const business = {
+      gstRegistrationStatus:
+        businessSettings?.gstRegistrationStatus === "NOT_REGISTERED"
+          ? "NOT_REGISTERED"
+          : "REGISTERED",
+    } as const;
+
+    const businessDetails = {
+      ...business,
       businessName: businessSettings?.businessName || "Prime Detailers",
       businessTagline: businessSettings?.businessTagline || "Car Wash & Detailing Studio",
       businessAddress: businessSettings?.businessAddress || "80 Feet Road, Koramangala, Bengaluru 560034",
@@ -86,7 +94,7 @@ export default function PublicInvoicePage() {
         customerEmail: jobCard?.customerEmail ?? "",
         customerAddress: jobCard?.customerAddress ?? "",
         vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
-        business,
+        business: businessDetails,
         payments: invoice.payments || [],
         totalPaid,
         remainingBalance,
