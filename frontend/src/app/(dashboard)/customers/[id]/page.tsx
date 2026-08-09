@@ -36,6 +36,7 @@ import { useWalletStore } from "@/store/wallet-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useCommunicationStore } from "@/store/communication-store";
+import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import {
   MEMBERSHIP_TIER_DAYS,
   membershipIncludedQuantity,
@@ -126,7 +127,16 @@ export default function CustomerDetailPage() {
   /* eslint-disable react-hooks/incompatible-library -- react-hook-form watch() */
   const watchFuelType = watch("fuelType");
   const watchSegment = watch("segment");
+  const watchMake = watch("make");
+  const watchModel = watch("model");
   /* eslint-enable react-hooks/incompatible-library */
+
+  const { getBrandNames, getModels } = useVehicleCatalogStore();
+  const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
+  const modelOptions = useMemo(
+    () => (watchMake ? getModels(watchMake) : []),
+    [getModels, watchMake]
+  );
 
   const { customers: allCustomers, updateCustomer, findByPhone } = useCustomerStore();
   const customer = useMemo(() => {
@@ -774,14 +784,62 @@ export default function CustomerDetailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="cust-make">Make</Label>
-                    <Input id="cust-make" placeholder="Maruti" {...register("make", { required: "Required" })} />
+                    <input type="hidden" {...register("make", { required: "Required" })} />
+                    <Select
+                      value={watchMake || undefined}
+                      onValueChange={(value) => {
+                        setValue("make", value, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                        setValue("model", "", {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                    >
+                      <SelectTrigger id="cust-make" className={cn(errors.make && "border-destructive")}>
+                        <SelectValue placeholder="Select make" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {makeOptions.map((make) => (
+                          <SelectItem key={make} value={make}>
+                            {make}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.make && (
                       <p className="text-sm text-destructive">{errors.make.message}</p>
                     )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="cust-model">Model</Label>
-                    <Input id="cust-model" placeholder="Swift" {...register("model", { required: "Required" })} />
+                    <input type="hidden" {...register("model", { required: "Required" })} />
+                    <Select
+                      value={watchModel || undefined}
+                      onValueChange={(value) => {
+                        setValue("model", value, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                      disabled={!watchMake}
+                    >
+                      <SelectTrigger id="cust-model" className={cn(errors.model && "border-destructive")}>
+                        <SelectValue placeholder={watchMake ? "Select model" : "Select make first"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelOptions.map((model) => (
+                          <SelectItem key={model.name} value={model.name}>
+                            {model.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.model && (
                       <p className="text-sm text-destructive">{errors.model.message}</p>
                     )}

@@ -8,6 +8,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useJobCardStore } from "@/store/job-card-store";
+import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
 import { useSettingsStore } from "@/store/settings-store";
 import { useBranchStore } from "@/store/branch-store";
@@ -132,6 +133,7 @@ export default function AppointmentsPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const { getBrandNames, getModels } = useVehicleCatalogStore();
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const staff = useStaffStore((s) => s.staff);
@@ -183,6 +185,12 @@ export default function AppointmentsPage() {
     if (!formCustomerId) return [];
     return vehicles.filter((v) => v.customerId === formCustomerId);
   }, [formCustomerId, vehicles]);
+
+  const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
+  const modelOptions = useMemo(
+    () => (newVehicleMake ? getModels(newVehicleMake) : []),
+    [getModels, newVehicleMake]
+  );
 
   const resetAppointmentForm = () => {
     setCustomerMode("existing");
@@ -700,23 +708,45 @@ export default function AppointmentsPage() {
                           <Label htmlFor="apt-new-make">
                             Make <span className="text-destructive">*</span>
                           </Label>
-                          <Input
-                            id="apt-new-make"
-                            value={newVehicleMake}
-                            onChange={(e) => setNewVehicleMake(e.target.value)}
-                            placeholder="e.g. Maruti"
-                          />
+                          <Select
+                            value={newVehicleMake || undefined}
+                            onValueChange={(value) => {
+                              setNewVehicleMake(value);
+                              setNewVehicleModel("");
+                            }}
+                          >
+                            <SelectTrigger id="apt-new-make">
+                              <SelectValue placeholder="Select make" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {makeOptions.map((make) => (
+                                <SelectItem key={make} value={make}>
+                                  {make}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="apt-new-model">
                             Model <span className="text-destructive">*</span>
                           </Label>
-                          <Input
-                            id="apt-new-model"
-                            value={newVehicleModel}
-                            onChange={(e) => setNewVehicleModel(e.target.value)}
-                            placeholder="e.g. Swift"
-                          />
+                          <Select
+                            value={newVehicleModel || undefined}
+                            onValueChange={setNewVehicleModel}
+                            disabled={!newVehicleMake}
+                          >
+                            <SelectTrigger id="apt-new-model">
+                              <SelectValue placeholder={newVehicleMake ? "Select model" : "Select make first"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {modelOptions.map((model) => (
+                                <SelectItem key={model.name} value={model.name}>
+                                  {model.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>

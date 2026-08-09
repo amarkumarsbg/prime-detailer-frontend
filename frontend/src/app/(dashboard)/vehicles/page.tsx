@@ -325,6 +325,7 @@ export default function VehiclesPage() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="make">Make</Label>
+                    <input type="hidden" {...register("make", { required: "Required" })} />
                     <Select
                       value={watchMake || undefined}
                       onValueChange={(value) => {
@@ -357,6 +358,7 @@ export default function VehiclesPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="model">Model</Label>
+                    <input type="hidden" {...register("model", { required: "Required" })} />
                     <Select
                       value={watchModel || undefined}
                       onValueChange={(value) => {
