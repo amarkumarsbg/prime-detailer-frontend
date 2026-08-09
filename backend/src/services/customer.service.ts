@@ -140,13 +140,61 @@ export async function deleteCustomer(id: string) {
   return true;
 }
 
-export async function creditWallet(customerId: string, amount: number) {
+export async function adjustWallet(
+  customerId: string,
+  amount: number,
+  type: "CREDIT" | "DEBIT",
+  reason: string
+) {
   if (amount <= 0 || !Number.isFinite(amount)) throw new Error("Invalid amount");
-  const current = await prisma.customer.findUnique({ where: { id: customerId } });
-  if (!current) return null;
-  const row = await prisma.customer.update({
-    where: { id: customerId },
-    data: { walletBalance: current.walletBalance + amount },
+
+  return await prisma.$transaction(async (tx) => {
+    const current = await tx.customer.findUnique({ where: { id: customerId } });
+    if (!current) return null;
+
+    let newBalance = current.walletBalance;
+    if (type === "CREDIT") {
+      newBalance = Math.round((newBalance + amount) * 100) / 100;
+    } else {
+      newBalance = Math.round((newBalance - amount) * 100) / 100;
+      if (newBalance < 0) {
+        throw new Error("Wallet balance cannot be negative");
+      }
+    }
+
+    // Update customer balance
+    const updatedCustomer = await tx.customer.update({
+      where: { id: customerId },
+      data: { walletBalance: newBalance },
+    });
+
+    // Create wallet transaction record
+    const txId = `wtx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const transaction = {
+      id: txId,
+      customerId,
+      customerName: current.name,
+      type,
+      amount,
+      source: "ADMIN_CREDIT" as const,
+      description: reason,
+      balanceAfter: newBalance,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save transaction in AppJsonRow
+    await tx.appJsonRow.create({
+      data: {
+        collection: "walletTransactions",
+        entityId: txId,
+        payload: transaction as any,
+      },
+    });
+
+    return toApiCustomer(updatedCustomer);
   });
-  return toApiCustomer(row);
+}
+
+export async function creditWallet(customerId: string, amount: number) {
+  return adjustWallet(customerId, amount, "CREDIT", "Referral Reward");
 }

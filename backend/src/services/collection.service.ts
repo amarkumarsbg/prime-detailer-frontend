@@ -5,6 +5,7 @@ import {
   isSingletonCollection,
   SINGLETON_ENTITY_ID,
 } from "../constants/json-collections.js";
+import { handleInvoiceWalletSync } from "./wallet-sync.service.js";
 
 export async function listCollectionItems(collection: string): Promise<unknown[]> {
   if (isSingletonCollection(collection)) {
@@ -32,6 +33,10 @@ export async function upsertCollectionItem(
   entityId: string,
   payload: unknown
 ): Promise<void> {
+  if (collection === "invoices") {
+    await handleInvoiceWalletSync(entityId, payload);
+  }
+
   await prisma.appJsonRow.upsert({
     where: { collection_entityId: { collection, entityId } },
     create: { collection, entityId, payload: payload as object },

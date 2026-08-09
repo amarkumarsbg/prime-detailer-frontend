@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ArrowLeft, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail } from "lucide-react";
 import { toast } from "sonner";
@@ -90,9 +90,22 @@ export default function CustomerDetailPage() {
   const router = useRouter();
   const id = params.id as string;
 
+  useEffect(() => {
+    if (id) {
+      void useWalletStore.getState().fetchTransactions();
+    }
+  }, [id]);
+
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
+
+  const [walletAdjustOpen, setWalletAdjustOpen] = useState(false);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustType, setAdjustType] = useState<"CREDIT" | "DEBIT">("CREDIT");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustLoading, setAdjustLoading] = useState(false);
+  const [walletFilter, setWalletFilter] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
 
   const {
     register,
@@ -138,10 +151,48 @@ export default function CustomerDetailPage() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [id, invoices]);
 
-  const { getByCustomer } = useWalletStore();
+  const walletTransactions = useWalletStore((s) => s.transactions);
   const customerWalletTransactions = useMemo(() => {
-    return getByCustomer(id);
-  }, [id, getByCustomer]);
+    return walletTransactions
+      .filter((wt) => wt.customerId === id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [id, walletTransactions]);
+
+  const filteredWalletTransactions = useMemo(() => {
+    return customerWalletTransactions.filter((wt) => {
+      if (walletFilter === "ALL") return true;
+      return wt.type === walletFilter;
+    });
+  }, [customerWalletTransactions, walletFilter]);
+
+  const handleWalletAdjust = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(adjustAmount);
+    if (!customer || isNaN(amt) || amt <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    if (adjustType === "DEBIT" && customer.walletBalance < amt) {
+      toast.error("Insufficient wallet balance for debit");
+      return;
+    }
+    setAdjustLoading(true);
+    try {
+      const { creditWallet } = useCustomerStore.getState();
+      const { fetchTransactions } = useWalletStore.getState();
+      await creditWallet(customer.id, amt, adjustType, adjustReason.trim() || "Manual Adjustment");
+      await fetchTransactions();
+      toast.success("Wallet adjusted successfully");
+      setWalletAdjustOpen(false);
+      setAdjustAmount("");
+      setAdjustReason("");
+      setAdjustType("CREDIT");
+    } catch (err) {
+      toast.error("Failed to adjust wallet");
+    } finally {
+      setAdjustLoading(false);
+    }
+  };
 
   const messages = useCommunicationStore((s) => s.messages);
   const customerMessages = useMemo(() => {
@@ -806,31 +857,103 @@ export default function CustomerDetailPage() {
         </TabsContent>
 
         <TabsContent value="wallet" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Wallet className="w-5 h-5" />
-                Wallet Transaction History
-              </CardTitle>
+          {customer && (
+            <div className="grid gap-4 sm:grid-cols-4">
+              <Card className="sm:col-span-1 border-border">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Wallet Balance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-emerald-500" />
+                    <p className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(customer.walletBalance)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <Card className="border-border">
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
+              <div className="space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wallet className="w-5 h-5" />
+                  Wallet History
+                </CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-md border border-border p-0.5 bg-muted/40">
+                  <Button
+                    type="button"
+                    variant={walletFilter === "ALL" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setWalletFilter("ALL")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={walletFilter === "CREDIT" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setWalletFilter("CREDIT")}
+                  >
+                    Credits
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={walletFilter === "DEBIT" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setWalletFilter("DEBIT")}
+                  >
+                    Debits
+                  </Button>
+                </div>
+                <Button size="sm" onClick={() => setWalletAdjustOpen(true)}>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Adjust Wallet
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              {customerWalletTransactions.length === 0 ? (
+              {filteredWalletTransactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   No wallet transactions yet
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {customerWalletTransactions.map((wt: WalletTransaction) => (
+                  {filteredWalletTransactions.map((wt: WalletTransaction) => (
                     <div
                       key={wt.id}
                       className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-lg border border-border"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <Badge variant={wt.type === "CREDIT" ? "default" : "secondary"}>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-xs font-semibold",
+                              wt.type === "CREDIT"
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20"
+                            )}
+                          >
                             {wt.type}
                           </Badge>
-                          <span className="text-sm font-medium">
+                          <span
+                            className={cn(
+                              "text-sm font-semibold font-mono",
+                              wt.type === "CREDIT"
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-orange-600 dark:text-orange-400"
+                            )}
+                          >
                             {wt.type === "CREDIT" ? "+" : "-"}
                             {formatCurrency(wt.amount)}
                           </span>
@@ -850,6 +973,74 @@ export default function CustomerDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={walletAdjustOpen} onOpenChange={setWalletAdjustOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add Wallet Credit / Debit</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleWalletAdjust} className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Adjustment Type</Label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <input
+                        type="radio"
+                        name="adjustType"
+                        value="CREDIT"
+                        checked={adjustType === "CREDIT"}
+                        onChange={() => setAdjustType("CREDIT")}
+                        className="accent-primary"
+                      />
+                      Credit (+)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <input
+                        type="radio"
+                        name="adjustType"
+                        value="DEBIT"
+                        checked={adjustType === "DEBIT"}
+                        onChange={() => setAdjustType("DEBIT")}
+                        className="accent-primary"
+                      />
+                      Debit (-)
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adjust-amount">Amount (₹)</Label>
+                  <Input
+                    id="adjust-amount"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    placeholder="Enter amount"
+                    value={adjustAmount}
+                    onChange={(e) => setAdjustAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adjust-reason">Reason</Label>
+                  <Input
+                    id="adjust-reason"
+                    required
+                    placeholder="e.g. Customer refund / adjustment"
+                    value={adjustReason}
+                    onChange={(e) => setAdjustReason(e.target.value)}
+                  />
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button type="button" variant="outline" onClick={() => setWalletAdjustOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={adjustLoading}>
+                    {adjustLoading ? "Processing..." : "Add Adjustment"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="membership" className="space-y-4">

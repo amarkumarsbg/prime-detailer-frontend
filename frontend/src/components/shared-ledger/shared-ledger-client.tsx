@@ -47,6 +47,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useExpenseStore } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useWalletStore } from "@/store/wallet-store";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { useSettingsStore } from "@/store/settings-store";
@@ -152,6 +153,8 @@ export function SharedLedgerClient() {
   const [invPayAmount, setInvPayAmount] = useState("");
   const [invPayMethod, setInvPayMethod] = useState<PaymentMethod>("CASH");
   const [invPayRef, setInvPayRef] = useState("");
+  const [useWallet, setUseWallet] = useState(false);
+  const [addExtraToWallet, setAddExtraToWallet] = useState(false);
 
   const [expensePayOpen, setExpensePayOpen] = useState(false);
   const [expensePayTarget, setExpensePayTarget] = useState<Expense | null>(null);
@@ -164,6 +167,8 @@ export function SharedLedgerClient() {
     setInvPayAmount(out > 0 ? String(out) : "");
     setInvPayMethod("CASH");
     setInvPayRef("");
+    setUseWallet(false);
+    setAddExtraToWallet(false);
     setInvoicePayOpen(true);
   };
 
@@ -172,9 +177,21 @@ export function SharedLedgerClient() {
     if (!inv) return;
     const amount = Number(invPayAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const invoiceCustomer = customers.find((c) => c.id === inv.customerId);
+    const remainingBalance = invoiceOutstanding(inv);
+
+    const walletAmountUsed = useWallet
+      ? Math.min(invoiceCustomer?.walletBalance || 0, remainingBalance)
+      : 0;
+
+    const extraAmount = amount > (remainingBalance - walletAmountUsed)
+      ? Math.round((amount - (remainingBalance - walletAmountUsed)) * 100) / 100
+      : 0;
+
+    const remainingAfter = Math.max(0, remainingBalance - walletAmountUsed - amount);
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
     const paidAt = new Date().toISOString();
-    const remainingAfter = Math.max(0, inv.grandTotal - invoicePaidTotal(inv) - amount);
 
     const result = await recordInvoicePayment(
       inv.id,
@@ -184,8 +201,11 @@ export function SharedLedgerClient() {
         method: invPayMethod,
         referenceNumber: invPayRef.trim() || undefined,
         paidAt,
+        addExtraToWallet: addExtraToWallet && extraAmount > 0,
+        extraAmount: addExtraToWallet && extraAmount > 0 ? extraAmount : undefined,
       },
-      { performedBy }
+      { performedBy },
+      walletAmountUsed
     );
     if (!result.ok) {
       toast.error("Could not record payment", {
@@ -194,6 +214,14 @@ export function SharedLedgerClient() {
       return;
     }
     toast.success("Payment recorded");
+
+    try {
+      await useCustomerStore.getState().fetchCustomers();
+      await useWalletStore.getState().fetchTransactions();
+    } catch (e) {
+      console.error("Failed to reload customer/wallet state:", e);
+    }
+
     pushActivityLog({
       action: "PAYMENT_RECEIVED",
       entityType: "INVOICE",
@@ -771,17 +799,115 @@ export function SharedLedgerClient() {
             </p>
           )}
           <div className="space-y-4 py-2">
+            {(() => {
+              const invoiceCustomer = invoicePayTarget ? customers.find((c) => c.id === invoicePayTarget.customerId) : null;
+              if (invoiceCustomer && invoiceCustomer.walletBalance > 0 && invoicePayTarget) {
+                const remainingBalance = invoiceOutstanding(invoicePayTarget);
+                return (
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                        Wallet Balance: ₹{invoiceCustomer.walletBalance}
+                      </span>
+                      <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useWallet}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setUseWallet(checked);
+                            const walletUse = checked
+                              ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
+                              : 0;
+                            setInvPayAmount(String(Math.max(0, Math.round((remainingBalance - walletUse) * 100) / 100)));
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Use Wallet Balance
+                      </label>
+                    </div>
+                    {useWallet && (
+                      <div className="text-xs space-y-1 pt-1 border-t border-emerald-500/10 font-mono text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Invoice Remaining:</span>
+                          <span>₹{remainingBalance}</span>
+                        </div>
+                        <div className="flex justify-between text-rose-500">
+                          <span>Wallet Used:</span>
+                          <span>-₹{Math.min(invoiceCustomer.walletBalance, remainingBalance)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-foreground">
+                          <span>Amount to Pay:</span>
+                          <span>₹{Math.max(0, Math.round((remainingBalance - Math.min(invoiceCustomer.walletBalance, remainingBalance)) * 100) / 100)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="space-y-2">
               <Label htmlFor="sl-inv-amount">Amount (INR)</Label>
               <Input
                 id="sl-inv-amount"
                 type="number"
-                min="0.01"
+                min="0"
                 step="0.01"
                 value={invPayAmount}
                 onChange={(e) => setInvPayAmount(e.target.value)}
               />
             </div>
+
+            {(() => {
+              const invoiceCustomer = invoicePayTarget ? customers.find((c) => c.id === invoicePayTarget.customerId) : null;
+              if (invoicePayTarget) {
+                const remainingBalance = invoiceOutstanding(invoicePayTarget);
+                const walletUse = useWallet && invoiceCustomer
+                  ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
+                  : 0;
+                const inputAmt = Number(invPayAmount) || 0;
+                const targetBalance = remainingBalance - walletUse;
+                const extra = inputAmt > targetBalance ? Math.round((inputAmt - targetBalance) * 100) / 100 : 0;
+                
+                if (extra > 0) {
+                  return (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
+                      <div className="text-xs space-y-1 font-mono text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Invoice Amount:</span>
+                          <span>₹{targetBalance}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Amount Received:</span>
+                          <span>₹{inputAmt}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-amber-600">
+                          <span>Extra Amount:</span>
+                          <span>₹{extra}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 border-t border-amber-500/10 pt-2">
+                        <input
+                          id="sl-add-to-wallet-chk"
+                          type="checkbox"
+                          checked={addExtraToWallet}
+                          onChange={(e) => setAddExtraToWallet(e.target.checked)}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                        />
+                        <Label htmlFor="sl-add-to-wallet-chk" className="text-xs font-semibold cursor-pointer select-none">
+                          Add ₹{extra} to customer wallet?
+                        </Label>
+                      </div>
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
+
             <div className="space-y-2">
               <Label>Payment method</Label>
               <Select

@@ -6,7 +6,7 @@ import {
   createCustomer,
   updateCustomer,
   deleteCustomer,
-  creditWallet,
+  adjustWallet,
 } from "../services/customer.service.js";
 
 const trimmed = (v: unknown) => (typeof v === "string" ? v.trim() : v);
@@ -30,6 +30,8 @@ const updateSchema = createSchema.partial();
 
 const walletSchema = z.object({
   amount: z.number().positive(),
+  type: z.enum(["CREDIT", "DEBIT"]).default("CREDIT"),
+  reason: z.string().min(1).default("Manual Adjustment"),
 });
 
 export async function getCustomers(_req: Request, res: Response, next: NextFunction) {
@@ -107,13 +109,17 @@ export async function removeCustomer(req: Request, res: Response, next: NextFunc
 export async function patchWallet(req: Request, res: Response, next: NextFunction) {
   try {
     const body = walletSchema.parse(req.body);
-    const customer = await creditWallet(paramId(req), body.amount);
+    const customer = await adjustWallet(paramId(req), body.amount, body.type, body.reason);
     if (!customer) {
       res.status(404).json({ data: null, error: { message: "Customer not found" } });
       return;
     }
     res.json({ data: { customer }, error: null });
   } catch (e) {
+    if (e instanceof Error && e.message === "Wallet balance cannot be negative") {
+      res.status(400).json({ data: null, error: { message: e.message } });
+      return;
+    }
     next(e);
   }
 }

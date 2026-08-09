@@ -11,13 +11,14 @@ interface InvoiceStore {
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
   recordPayment: (
     invoiceId: string,
-    payment: Omit<Payment, "id"> & { id?: string },
-    options: { performedBy: string }
+    payment: Omit<Payment, "id"> & { id?: string; addExtraToWallet?: boolean; extraAmount?: number },
+    options: { performedBy: string },
+    walletAmountUsed?: number
   ) => Promise<{ ok: boolean; inventoryError?: string }>;
 }
 
 function computeInvoiceStatus(inv: Invoice, payments: Payment[]): InvoiceStatus {
-  const paid = payments.reduce((s, p) => s + p.amount, 0);
+  const paid = payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
   if (paid >= inv.grandTotal - 0.01) return "PAID";
   if (paid > 0) return "PARTIALLY_PAID";
   return inv.status;
@@ -50,7 +51,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     }));
   },
 
-  recordPayment: async (invoiceId, payment, options) => {
+  recordPayment: async (invoiceId, payment, options, walletAmountUsed = 0) => {
     void options.performedBy;
     const inv = get().invoices.find((i) => i.id === invoiceId);
     if (!inv) return { ok: false, inventoryError: "Invoice not found" };
@@ -59,10 +60,18 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
       ...payment,
       id: payment.id ?? `pay-${Date.now()}`,
       invoiceId,
-    };
+    } as any;
     const payments = [...inv.payments, newPayment];
-    const status = computeInvoiceStatus(inv, payments);
-    const next = { ...inv, payments, status, storedPdf: undefined };
+    const updatedWalletAmount = Math.round(((inv.walletAmountUsed || 0) + walletAmountUsed) * 100) / 100;
+    const next = {
+      ...inv,
+      payments,
+      walletAmountUsed: updatedWalletAmount,
+      storedPdf: undefined,
+    };
+    const status = computeInvoiceStatus(next, payments);
+    next.status = status;
+
     await putCollectionDocument("invoices", invoiceId, next);
     set((state) => ({
       invoices: state.invoices.map((i) => (i.id === invoiceId ? next : i)),

@@ -20,7 +20,7 @@ interface CustomerStore {
   findByPhone: (phone: string) => Customer | undefined;
   findByEmail: (email: string) => Customer | undefined;
   findByReferralCode: (code: string) => Customer | undefined;
-  creditWallet: (customerId: string, amount: number) => Promise<void>;
+  creditWallet: (customerId: string, amount: number, type?: "CREDIT" | "DEBIT", reason?: string) => Promise<void>;
 }
 
 export const useCustomerStore = create<CustomerStore>((set, get) => ({
@@ -106,10 +106,10 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
     return get().customers.find((c) => c.referralCode.toUpperCase() === upper);
   },
 
-  creditWallet: async (customerId, amount) => {
+  creditWallet: async (customerId, amount, type = "CREDIT", reason = "Manual Adjustment") => {
     const data = await apiPatch<{ customer: Customer }>(
       `/api/customers/${customerId}/wallet`,
-      { amount }
+      { amount, type, reason }
     );
     set((state) => ({
       customers: state.customers.map((c) => (c.id === customerId ? data.customer : c)),

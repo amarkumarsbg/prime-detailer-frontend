@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
+import { useCustomerStore } from "@/store/customer-store";
+import { useWalletStore } from "@/store/wallet-store";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
@@ -81,6 +83,8 @@ export function CustomerCreditCheckDialog({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [referenceNumber, setReferenceNumber] = useState("");
+  const [useWallet, setUseWallet] = useState(false);
+  const [addExtraToWallet, setAddExtraToWallet] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -90,6 +94,8 @@ export function CustomerCreditCheckDialog({
         setPaymentAmount("");
         setReferenceNumber("");
         setPaymentMethod("CASH");
+        setUseWallet(false);
+        setAddExtraToWallet(false);
       });
     }
   }, [open]);
@@ -100,6 +106,8 @@ export function CustomerCreditCheckDialog({
     setPaymentAmount(bal > 0 ? String(Math.round(bal * 100) / 100) : "");
     setPaymentMethod("CASH");
     setReferenceNumber("");
+    setUseWallet(false);
+    setAddExtraToWallet(false);
     setRecordOpen(true);
   };
 
@@ -110,20 +118,30 @@ export function CustomerCreditCheckDialog({
       toast.error("Enter a valid amount");
       return;
     }
+    
+    const invoiceCustomer = useCustomerStore.getState().customers.find((c) => c.id === targetInvoice.customerId);
     const maxPay = balanceDue(targetInvoice);
-    if (amount > maxPay + 0.01) {
+
+    const walletAmountUsed = useWallet
+      ? Math.min(invoiceCustomer?.walletBalance || 0, maxPay)
+      : 0;
+
+    const remainingPayable = maxPay - walletAmountUsed;
+
+    const extraAmount = amount > remainingPayable
+      ? Math.round((amount - remainingPayable) * 100) / 100
+      : 0;
+
+    if (extraAmount > 0 && !addExtraToWallet) {
       toast.error("Amount exceeds balance due", {
-        description: `Maximum ${formatCurrency(maxPay)} for ${targetInvoice.invoiceNumber}`,
+        description: `Maximum ${formatCurrency(remainingPayable)} for ${targetInvoice.invoiceNumber} unless adding extra to wallet.`,
       });
       return;
     }
 
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
     const paidAt = new Date().toISOString();
-    const remainingAfter = Math.max(
-      0,
-      targetInvoice.grandTotal - sumPayments(targetInvoice) - amount
-    );
+    const remainingAfter = Math.max(0, maxPay - walletAmountUsed - amount);
 
     const result = await recordInvoicePayment(
       targetInvoice.id,
@@ -133,8 +151,11 @@ export function CustomerCreditCheckDialog({
         method: paymentMethod,
         referenceNumber: referenceNumber.trim() || undefined,
         paidAt,
+        addExtraToWallet: addExtraToWallet && extraAmount > 0,
+        extraAmount: addExtraToWallet && extraAmount > 0 ? extraAmount : undefined,
       },
-      { performedBy }
+      { performedBy },
+      walletAmountUsed
     );
 
     if (!result.ok) {
@@ -143,6 +164,14 @@ export function CustomerCreditCheckDialog({
     }
 
     toast.success("Payment recorded");
+
+    try {
+      await useCustomerStore.getState().fetchCustomers();
+      await useWalletStore.getState().fetchTransactions();
+    } catch (e) {
+      console.error("Failed to reload customer/wallet state:", e);
+    }
+
     pushActivityLog({
       action: "PAYMENT_RECEIVED",
       entityType: "INVOICE",
@@ -261,6 +290,56 @@ export function CustomerCreditCheckDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
+            {(() => {
+              if (!targetInvoice) return null;
+              const invoiceCustomer = useCustomerStore.getState().customers.find((c) => c.id === targetInvoice.customerId);
+              if (invoiceCustomer && invoiceCustomer.walletBalance > 0) {
+                const remainingBalance = balanceDue(targetInvoice);
+                return (
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                        Wallet Balance: ₹{invoiceCustomer.walletBalance}
+                      </span>
+                      <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useWallet}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setUseWallet(checked);
+                            const walletUse = checked
+                              ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
+                              : 0;
+                            setPaymentAmount(String(Math.max(0, Math.round((remainingBalance - walletUse) * 100) / 100)));
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Use Wallet Balance
+                      </label>
+                    </div>
+                    {useWallet && (
+                      <div className="text-xs space-y-1 pt-1 border-t border-emerald-500/10 font-mono text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Invoice Remaining:</span>
+                          <span>₹{remainingBalance}</span>
+                        </div>
+                        <div className="flex justify-between text-rose-500">
+                          <span>Wallet Used:</span>
+                          <span>-₹{Math.min(invoiceCustomer.walletBalance, remainingBalance)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-foreground">
+                          <span>Amount to Pay:</span>
+                          <span>₹{Math.max(0, Math.round((remainingBalance - Math.min(invoiceCustomer.walletBalance, remainingBalance)) * 100) / 100)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="space-y-2">
               <Label htmlFor="credit-pay-amt">Amount (INR)</Label>
               <Input
@@ -271,6 +350,54 @@ export function CustomerCreditCheckDialog({
                 placeholder="0"
               />
             </div>
+
+            {(() => {
+              if (!targetInvoice) return null;
+              const invoiceCustomer = useCustomerStore.getState().customers.find((c) => c.id === targetInvoice.customerId);
+              const remainingBalance = balanceDue(targetInvoice);
+              const walletUse = useWallet && invoiceCustomer
+                ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
+                : 0;
+              const inputAmt = Number(paymentAmount) || 0;
+              const targetBalance = remainingBalance - walletUse;
+              const extra = inputAmt > targetBalance ? Math.round((inputAmt - targetBalance) * 100) / 100 : 0;
+              
+              if (extra > 0) {
+                return (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
+                    <div className="text-xs space-y-1 font-mono text-muted-foreground">
+                      <div className="flex justify-between">
+                        <span>Invoice Amount:</span>
+                        <span>₹{targetBalance}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Amount Received:</span>
+                        <span>₹{inputAmt}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-amber-600">
+                        <span>Extra Amount:</span>
+                        <span>₹{extra}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 border-t border-amber-500/10 pt-2">
+                      <input
+                        id="chk-credit-pay-ref"
+                        type="checkbox"
+                        checked={addExtraToWallet}
+                        onChange={(e) => setAddExtraToWallet(e.target.checked)}
+                        className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                      />
+                      <Label htmlFor="chk-credit-pay-ref" className="text-xs font-semibold cursor-pointer select-none">
+                        Add ₹{extra} to customer wallet?
+                      </Label>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="space-y-2">
               <Label>Method</Label>
               <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
