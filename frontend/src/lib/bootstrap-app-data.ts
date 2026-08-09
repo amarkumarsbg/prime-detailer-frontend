@@ -49,7 +49,11 @@ import { useFollowUpStore } from "@/store/follow-up-store";
 import type { CashBankAccount, CashBankTransaction } from "@/store/cash-bank-store";
 import { useCashBankStore } from "@/store/cash-bank-store";
 import { usePayrollStore } from "@/store/payroll-store";
-import { useMembershipStore } from "@/store/membership-store";
+import {
+  normalizeMembershipPackages,
+  normalizeMembershipSubscriptions,
+  useMembershipStore,
+} from "@/store/membership-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import type { Notification } from "@/store/notification-store";
 import { useNotificationStore } from "@/store/notification-store";
@@ -187,8 +191,12 @@ export async function bootstrapAppData(): Promise<void> {
     | null
     | undefined;
   useMembershipStore.setState({
-    packages: Array.isArray(membership?.packages) ? membership.packages : [],
-    subscriptions: Array.isArray(membership?.subscriptions) ? membership.subscriptions : [],
+    packages: Array.isArray(membership?.packages)
+      ? normalizeMembershipPackages(membership.packages)
+      : [],
+    subscriptions: Array.isArray(membership?.subscriptions)
+      ? normalizeMembershipSubscriptions(membership.subscriptions)
+      : [],
   });
 
   useServiceCategoryStore.setState({

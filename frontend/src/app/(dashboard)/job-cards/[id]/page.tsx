@@ -73,6 +73,7 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useMembershipStore } from "@/store/membership-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
@@ -236,6 +237,11 @@ export default function JobCardDetailPage() {
   /** Fallback % for suggested advance copy on job card when creation left hint empty. */
   const effectiveAdvanceHintPercent = jobCard?.highEndAdvanceHintPercent ?? 30;
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
+  const membershipPackages = useMembershipStore((s) => s.packages);
+  const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
+  const getUsedIncludedServiceCount = useMembershipStore((s) => s.getUsedIncludedServiceCount);
+  const getRemainingIncludedServiceCount = useMembershipStore((s) => s.getRemainingIncludedServiceCount);
+  const redeemMembershipServiceUsage = useMembershipStore((s) => s.redeemMembershipServiceUsage);
 
   /** Advance UI: premium programs and/or any catalog line marked high-end (not only the PPF wizard step). */
   const jobQualifiesForHighEndAdvance = useMemo(() => {
@@ -775,15 +781,70 @@ export default function JobCardDetailPage() {
   const totalCount = serviceItems.length;
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
+  const membershipUsageByCatalogId = useMemo(() => {
+    const m = new Map<
+      string,
+      { included: number; used: number; remaining: number; isIncluded: boolean }
+    >();
+    if (!jobCard) return m;
+    const sub = getActiveMembership(jobCard.customerId, jobCard.vehicleId);
+    const pkg = sub ? membershipPackages.find((p) => p.id === sub.packageId) : undefined;
+    if (!sub || !pkg) return m;
+    for (const sid of pkg.includedServiceIds) {
+      const included = Math.max(1, pkg.includedServiceQuantities?.[sid] ?? 1);
+      const used = getUsedIncludedServiceCount(sub, sid);
+      const remaining = getRemainingIncludedServiceCount(sub, pkg, sid);
+      m.set(sid, { included, used, remaining, isIncluded: true });
+    }
+    return m;
+  }, [jobCard, getActiveMembership, membershipPackages, getRemainingIncludedServiceCount, getUsedIncludedServiceCount]);
+
   const toggleServiceComplete = (serviceId: string) => {
     if (!jobCard) return;
-    const next = serviceItems.map((s) =>
-      s.id === serviceId ? { ...s, isCompleted: !s.isCompleted } : s
-    );
+    const target = serviceItems.find((s) => s.id === serviceId);
+    if (!target) return;
+    const markingComplete = !target.isCompleted;
+    if (markingComplete) {
+      const sub = getActiveMembership(jobCard.customerId, jobCard.vehicleId);
+      const pkg = sub ? membershipPackages.find((p) => p.id === sub.packageId) : undefined;
+      const isMembershipBenefit = target.price <= 0;
+      if (sub && pkg && isMembershipBenefit && pkg.includedServiceIds.includes(target.serviceCatalogId)) {
+        const remaining = getRemainingIncludedServiceCount(sub, pkg, target.serviceCatalogId);
+        if (remaining <= 0) {
+          toast.error(`No remaining membership usage for ${target.name}.`);
+          return;
+        }
+        const redeemed = redeemMembershipServiceUsage({
+          subscriptionId: sub.id,
+          serviceCatalogId: target.serviceCatalogId,
+          serviceName: target.name,
+          jobCardId: jobCard.id,
+          quantity: 1,
+        });
+        if (!redeemed.ok) {
+          toast.error(redeemed.error);
+          return;
+        }
+        toast.success(`${target.name} marked used via membership. Remaining: ${redeemed.remaining}`);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const byUser = authUser?.id ?? "USR-001";
+    const next = serviceItems.map((s) => {
+      if (s.id !== serviceId) return s;
+      const done = !s.isCompleted;
+      return {
+        ...s,
+        isCompleted: done,
+        completedAt: done ? nowIso : undefined,
+        completedBy: done ? byUser : undefined,
+      };
+    });
     setServiceItems(next);
     updateJobCard(jobCard.id, {
       services: next,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowIso,
     });
   };
 
@@ -1880,6 +1941,11 @@ export default function JobCardDetailPage() {
                         currency: "INR",
                       }).format(item.price)}
                     </p>
+                    {membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Included: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.included} · Used: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.used} · Remaining: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.remaining}
+                      </p>
+                    ) : null}
                     {item.durationMinutes != null && (
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Est. {item.durationMinutes} min
@@ -3062,6 +3128,11 @@ export default function JobCardDetailPage() {
                         <p className="text-xs text-muted-foreground tabular-nums">
                           {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(item.price)}
                         </p>
+                        {membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Included: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.included} · Used: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.used} · Remaining: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.remaining}
+                          </p>
+                        ) : null}
                         {item.durationMinutes != null && (
                           <p className="text-xs text-muted-foreground mt-0.5">
                             Est. {item.durationMinutes} min

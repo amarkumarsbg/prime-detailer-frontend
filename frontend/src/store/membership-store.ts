@@ -17,6 +17,74 @@ export const MEMBERSHIP_TIER_DAYS: Record<MembershipTier, number> = {
   YEARLY: 365,
 };
 
+function toPositiveInt(value: unknown, fallback = 1): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  const rounded = Math.floor(n);
+  return rounded >= 1 ? rounded : fallback;
+}
+
+export function membershipIncludedQuantity(pkg: MembershipPackage, serviceCatalogId: string): number {
+  const raw = pkg.includedServiceQuantities?.[serviceCatalogId];
+  return toPositiveInt(raw, 1);
+}
+
+function normalizeIncludedServiceIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+export function normalizeMembershipPackage(pkg: MembershipPackage): MembershipPackage {
+  const includedServiceIds = normalizeIncludedServiceIds(pkg.includedServiceIds ?? []);
+  const includedServiceQuantities: Record<string, number> = {};
+  for (const sid of includedServiceIds) {
+    includedServiceQuantities[sid] = membershipIncludedQuantity(pkg, sid);
+  }
+  return {
+    ...pkg,
+    includedServiceIds,
+    includedServiceQuantities,
+  };
+}
+
+export function normalizeMembershipPackages(packages: MembershipPackage[]): MembershipPackage[] {
+  return packages.map(normalizeMembershipPackage);
+}
+
+export function usageQuantity(entry: MembershipServiceUsage): number {
+  return toPositiveInt(entry.quantity, 1);
+}
+
+export function usedMembershipCounts(sub: CustomerMembership): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const u of sub.usageHistory ?? []) {
+    const qty = usageQuantity(u);
+    m.set(u.serviceCatalogId, (m.get(u.serviceCatalogId) ?? 0) + qty);
+  }
+  return m;
+}
+
+export function normalizeMembershipSubscription(sub: CustomerMembership): CustomerMembership {
+  const usageHistory = (sub.usageHistory ?? []).map((u) => ({
+    ...u,
+    quantity: usageQuantity(u),
+  }));
+  return {
+    ...sub,
+    usageHistory,
+  };
+}
+
+export function normalizeMembershipSubscriptions(subscriptions: CustomerMembership[]): CustomerMembership[] {
+  return subscriptions.map(normalizeMembershipSubscription);
+}
+
 function addDays(isoStart: string, days: number): string {
   const d = new Date(isoStart);
   d.setDate(d.getDate() + days);
@@ -61,6 +129,19 @@ interface MembershipState {
     subscriptionId: string,
     entries: Omit<MembershipServiceUsage, "usedAt">[]
   ) => void;
+  redeemMembershipServiceUsage: (input: {
+    subscriptionId: string;
+    serviceCatalogId: string;
+    serviceName?: string;
+    jobCardId?: string;
+    quantity?: number;
+  }) => { ok: true; remaining: number } | { ok: false; error: string; remaining: number };
+  getUsedIncludedServiceCount: (sub: CustomerMembership, serviceCatalogId: string) => number;
+  getRemainingIncludedServiceCount: (
+    sub: CustomerMembership,
+    pkg: MembershipPackage,
+    serviceCatalogId: string
+  ) => number;
   getUsedIncludedServiceIds: (sub: CustomerMembership) => Set<string>;
   subscriptionEffectiveStatus: (sub: CustomerMembership) => CustomerMembershipStatus;
 }
@@ -75,11 +156,12 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
 
   upsertPackage: (pkg) => {
     set((s) => {
-      const idx = s.packages.findIndex((p) => p.id === pkg.id);
+      const normalized = normalizeMembershipPackage(pkg);
+      const idx = s.packages.findIndex((p) => p.id === normalized.id);
       const packages =
         idx >= 0
-          ? s.packages.map((p, i) => (i === idx ? pkg : p))
-          : [...s.packages, pkg];
+          ? s.packages.map((p, i) => (i === idx ? normalized : p))
+          : [...s.packages, normalized];
       persistMembership(packages, s.subscriptions);
       return { packages };
     });
@@ -178,6 +260,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
                 ...(sub.usageHistory ?? []),
                 ...entries.map((e) => ({
                   ...e,
+                  quantity: toPositiveInt(e.quantity, 1),
                   usedAt,
                 })),
               ],
@@ -189,10 +272,72 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
     });
   },
 
+  redeemMembershipServiceUsage: (input) => {
+    const quantity = toPositiveInt(input.quantity, 1);
+    const sub = get().subscriptions.find((s) => s.id === input.subscriptionId);
+    if (!sub) return { ok: false, error: "Membership subscription not found", remaining: 0 };
+    if (!isSubscriptionActiveNow(sub)) {
+      return { ok: false, error: "Membership is not active", remaining: 0 };
+    }
+    const pkg = get().packages.find((p) => p.id === sub.packageId);
+    if (!pkg) return { ok: false, error: "Membership package not found", remaining: 0 };
+
+    const included = membershipIncludedQuantity(pkg, input.serviceCatalogId);
+    if (!pkg.includedServiceIds.includes(input.serviceCatalogId)) {
+      return { ok: false, error: "Service is not included in this membership", remaining: 0 };
+    }
+
+    const used = usedMembershipCounts(sub).get(input.serviceCatalogId) ?? 0;
+    const remaining = Math.max(0, included - used);
+    if (remaining < quantity) {
+      return {
+        ok: false,
+        error: `No remaining uses for this service (${remaining} left)`,
+        remaining,
+      };
+    }
+
+    const usedAt = new Date().toISOString();
+    set((s) => {
+      const subscriptions = s.subscriptions.map((row) =>
+        row.id === input.subscriptionId
+          ? {
+              ...row,
+              usageHistory: [
+                ...(row.usageHistory ?? []),
+                {
+                  usedAt,
+                  serviceCatalogId: input.serviceCatalogId,
+                  quantity,
+                  serviceName: input.serviceName,
+                  jobCardId: input.jobCardId,
+                },
+              ],
+            }
+          : row
+      );
+      persistMembership(s.packages, subscriptions);
+      return { subscriptions };
+    });
+
+    return { ok: true, remaining: remaining - quantity };
+  },
+
+  getUsedIncludedServiceCount: (sub, serviceCatalogId) => {
+    return usedMembershipCounts(sub).get(serviceCatalogId) ?? 0;
+  },
+
+  getRemainingIncludedServiceCount: (sub, pkg, serviceCatalogId) => {
+    if (!pkg.includedServiceIds.includes(serviceCatalogId)) return 0;
+    const used = usedMembershipCounts(sub).get(serviceCatalogId) ?? 0;
+    return Math.max(0, membershipIncludedQuantity(pkg, serviceCatalogId) - used);
+  },
+
   getUsedIncludedServiceIds: (sub) => {
-    const hist = sub.usageHistory ?? [];
     const used = new Set<string>();
-    for (const u of hist) used.add(u.serviceCatalogId);
+    for (const [serviceCatalogId, count] of usedMembershipCounts(sub)) {
+      if (count > 0) used.add(serviceCatalogId);
+    }
     return used;
   },
 

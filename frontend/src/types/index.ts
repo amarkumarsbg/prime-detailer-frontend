@@ -243,6 +243,8 @@ export interface MembershipPackage {
   /** Demo list price (no payment processing). */
   price: number;
   includedServiceIds: string[];
+  /** Allowed usage count per included service id during the package period. */
+  includedServiceQuantities?: Record<string, number>;
   isActive: boolean;
   createdAt: string;
 }
@@ -251,6 +253,8 @@ export interface MembershipPackage {
 export interface MembershipServiceUsage {
   usedAt: string;
   serviceCatalogId: string;
+  /** Number of units consumed in this usage event (defaults to 1 for legacy rows). */
+  quantity?: number;
   serviceName?: string;
   jobCardId?: string;
 }

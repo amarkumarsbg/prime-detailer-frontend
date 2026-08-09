@@ -38,6 +38,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useCommunicationStore } from "@/store/communication-store";
 import {
   MEMBERSHIP_TIER_DAYS,
+  membershipIncludedQuantity,
   useMembershipStore,
 } from "@/store/membership-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
@@ -204,6 +205,8 @@ export default function CustomerDetailPage() {
   const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
   const packages = useMembershipStore((s) => s.packages);
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
+  const getUsedIncludedServiceCount = useMembershipStore((s) => s.getUsedIncludedServiceCount);
+  const getRemainingIncludedServiceCount = useMembershipStore((s) => s.getRemainingIncludedServiceCount);
   const subscriptionEffectiveStatus = useMembershipStore((s) => s.subscriptionEffectiveStatus);
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const serviceNameByCatalogId = useMemo(() => {
@@ -247,6 +250,7 @@ export default function CustomerDetailPage() {
     type Line = {
       usedAt: string;
       serviceName: string;
+      quantity: number;
       vehicleLabel: string;
       jobCardId?: string;
     };
@@ -262,6 +266,7 @@ export default function CustomerDetailPage() {
         lines.push({
           usedAt: u.usedAt,
           serviceName: u.serviceName ?? serviceNameByCatalogId.get(u.serviceCatalogId) ?? u.serviceCatalogId,
+          quantity: Math.max(1, Math.floor(u.quantity ?? 1)),
           vehicleLabel,
           jobCardId: u.jobCardId,
         });
@@ -1110,7 +1115,12 @@ export default function CustomerDetailPage() {
                         <p className="text-sm font-medium mb-2">Included services</p>
                         <ul className="list-inside list-disc text-sm text-muted-foreground space-y-1">
                           {pkg.includedServiceIds.map((sid) => (
-                            <li key={sid}>{serviceNameByCatalogId.get(sid) ?? sid}</li>
+                            <li key={sid}>
+                              {serviceNameByCatalogId.get(sid) ?? sid} ×{membershipIncludedQuantity(pkg, sid)}
+                              <span className="ml-1 text-xs">
+                                (Used: {getUsedIncludedServiceCount(sub, sid)} · Remaining: {getRemainingIncludedServiceCount(sub, pkg, sid)})
+                              </span>
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -1140,7 +1150,7 @@ export default function CustomerDetailPage() {
                         key={`${line.usedAt}-${line.serviceName}-${idx}`}
                         className="flex flex-col gap-0.5 rounded-md border border-border/60 px-3 py-2"
                       >
-                        <span className="font-medium">{line.serviceName}</span>
+                        <span className="font-medium">{line.serviceName} ×{line.quantity}</span>
                         <span className="text-xs text-muted-foreground">
                           {line.vehicleLabel} ·{" "}
                           {new Date(line.usedAt).toLocaleString(undefined, {

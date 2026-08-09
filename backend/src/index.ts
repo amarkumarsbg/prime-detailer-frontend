@@ -76,6 +76,18 @@ app.get("/api/run-seed-prod", (req, res) => {
   });
 });
 
+app.get("/api/check-user-prod", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: "amarkumarsbg13@gmail.com" },
+      select: { id: true, email: true, role: true, permissions: true }
+    });
+    res.json({ user });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/health/db", async (_req, res, next) => {
   try {
     await prisma.$queryRaw`SELECT 1`;

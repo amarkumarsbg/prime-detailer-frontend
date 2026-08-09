@@ -457,8 +457,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
   const subscriptionEffectiveStatus = useMembershipStore((s) => s.subscriptionEffectiveStatus);
-  const getUsedIncludedServiceIds = useMembershipStore((s) => s.getUsedIncludedServiceIds);
-  const recordMembershipUsages = useMembershipStore((s) => s.recordMembershipUsages);
+  const getUsedIncludedServiceCount = useMembershipStore((s) => s.getUsedIncludedServiceCount);
+  const getRemainingIncludedServiceCount = useMembershipStore((s) => s.getRemainingIncludedServiceCount);
   const assignMembership = useMembershipStore((s) => s.assignMembership);
   const invoices = useInvoiceStore((s) => s.invoices);
   const activeMembershipPackages = useMemo(
@@ -1564,6 +1564,25 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
     }
 
+    if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
+      const activeSub = getActiveMembership(custId, resolvedVehicleId);
+      const activePkg = activeSub
+        ? membershipPackagesAll.find((p) => p.id === activeSub.packageId)
+        : undefined;
+      if (!activeSub || !activePkg) {
+        toast.error("Active membership not found for this vehicle.");
+        return;
+      }
+      for (const sid of membershipRedeemServiceIds) {
+        const remaining = getRemainingIncludedServiceCount(activeSub, activePkg, sid);
+        if (remaining <= 0) {
+          const serviceName = serviceCatalog.find((c) => c.id === sid)?.name ?? sid;
+          toast.error(`${serviceName} has no remaining membership usage.`);
+          return;
+        }
+      }
+    }
+
     const serviceItems = selectedCatalogItems.map((s) => {
       const isFreeMain =
         membershipVisitChoice === "yes" &&
@@ -1822,20 +1841,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         pickupDriverName: pickupDriver?.name,
         branches,
       });
-    }
-
-    if (membershipVisitChoice === "yes" && membershipRedeemServiceIds.length > 0) {
-      const sub = getActiveMembership(custId, resolvedVehicleId);
-      if (sub) {
-        recordMembershipUsages(
-          sub.id,
-          membershipRedeemServiceIds.map((sid) => ({
-            serviceCatalogId: sid,
-            serviceName: serviceCatalog.find((c) => c.id === sid)?.name,
-            jobCardId: id,
-          }))
-        );
-      }
     }
 
     pushActivityLog({
@@ -2180,8 +2185,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           return;
         }
         if (membershipVisitChoice === "yes") {
-          const used = getUsedIncludedServiceIds(activeMembershipForSelectedVehicle);
-          const remaining = activeMembershipPackageRow.includedServiceIds.filter((sid) => !used.has(sid));
+          const remaining = activeMembershipPackageRow.includedServiceIds.filter(
+            (sid) =>
+              getRemainingIncludedServiceCount(
+                activeMembershipForSelectedVehicle,
+                activeMembershipPackageRow,
+                sid
+              ) > 0
+          );
           if (remaining.length > 0 && membershipRedeemServiceIds.length === 0) {
             toast.error(
               "Open included services and pick at least one remaining service, or choose No for a normal booking."
@@ -3665,7 +3676,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         Included services ({membershipRedeemServiceIds.length} selected)
                       </Button>
                       <p className="text-[11px] text-muted-foreground">
-                        Already-used included services cannot be selected again this period.
+                        Services with 0 remaining usage cannot be selected this period.
                       </p>
                     </div>
                   ) : null}
@@ -3685,6 +3696,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                 {u.serviceName ??
                                   serviceCatalog.find((c) => c.id === u.serviceCatalogId)?.name ??
                                   u.serviceCatalogId}
+                                {(u.quantity ?? 1) > 1 ? ` ×${u.quantity ?? 1}` : ""}
                               </span>
                               <span className="shrink-0 tabular-nums">
                                 {new Date(u.usedAt).toLocaleString(undefined, {
@@ -3790,24 +3802,38 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1 space-y-2">
                   {activeMembershipPackageRow.includedServiceIds.map((sid) => {
                     const cat = serviceCatalog.find((c) => c.id === sid);
-                    const used = getUsedIncludedServiceIds(activeMembershipForSelectedVehicle).has(sid);
+                    const included = Math.max(
+                      1,
+                      activeMembershipPackageRow.includedServiceQuantities?.[sid] ?? 1
+                    );
+                    const used = getUsedIncludedServiceCount(activeMembershipForSelectedVehicle, sid);
+                    const remaining = getRemainingIncludedServiceCount(
+                      activeMembershipForSelectedVehicle,
+                      activeMembershipPackageRow,
+                      sid
+                    );
+                    const exhausted = remaining <= 0;
                     const checked = membershipRedeemServiceIds.includes(sid);
                     return (
                       <label
                         key={sid}
                         className={cn(
                           "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm",
-                          used ? "border-border/50 bg-muted/40 opacity-60 cursor-not-allowed" : "border-border bg-card"
+                          exhausted
+                            ? "border-border/50 bg-muted/40 opacity-60 cursor-not-allowed"
+                            : "border-border bg-card"
                         )}
                       >
                         <Checkbox
                           checked={checked}
-                          disabled={used}
+                          disabled={exhausted}
                           onCheckedChange={(v) => {
-                            if (used) return;
+                            if (exhausted) return;
                             const on = v === true;
                             setMembershipRedeemServiceIds((prev) =>
-                              on ? [...prev, sid] : prev.filter((x) => x !== sid)
+                              on
+                                ? (prev.includes(sid) ? prev : [...prev, sid])
+                                : prev.filter((x) => x !== sid)
                             );
                             setSelectedMainIds((prev) => {
                               if (on) return prev.includes(sid) ? prev : [...prev, sid];
@@ -3819,11 +3845,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         />
                         <span className="min-w-0">
                           <span className="font-medium block">{cat?.name ?? sid}</span>
-                          {used ? (
-                            <span className="text-[11px] text-amber-700 dark:text-amber-300">Already used</span>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground">{cat?.category}</span>
-                          )}
+                          <span className="text-[11px] text-muted-foreground">{cat?.category}</span>
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                            Included: {included} · Used: {used} · Remaining: {remaining}
+                          </span>
+                          {exhausted ? (
+                            <span className="block text-[11px] text-amber-700 dark:text-amber-300">
+                              No remaining uses
+                            </span>
+                          ) : null}
                         </span>
                       </label>
                     );

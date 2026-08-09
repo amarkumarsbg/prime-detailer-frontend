@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MEMBERSHIP_TIER_DAYS,
+  membershipIncludedQuantity,
   useMembershipStore,
 } from "@/store/membership-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -73,25 +74,29 @@ function formatTierLabel(tier: MembershipTier): string {
   return found.label.replace(/\s*\(.*\)$/, "");
 }
 
+function includedServiceLabel(name: string, quantity: number): string {
+  return `${name} ×${quantity}`;
+}
+
 const MOBILE_SERVICES_PREVIEW = 2;
 
 function MembershipPackageMobileCard({
   pkg,
-  serviceNames,
+  serviceLabels,
   onEdit,
   onToggleActive,
 }: {
   pkg: MembershipPackage;
-  serviceNames: string[];
+  serviceLabels: string[];
   onEdit: () => void;
   onToggleActive: (active: boolean) => void;
 }) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
-  const overflowCount = Math.max(0, serviceNames.length - MOBILE_SERVICES_PREVIEW);
+  const overflowCount = Math.max(0, serviceLabels.length - MOBILE_SERVICES_PREVIEW);
   const showTruncated = overflowCount > 0 && !servicesExpanded;
   const previewText = showTruncated
-    ? serviceNames.slice(0, MOBILE_SERVICES_PREVIEW).join(", ")
-    : serviceNames.join(", ");
+    ? serviceLabels.slice(0, MOBILE_SERVICES_PREVIEW).join(", ")
+    : serviceLabels.join(", ");
 
   return (
     <MobileRowCard className="p-3.5">
@@ -120,7 +125,7 @@ function MembershipPackageMobileCard({
         </Button>
       </div>
 
-      {serviceNames.length > 0 ? (
+      {serviceLabels.length > 0 ? (
         <div className="mt-2.5 rounded-md bg-muted/35 px-2.5 py-2">
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Services
@@ -220,15 +225,20 @@ export function MembershipPageClient() {
   const [formName, setFormName] = useState("");
   const [formTier, setFormTier] = useState<MembershipTier>("MONTHLY");
   const [formPrice, setFormPrice] = useState("");
-  const [formServiceIds, setFormServiceIds] = useState<Set<string>>(new Set());
+  const [formServiceQuantities, setFormServiceQuantities] = useState<Record<string, number>>({});
   const [serviceFilter, setServiceFilter] = useState("");
+
+  const selectedServiceIds = useMemo(
+    () => Object.keys(formServiceQuantities),
+    [formServiceQuantities]
+  );
 
   const openNewPackage = () => {
     setEditingPackage(null);
     setFormName("");
     setFormTier("MONTHLY");
     setFormPrice("");
-    setFormServiceIds(new Set());
+    setFormServiceQuantities({});
     setServiceFilter("");
     setPkgDialogOpen(true);
   };
@@ -238,7 +248,11 @@ export function MembershipPageClient() {
     setFormName(p.name);
     setFormTier(p.tier);
     setFormPrice(String(p.price));
-    setFormServiceIds(new Set(p.includedServiceIds));
+    setFormServiceQuantities(
+      Object.fromEntries(
+        p.includedServiceIds.map((sid) => [sid, membershipIncludedQuantity(p, sid)])
+      )
+    );
     setServiceFilter("");
     setPkgDialogOpen(true);
   };
@@ -255,8 +269,8 @@ export function MembershipPageClient() {
   }, [activeServices, serviceFilter]);
 
   const orphanedSelectedIds = useMemo(() => {
-    return Array.from(formServiceIds).filter((id) => !catalog.some((c) => c.id === id));
-  }, [formServiceIds, catalog]);
+    return selectedServiceIds.filter((id) => !catalog.some((c) => c.id === id));
+  }, [selectedServiceIds, catalog]);
 
   const savePackage = () => {
     const price = parseFloat(formPrice.replace(/,/g, ""));
@@ -268,7 +282,7 @@ export function MembershipPageClient() {
       toast.error("Enter a valid price.");
       return;
     }
-    if (formServiceIds.size === 0) {
+    if (selectedServiceIds.length === 0) {
       toast.error("Select at least one service.");
       return;
     }
@@ -278,7 +292,10 @@ export function MembershipPageClient() {
       name: formName.trim(),
       tier: formTier,
       price,
-      includedServiceIds: Array.from(formServiceIds),
+      includedServiceIds: selectedServiceIds,
+      includedServiceQuantities: Object.fromEntries(
+        selectedServiceIds.map((sid) => [sid, Math.max(1, Math.floor(formServiceQuantities[sid] ?? 1))])
+      ),
       isActive: editingPackage?.isActive ?? true,
       createdAt: editingPackage?.createdAt ?? now,
     };
@@ -417,13 +434,23 @@ export function MembershipPageClient() {
             <CardContent className="pb-2 md:pb-6">
               <MobileCardList className="space-y-2.5 pb-6">
                 {packages.map((p) => (
+                  (() => {
+                    const serviceLabels = p.includedServiceIds.map((id) =>
+                      includedServiceLabel(
+                        serviceNameById.get(id) ?? id,
+                        membershipIncludedQuantity(p, id)
+                      )
+                    );
+                    return (
                   <MembershipPackageMobileCard
                     key={p.id}
                     pkg={p}
-                    serviceNames={p.includedServiceIds.map((id) => serviceNameById.get(id) ?? id)}
+                    serviceLabels={serviceLabels}
                     onEdit={() => openEditPackage(p)}
                     onToggleActive={(c) => setPackageActive(p.id, c)}
                   />
+                    );
+                  })()
                 ))}
               </MobileCardList>
               <DesktopTableWrap>
@@ -451,7 +478,12 @@ export function MembershipPageClient() {
                         <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(p.price)}</td>
                         <td className="max-w-[280px] px-2 py-2 text-sm text-muted-foreground">
                           {p.includedServiceIds
-                            .map((id) => serviceNameById.get(id) ?? id)
+                            .map((id) =>
+                              includedServiceLabel(
+                                serviceNameById.get(id) ?? id,
+                                membershipIncludedQuantity(p, id)
+                              )
+                            )
                             .join(", ")}
                         </td>
                         <td className="px-2 py-2 text-center">
@@ -670,7 +702,7 @@ export function MembershipPageClient() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Included services</Label>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    {formServiceIds.size} selected
+                    {selectedServiceIds.length} selected
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -702,23 +734,68 @@ export function MembershipPageClient() {
                       filteredActiveServices.map((s) => (
                         <label
                           key={s.id}
-                          className="flex cursor-pointer items-start gap-2 text-sm leading-tight"
+                          className="flex items-start justify-between gap-3 text-sm leading-tight"
                         >
-                          <Checkbox
-                            checked={formServiceIds.has(s.id)}
-                            onCheckedChange={(checked) => {
-                              setFormServiceIds((prev) => {
-                                const next = new Set(prev);
-                                if (checked === true) next.add(s.id);
-                                else next.delete(s.id);
-                                return next;
-                              });
-                            }}
-                          />
-                          <span>
-                            <span className="font-medium">{s.name}</span>
-                            <span className="block text-xs text-muted-foreground">{s.category}</span>
-                          </span>
+                          <div className="flex min-w-0 cursor-pointer items-start gap-2">
+                            <Checkbox
+                              checked={formServiceQuantities[s.id] != null}
+                              onCheckedChange={(checked) => {
+                                setFormServiceQuantities((prev) => {
+                                  const next = { ...prev };
+                                  if (checked === true) {
+                                    next[s.id] = Math.max(1, Math.floor(prev[s.id] ?? 1));
+                                  } else {
+                                    delete next[s.id];
+                                  }
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className="min-w-0">
+                              <span className="font-medium">{s.name}</span>
+                              <span className="block text-xs text-muted-foreground">{s.category}</span>
+                            </span>
+                          </div>
+                          {formServiceQuantities[s.id] != null ? (
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 px-0"
+                                onClick={() => {
+                                  setFormServiceQuantities((prev) => {
+                                    const cur = Math.max(1, Math.floor(prev[s.id] ?? 1));
+                                    if (cur <= 1) {
+                                      const next = { ...prev };
+                                      delete next[s.id];
+                                      return next;
+                                    }
+                                    return { ...prev, [s.id]: cur - 1 };
+                                  });
+                                }}
+                              >
+                                -
+                              </Button>
+                              <span className="min-w-[2ch] text-center tabular-nums">
+                                {formServiceQuantities[s.id]}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 px-0"
+                                onClick={() => {
+                                  setFormServiceQuantities((prev) => ({
+                                    ...prev,
+                                    [s.id]: Math.max(1, Math.floor(prev[s.id] ?? 1)) + 1,
+                                  }));
+                                }}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          ) : null}
                         </label>
                       ))
                     )}
