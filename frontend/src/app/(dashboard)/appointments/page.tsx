@@ -88,6 +88,11 @@ import {
   localTodayDateInputMin,
   localTimeInputMinNow,
 } from "@/lib/booking-calendar-validation";
+import {
+  findVehicleByNormalizedReg,
+  INDIAN_VEHICLE_REG_HINT,
+  isValidIndianVehicleRegistration,
+} from "@/lib/vehicle-registration";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -169,6 +174,11 @@ export default function AppointmentsPage() {
   const [newVehicleSegment, setNewVehicleSegment] = useState<VehicleSegment>("HATCHBACK");
   const [formCustomerId, setFormCustomerId] = useState("");
   const [formVehicleId, setFormVehicleId] = useState("");
+  const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
+  const [newVehicleRegInput, setNewVehicleRegInput] = useState("");
+  const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
+  const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
+  const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
   const [formServiceId, setFormServiceId] = useState("");
   const [formMechanicId, setFormMechanicId] = useState("");
   const [formDate, setFormDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
@@ -191,6 +201,87 @@ export default function AppointmentsPage() {
     () => (newVehicleMake ? getModels(newVehicleMake) : []),
     [getModels, newVehicleMake]
   );
+  const modelOptionsForExistingCustomer = useMemo(
+    () => (newVehicleMakeInput ? getModels(newVehicleMakeInput) : []),
+    [getModels, newVehicleMakeInput]
+  );
+
+  const selectedExistingCustomer = useMemo(
+    () => customers.find((c) => c.id === formCustomerId) ?? null,
+    [customers, formCustomerId]
+  );
+
+  const handleExistingCustomerVehicleSelection = (value: string) => {
+    if (value === "__add_new_vehicle__") {
+      if (!formCustomerId) return;
+      setFormVehicleId("");
+      setNewVehicleRegInput("");
+      setNewVehicleMakeInput("");
+      setNewVehicleModelInput("");
+      setNewVehicleSegmentInput("HATCHBACK");
+      setAddVehicleForExistingCustomerDialogOpen(true);
+      return;
+    }
+    setFormVehicleId(value);
+  };
+
+  const handleSaveVehicleForExistingCustomer = () => {
+    if (!formCustomerId) {
+      toast.error("Select customer first");
+      return;
+    }
+
+    const reg = newVehicleRegInput.trim().toUpperCase();
+    const make = newVehicleMakeInput.trim();
+    const model = newVehicleModelInput.trim();
+    if (!reg || !make || !model) {
+      toast.error("Enter registration, make, and model");
+      return;
+    }
+
+    if (!isValidIndianVehicleRegistration(reg)) {
+      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
+      return;
+    }
+
+    const existingVehicle = findVehicleByNormalizedReg(vehicles, reg);
+    if (existingVehicle) {
+      toast.error("Registration already in the system", {
+        description: `${existingVehicle.registrationNumber} is already assigned to ${existingVehicle.customerName}.`,
+      });
+      return;
+    }
+
+    const customer = customers.find((c) => c.id === formCustomerId);
+    if (!customer) {
+      toast.error("Could not find selected customer");
+      return;
+    }
+
+    const newVehicle: Vehicle = {
+      id: `veh-apt-${Date.now()}`,
+      customerId: formCustomerId,
+      customerName: customer.name,
+      registrationNumber: reg,
+      make,
+      model,
+      segment: newVehicleSegmentInput,
+      fuelType: "PETROL",
+      color: "—",
+      year: new Date().getFullYear(),
+    };
+
+    setVehicles((prev) => [...prev, newVehicle]);
+    setFormVehicleId(newVehicle.id);
+    setAddVehicleForExistingCustomerDialogOpen(false);
+    setNewVehicleRegInput("");
+    setNewVehicleMakeInput("");
+    setNewVehicleModelInput("");
+    setNewVehicleSegmentInput("HATCHBACK");
+    toast.success("Vehicle added", {
+      description: `${reg} has been linked to ${customer.name} and selected for this appointment.`,
+    });
+  };
 
   const resetAppointmentForm = () => {
     setCustomerMode("existing");
@@ -204,6 +295,11 @@ export default function AppointmentsPage() {
     setNewVehicleSegment("HATCHBACK");
     setFormCustomerId("");
     setFormVehicleId("");
+    setAddVehicleForExistingCustomerDialogOpen(false);
+    setNewVehicleRegInput("");
+    setNewVehicleMakeInput("");
+    setNewVehicleModelInput("");
+    setNewVehicleSegmentInput("HATCHBACK");
     setFormServiceId("");
     setFormMechanicId("");
     setFormDate(format(new Date(), "yyyy-MM-dd"));
@@ -597,7 +693,7 @@ export default function AppointmentsPage() {
                       <Label htmlFor="apt-vehicle">Vehicle</Label>
                       <Select
                         value={formVehicleId}
-                        onValueChange={setFormVehicleId}
+                        onValueChange={handleExistingCustomerVehicleSelection}
                         disabled={!formCustomerId}
                       >
                         <SelectTrigger id="apt-vehicle">
@@ -615,8 +711,23 @@ export default function AppointmentsPage() {
                               </SelectItem>
                             ))
                           )}
+                          <SelectItem value="__add_new_vehicle__">+ Add New Vehicle</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto px-0 text-xs"
+                        disabled={!formCustomerId}
+                        onClick={() => handleExistingCustomerVehicleSelection("__add_new_vehicle__")}
+                      >
+                        + Add New Vehicle
+                      </Button>
+                      {formCustomerId && vehiclesForCustomer.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No vehicles yet for this customer. Click + Add New Vehicle.
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 ) : (
@@ -840,6 +951,106 @@ export default function AppointmentsPage() {
                   <Button type="submit">Schedule</Button>
                 </div>
               </form>
+
+              <Dialog
+                open={addVehicleForExistingCustomerDialogOpen}
+                onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
+              >
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Add New Vehicle</DialogTitle>
+                    <DialogDescription>
+                      Link a new vehicle to {selectedExistingCustomer?.name ?? "the selected customer"} and continue scheduling.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Customer</Label>
+                      <Input value={selectedExistingCustomer?.name ?? ""} readOnly disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="apt-existing-vehicle-reg">Registration *</Label>
+                      <Input
+                        id="apt-existing-vehicle-reg"
+                        value={newVehicleRegInput}
+                        onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
+                        placeholder="e.g. KA01AB1234"
+                        maxLength={16}
+                        className="font-mono uppercase"
+                      />
+                      <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="apt-existing-vehicle-segment">Type</Label>
+                        <Select
+                          value={newVehicleSegmentInput}
+                          onValueChange={(value) => setNewVehicleSegmentInput(value as VehicleSegment)}
+                        >
+                          <SelectTrigger id="apt-existing-vehicle-segment">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {APPOINTMENT_VEHICLE_SEGMENTS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="apt-existing-vehicle-make">Make *</Label>
+                        <Select
+                          value={newVehicleMakeInput || undefined}
+                          onValueChange={(value) => {
+                            setNewVehicleMakeInput(value);
+                            setNewVehicleModelInput("");
+                          }}
+                        >
+                          <SelectTrigger id="apt-existing-vehicle-make">
+                            <SelectValue placeholder="Select make" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {makeOptions.map((make) => (
+                              <SelectItem key={make} value={make}>
+                                {make}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="apt-existing-vehicle-model">Model *</Label>
+                        <Select
+                          value={newVehicleModelInput || undefined}
+                          onValueChange={setNewVehicleModelInput}
+                          disabled={!newVehicleMakeInput}
+                        >
+                          <SelectTrigger id="apt-existing-vehicle-model">
+                            <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select make first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {modelOptionsForExistingCustomer.map((model) => (
+                              <SelectItem key={model.name} value={model.name}>
+                                {model.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
+                      Save vehicle
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </DialogContent>
           </Dialog>
         }
