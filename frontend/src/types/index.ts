@@ -99,6 +99,7 @@ export interface User {
   passwordUpdatedAt?: string;
   /** Staff user id who provisioned this account password (server audit). */
   passwordCreatedBy?: string;
+  permissions?: string[];
 }
 
 export type PayrollRecordStatus = "PENDING" | "PROCESSING" | "PAID";

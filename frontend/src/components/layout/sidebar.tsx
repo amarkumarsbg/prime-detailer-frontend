@@ -58,11 +58,12 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const userRole = useAuthStore((s) => s.user?.role);
+  const userPermissions = useAuthStore((s) => s.user?.permissions);
   const clearDashboardFilter = useDashboardFilterStore((s) => s.setActiveFilter);
 
   const filteredGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => canAccessNavItem(item.roles, userRole)),
+    items: group.items.filter((item) => canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions)),
   })).filter((group) => group.items.length > 0);
 
   const navRef = useRef<HTMLElement>(null);

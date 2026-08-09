@@ -9,7 +9,7 @@ export const STAFF_MANAGEMENT_ROLES: readonly UserRole[] = [
 ] as const;
 
 /** Can assign or change roles (including elevating to admin). */
-export const ROLE_ASSIGNMENT_ROLES: readonly UserRole[] = ["SUPER_ADMIN", "ADMIN"] as const;
+export const ROLE_ASSIGNMENT_ROLES: readonly UserRole[] = ["SUPER_ADMIN"] as const;
 
 /** Branch create/update. */
 export const BRANCH_MUTATION_ROLES: readonly UserRole[] = [
@@ -27,10 +27,7 @@ export function isStaffManager(role: UserRole): boolean {
 }
 
 export function canAssignUserRole(actor: UserRole, targetRole: UserRole): boolean {
-  if (!isStaffManager(actor)) return false;
-  if (targetRole === "SUPER_ADMIN") return actor === "SUPER_ADMIN";
-  if (targetRole === "ADMIN") return actor === "SUPER_ADMIN" || actor === "ADMIN";
-  return true;
+  return actor === "SUPER_ADMIN";
 }
 
 export function canChangeRoles(actor: UserRole): boolean {

@@ -78,6 +78,7 @@ model User {
   birthday             String?
   anniversary          String?
   passwordHash         String
+  permissions          String[] @default([])
   /** When true, client should force a password change before using the app (set for auto-generated onboarding passwords). */
   mustChangePassword   Boolean  @default(false)
   /** Staff user id (`User.id`) of the admin who last set the initial/onboarding password, when tracked. */

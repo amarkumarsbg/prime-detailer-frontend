@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import {
   getVehicles,
   postVehicle,
@@ -11,6 +11,7 @@ import {
 export const vehicleApiRouter = Router();
 
 vehicleApiRouter.use(requireAuth);
+vehicleApiRouter.use(requirePermission("VEHICLES"));
 
 vehicleApiRouter.get("/", getVehicles);
 vehicleApiRouter.post("/snapshot", postVehicleSnapshot);

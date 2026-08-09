@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStaffStore, generateRandomAttendancePin } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -45,6 +45,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
 import type { UpdatePinResult } from "@/store/staff-store";
 import type { User, UserRole } from "@/types";
+
+const ALL_PERMISSIONS = [
+  { key: "DASHBOARD", label: "Dashboard" },
+  { key: "JOB_CARDS", label: "Job Cards" },
+  { key: "BOOKINGS", label: "Bookings" },
+  { key: "PICKUP_DROP", label: "Pickup & Drop" },
+  { key: "QUOTATIONS", label: "Quotations" },
+  { key: "APPOINTMENTS", label: "Appointments" },
+  { key: "CUSTOMERS", label: "Customers" },
+  { key: "MEMBERSHIP", label: "Membership" },
+  { key: "VEHICLES", label: "Vehicles" },
+  { key: "REMINDERS", label: "Reminders" },
+  { key: "FOLLOW_UPS", label: "Follow-ups" },
+  { key: "REFERRALS", label: "Referrals" },
+  { key: "BILLING", label: "Billing" },
+  { key: "REPORTS", label: "Reports" },
+  { key: "CASH_BANK", label: "Cash & Bank" },
+  { key: "PARTIES", label: "Parties" },
+  { key: "SHARED_LEDGER", label: "Shared Ledger" },
+  { key: "EXPENSES", label: "Expenses" },
+  { key: "VENDORS", label: "Vendors" },
+  { key: "STAFF", label: "Users & Staff" },
+  { key: "ATTENDANCE", label: "Attendance" },
+  { key: "PAYROLL", label: "Salary & Payroll" },
+  { key: "SERVICES", label: "Services" },
+  { key: "INVENTORY", label: "Inventory" },
+  { key: "BRANCHES", label: "Locations" },
+  { key: "PERFORMANCE", label: "Performance" },
+  { key: "MECHANICS", label: "Mechanics" },
+  { key: "ANALYTICS", label: "Analytics" },
+  { key: "ADVANCED_REPORTS", label: "Advanced Reports" },
+  { key: "ACTIVITY", label: "Activity Log" },
+  { key: "MESSAGES", label: "Messages Log" },
+  { key: "SETTINGS", label: "Settings" }
+] as const;
 
 function StaffAttendancePinCard({
   member,
@@ -139,6 +174,42 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [editBranchId, setEditBranchId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
+
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
+
+  useEffect(() => {
+    if (member) {
+      setPermissions(member.permissions || []);
+    }
+  }, [member]);
+
+  const isEditingSuperAdmin = member?.role === "SUPER_ADMIN";
+
+  const handleTogglePermission = (key: string) => {
+    setPermissions((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const handleSavePermissions = async () => {
+    if (!member) return;
+    setSavingPermissions(true);
+    try {
+      const result = await updateStaff(member.id, {
+        permissions,
+      });
+      if (result.ok) {
+        toast.success("Permissions updated successfully.");
+      } else {
+        toast.error("Failed to update permissions.");
+      }
+    } catch {
+      toast.error("An error occurred while updating permissions.");
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
 
   const syncEditFromMember = () => {
     if (!member) return;
@@ -335,7 +406,11 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                       </div>
                       <div className="space-y-2">
                         <Label>Role</Label>
-                        <Select value={editRole} onValueChange={(v) => setEditRole(v as UserRole)}>
+                        <Select
+                          value={editRole}
+                          onValueChange={(v) => setEditRole(v as UserRole)}
+                          disabled={user?.role !== "SUPER_ADMIN"}
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -458,6 +533,53 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
           member={member}
           updateAttendancePin={updateAttendancePin}
         />
+      )}
+
+      {user?.role === "SUPER_ADMIN" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Staff Permissions
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Select which modules this staff member can access. Super Admins always have full access.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {ALL_PERMISSIONS.map((perm) => {
+                const isChecked = isEditingSuperAdmin || permissions.includes(perm.key);
+                return (
+                  <div key={perm.key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`perm-${perm.key}`}
+                      checked={isChecked}
+                      disabled={isEditingSuperAdmin || savingPermissions}
+                      onCheckedChange={() => handleTogglePermission(perm.key)}
+                    />
+                    <label
+                      htmlFor={`perm-${perm.key}`}
+                      className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {perm.label}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            {!isEditingSuperAdmin && (
+              <div className="flex justify-end">
+                <Button
+                  disabled={savingPermissions || JSON.stringify(permissions.sort()) === JSON.stringify((member.permissions || []).sort())}
+                  onClick={() => void handleSavePermissions()}
+                >
+                  {savingPermissions ? "Saving..." : "Save Permissions"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {jobStats.total > 0 && (

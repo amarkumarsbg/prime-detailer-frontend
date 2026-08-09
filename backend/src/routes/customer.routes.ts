@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import {
   getCustomers,
   getCustomer,
@@ -12,6 +12,7 @@ import {
 export const customerRouter = Router();
 
 customerRouter.use(requireAuth);
+customerRouter.use(requirePermission("CUSTOMERS"));
 
 customerRouter.get("/", getCustomers);
 customerRouter.post("/", postCustomer);

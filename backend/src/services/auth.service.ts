@@ -19,6 +19,7 @@ export function signAuthToken(user: {
   branchId: string;
   name: string;
   mustChangePassword?: boolean;
+  permissions?: string[];
 }) {
   const expiresSeconds = 7 * 24 * 60 * 60;
   const options: jwt.SignOptions = { expiresIn: expiresSeconds };
@@ -30,6 +31,7 @@ export function signAuthToken(user: {
       branchId: user.branchId,
       name: user.name,
       mustChangePassword: user.mustChangePassword === true,
+      permissions: user.permissions || [],
     },
     env.JWT_SECRET,
     options

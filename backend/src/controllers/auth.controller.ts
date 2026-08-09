@@ -119,6 +119,7 @@ function authSuccessResponse(user: User, branch: Branch | null) {
     branchId: user.branchId,
     name: user.name,
     mustChangePassword: user.mustChangePassword === true,
+    permissions: user.permissions,
   });
   return {
     accessToken: token,
@@ -137,6 +138,7 @@ function authSuccessResponse(user: User, branch: Branch | null) {
       totalIncentiveEarned: user.totalIncentiveEarned ?? undefined,
       birthday: user.birthday ?? undefined,
       anniversary: user.anniversary ?? undefined,
+      permissions: user.permissions || [],
       ...(user.mustChangePassword === true ? { mustChangePassword: true as const } : {}),
     },
     branch: branch
@@ -521,6 +523,7 @@ export async function me(req: Request, res: Response) {
         totalIncentiveEarned: user.totalIncentiveEarned ?? undefined,
         birthday: user.birthday ?? undefined,
         anniversary: user.anniversary ?? undefined,
+        permissions: user.permissions || [],
         ...(user.mustChangePassword === true ? { mustChangePassword: true as const } : {}),
       },
       branch: branch

@@ -51,6 +51,7 @@ export function toApiUser(u: PrismaUser) {
     mustChangePassword: u.mustChangePassword === true ? true : undefined,
     passwordCreatedBy: u.passwordCreatedBy ?? undefined,
     passwordUpdatedAt: u.passwordUpdatedAt?.toISOString(),
+    permissions: u.permissions || [],
   };
 }
 
@@ -77,6 +78,7 @@ export async function createUserApi(input: {
   anniversary?: string | null;
   /** Creator `User.id` when provisioned by an authenticated admin. */
   createdById?: string | null;
+  permissions?: string[];
 }): Promise<{ user: ReturnType<typeof toApiUser>; temporaryPassword?: string }> {
   const useExplicitPassword = input.password !== undefined && input.password.trim() !== "";
   const plainPassword = useExplicitPassword ? input.password!.trim() : generateTemporaryPassword();
@@ -102,6 +104,7 @@ export async function createUserApi(input: {
       totalIncentiveEarned: input.totalIncentiveEarned ?? null,
       birthday: input.birthday ?? null,
       anniversary: input.anniversary ?? null,
+      permissions: input.permissions ?? [],
     },
   });
   return {
@@ -126,6 +129,7 @@ export async function updateUserApi(
     totalIncentiveEarned: number | null;
     birthday: string | null;
     anniversary: string | null;
+    permissions: string[];
   }>
 ): Promise<ReturnType<typeof toApiUser> | null> {
   try {

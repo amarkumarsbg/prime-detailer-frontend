@@ -9,6 +9,7 @@ export interface AuthUser {
   role: UserRole;
   branchId: string;
   name: string;
+  permissions?: string[];
 }
 
 declare global {
@@ -33,6 +34,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       role: UserRole;
       branchId: string;
       name: string;
+      permissions?: string[];
     };
     req.auth = {
       id: decoded.sub,
@@ -40,9 +42,28 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       role: decoded.role,
       branchId: decoded.branchId,
       name: decoded.name,
+      permissions: decoded.permissions || [],
     };
     next();
   } catch {
     res.status(401).json({ data: null, error: { message: "Invalid or expired token" } });
   }
+}
+
+export function requirePermission(permission: string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    if (req.auth.role === "SUPER_ADMIN") {
+      next();
+      return;
+    }
+    if (req.auth.permissions && req.auth.permissions.includes(permission)) {
+      next();
+      return;
+    }
+    res.status(403).json({ data: null, error: { message: `Forbidden: Missing permission ${permission}` } });
+  };
 }

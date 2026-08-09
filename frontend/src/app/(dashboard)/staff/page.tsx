@@ -657,6 +657,7 @@ export default function StaffPage() {
                           <Label htmlFor="role">Role</Label>
                           <Select
                             required
+                            disabled={authRole !== "SUPER_ADMIN"}
                             value={newRole}
                             onValueChange={(v) => setNewRole(v as UserRole)}
                           >

@@ -27,7 +27,6 @@ export function canManageStaffUsers(role: UserRole | undefined): boolean {
 
 /** Which staff roles an actor may assign when adding/editing team members. */
 export function getAssignableStaffRoles(actor: UserRole | undefined): UserRole[] {
-  if (!actor) return [];
   if (actor === "SUPER_ADMIN") {
     return [
       "SUPER_ADMIN",
@@ -39,32 +38,40 @@ export function getAssignableStaffRoles(actor: UserRole | undefined): UserRole[]
       "MECHANIC",
     ];
   }
-  if (actor === "ADMIN") {
-    return [
-      "ADMIN",
-      "BRANCH_MANAGER",
-      "MANAGER",
-      "SUPERVISOR",
-      "RECEPTIONIST",
-      "MECHANIC",
-    ];
-  }
-  if (actor === "BRANCH_MANAGER" || actor === "MANAGER") {
-    return ["SUPERVISOR", "RECEPTIONIST", "MECHANIC"];
-  }
   return [];
 }
 
 /**
  * Sidebar / command menu: SUPER_ADMIN passes all checks; BRANCH_MANAGER matches MANAGER entries.
+ * Non-Super Admin users must also satisfy custom permission checks if a permissionKey is specified.
  */
-export function canAccessNavItem(allowed: UserRole[] | undefined, userRole: UserRole | undefined): boolean {
+export function canAccessNavItem(
+  allowed: UserRole[] | undefined,
+  userRole: UserRole | undefined,
+  permissionKey?: string,
+  userPermissions?: string[]
+): boolean {
   if (!userRole) return false;
   if (userRole === "SUPER_ADMIN") return true;
-  if (!allowed || allowed.length === 0) return true;
-  if (allowed.includes(userRole)) return true;
-  if (userRole === "BRANCH_MANAGER" && allowed.includes("MANAGER")) return true;
-  return false;
+
+  // 1. Role-based check
+  let roleAllowed = false;
+  if (!allowed || allowed.length === 0) {
+    roleAllowed = true;
+  } else if (allowed.includes(userRole)) {
+    roleAllowed = true;
+  } else if (userRole === "BRANCH_MANAGER" && allowed.includes("MANAGER")) {
+    roleAllowed = true;
+  }
+
+  if (!roleAllowed) return false;
+
+  // 2. Custom permission check
+  if (permissionKey) {
+    return userPermissions ? userPermissions.includes(permissionKey) : false;
+  }
+
+  return true;
 }
 
 export function roleDisplayLabel(role: UserRole): string {

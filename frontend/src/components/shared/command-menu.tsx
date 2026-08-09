@@ -42,45 +42,50 @@ type NavPageItem = {
   icon: React.ElementType;
   /** If set, only these roles see this shortcut (same idea as sidebar). */
   roles?: UserRole[];
+  permissionKey?: string;
 };
 
 const NAV_PAGES: NavPageItem[] = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Job Cards", href: "/job-cards", icon: ClipboardList },
-  { name: "Customers", href: "/customers", icon: Users },
-  { name: "Vehicles", href: "/vehicles", icon: Car },
-  { name: "Staff", href: "/staff", icon: UserCog },
-  { name: "Services", href: "/services", icon: Wrench },
-  { name: "Inventory", href: "/inventory", icon: Package },
-  { name: "Billing", href: "/billing", icon: Receipt },
-  { name: "Appointments", href: "/appointments", icon: Calendar },
-  { name: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"] },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permissionKey: "DASHBOARD" },
+  { name: "Job Cards", href: "/job-cards", icon: ClipboardList, permissionKey: "JOB_CARDS" },
+  { name: "Customers", href: "/customers", icon: Users, permissionKey: "CUSTOMERS" },
+  { name: "Vehicles", href: "/vehicles", icon: Car, permissionKey: "VEHICLES" },
+  { name: "Staff", href: "/staff", icon: UserCog, permissionKey: "STAFF" },
+  { name: "Services", href: "/services", icon: Wrench, permissionKey: "SERVICES" },
+  { name: "Inventory", href: "/inventory", icon: Package, permissionKey: "INVENTORY" },
+  { name: "Billing", href: "/billing", icon: Receipt, permissionKey: "BILLING" },
+  { name: "Appointments", href: "/appointments", icon: Calendar, permissionKey: "APPOINTMENTS" },
+  { name: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"], permissionKey: "ATTENDANCE" },
   {
     name: "Performance",
     href: "/performance",
     icon: TrendingUp,
     roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
+    permissionKey: "PERFORMANCE",
   },
-  { name: "Analytics", href: "/reports", icon: BarChart3 },
+  { name: "Analytics", href: "/reports", icon: BarChart3, permissionKey: "ANALYTICS" },
   {
     name: "Advanced Reports",
     href: "/advanced-reports",
     icon: FileBarChart,
     roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
+    permissionKey: "ADVANCED_REPORTS",
   },
-  { name: "Activity Log", href: "/activity", icon: History },
-  { name: "Referrals", href: "/referrals", icon: Gift, roles: ["ADMIN", "MANAGER"] },
+  { name: "Activity Log", href: "/activity", icon: History, permissionKey: "ACTIVITY" },
+  { name: "Referrals", href: "/referrals", icon: Gift, roles: ["ADMIN", "MANAGER"], permissionKey: "REFERRALS" },
   {
     name: "Locations",
     href: "/branches",
     icon: Building2,
     roles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "BRANCH_MANAGER"],
+    permissionKey: "BRANCHES",
   },
 ];
 
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const router = useRouter();
   const userRole = useAuthStore((s) => s.user?.role);
+  const userPermissions = useAuthStore((s) => s.user?.permissions);
   const [search, setSearch] = useState("");
   const { customers } = useCustomerStore();
   const vehicles = useVehicleStore((s) => s.vehicles);
@@ -96,8 +101,8 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   }, [open]);
 
   const visibleNavPages = useMemo(
-    () => NAV_PAGES.filter((p) => canAccessNavItem(p.roles, userRole)),
-    [userRole]
+    () => NAV_PAGES.filter((p) => canAccessNavItem(p.roles, userRole, p.permissionKey, userPermissions)),
+    [userRole, userPermissions]
   );
 
   const navigate = (href: string) => {

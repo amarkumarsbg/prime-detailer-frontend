@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth-store";
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
@@ -11,14 +11,29 @@ import { ScrollToTopButton } from "@/components/layout/scroll-to-top-button";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { AppDataSync } from "@/components/layout/app-data-sync";
 import { Button } from "@/components/ui/button";
+import { NAV_GROUPS } from "@/lib/nav-items";
+import { canAccessNavItem } from "@/lib/rbac";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword === true);
+  const user = useAuthStore((s) => s.user);
+  const pathname = usePathname();
   const router = useRouter();
   const [authReady, setAuthReady] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
   const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  const currentNavItem = useMemo(() => {
+    for (const group of NAV_GROUPS) {
+      for (const item of group.items) {
+        if (pathname === item.href || pathname.startsWith(item.href + "/")) {
+          return item;
+        }
+      }
+    }
+    return null;
+  }, [pathname]);
 
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
@@ -53,6 +68,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!mustChangePassword) return;
     void router.replace("/change-password");
   }, [authReady, sessionChecked, isAuthenticated, mustChangePassword, router]);
+
+  useEffect(() => {
+    if (!authReady || !sessionChecked || !isAuthenticated || !user) return;
+    if (user.role === "SUPER_ADMIN") return;
+    if (currentNavItem) {
+      const hasRoleAccess = canAccessNavItem(
+        currentNavItem.roles,
+        user.role,
+        currentNavItem.permissionKey,
+        user.permissions
+      );
+      if (!hasRoleAccess) {
+        toast.error("Access Denied", {
+          description: "You do not have permission to access this module.",
+        });
+        void router.replace("/dashboard");
+      }
+    }
+  }, [authReady, sessionChecked, isAuthenticated, user, currentNavItem, router]);
 
   const runBootstrap = useAppBootstrapStore((s) => s.run);
   const resetBootstrap = useAppBootstrapStore((s) => s.reset);

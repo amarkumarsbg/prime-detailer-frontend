@@ -42,7 +42,7 @@ interface StaffStoreState {
   updateStaff: (
     id: string,
     updates: Partial<
-      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive">
+      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions">
     >
   ) => Promise<UpdateStaffResult>;
   updateAttendancePin: (staffId: string, pin: string) => Promise<UpdatePinResult>;
@@ -140,6 +140,7 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
         role: next.role,
         branchId: next.branchId,
         isActive: next.isActive,
+        permissions: next.permissions,
       });
       set({
         staff: list.map((s) => (s.id === id ? user : s)),

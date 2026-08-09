@@ -162,6 +162,41 @@ async function main() {
     });
   }
 
+  const ALL_PERMISSION_KEYS = [
+    "DASHBOARD",
+    "JOB_CARDS",
+    "BOOKINGS",
+    "PICKUP_DROP",
+    "QUOTATIONS",
+    "APPOINTMENTS",
+    "CUSTOMERS",
+    "MEMBERSHIP",
+    "VEHICLES",
+    "REMINDERS",
+    "FOLLOW_UPS",
+    "REFERRALS",
+    "BILLING",
+    "REPORTS",
+    "CASH_BANK",
+    "PARTIES",
+    "SHARED_LEDGER",
+    "EXPENSES",
+    "VENDORS",
+    "STAFF",
+    "ATTENDANCE",
+    "PAYROLL",
+    "SERVICES",
+    "INVENTORY",
+    "BRANCHES",
+    "PERFORMANCE",
+    "MECHANICS",
+    "ANALYTICS",
+    "ADVANCED_REPORTS",
+    "ACTIVITY",
+    "MESSAGES",
+    "SETTINGS"
+  ];
+
   for (const u of staff) {
     await prisma.user.upsert({
       where: { id: u.id },
@@ -181,6 +216,7 @@ async function main() {
         birthday: u.birthday ?? null,
         anniversary: u.anniversary ?? null,
         passwordHash,
+        permissions: ALL_PERMISSION_KEYS,
       },
       update: {
         name: u.name,
@@ -197,6 +233,7 @@ async function main() {
         birthday: u.birthday ?? null,
         anniversary: u.anniversary ?? null,
         passwordHash,
+        permissions: ALL_PERMISSION_KEYS,
       },
     });
   }

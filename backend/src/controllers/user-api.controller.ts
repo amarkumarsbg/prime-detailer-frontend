@@ -13,6 +13,7 @@ import {
 } from "../services/password-reset-email.service.js";
 import { sendUserCredentialsEmail } from "../services/onboarding-credentials-email.service.js";
 import { listUsersApi, createUserApi, updateUserApi } from "../services/user-api.service.js";
+import { prisma } from "../lib/prisma.js";
 
 function paramId(req: Request): string {
   const raw = req.params.id;
@@ -50,6 +51,7 @@ const createUserBodySchema = z.object({
   totalIncentiveEarned: z.number().nullable().optional(),
   birthday: z.string().nullable().optional(),
   anniversary: z.string().nullable().optional(),
+  permissions: z.array(z.string()).optional(),
 });
 
 const createUserSchema = createUserBodySchema.superRefine((data, ctx) => {
@@ -82,9 +84,10 @@ export async function postUser(req: Request, res: Response, next: NextFunction) 
     }
     const body = createUserSchema.parse(req.body);
     if (!canAssignUserRole(req.auth.role, body.role)) {
-      forbidden(res, "You cannot assign this role.");
+      forbidden(res, "Only Super Admin can assign user roles.");
       return;
     }
+    // Set default permissions to all keys if not specified
     const created = await createUserApi({
       ...body,
       role: body.role as UserRole,
@@ -135,14 +138,18 @@ export async function putUser(req: Request, res: Response, next: NextFunction) {
         forbidden(res, "You cannot change your own role.");
         return;
       }
-      if (!canChangeRoles(req.auth.role)) {
-        forbidden(res, "Only administrators can change user roles.");
-        return;
+      const existing = await prisma.user.findUnique({ where: { id } });
+      if (existing && existing.role !== body.role) {
+        if (req.auth.role !== "SUPER_ADMIN") {
+          forbidden(res, "Only Super Admin can change user roles.");
+          return;
+        }
       }
-      if (!canAssignUserRole(req.auth.role, body.role as UserRole)) {
-        forbidden(res, "You cannot assign this role.");
-        return;
-      }
+    }
+
+    if (body.permissions !== undefined && req.auth.role !== "SUPER_ADMIN") {
+      forbidden(res, "Only Super Admin can manage user permissions.");
+      return;
     }
 
     const user = await updateUserApi(id, {
