@@ -12,9 +12,12 @@ import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-
 import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { getNextBookingId } from "@/lib/appointment-ids";
 import {
-  buildJobCardCreationConfirmationMessage,
   getBookingConfirmationBusiness,
 } from "@/lib/booking-confirmation-message";
+import {
+  appendAdvanceAckToJobMessage,
+  buildJobCardCustomerWhatsAppMessage,
+} from "@/lib/whatsapp-customer-messages";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1853,24 +1856,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
     void sendJobCardCreatedWhatsApp(
       newJobCard,
-      buildJobCardCreationConfirmationMessage({
-        job: newJobCard,
-        business: getBookingConfirmationBusiness({
-          businessName,
-          businessAddress,
-          businessPhone,
-          businessEmail,
-          businessWebsite,
-          acceptanceOutlet: "Visit Outlet",
-        }),
-        customerAddress: customerAddress.trim() || undefined,
-        priceSubtotalExGst: afterDiscount,
-        priceGstAmount: gstAmount,
-        priceGrandTotal: totalPayable,
-        advancePaid: summaryAdvanceAmount > 0 ? summaryAdvanceAmount : undefined,
-        appointmentDate: format(new Date(), "yyyy-MM-dd"),
-        appointmentTime: format(new Date(), "HH:mm"),
-      })
+      appendAdvanceAckToJobMessage(
+        buildJobCardCustomerWhatsAppMessage(newJobCard),
+        newJobCard
+      )
     );
 
     setCheckInJob({
