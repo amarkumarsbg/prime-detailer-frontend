@@ -49,7 +49,7 @@ import { useBranchStore } from "@/store/branch-store";
 import { resolveJobBranchId } from "@/lib/job-from-appointment";
 import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -72,6 +72,7 @@ import type {
   QuotationStatus,
   ServiceCatalogItem,
   ServiceItem,
+  Vehicle,
   VehicleSegment,
 } from "@/types";
 import {
@@ -191,9 +192,14 @@ export default function QuotationsPage() {
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerNameError, setNewCustomerNameError] = useState("");
+  const [newCustomerPhoneError, setNewCustomerPhoneError] = useState("");
   const [newVehicleReg, setNewVehicleReg] = useState("");
   const [newVehicleMake, setNewVehicleMake] = useState("");
   const [newVehicleModel, setNewVehicleModel] = useState("");
+  const [newVehicleRegError, setNewVehicleRegError] = useState("");
+  const [newVehicleMakeError, setNewVehicleMakeError] = useState("");
+  const [newVehicleModelError, setNewVehicleModelError] = useState("");
   const [formServiceIds, setFormServiceIds] = useState<Set<string>>(new Set());
   const [formNotes, setFormNotes] = useState("");
   const [formTerms, setFormTerms] = useState("");
@@ -253,9 +259,14 @@ export default function QuotationsPage() {
     setNewCustomerName("");
     setNewCustomerPhone("");
     setNewCustomerEmail("");
+    setNewCustomerNameError("");
+    setNewCustomerPhoneError("");
     setNewVehicleReg("");
     setNewVehicleMake("");
     setNewVehicleModel("");
+    setNewVehicleRegError("");
+    setNewVehicleMakeError("");
+    setNewVehicleModelError("");
     setFormServiceIds(new Set());
     setFormNotes("");
     setFormTerms("");
@@ -371,23 +382,52 @@ export default function QuotationsPage() {
       const reg = newVehicleReg.trim().toUpperCase();
       const make = newVehicleMake.trim();
       const model = newVehicleModel.trim();
-      if (!name || phoneDigits.length !== 10) {
-        toast.error("Enter name and a valid 10-digit phone number");
-        return;
+
+      let hasCustomerErrors = false;
+      if (!name) {
+        setNewCustomerNameError("Name is required");
+        hasCustomerErrors = true;
+      } else {
+        setNewCustomerNameError("");
       }
-      if (!reg || !make || !model) {
-        toast.error("Enter vehicle registration, make, and model");
-        return;
+      if (phoneDigits.length !== 10) {
+        setNewCustomerPhoneError("Enter a valid 10-digit phone number");
+        hasCustomerErrors = true;
+      } else {
+        setNewCustomerPhoneError("");
       }
-      if (!isValidIndianVehicleRegistration(reg)) {
-        toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
-        return;
+      let hasVehicleErrors = false;
+      if (!reg) {
+        setNewVehicleRegError("Registration is required");
+        hasVehicleErrors = true;
+      } else if (!isValidIndianVehicleRegistration(reg)) {
+        setNewVehicleRegError("Enter a valid vehicle registration");
+        hasVehicleErrors = true;
+      } else {
+        setNewVehicleRegError("");
       }
-      const regTaken = findVehicleByNormalizedReg(vehicles, reg);
-      if (regTaken) {
-        toast.error("Registration already in the system", {
-          description: `${regTaken.registrationNumber} is assigned to ${regTaken.customerName}. Select an existing customer and vehicle, or use ownership transfer.`,
-        });
+      if (!make) {
+        setNewVehicleMakeError("Make is required");
+        hasVehicleErrors = true;
+      } else {
+        setNewVehicleMakeError("");
+      }
+      if (!model) {
+        setNewVehicleModelError("Model is required");
+        hasVehicleErrors = true;
+      } else {
+        setNewVehicleModelError("");
+      }
+      if (!hasVehicleErrors) {
+        const regTaken = findVehicleByNormalizedReg(vehicles, reg);
+        if (regTaken) {
+          setNewVehicleRegError(
+            `${regTaken.registrationNumber} is already in the system. Select an existing customer and vehicle or use ownership transfer.`
+          );
+          hasVehicleErrors = true;
+        }
+      }
+      if (hasCustomerErrors || hasVehicleErrors) {
         return;
       }
       customerName = name;
@@ -929,10 +969,6 @@ export default function QuotationsPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Quotation</DialogTitle>
-            <DialogDescription>
-              Choose an existing customer and vehicle, or add a new prospect with vehicle details. Segment sets
-              service pricing.
-            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleNewQuotationSubmit} className="space-y-4">
             <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/30 p-1">
@@ -945,6 +981,8 @@ export default function QuotationsPage() {
                   setCustomerMode("existing");
                   setFormCustomerId("");
                   setFormVehicleId("");
+                  setNewCustomerNameError("");
+                  setNewCustomerPhoneError("");
                 }}
               >
                 Existing customer
@@ -958,6 +996,8 @@ export default function QuotationsPage() {
                   setCustomerMode("new");
                   setFormCustomerId("");
                   setFormVehicleId("");
+                  setNewCustomerNameError("");
+                  setNewCustomerPhoneError("");
                 }}
               >
                 New prospect
@@ -1012,36 +1052,52 @@ export default function QuotationsPage() {
                   Saves to your customer and vehicle lists when you create the quotation.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
-                </div>
-              </div>
-            )}
-
-            {customerMode === "new" && (
-              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-sm font-medium">Prospect &amp; vehicle</p>
-                <p className="text-xs text-muted-foreground -mt-2">
-                  Saves to your customer and vehicle lists when you create the quotation.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="quot-new-name">Name *</Label>
                     <Input
                       id="quot-new-name"
                       value={newCustomerName}
-                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      onChange={(e) => {
+                        setNewCustomerName(e.target.value);
+                        if (newCustomerNameError && e.target.value.trim()) {
+                          setNewCustomerNameError("");
+                        }
+                      }}
                       placeholder="Full name"
                       autoComplete="name"
+                      aria-invalid={!!newCustomerNameError}
+                      aria-describedby={newCustomerNameError ? "quot-new-name-error" : undefined}
+                      className={cn(newCustomerNameError && "border-destructive focus-visible:ring-destructive/50")}
                     />
+                    {newCustomerNameError ? (
+                      <p id="quot-new-name-error" className="text-xs text-destructive" role="alert">
+                        {newCustomerNameError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quot-new-phone">Phone *</Label>
                     <Input
                       id="quot-new-phone"
                       value={newCustomerPhone}
-                      onChange={(e) => setNewCustomerPhone(e.target.value)}
+                      onChange={(e) => {
+                        setNewCustomerPhone(e.target.value);
+                        const digits = e.target.value.replace(/\D/g, "").slice(-10);
+                        if (newCustomerPhoneError && digits.length === 10) {
+                          setNewCustomerPhoneError("");
+                        }
+                      }}
                       placeholder="10-digit mobile"
                       inputMode="tel"
+                      aria-invalid={!!newCustomerPhoneError}
+                      aria-describedby={newCustomerPhoneError ? "quot-new-phone-error" : undefined}
+                      className={cn(newCustomerPhoneError && "border-destructive focus-visible:ring-destructive/50")}
                     />
+                    {newCustomerPhoneError ? (
+                      <p id="quot-new-phone-error" className="text-xs text-destructive" role="alert">
+                        {newCustomerPhoneError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="quot-new-email">Email (optional)</Label>
@@ -1059,11 +1115,23 @@ export default function QuotationsPage() {
                     <Input
                       id="quot-new-reg"
                       value={newVehicleReg}
-                      onChange={(e) => setNewVehicleReg(sanitizeVehicleRegistrationInput(e.target.value))}
+                      onChange={(e) => {
+                        setNewVehicleReg(sanitizeVehicleRegistrationInput(e.target.value));
+                        if (newVehicleRegError) {
+                          setNewVehicleRegError("");
+                        }
+                      }}
                       placeholder="e.g. KA-01-AB-1234 or 22BH5678KA"
                       maxLength={16}
-                      className="font-mono uppercase"
+                      className={cn("font-mono uppercase", newVehicleRegError && "border-destructive focus-visible:ring-destructive/50")}
+                      aria-invalid={!!newVehicleRegError}
+                      aria-describedby={newVehicleRegError ? "quot-new-reg-error" : undefined}
                     />
+                    {newVehicleRegError ? (
+                      <p id="quot-new-reg-error" className="text-xs text-destructive" role="alert">
+                        {newVehicleRegError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quot-new-make">Make *</Label>
@@ -1072,9 +1140,17 @@ export default function QuotationsPage() {
                       onValueChange={(value) => {
                         setNewVehicleMake(value);
                         setNewVehicleModel("");
+                        if (newVehicleMakeError) {
+                          setNewVehicleMakeError("");
+                        }
                       }}
                     >
-                      <SelectTrigger id="quot-new-make">
+                      <SelectTrigger
+                        id="quot-new-make"
+                        aria-invalid={!!newVehicleMakeError}
+                        aria-describedby={newVehicleMakeError ? "quot-new-make-error" : undefined}
+                        className={cn(newVehicleMakeError && "border-destructive focus-visible:ring-destructive/50")}
+                      >
                         <SelectValue placeholder="Select make" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1085,6 +1161,11 @@ export default function QuotationsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {newVehicleMakeError ? (
+                      <p id="quot-new-make-error" className="text-xs text-destructive" role="alert">
+                        {newVehicleMakeError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quot-new-model">Model *</Label>
@@ -1096,10 +1177,18 @@ export default function QuotationsPage() {
                         if (inferredSegment) {
                           setFormSegment(inferredSegment);
                         }
+                        if (newVehicleModelError) {
+                          setNewVehicleModelError("");
+                        }
                       }}
                       disabled={!newVehicleMake}
                     >
-                      <SelectTrigger id="quot-new-model">
+                      <SelectTrigger
+                        id="quot-new-model"
+                        aria-invalid={!!newVehicleModelError}
+                        aria-describedby={newVehicleModelError ? "quot-new-model-error" : undefined}
+                        className={cn(newVehicleModelError && "border-destructive focus-visible:ring-destructive/50")}
+                      >
                         <SelectValue placeholder={newVehicleMake ? "Select model" : "Select make first"} />
                       </SelectTrigger>
                       <SelectContent>
@@ -1110,6 +1199,11 @@ export default function QuotationsPage() {
                         )) : null}
                       </SelectContent>
                     </Select>
+                    {newVehicleModelError ? (
+                      <p id="quot-new-model-error" className="text-xs text-destructive" role="alert">
+                        {newVehicleModelError}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
