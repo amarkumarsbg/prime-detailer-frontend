@@ -1,5 +1,6 @@
 import "dotenv/config";
 import path from "node:path";
+import { exec } from "child_process";
 import compression from "compression";
 import express from "express";
 import cors from "cors";
@@ -53,6 +54,26 @@ app.get("/", (_req, res) => {
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/api/run-migration-prod", (req, res) => {
+  exec("npx prisma db push --accept-data-loss", (error, stdout, stderr) => {
+    if (error) {
+      res.status(500).json({ error: error.message, stderr, stdout });
+      return;
+    }
+    res.json({ stdout, stderr });
+  });
+});
+
+app.get("/api/run-seed-prod", (req, res) => {
+  exec("npx prisma db seed", (error, stdout, stderr) => {
+    if (error) {
+      res.status(500).json({ error: error.message, stderr, stdout });
+      return;
+    }
+    res.json({ stdout, stderr });
+  });
 });
 
 app.get("/health/db", async (_req, res, next) => {
