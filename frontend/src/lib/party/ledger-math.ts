@@ -15,7 +15,7 @@ import {
 import { dateInPreset } from "@/lib/reports/report-period-presets";
 
 export function invoicePaidTotal(inv: Invoice): number {
-  return inv.payments.reduce((s, p) => s + p.amount, 0);
+  return inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
 }
 
 export function invoiceOutstanding(inv: Invoice): number {

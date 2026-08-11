@@ -75,7 +75,7 @@ export function notifyJobDeliveredWhatsApp(job: JobCard, businessName: string): 
 export function notifyInvoiceCreatedWhatsApp(inv: Invoice, businessName: string): void {
   const phone = inv.customerPhone?.trim();
   if (!phone) return;
-  const totalPaid = inv.payments.reduce((s, p) => s + p.amount, 0);
+  const totalPaid = inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
   const remainingBalance = Math.max(0, inv.grandTotal - totalPaid);
   const invoiceLabel = inv.taxRate > 0 ? "tax invoice" : "invoice";
   const message = buildInvoiceWhatsAppMessage(inv, {

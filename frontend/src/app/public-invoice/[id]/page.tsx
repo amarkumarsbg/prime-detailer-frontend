@@ -57,7 +57,7 @@ export default function PublicInvoicePage() {
     if (!data) return "";
     const { invoice, jobCard, businessSettings } = data;
     
-    const totalPaid = invoice.payments ? invoice.payments.reduce((s: number, p: any) => s + p.amount, 0) : 0;
+    const totalPaid = (invoice.payments ? invoice.payments.reduce((s: number, p: any) => s + p.amount, 0) : 0) + (invoice.walletAmountUsed || 0);
     const remainingBalance = Math.max(0, invoice.grandTotal - totalPaid);
 
     const business = {
@@ -155,7 +155,7 @@ export default function PublicInvoicePage() {
 
   const { invoice, jobCard, businessSettings } = data;
 
-  const totalPaid = invoice.payments ? invoice.payments.reduce((s: number, p: any) => s + p.amount, 0) : 0;
+  const totalPaid = (invoice.payments ? invoice.payments.reduce((s: number, p: any) => s + p.amount, 0) : 0) + (invoice.walletAmountUsed || 0);
   const isPaid = invoice.status === "PAID" || totalPaid >= invoice.grandTotal;
   const remainingBalance = Math.max(0, invoice.grandTotal - totalPaid);
 

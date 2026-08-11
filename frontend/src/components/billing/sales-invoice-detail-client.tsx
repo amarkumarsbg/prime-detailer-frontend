@@ -398,8 +398,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   };
 
   const totalPaid = useMemo(
-    () => payments.reduce((sum, p) => sum + p.amount, 0),
-    [payments]
+    () => payments.reduce((sum, p) => sum + p.amount, 0) + (invoice?.walletAmountUsed || 0),
+    [payments, invoice?.walletAmountUsed]
   );
   const remainingBalance = invoice ? invoice.grandTotal - totalPaid : 0;
 
@@ -510,7 +510,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     if (!invoice || isNaN(amount) || amount <= 0) return;
 
     const paidAt = new Date().toISOString();
-    const totalPaidBefore = payments.reduce((sum, p) => sum + p.amount, 0);
+    const totalPaidBefore = payments.reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0);
 
     const walletAmountUsed = useWallet
       ? Math.min(invoiceCustomer?.walletBalance || 0, remainingBalance)

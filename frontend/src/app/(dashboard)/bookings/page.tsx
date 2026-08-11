@@ -265,7 +265,7 @@ export default function BookingsPage() {
       if (inv) {
         invoiced++;
         totalRevenue += inv.grandTotal;
-        const paid = inv.payments.reduce((s, p) => s + p.amount, 0);
+        const paid = inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
         amountReceived += paid;
         pendingAmount += Math.max(0, inv.grandTotal - paid);
       } else {

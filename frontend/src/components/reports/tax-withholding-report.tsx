@@ -58,7 +58,7 @@ export function TaxWithholdingReport({ variant }: { variant: TaxReportVariant })
     if (variant === "tds-receivable") {
       const base = invoices
         .filter((i) => i.status !== "DRAFT" && dateInPreset(i.createdAt, period))
-        .reduce((s, i) => s + i.payments.reduce((p, pay) => p + pay.amount, 0), 0);
+        .reduce((s, i) => s + i.payments.reduce((p, pay) => p + pay.amount, 0) + (i.walletAmountUsed || 0), 0);
       return { baseAmount: base, taxAmount: 0 };
     }
     if (variant === "tcs-payable") {

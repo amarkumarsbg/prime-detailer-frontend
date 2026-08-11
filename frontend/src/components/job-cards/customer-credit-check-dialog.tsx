@@ -43,7 +43,7 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 ];
 
 function sumPayments(inv: Invoice): number {
-  return inv.payments.reduce((s, p) => s + p.amount, 0);
+  return inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
 }
 
 function balanceDue(inv: Invoice): number {

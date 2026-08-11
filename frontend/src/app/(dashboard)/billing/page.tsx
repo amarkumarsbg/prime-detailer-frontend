@@ -148,7 +148,7 @@ export default function BillingPage() {
     const outstanding = branchScopedInvoices
       .filter((i) => i.status === "ISSUED" || i.status === "PARTIALLY_PAID")
       .reduce((sum, i) => {
-        const paid = i.payments.reduce((p, pay) => p + pay.amount, 0);
+        const paid = i.payments.reduce((p, pay) => p + pay.amount, 0) + (i.walletAmountUsed || 0);
         return sum + (i.grandTotal - paid);
       }, 0);
     const now = new Date();

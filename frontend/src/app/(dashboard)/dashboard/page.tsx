@@ -138,10 +138,42 @@ function getDashboardView(role: UserRole | undefined): DashboardView {
 }
 
 const QUICK_ACTIONS = [
-  { href: "/job-cards/new", label: "New Job", icon: ClipboardList },
-  { href: "/bookings/walk-in", label: "New Booking", icon: Calendar },
-  { href: "/customers", label: "New Customer", icon: UserPlus },
-  { href: "/billing", label: "Invoice", icon: Receipt },
+  {
+    href: "/job-cards/new",
+    label: "New Job",
+    icon: ClipboardList,
+    bgClass: "bg-blue-50/40 hover:bg-blue-50/70 border-blue-300 hover:border-blue-500 dark:bg-blue-950/20 dark:hover:bg-blue-950/30 dark:border-blue-800 dark:hover:border-blue-600 hover:shadow-blue-500/5",
+    iconBgClass: "bg-blue-100/80 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
+    textClass: "text-blue-950 dark:text-blue-100",
+    plusClass: "text-blue-500/80",
+  },
+  {
+    href: "/bookings/walk-in",
+    label: "New Booking",
+    icon: Calendar,
+    bgClass: "bg-violet-50/40 hover:bg-violet-50/70 border-violet-300 hover:border-violet-500 dark:bg-violet-950/20 dark:hover:bg-violet-950/30 dark:border-violet-800 dark:hover:border-violet-600 hover:shadow-violet-500/5",
+    iconBgClass: "bg-violet-100/80 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400",
+    textClass: "text-violet-950 dark:text-violet-100",
+    plusClass: "text-violet-500/80",
+  },
+  {
+    href: "/customers",
+    label: "New Customer",
+    icon: UserPlus,
+    bgClass: "bg-emerald-50/40 hover:bg-emerald-50/70 border-emerald-300 hover:border-emerald-500 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30 dark:border-emerald-800 dark:hover:border-emerald-600 hover:shadow-emerald-500/5",
+    iconBgClass: "bg-emerald-100/80 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400",
+    textClass: "text-emerald-950 dark:text-emerald-100",
+    plusClass: "text-emerald-500/80",
+  },
+  {
+    href: "/billing",
+    label: "Invoice",
+    icon: Receipt,
+    bgClass: "bg-amber-50/40 hover:bg-amber-50/70 border-amber-300 hover:border-amber-500 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 dark:border-amber-800 dark:hover:border-amber-600 hover:shadow-amber-500/5",
+    iconBgClass: "bg-amber-100/80 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
+    textClass: "text-amber-950 dark:text-amber-100",
+    plusClass: "text-amber-500/80",
+  },
 ] as const;
 
 export default function DashboardPage() {
@@ -512,26 +544,44 @@ export default function DashboardPage() {
       {alerts.length > 0 &&
         (reduceMotion ? (
           <div className="grid grid-cols-2 gap-2">
-            {alerts.map((alert) => (
-              <button
-                key={alert.id}
-                type="button"
-                onClick={() => handleMobileAlertClick(alert.id, alert.href)}
-                className={alertCardClassName}
-              >
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${alert.bgColor}`}
+            {alerts.map((alert) => {
+              const borderClassMap: Record<string, string> = {
+                overdue: "border-red-300 dark:border-red-800/70 hover:border-red-500",
+                stock: "border-amber-300 dark:border-amber-800/70 hover:border-amber-500",
+                payments: "border-orange-300 dark:border-orange-800/70 hover:border-orange-500",
+                reminders: "border-violet-300 dark:border-violet-800/70 hover:border-violet-500",
+                inactive: "border-slate-300 dark:border-slate-800/70 hover:border-slate-500",
+              };
+              const iconBgClassMap: Record<string, string> = {
+                overdue: "bg-red-100/80 dark:bg-red-900/50",
+                stock: "bg-amber-100/80 dark:bg-amber-900/50",
+                payments: "bg-orange-100/80 dark:bg-orange-900/50",
+                reminders: "bg-violet-100/80 dark:bg-violet-900/50",
+                inactive: "bg-slate-200/80 dark:bg-slate-800/50",
+              };
+              const borderClass = borderClassMap[alert.id] ?? "border-border/70";
+              const iconBgClass = iconBgClassMap[alert.id] ?? alert.bgColor;
+              return (
+                <button
+                  key={alert.id}
+                  type="button"
+                  onClick={() => handleMobileAlertClick(alert.id, alert.href)}
+                  className={`group flex min-w-0 w-full items-center gap-2 rounded-lg border ${borderClass} ${alert.bgColor} px-2.5 py-2 text-left shadow-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md cursor-pointer active:scale-[0.98]`}
                 >
-                  <alert.icon className={`w-3.5 h-3.5 ${alert.color}`} />
-                </div>
-                <p className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug">
-                  <span className={alert.color}>{alert.count}</span>{" "}
-                  <span className="text-foreground">
-                    {compactAlertLabel(alert.id, alert.shortLabel)}
-                  </span>
-                </p>
-              </button>
-            ))}
+                  <div
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconBgClass}`}
+                  >
+                    <alert.icon className={`w-3.5 h-3.5 ${alert.color}`} />
+                  </div>
+                  <p className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug">
+                    <span className={alert.color}>{alert.count}</span>{" "}
+                    <span className="text-foreground">
+                      {compactAlertLabel(alert.id, alert.shortLabel)}
+                    </span>
+                  </p>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <motion.div
@@ -540,28 +590,46 @@ export default function DashboardPage() {
             animate="show"
             className="grid grid-cols-2 gap-2"
           >
-            {alerts.map((alert) => (
-              <motion.button
-                key={alert.id}
-                type="button"
-                variants={alertStaggerItem}
-                onClick={() => handleMobileAlertClick(alert.id, alert.href)}
-                whileTap={{ scale: 0.98 }}
-                className={alertCardClassName}
-              >
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${alert.bgColor}`}
+            {alerts.map((alert) => {
+              const borderClassMap: Record<string, string> = {
+                overdue: "border-red-300 dark:border-red-800/70 hover:border-red-500",
+                stock: "border-amber-300 dark:border-amber-800/70 hover:border-amber-500",
+                payments: "border-orange-300 dark:border-orange-800/70 hover:border-orange-500",
+                reminders: "border-violet-300 dark:border-violet-800/70 hover:border-violet-500",
+                inactive: "border-slate-300 dark:border-slate-800/70 hover:border-slate-500",
+              };
+              const iconBgClassMap: Record<string, string> = {
+                overdue: "bg-red-100/80 dark:bg-red-900/50",
+                stock: "bg-amber-100/80 dark:bg-amber-900/50",
+                payments: "bg-orange-100/80 dark:bg-orange-900/50",
+                reminders: "bg-violet-100/80 dark:bg-violet-900/50",
+                inactive: "bg-slate-200/80 dark:bg-slate-800/50",
+              };
+              const borderClass = borderClassMap[alert.id] ?? "border-border/70";
+              const iconBgClass = iconBgClassMap[alert.id] ?? alert.bgColor;
+              return (
+                <motion.button
+                  key={alert.id}
+                  type="button"
+                  variants={alertStaggerItem}
+                  onClick={() => handleMobileAlertClick(alert.id, alert.href)}
+                  whileTap={{ scale: 0.98 }}
+                  className={`group flex min-w-0 w-full items-center gap-2 rounded-lg border ${borderClass} ${alert.bgColor} px-2.5 py-2 text-left shadow-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md cursor-pointer active:scale-[0.98]`}
                 >
-                  <alert.icon className={`w-3.5 h-3.5 ${alert.color}`} />
-                </div>
-                <p className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug">
-                  <span className={alert.color}>{alert.count}</span>{" "}
-                  <span className="text-foreground">
-                    {compactAlertLabel(alert.id, alert.shortLabel)}
-                  </span>
-                </p>
-              </motion.button>
-            ))}
+                  <div
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconBgClass}`}
+                  >
+                    <alert.icon className={`w-3.5 h-3.5 ${alert.color}`} />
+                  </div>
+                  <p className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug">
+                    <span className={alert.color}>{alert.count}</span>{" "}
+                    <span className="text-foreground">
+                      {compactAlertLabel(alert.id, alert.shortLabel)}
+                    </span>
+                  </p>
+                </motion.button>
+              );
+            })}
           </motion.div>
         ))}
 
@@ -628,13 +696,13 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-2">
           {QUICK_ACTIONS.map((action) => (
             <Link key={action.href} href={action.href}>
-              <Card className="border border-border/60 bg-card shadow-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50 cursor-pointer active:scale-[0.98]">
+              <Card className={`border shadow-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md cursor-pointer active:scale-[0.98] ${action.bgClass}`}>
                 <CardContent className="flex items-center gap-2 p-2 sm:p-2.5">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60 text-foreground">
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${action.iconBgClass}`}>
                     <action.icon className="h-3.5 w-3.5" />
                   </div>
-                  <span className="text-xs font-medium sm:text-sm">{action.label}</span>
-                  <Plus className="ml-auto h-3 w-3 text-muted-foreground" />
+                  <span className={`text-xs font-semibold sm:text-sm ${action.textClass}`}>{action.label}</span>
+                  <Plus className={`ml-auto h-3 w-3 ${action.plusClass}`} />
                 </CardContent>
               </Card>
             </Link>
@@ -1065,25 +1133,25 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link href="/quotations?new=true">
-              <Button>
+              <Button variant="outline" className="bg-amber-50/50 border-amber-300 text-amber-700 hover:bg-amber-100/80 hover:text-amber-800 hover:border-amber-400 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/30">
                 <FileText className="w-4 h-4 mr-1" />
                 New Quotation
               </Button>
             </Link>
             <Link href="/bookings/walk-in">
-              <Button>
+              <Button variant="outline" className="bg-violet-50/50 border-violet-300 text-violet-700 hover:bg-violet-100/80 hover:text-violet-800 hover:border-violet-400 dark:bg-violet-950/20 dark:border-violet-900 dark:text-violet-400 dark:hover:bg-violet-950/30">
                 <CalendarCheck className="w-4 h-4 mr-1" />
                 New Booking
               </Button>
             </Link>
             <Link href="/appointments?new=true">
-              <Button>
+              <Button variant="outline" className="bg-emerald-50/50 border-emerald-300 text-emerald-700 hover:bg-emerald-100/80 hover:text-emerald-800 hover:border-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/30">
                 <Calendar className="w-4 h-4 mr-1" />
                 New Appointment
               </Button>
             </Link>
             <Link href="/job-cards/new">
-              <Button>
+              <Button variant="outline" className="bg-blue-50/50 border-blue-300 text-blue-700 hover:bg-blue-100/80 hover:text-blue-800 hover:border-blue-400 dark:bg-blue-950/20 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950/30">
                 <Plus className="w-4 h-4 mr-1" />
                 New Job Card
               </Button>
@@ -1103,6 +1171,14 @@ export default function DashboardPage() {
                   inactive: DASHBOARD_FILTER.INACTIVE,
                 };
                 const filter = filterMap[alert.id];
+                const borderClassMap: Record<string, string> = {
+                  overdue: "border-red-300 dark:border-red-800/70 hover:border-red-500",
+                  stock: "border-amber-300 dark:border-amber-800/70 hover:border-amber-500",
+                  payments: "border-orange-300 dark:border-orange-800/70 hover:border-orange-500",
+                  reminders: "border-violet-300 dark:border-violet-800/70 hover:border-violet-500",
+                  inactive: "border-slate-300 dark:border-slate-800/70 hover:border-slate-500",
+                };
+                const borderClass = borderClassMap[alert.id] ?? "border-border";
                 return (
                   <button
                     key={alert.id}
@@ -1111,7 +1187,7 @@ export default function DashboardPage() {
                       if (filter) setActiveFilter(filter);
                       router.push(alert.href);
                     }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${borderClass} ${alert.bgColor} cursor-pointer text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50`}
                   >
                     <alert.icon className={`w-4 h-4 ${alert.color}`} />
                     <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
@@ -1136,6 +1212,14 @@ export default function DashboardPage() {
                   inactive: DASHBOARD_FILTER.INACTIVE,
                 };
                 const filter = filterMap[alert.id];
+                const borderClassMap: Record<string, string> = {
+                  overdue: "border-red-300 dark:border-red-800/70 hover:border-red-500",
+                  stock: "border-amber-300 dark:border-amber-800/70 hover:border-amber-500",
+                  payments: "border-orange-300 dark:border-orange-800/70 hover:border-orange-500",
+                  reminders: "border-violet-300 dark:border-violet-800/70 hover:border-violet-500",
+                  inactive: "border-slate-300 dark:border-slate-800/70 hover:border-slate-500",
+                };
+                const borderClass = borderClassMap[alert.id] ?? "border-border";
                 return (
                   <motion.button
                     key={alert.id}
@@ -1146,7 +1230,7 @@ export default function DashboardPage() {
                       router.push(alert.href);
                     }}
                     whileTap={{ scale: 0.99 }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${borderClass} ${alert.bgColor} cursor-pointer text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50`}
                   >
                     <alert.icon className={`w-4 h-4 ${alert.color}`} />
                     <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>

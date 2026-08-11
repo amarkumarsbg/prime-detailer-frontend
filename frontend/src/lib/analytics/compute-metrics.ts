@@ -15,7 +15,7 @@ export function inRange(iso: string, start: Date): boolean {
 }
 
 export function sumInvoicePayments(inv: Invoice): number {
-  return inv.payments.reduce((s, p) => s + p.amount, 0);
+  return inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
 }
 
 export function revenueBetween(invoices: Invoice[], from: Date, to: Date): number {
