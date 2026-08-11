@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Calendar, MapPin, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +45,7 @@ function LegRow({
   onAdvance,
   onWhatsApp,
 }: LegRowProps) {
+  const router = useRouter();
   const pickupLegComplete = isPickupLegComplete(leg, allRequests);
   const displayStatus = pickupLegComplete ? "DELIVERED" : leg.status;
   const statusLabel = pickupDropDisplayLabel(leg, allRequests);
@@ -86,21 +88,35 @@ function LegRow({
           />
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
-          <Button
-            type="button"
-            variant={nextStatus ? "default" : "secondary"}
-            size="sm"
-            className="h-8 text-xs"
-            disabled={!nextStatus}
-            title={
-              nextStatus
-                ? pickupAdvanceActionLabel(nextStatus)
-                : PICKUP_DROP_STATUS_LABEL[leg.status]
-            }
-            onClick={() => onAdvance(leg)}
-          >
-            {nextStatus ? pickupAdvanceActionLabel(nextStatus) : "Complete"}
-          </Button>
+          {leg.type === "PICKUP" && leg.status === "IN_SERVICE" && leg.jobNumber === "NEW" ? (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-750 hover:bg-emerald-700 text-white font-semibold"
+              onClick={() => {
+                router.push(`/job-cards/new?pickupId=${leg.id}`);
+              }}
+            >
+              Create Job Card
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant={nextStatus ? "default" : "secondary"}
+              size="sm"
+              className="h-8 text-xs"
+              disabled={!nextStatus}
+              title={
+                nextStatus
+                  ? pickupAdvanceActionLabel(nextStatus)
+                  : PICKUP_DROP_STATUS_LABEL[leg.status]
+              }
+              onClick={() => onAdvance(leg)}
+            >
+              {nextStatus ? pickupAdvanceActionLabel(nextStatus) : "Complete"}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"

@@ -106,6 +106,7 @@ import {
   normalizeRegistrationNumber,
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
+import { reconcilePickupWithJobCards } from "@/lib/sync-pickup-from-job-card";
 import {
   isDatetimeLocalInPast,
   localDatetimeLocalInputMin,
@@ -523,6 +524,51 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[] | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [hasManuallySetExpectedDelivery, setHasManuallySetExpectedDelivery] = useState(false);
+  const [sourcePickupId, setSourcePickupId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const pId = params.get("pickupId");
+      if (pId) {
+        setSourcePickupId(pId);
+        const reqs = usePickupDropStore.getState().requests;
+        const pickup = reqs.find((r) => r.id === pId);
+        if (pickup) {
+          if (pickup.branchId) {
+            setBranchId(pickup.branchId);
+          }
+          const existingCust = useCustomerStore.getState().customers.find(
+            (c) => c.phone?.trim() === pickup.customerPhone?.trim()
+          );
+          if (existingCust) {
+            setExistingCustomerId(existingCust.id);
+            setCustomerName(existingCust.name);
+            setCustomerPhone(existingCust.phone || "");
+            setCustomerEmail(existingCust.email || "");
+            setCustomerAddress(existingCust.address || "");
+          } else {
+            setExistingCustomerId(null);
+            setCustomerName(pickup.customerName);
+            setCustomerPhone(pickup.customerPhone || "");
+            setCustomerAddress(pickup.address);
+          }
+          if (pickup.vehicleRegNumber) {
+            setVehicleNumber(pickup.vehicleRegNumber);
+          }
+          if (pickup.vehicleMakeModel) {
+            const parts = pickup.vehicleMakeModel.trim().split(" ");
+            const make = parts[0] || "";
+            const model = parts.slice(1).join(" ") || "";
+            setVehicleBrand(make);
+            setVehicleModel(model);
+            const segment = getModelSegment(make, model) || "";
+            setVehicleSegment(segment);
+          }
+        }
+      }
+    }
+  }, [getModelSegment]);
 
   const selectedCustomerRecord = useMemo(() => {
     if (!existingCustomerId) return null;
@@ -1895,7 +1941,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     checkInJobIdRef.current = null;
     setCheckInOpen(false);
     setCheckInJob(null);
-    if (jid) navigateToCreatedJobCard(jid);
+    if (jid) {
+      if (sourcePickupId) {
+        const createdJob = useJobCardStore.getState().jobCards.find((j) => j.id === jid);
+        if (createdJob) {
+          usePickupDropStore.getState().linkJobCard(sourcePickupId, jid, createdJob.jobNumber);
+          reconcilePickupWithJobCards();
+        }
+      }
+      navigateToCreatedJobCard(jid);
+    }
   };
 
   const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -53,11 +53,30 @@ export function nextPickupDropStatus(
   type: PickupDropType,
   current: PickupDropStatus
 ): PickupDropStatus | null {
-  const idx = pickupDropStatusRank(current);
-  if (idx < 0 || idx >= PICKUP_DROP_STATUS_ORDER.length - 1) return null;
-  const next = PICKUP_DROP_STATUS_ORDER[idx + 1]!;
-  if (type === "PICKUP" && next === "DELIVERED") return null;
-  return next;
+  if (type === "PICKUP") {
+    switch (current) {
+      case "PENDING":
+        return "DRIVER_ASSIGNED";
+      case "DRIVER_ASSIGNED":
+        return "PICKED_UP";
+      case "PICKED_UP":
+        return "IN_SERVICE";
+      default:
+        return null;
+    }
+  } else {
+    // DROP type
+    switch (current) {
+      case "PENDING":
+        return "DRIVER_ASSIGNED";
+      case "DRIVER_ASSIGNED":
+        return "IN_SERVICE"; // Bypasses PICKED_UP
+      case "IN_SERVICE":
+        return "DELIVERED";
+      default:
+        return null;
+    }
+  }
 }
 
 export function getLinkedPickupRequest(
@@ -97,6 +116,14 @@ export function pickupDropDisplayLabel(
   requests: PickupDropRequest[]
 ): string {
   if (isPickupLegComplete(req, requests)) return "Pickup complete";
+  if (req.type === "DROP") {
+    if (req.status === "IN_SERVICE") return "At workshop";
+    if (req.status === "DELIVERED") return "Complete";
+  } else {
+    if (req.status === "IN_SERVICE" && req.jobNumber === "NEW") {
+      return "At workshop (Needs Job Card)";
+    }
+  }
   return PICKUP_DROP_STATUS_LABEL[req.status];
 }
 

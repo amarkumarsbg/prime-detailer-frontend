@@ -49,6 +49,7 @@ interface PickupDropStore {
   updateStatus: (id: string, status: PickupDropStatus) => void;
   assignDriver: (id: string, driverId: string | undefined, driverName: string | undefined) => void;
   advanceStatus: (id: string) => PickupDropStatus | null;
+  linkJobCard: (oldJobCardId: string, newJobCardId: string, newJobNumber: string) => void;
 }
 
 export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
@@ -124,5 +125,22 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
     if (!next) return null;
     get().updateStatus(id, next);
     return next;
+  },
+
+  linkJobCard: (oldJobCardId, newJobCardId, newJobNumber) => {
+    set((s) => {
+      const requests = s.requests.map((r) =>
+        r.jobCardId === oldJobCardId
+          ? {
+              ...r,
+              jobCardId: newJobCardId,
+              jobNumber: newJobNumber,
+              updatedAt: new Date().toISOString(),
+            }
+          : r
+      );
+      pushPickupSnapshot(requests);
+      return { requests };
+    });
   },
 }));

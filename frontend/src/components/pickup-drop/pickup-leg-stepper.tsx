@@ -134,7 +134,7 @@ export function pickupAdvanceActionLabel(nextStatus: PickupDropStatus): string {
     case "IN_SERVICE":
       return "At workshop";
     case "DELIVERED":
-      return "Mark delivered";
+      return "Complete";
     default:
       return PICKUP_DROP_STATUS_LABEL[nextStatus];
   }

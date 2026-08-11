@@ -220,7 +220,9 @@ export default function PickupDropPage() {
       (jc) =>
         jc.jobNumber.toLowerCase().includes(q) ||
         jc.customerName.toLowerCase().includes(q) ||
-        (jc.customerPhone && jc.customerPhone.toLowerCase().includes(q))
+        (jc.customerPhone && jc.customerPhone.toLowerCase().includes(q)) ||
+        (jc.vehicleMakeModel && jc.vehicleMakeModel.toLowerCase().includes(q)) ||
+        (jc.vehicleRegNumber && jc.vehicleRegNumber.toLowerCase().includes(q))
     );
   }, [scopedJobCards, searchQuery]);
 
@@ -678,7 +680,9 @@ export default function PickupDropPage() {
                             {selectedJobCard ? (
                               <span className="truncate">
                                 {selectedJobCard.jobNumber} · {selectedJobCard.customerName}
-                                {selectedJobCard.customerPhone ? ` (${selectedJobCard.customerPhone})` : ""}
+                                {selectedJobCard.customerPhone ? ` · ${selectedJobCard.customerPhone}` : ""}
+                                {selectedJobCard.vehicleMakeModel ? ` · ${selectedJobCard.vehicleMakeModel}` : ""}
+                                {selectedJobCard.vehicleRegNumber ? ` (${selectedJobCard.vehicleRegNumber})` : ""}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">Select a job card…</span>
@@ -694,7 +698,7 @@ export default function PickupDropPage() {
                             <Search className="h-4 w-4 shrink-0 text-slate-400" />
                             <input
                               className="flex h-7 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-slate-400 border-0 p-0 focus:ring-0 text-slate-800 dark:text-slate-100"
-                              placeholder="Search job card, customer or phone…"
+                              placeholder="Search job card, customer, phone or vehicle…"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -724,7 +728,9 @@ export default function PickupDropPage() {
                                 >
                                   <span className="truncate">
                                     {jc.jobNumber} · {jc.customerName}
-                                    {jc.customerPhone ? ` (${jc.customerPhone})` : ""}
+                                    {jc.customerPhone ? ` · ${jc.customerPhone}` : ""}
+                                    {jc.vehicleMakeModel ? ` · ${jc.vehicleMakeModel}` : ""}
+                                    {jc.vehicleRegNumber ? ` (${jc.vehicleRegNumber})` : ""}
                                   </span>
                                   {bookingId === jc.id && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
                                 </button>

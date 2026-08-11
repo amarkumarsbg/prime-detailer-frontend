@@ -462,7 +462,7 @@ export default function DashboardPage() {
   };
 
   const alertCardClassName =
-    "group flex min-w-0 w-full items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-2 text-left shadow-sm transition-shadow hover:shadow-md cursor-pointer active:scale-[0.98]";
+    "group flex min-w-0 w-full items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-2 text-left shadow-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50 cursor-pointer active:scale-[0.98]";
 
   const mobileAlertFilterMap: Record<string, string> = {
     overdue: DASHBOARD_FILTER.OVERDUE,
@@ -628,7 +628,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-2">
           {QUICK_ACTIONS.map((action) => (
             <Link key={action.href} href={action.href}>
-              <Card className="border border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md">
+              <Card className="border border-border/60 bg-card shadow-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50 cursor-pointer active:scale-[0.98]">
                 <CardContent className="flex items-center gap-2 p-2 sm:p-2.5">
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60 text-foreground">
                     <action.icon className="h-3.5 w-3.5" />
@@ -1111,7 +1111,7 @@ export default function DashboardPage() {
                       if (filter) setActiveFilter(filter);
                       router.push(alert.href);
                     }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left hover:shadow-sm`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50`}
                   >
                     <alert.icon className={`w-4 h-4 ${alert.color}`} />
                     <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
@@ -1146,7 +1146,7 @@ export default function DashboardPage() {
                       router.push(alert.href);
                     }}
                     whileTap={{ scale: 0.99 }}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left hover:shadow-sm`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border ${alert.bgColor} cursor-pointer text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:border-primary/50`}
                   >
                     <alert.icon className={`w-4 h-4 ${alert.color}`} />
                     <span className={`text-sm font-semibold ${alert.color}`}>{alert.count}</span>
@@ -1543,7 +1543,7 @@ export default function DashboardPage() {
               ] as const
             ).map((item) => (
               <Link key={item.href} href={item.href} className="block h-full min-h-[140px]">
-                <Card className="h-full translate-y-0 transform-gpu will-change-transform transition-[transform,box-shadow] duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)] motion-safe:hover:-translate-y-1 hover:shadow-md">
+                <Card className="h-full translate-y-0 transform-gpu will-change-transform transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:border-primary/50 cursor-pointer active:scale-[0.98]">
                   <div className="flex h-full min-h-[140px] flex-col items-center justify-center gap-3 px-5 py-8 text-center">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
                       <item.icon className="h-5 w-5" />
