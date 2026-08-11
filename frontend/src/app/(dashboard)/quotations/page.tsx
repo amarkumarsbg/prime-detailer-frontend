@@ -90,7 +90,13 @@ import {
   Eye,
   ChevronRight,
   Loader2,
+  Car,
+  Search,
+  ArrowLeft,
+  Info,
+  Check,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 function quotationCanConvertToJob(status: QuotationStatus): boolean {
   return status !== "CONVERTED" && status !== "REJECTED";
@@ -178,6 +184,71 @@ export default function QuotationsPage() {
   const [convertingQuotationId, setConvertingQuotationId] = useState<string | null>(null);
 
   // New quotation form state
+  const [currentStep, setCurrentStep] = useState<"customer" | "vehicle" | "details">("customer");
+
+  const validateCustomerStep = () => {
+    if (formCustomerId) return true;
+    const name = newCustomerName.trim();
+    const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
+    let valid = true;
+    if (!name) {
+      setNewCustomerNameError("Name is required");
+      valid = false;
+    } else {
+      setNewCustomerNameError("");
+    }
+    if (phoneDigits.length !== 10) {
+      setNewCustomerPhoneError("Enter a valid 10-digit phone number");
+      valid = false;
+    } else {
+      setNewCustomerPhoneError("");
+    }
+    return valid;
+  };
+
+  const validateVehicleStep = () => {
+    if (formCustomerId) {
+      if (!formVehicleId) {
+        toast.error("Please select a vehicle or add a new one");
+        return false;
+      }
+      return true;
+    }
+    const reg = newVehicleReg.trim().toUpperCase();
+    const make = newVehicleMake.trim();
+    const model = newVehicleModel.trim();
+    let valid = true;
+    if (!reg) {
+      setNewVehicleRegError("Registration is required");
+      valid = false;
+    } else if (!isValidIndianVehicleRegistration(reg)) {
+      setNewVehicleRegError("Enter a valid vehicle registration");
+      valid = false;
+    } else {
+      setNewVehicleRegError("");
+    }
+    if (!make) {
+      setNewVehicleMakeError("Make is required");
+      valid = false;
+    } else {
+      setNewVehicleMakeError("");
+    }
+    if (!model) {
+      setNewVehicleModelError("Model is required");
+      valid = false;
+    } else {
+      setNewVehicleModelError("");
+    }
+    if (valid) {
+      const regTaken = findVehicleByNormalizedReg(vehicles, reg);
+      if (regTaken) {
+        setNewVehicleRegError(`${regTaken.registrationNumber} is already in the system.`);
+        valid = false;
+      }
+    }
+    return valid;
+  };
+
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Array<{ id: string; name: string; phone: string }>>([]);
   const [formCustomerId, setFormCustomerId] = useState<string>("");
@@ -188,11 +259,27 @@ export default function QuotationsPage() {
   const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
   const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
   const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
+  const [extraBrands, setExtraBrands] = useState<string[]>([]);
+  const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
+  const [newBrandOpen, setNewBrandOpen] = useState(false);
+  const [newBrandDraft, setNewBrandDraft] = useState("");
+  const [newModelOpen, setNewModelOpen] = useState(false);
+  const [newModelDraft, setNewModelDraft] = useState("");
+
   const brandNames = useMemo(() => getBrandNames(), [getBrandNames]);
+  const allBrandsSorted = useMemo(
+    () => [...new Set([...brandNames, ...extraBrands])].sort((a, b) => a.localeCompare(b)),
+    [brandNames, extraBrands]
+  );
   const modelOptions = useMemo(
     () => (newVehicleMakeInput ? getModels(newVehicleMakeInput) : []),
     [getModels, newVehicleMakeInput]
   );
+  const allModelsSorted = useMemo(() => {
+    const catalog = newVehicleMakeInput ? getModels(newVehicleMakeInput).map((m) => m.name) : [];
+    const extra = newVehicleMakeInput ? extraModelsByBrand[newVehicleMakeInput] ?? [] : [];
+    return [...new Set([...catalog, ...extra])].sort((a, b) => a.localeCompare(b));
+  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
@@ -305,6 +392,7 @@ export default function QuotationsPage() {
   };
 
   const resetForm = () => {
+    setCurrentStep("customer");
     setLookupQuery("");
     setLookupPanelCustomers([]);
     setFormCustomerId("");
@@ -379,6 +467,7 @@ export default function QuotationsPage() {
       return;
     }
 
+    const inferredSegment = getModelSegment(make, model) ?? "HATCHBACK";
     const newVehicle: Vehicle = {
       id: `veh-quot-${Date.now()}`,
       customerId: formCustomerId,
@@ -386,7 +475,7 @@ export default function QuotationsPage() {
       registrationNumber: reg,
       make,
       model,
-      segment: newVehicleSegmentInput,
+      segment: inferredSegment,
       fuelType: "PETROL",
       color: "—",
       year: new Date().getFullYear(),
@@ -1030,458 +1119,739 @@ export default function QuotationsPage() {
             <DialogTitle>New Quotation</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleNewQuotationSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="quot-customer-lookup">Search Mobile or Vehicle Number</Label>
-              <Input
-                id="quot-customer-lookup"
-                value={lookupQuery}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setLookupQuery(next);
-                  if (!next.trim()) clearSelectedCustomer();
-                }}
-                placeholder="Type mobile or vehicle number"
-              />
-              {lookupQuery.trim() ? (
-                <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto">
-                  {lookupPanelCustomers.length > 0 ? (
-                    <div className="space-y-1">
-                      {lookupPanelCustomers.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
-                          onClick={() => applySelectedCustomer(c.id)}
-                        >
-                          <p className="text-sm font-medium text-foreground">{c.name}</p>
-                          <p className="text-xs text-muted-foreground">{c.phone}</p>
-                        </button>
-                      ))}
+            {/* Stepper Progress Indicator */}
+            <div className="space-y-2 border-b pb-4 mb-4">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  Step {currentStep === "customer" ? 1 : currentStep === "vehicle" ? 2 : 3} of 3 —{" "}
+                  {currentStep === "customer"
+                    ? "Customer Information"
+                    : currentStep === "vehicle"
+                    ? "Vehicle Details"
+                    : "Quotation Details"}
+                </p>
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{
+                      width: currentStep === "customer" ? "33.3%" : currentStep === "vehicle" ? "66.6%" : "100%",
+                    }}
+                    role="progressbar"
+                    aria-valuenow={currentStep === "customer" ? 33 : currentStep === "vehicle" ? 66 : 100}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  />
+                </div>
+                <span className="text-[10px] font-medium tabular-nums text-muted-foreground shrink-0">
+                  {currentStep === "customer" ? "33%" : currentStep === "vehicle" ? "66%" : "100%"}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground leading-snug">
+                <span className={cn("font-medium", currentStep === "customer" && "text-primary font-semibold")}>Customer</span>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className={cn("font-medium", currentStep === "vehicle" && "text-primary font-semibold")}>Vehicle details</span>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className={cn("font-medium", currentStep === "details" && "text-primary font-semibold")}>Review &amp; details</span>
+              </div>
+            </div>
+
+            {/* STEP 1: Customer Information */}
+            {currentStep === "customer" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="quot-customer-lookup" className="text-sm font-medium">Search Existing Customer</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      id="quot-customer-lookup"
+                      className="pl-9"
+                      value={lookupQuery}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setLookupQuery(next);
+                        if (!next.trim()) clearSelectedCustomer();
+                      }}
+                      placeholder="Enter Mobile or Vehicle number"
+                      autoComplete="off"
+                    />
+                  </div>
+                  {lookupQuery.trim() ? (
+                    <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto">
+                      {lookupPanelCustomers.length > 0 ? (
+                        <div className="space-y-1">
+                          {lookupPanelCustomers.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
+                              onClick={() => applySelectedCustomer(c.id)}
+                            >
+                              <p className="text-sm font-medium text-foreground">{c.name}</p>
+                              <p className="text-xs text-muted-foreground">{c.phone}</p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground px-1 py-1.5">
+                          No customer found. Continue below to fill details for a new prospect.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-3">
+                  <p className="font-semibold text-sm">Customer Details</p>
+                  {hasExistingCustomer ? (
+                    <div className="flex items-center justify-between border rounded-lg p-3 bg-muted/20">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{selectedExistingCustomer?.name}</p>
+                        <p className="text-xs text-muted-foreground tabular-nums">{selectedExistingCustomer?.phone}</p>
+                        {selectedExistingCustomer?.email && (
+                          <p className="text-xs text-muted-foreground truncate">{selectedExistingCustomer.email}</p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearSelectedCustomer}
+                        className="shrink-0"
+                      >
+                        Change Customer
+                      </Button>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground px-1">
-                      No customer found. Continue below to create a new prospect.
-                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2 border rounded-lg p-3.5 bg-muted/5">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="quot-new-name" className="text-xs">Full Name *</Label>
+                        <Input
+                          id="quot-new-name"
+                          value={newCustomerName}
+                          onChange={(e) => {
+                            setNewCustomerName(e.target.value);
+                            if (newCustomerNameError && e.target.value.trim()) {
+                              setNewCustomerNameError("");
+                            }
+                          }}
+                          placeholder="Customer name"
+                          autoComplete="name"
+                          className={cn("h-9", newCustomerNameError && "border-destructive focus-visible:ring-destructive/50")}
+                        />
+                        {newCustomerNameError && (
+                          <p className="text-xs text-destructive">{newCustomerNameError}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="quot-new-phone" className="text-xs">Phone Number *</Label>
+                        <Input
+                          id="quot-new-phone"
+                          value={newCustomerPhone}
+                          onChange={(e) => {
+                            setNewCustomerPhone(e.target.value.replace(/\D/g, "").slice(-10));
+                            const digits = e.target.value.replace(/\D/g, "").slice(-10);
+                            if (newCustomerPhoneError && digits.length === 10) {
+                              setNewCustomerPhoneError("");
+                            }
+                          }}
+                          placeholder="Phone number"
+                          maxLength={10}
+                          className={cn("h-9", newCustomerPhoneError && "border-destructive focus-visible:ring-destructive/50")}
+                        />
+                        {newCustomerPhoneError && (
+                          <p className="text-xs text-destructive">{newCustomerPhoneError}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="quot-new-email" className="text-xs">Email (Optional)</Label>
+                        <Input
+                          id="quot-new-email"
+                          type="email"
+                          value={newCustomerEmail}
+                          onChange={(e) => setNewCustomerEmail(e.target.value)}
+                          placeholder="Email address"
+                          autoComplete="email"
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
-              ) : null}
-            </div>
 
-            {hasExistingCustomer && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Customer</Label>
-                  <Input value={selectedExistingCustomer?.name ?? ""} disabled />
-                </div>
-                <div className="space-y-2">
-                  <Label>Vehicle</Label>
-                  <Select
-                    value={formVehicleId}
-                    onValueChange={handleExistingCustomerVehicleSelection}
-                    disabled={!formCustomerId}
+                <div className="flex justify-end gap-2 pt-3 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setNewDialogOpen(false);
+                      resetForm();
+                    }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select vehicle" />
-                      {formVehicleId && selectedVehicle ? (
-                        <span className="truncate text-foreground">
-                          {selectedVehicle.registrationNumber} — {selectedVehicle.make} {selectedVehicle.model}
-                        </span>
-                      ) : null}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customerVehicles.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.registrationNumber} — {v.make} {v.model}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="__add_new_vehicle__">+ Add New Vehicle</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Phone</Label>
-                  <Input value={selectedExistingCustomer?.phone ?? ""} disabled />
-                </div>
-              </div>
-            )}
-
-            {!hasExistingCustomer && (
-              <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-sm font-medium">Prospect &amp; vehicle</p>
-                <p className="text-xs text-muted-foreground -mt-2">
-                  Saves to your customer and vehicle lists when you create the quotation.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="quot-new-name">Name *</Label>
-                    <Input
-                      id="quot-new-name"
-                      value={newCustomerName}
-                      onChange={(e) => {
-                        setNewCustomerName(e.target.value);
-                        if (newCustomerNameError && e.target.value.trim()) {
-                          setNewCustomerNameError("");
-                        }
-                      }}
-                      placeholder="Full name"
-                      autoComplete="name"
-                      aria-invalid={!!newCustomerNameError}
-                      aria-describedby={newCustomerNameError ? "quot-new-name-error" : undefined}
-                      className={cn(newCustomerNameError && "border-destructive focus-visible:ring-destructive/50")}
-                    />
-                    {newCustomerNameError ? (
-                      <p id="quot-new-name-error" className="text-xs text-destructive" role="alert">
-                        {newCustomerNameError}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="quot-new-phone">Phone *</Label>
-                    <Input
-                      id="quot-new-phone"
-                      value={newCustomerPhone}
-                      onChange={(e) => {
-                        setNewCustomerPhone(e.target.value);
-                        const digits = e.target.value.replace(/\D/g, "").slice(-10);
-                        if (newCustomerPhoneError && digits.length === 10) {
-                          setNewCustomerPhoneError("");
-                        }
-                      }}
-                      placeholder="10-digit mobile"
-                      inputMode="tel"
-                      aria-invalid={!!newCustomerPhoneError}
-                      aria-describedby={newCustomerPhoneError ? "quot-new-phone-error" : undefined}
-                      className={cn(newCustomerPhoneError && "border-destructive focus-visible:ring-destructive/50")}
-                    />
-                    {newCustomerPhoneError ? (
-                      <p id="quot-new-phone-error" className="text-xs text-destructive" role="alert">
-                        {newCustomerPhoneError}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="quot-new-email">Email (optional)</Label>
-                    <Input
-                      id="quot-new-email"
-                      type="email"
-                      value={newCustomerEmail}
-                      onChange={(e) => setNewCustomerEmail(e.target.value)}
-                      placeholder="email@example.com"
-                      autoComplete="email"
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="quot-new-reg">Registration *</Label>
-                    <Input
-                      id="quot-new-reg"
-                      value={newVehicleReg}
-                      onChange={(e) => {
-                        setNewVehicleReg(sanitizeVehicleRegistrationInput(e.target.value));
-                        if (newVehicleRegError) {
-                          setNewVehicleRegError("");
-                        }
-                      }}
-                      placeholder="e.g. KA-01-AB-1234 or 22BH5678KA"
-                      maxLength={16}
-                      className={cn("font-mono uppercase", newVehicleRegError && "border-destructive focus-visible:ring-destructive/50")}
-                      aria-invalid={!!newVehicleRegError}
-                      aria-describedby={newVehicleRegError ? "quot-new-reg-error" : undefined}
-                    />
-                    {newVehicleRegError ? (
-                      <p id="quot-new-reg-error" className="text-xs text-destructive" role="alert">
-                        {newVehicleRegError}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="quot-new-make">Make *</Label>
-                    <Select
-                      value={newVehicleMake || undefined}
-                      onValueChange={(value) => {
-                        setNewVehicleMake(value);
-                        setNewVehicleModel("");
-                        if (newVehicleMakeError) {
-                          setNewVehicleMakeError("");
-                        }
-                      }}
-                    >
-                      <SelectTrigger
-                        id="quot-new-make"
-                        aria-invalid={!!newVehicleMakeError}
-                        aria-describedby={newVehicleMakeError ? "quot-new-make-error" : undefined}
-                        className={cn(newVehicleMakeError && "border-destructive focus-visible:ring-destructive/50")}
-                      >
-                        <SelectValue placeholder="Select make" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {brandNames.map((brand) => (
-                          <SelectItem key={brand} value={brand}>
-                            {brand}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {newVehicleMakeError ? (
-                      <p id="quot-new-make-error" className="text-xs text-destructive" role="alert">
-                        {newVehicleMakeError}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="quot-new-model">Model *</Label>
-                    <Select
-                      value={newVehicleModel || undefined}
-                      onValueChange={(value) => {
-                        setNewVehicleModel(value);
-                        const inferredSegment = getModelSegment(newVehicleMake, value);
-                        if (inferredSegment) {
-                          setFormSegment(inferredSegment);
-                        }
-                        if (newVehicleModelError) {
-                          setNewVehicleModelError("");
-                        }
-                      }}
-                      disabled={!newVehicleMake}
-                    >
-                      <SelectTrigger
-                        id="quot-new-model"
-                        aria-invalid={!!newVehicleModelError}
-                        aria-describedby={newVehicleModelError ? "quot-new-model-error" : undefined}
-                        className={cn(newVehicleModelError && "border-destructive focus-visible:ring-destructive/50")}
-                      >
-                        <SelectValue placeholder={newVehicleMake ? "Select model" : "Select make first"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {newVehicleMake ? getModels(newVehicleMake).map((model) => (
-                          <SelectItem key={model.name} value={model.name}>
-                            {model.name}
-                          </SelectItem>
-                        )) : null}
-                      </SelectContent>
-                    </Select>
-                    {newVehicleModelError ? (
-                      <p id="quot-new-model-error" className="text-xs text-destructive" role="alert">
-                        {newVehicleModelError}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Vehicle segment (pricing)</Label>
-              <Select
-                value={effectiveSegment}
-                onValueChange={(v) => {
-                  if (!segmentSelectLocked) setFormSegment(v as VehicleSegment);
-                }}
-                disabled={segmentSelectLocked}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEGMENT_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {segmentSelectLocked
-                  ? "Locked to the selected vehicle’s segment."
-                  : hasExistingCustomer && !formVehicleId
-                  ? "Pick a segment for pricing until you select a vehicle."
-                  : "Used for segment-based service prices."}
-              </p>
-            </div>
-
-            <Dialog open={addVehicleForExistingCustomerDialogOpen} onOpenChange={setAddVehicleForExistingCustomerDialogOpen}>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Add New Vehicle</DialogTitle>
-                  <DialogDescription>
-                    Link a new vehicle to the selected customer and select it for this quotation.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="quot-existing-vehicle-reg">Registration *</Label>
-                    <Input
-                      id="quot-existing-vehicle-reg"
-                      value={newVehicleRegInput}
-                      onChange={(e) => setNewVehicleRegInput(sanitizeVehicleRegistrationInput(e.target.value))}
-                      placeholder="e.g. KA01AB1234"
-                      maxLength={16}
-                      className="font-mono uppercase"
-                    />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="quot-existing-vehicle-segment">Segment</Label>
-                      <Select
-                        value={newVehicleSegmentInput}
-                        onValueChange={(value) => setNewVehicleSegmentInput(value as VehicleSegment)}
-                      >
-                        <SelectTrigger id="quot-existing-vehicle-segment">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SEGMENT_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>
-                              {o.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="quot-existing-vehicle-make">Make *</Label>
-                      <Select
-                        value={newVehicleMakeInput || undefined}
-                        onValueChange={(value) => {
-                          setNewVehicleMakeInput(value);
-                          setNewVehicleModelInput("");
-                          setNewVehicleSegmentInput("HATCHBACK");
-                        }}
-                      >
-                        <SelectTrigger id="quot-existing-vehicle-make">
-                          <SelectValue placeholder="Select make" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {brandNames.map((brand) => (
-                            <SelectItem key={brand} value={brand}>
-                              {brand}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="quot-existing-vehicle-model">Model *</Label>
-                      <Select
-                        value={newVehicleModelInput || undefined}
-                        onValueChange={(value) => {
-                          setNewVehicleModelInput(value);
-                          const inferredSegment = getModelSegment(newVehicleMakeInput, value);
-                          if (inferredSegment) {
-                            setNewVehicleSegmentInput(inferredSegment);
-                          }
-                        }}
-                        disabled={!newVehicleMakeInput}
-                      >
-                        <SelectTrigger id="quot-existing-vehicle-model">
-                          <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select make first"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {modelOptions.map((model) => (
-                            <SelectItem key={model.name} value={model.name}>
-                              {model.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
-                    Save vehicle
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateCustomerStep()) {
+                        setCurrentStep("vehicle");
+                      }
+                    }}
+                  >
+                    Next
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </div>
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label>Services</Label>
-              <div className="rounded-lg border border-border p-3 max-h-48 overflow-y-auto space-y-2">
-                {catalog.filter((s) => s.isActive).map((svc) => {
-                  const price = getServicePrice(catalog, svc.id, effectiveSegment);
-                  return (
-                    <div
-                      key={svc.id}
-                      className="flex items-center space-x-2"
-                    >
-                      <Checkbox
-                        id={`svc-${svc.id}`}
-                        checked={formServiceIds.has(svc.id)}
-                        onCheckedChange={() => toggleService(svc.id)}
-                        disabled={!canSelectServices}
-                      />
-                      <label
-                        htmlFor={`svc-${svc.id}`}
-                        className="text-sm font-medium leading-none cursor-pointer flex-1"
+            {/* STEP 2: Vehicle Details */}
+            {currentStep === "vehicle" && (
+              <div className="space-y-4">
+                {hasExistingCustomer ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-sm">Vehicle Details</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setNewVehicleRegInput("");
+                          setNewVehicleMakeInput("");
+                          setNewVehicleModelInput("");
+                          setNewVehicleSegmentInput("HATCHBACK");
+                          setAddVehicleForExistingCustomerDialogOpen(true);
+                        }}
                       >
-                        {svc.name}
-                      </label>
-                      <span className="text-sm text-muted-foreground">
-                        {formatCurrency(price)}
-                      </span>
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Add New Vehicle
+                      </Button>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(formCalculations.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax (18%)</span>
-                <span>{formatCurrency(formCalculations.taxAmount)}</span>
-              </div>
-              <div className="flex justify-between font-semibold pt-2 border-t border-border">
-                <span>Grand Total</span>
-                <span>{formatCurrency(formCalculations.grandTotal)}</span>
-              </div>
-            </div>
+                    {customerVehicles.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                        {customerVehicles.map((v) => {
+                          const isSelected = formVehicleId === v.id;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => {
+                                setFormVehicleId(v.id);
+                                setFormSegment(v.segment);
+                              }}
+                              className={cn(
+                                "rounded-xl border-2 p-3 text-left transition-all flex flex-col justify-between h-28",
+                                isSelected
+                                  ? "border-primary bg-primary/5 shadow-sm"
+                                  : "border-border hover:border-primary/30"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2 w-full">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Car className="w-8 h-8 shrink-0 text-muted-foreground" />
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-sm truncate">
+                                      {v.make} {v.model}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                      Reg: {v.registrationNumber}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <Badge className="shrink-0 bg-primary text-primary-foreground hover:bg-primary">
+                                    Selected
+                                  </Badge>
+                                )}
+                              </div>
+                              <Badge variant="secondary" className="text-[10px] self-start mt-1">
+                                {v.segment.replace("_", " ")}
+                              </Badge>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 border border-dashed rounded-lg bg-muted/10">
+                        <Car className="w-8 h-8 mx-auto text-muted-foreground/60 mb-2" />
+                        <p className="text-sm font-medium">No vehicles registered for this customer</p>
+                        <p className="text-xs text-muted-foreground mt-1">Click Add New Vehicle above to register one.</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                    <p className="text-sm font-semibold">New Vehicle Details</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="quot-new-reg" className="text-xs">Registration Number *</Label>
+                        <Input
+                          id="quot-new-reg"
+                          value={newVehicleReg}
+                          onChange={(e) => {
+                            setNewVehicleReg(sanitizeVehicleRegistrationInput(e.target.value));
+                            if (newVehicleRegError) {
+                              setNewVehicleRegError("");
+                            }
+                          }}
+                          placeholder="e.g. KA01AB1234"
+                          maxLength={16}
+                          className={cn("font-mono uppercase h-9", newVehicleRegError && "border-destructive focus-visible:ring-destructive/50")}
+                        />
+                        {newVehicleRegError ? (
+                          <p className="text-xs text-destructive">{newVehicleRegError}</p>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="quot-new-make" className="text-xs">Make *</Label>
+                        <Select
+                          value={newVehicleMake || undefined}
+                          onValueChange={(value) => {
+                            setNewVehicleMake(value);
+                            setNewVehicleModel("");
+                            if (newVehicleMakeError) {
+                              setNewVehicleMakeError("");
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            id="quot-new-make"
+                            className={cn("h-9", newVehicleMakeError && "border-destructive focus-visible:ring-destructive/50")}
+                          >
+                            <SelectValue placeholder="Select make" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {brandNames.map((brand) => (
+                              <SelectItem key={brand} value={brand}>
+                                {brand}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {newVehicleMakeError && (
+                          <p className="text-xs text-destructive">{newVehicleMakeError}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="quot-new-model" className="text-xs">Model *</Label>
+                        <Select
+                          value={newVehicleModel || undefined}
+                          onValueChange={(value) => {
+                            setNewVehicleModel(value);
+                            const inferredSegment = getModelSegment(newVehicleMake, value);
+                            if (inferredSegment) {
+                              setFormSegment(inferredSegment);
+                            }
+                            if (newVehicleModelError) {
+                              setNewVehicleModelError("");
+                            }
+                          }}
+                          disabled={!newVehicleMake}
+                        >
+                          <SelectTrigger
+                            id="quot-new-model"
+                            className={cn("h-9", newVehicleModelError && "border-destructive focus-visible:ring-destructive/50")}
+                          >
+                            <SelectValue placeholder={newVehicleMake ? "Select model" : "Select make first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {newVehicleMake ? getModels(newVehicleMake).map((model) => (
+                              <SelectItem key={model.name} value={model.name}>
+                                {model.name}
+                              </SelectItem>
+                            )) : null}
+                          </SelectContent>
+                        </Select>
+                        {newVehicleModelError && (
+                          <p className="text-xs text-destructive">{newVehicleModelError}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-            <div className="space-y-2">
-              <Label htmlFor="quot-notes">Notes</Label>
-              <Textarea
-                id="quot-notes"
-                placeholder="e.g. customer requests, follow-up reminders, scope clarifications…"
-                value={formNotes}
-                onChange={(e) => setFormNotes(e.target.value)}
-                rows={3}
-                className="resize-y min-h-[80px]"
-              />
-              <p className="text-xs text-muted-foreground">
-                Optional. Shown on the quotation details and kept with the estimate record.
-              </p>
-            </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Vehicle segment (pricing)</Label>
+                  <Select
+                    value={effectiveSegment}
+                    onValueChange={(v) => {
+                      if (!segmentSelectLocked) setFormSegment(v as VehicleSegment);
+                    }}
+                    disabled={segmentSelectLocked}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SEGMENT_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {segmentSelectLocked
+                      ? "Locked to the selected vehicle’s segment."
+                      : hasExistingCustomer && !formVehicleId
+                      ? "Pick a segment for pricing until you select a vehicle."
+                      : "Used for segment-based service prices."}
+                  </p>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="quot-terms">Terms & Conditions</Label>
-              <Textarea
-                id="quot-terms"
-                placeholder="Payment terms, warranty, etc."
-                value={formTerms}
-                onChange={(e) => setFormTerms(e.target.value)}
-                rows={3}
-              />
-            </div>
+                {/* Inline dialog for adding new vehicle for existing customer */}
+                <Dialog open={addVehicleForExistingCustomerDialogOpen} onOpenChange={setAddVehicleForExistingCustomerDialogOpen}>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Add New Vehicle</DialogTitle>
+                      <DialogDescription>
+                        Enter registration, brand, and model. Use + New if a brand or model is not in the list.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="quot-existing-vehicle-reg">Registration Number *</Label>
+                        <Input
+                          id="quot-existing-vehicle-reg"
+                          value={newVehicleRegInput}
+                          onChange={(e) => setNewVehicleRegInput(sanitizeVehicleRegistrationInput(e.target.value))}
+                          placeholder="e.g. KA01AB1234"
+                          maxLength={16}
+                          className="font-mono uppercase"
+                        />
+                        <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label htmlFor="quot-existing-vehicle-make">Brand *</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                              onClick={() => {
+                                setNewBrandDraft("");
+                                setNewBrandOpen(true);
+                              }}
+                            >
+                              + New
+                            </Button>
+                          </div>
+                          <Select
+                            value={newVehicleMakeInput || undefined}
+                            onValueChange={(value) => {
+                              setNewVehicleMakeInput(value);
+                              setNewVehicleModelInput("");
+                              setNewVehicleSegmentInput("HATCHBACK");
+                            }}
+                          >
+                            <SelectTrigger id="quot-existing-vehicle-make">
+                              <SelectValue placeholder="Select brand" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allBrandsSorted.map((brand) => (
+                                <SelectItem key={brand} value={brand}>
+                                  {brand}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label htmlFor="quot-existing-vehicle-model">Model *</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={!newVehicleMakeInput}
+                              className="h-7 shrink-0 px-2.5 text-xs font-medium disabled:opacity-50"
+                              onClick={() => {
+                                if (!newVehicleMakeInput) return;
+                                setNewModelDraft("");
+                                setNewModelOpen(true);
+                              }}
+                            >
+                              + New
+                            </Button>
+                          </div>
+                          <Select
+                            value={newVehicleModelInput || undefined}
+                            onValueChange={(value) => {
+                              setNewVehicleModelInput(value);
+                              const inferredSegment = getModelSegment(newVehicleMakeInput, value);
+                              if (inferredSegment) {
+                                setNewVehicleSegmentInput(inferredSegment);
+                              }
+                            }}
+                            disabled={!newVehicleMakeInput}
+                          >
+                            <SelectTrigger id="quot-existing-vehicle-model">
+                              <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allModelsSorted.map((model) => (
+                                <SelectItem key={model} value={model}>
+                                  {model}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter className="gap-2">
+                      <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
+                        Done
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setNewDialogOpen(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Create Quotation</Button>
-            </DialogFooter>
+                {/* Brand add nested dialog */}
+                <Dialog
+                  open={newBrandOpen}
+                  onOpenChange={setNewBrandOpen}
+                >
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add brand</DialogTitle>
+                      <DialogDescription>
+                        Add a brand name when it is not in the catalog search list.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Input
+                      placeholder="Brand name"
+                      value={newBrandDraft}
+                      onChange={(e) => setNewBrandDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const t = newBrandDraft.trim();
+                          if (!t) return;
+                          if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                            toast.message("Brand already in list");
+                            return;
+                          }
+                          setExtraBrands((prev) => [...prev, t]);
+                          setNewVehicleMakeInput(t);
+                          setNewVehicleModelInput("");
+                          setNewBrandOpen(false);
+                          setNewBrandDraft("");
+                          toast.success("Brand added", { description: t });
+                        }
+                      }}
+                    />
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const t = newBrandDraft.trim();
+                          if (!t) {
+                            toast.error("Enter a brand name");
+                            return;
+                          }
+                          if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                            toast.message("Brand already in list");
+                            return;
+                          }
+                          setExtraBrands((prev) => [...prev, t]);
+                          setNewVehicleMakeInput(t);
+                          setNewVehicleModelInput("");
+                          setNewBrandOpen(false);
+                          setNewBrandDraft("");
+                          toast.success("Brand added", { description: t });
+                        }}
+                      >
+                        Add brand
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Model add nested dialog */}
+                <Dialog
+                  open={newModelOpen}
+                  onOpenChange={setNewModelOpen}
+                >
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add model</DialogTitle>
+                      <DialogDescription>
+                        Add a model for <span className="font-medium text-foreground">{newVehicleMakeInput}</span> when it is not listed.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Input
+                      placeholder="Model name"
+                      value={newModelDraft}
+                      onChange={(e) => setNewModelDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const t = newModelDraft.trim();
+                          if (!t || !newVehicleMakeInput.trim()) return;
+                          setExtraModelsByBrand((prev) => ({
+                            ...prev,
+                            [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] ?? []), t],
+                          }));
+                          setNewVehicleModelInput(t);
+                          const seg = getModelSegment(newVehicleMakeInput, t);
+                          if (seg) setNewVehicleSegmentInput(seg);
+                          setNewModelOpen(false);
+                          setNewModelDraft("");
+                          toast.success("Model added", { description: t });
+                        }
+                      }}
+                    />
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const t = newModelDraft.trim();
+                          if (!t) {
+                            toast.error("Enter a model name");
+                            return;
+                          }
+                          if (!newVehicleMakeInput.trim()) return;
+                          setExtraModelsByBrand((prev) => ({
+                            ...prev,
+                            [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] ?? []), t],
+                          }));
+                          setNewVehicleModelInput(t);
+                          const seg = getModelSegment(newVehicleMakeInput, t);
+                          if (seg) setNewVehicleSegmentInput(seg);
+                          setNewModelOpen(false);
+                          setNewModelDraft("");
+                          toast.success("Model added", { description: t });
+                        }}
+                      >
+                        Add model
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <div className="flex justify-between pt-3 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep("customer")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateVehicleStep()) {
+                        setCurrentStep("details");
+                      }
+                    }}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Services & Details */}
+            {currentStep === "details" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Services</Label>
+                  <div className="rounded-lg border border-border p-3 max-h-48 overflow-y-auto space-y-2 bg-background">
+                    {catalog.filter((s) => s.isActive).map((svc) => {
+                      const price = getServicePrice(catalog, svc.id, effectiveSegment);
+                      return (
+                        <div
+                          key={svc.id}
+                          className="flex items-center space-x-2"
+                        >
+                          <Checkbox
+                            id={`svc-${svc.id}`}
+                            checked={formServiceIds.has(svc.id)}
+                            onCheckedChange={() => toggleService(svc.id)}
+                            disabled={!canSelectServices}
+                          />
+                          <label
+                            htmlFor={`svc-${svc.id}`}
+                            className="text-sm font-medium leading-none cursor-pointer flex-1 text-foreground"
+                          >
+                            {svc.name}
+                          </label>
+                          <span className="text-sm text-muted-foreground tabular-nums">
+                            {formatCurrency(price)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(formCalculations.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tax (18%)</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(formCalculations.taxAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold pt-2 border-t border-border text-foreground">
+                    <span>Grand Total</span>
+                    <span className="tabular-nums">{formatCurrency(formCalculations.grandTotal)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="quot-notes">Notes</Label>
+                  <Textarea
+                    id="quot-notes"
+                    placeholder="e.g. customer requests, follow-up reminders, scope clarifications…"
+                    value={formNotes}
+                    onChange={(e) => setFormNotes(e.target.value)}
+                    rows={3}
+                    className="resize-y min-h-[80px]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Shown on the quotation details and kept with the estimate record.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="quot-terms">Terms & Conditions</Label>
+                  <Textarea
+                    id="quot-terms"
+                    placeholder="Payment terms, warranty, etc."
+                    value={formTerms}
+                    onChange={(e) => setFormTerms(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex justify-between pt-3 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep("vehicle")}
+                  >
+                    Back
+                  </Button>
+                  <Button type="submit">Create Quotation</Button>
+                </div>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>

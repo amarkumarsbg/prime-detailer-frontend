@@ -63,7 +63,12 @@ import {
   XCircle,
   Loader2,
   ClipboardList,
+  Car,
+  Search,
+  ArrowLeft,
+  Info,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import type { Appointment, AppointmentStatus, Customer, Vehicle, VehicleSegment } from "@/types";
 import { toast } from "sonner";
@@ -143,7 +148,7 @@ export default function AppointmentsPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
-  const { getBrandNames, getModels } = useVehicleCatalogStore();
+  const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const staff = useStaffStore((s) => s.staff);
@@ -166,6 +171,50 @@ export default function AppointmentsPage() {
   const [creatingJobForId, setCreatingJobForId] = useState<string | null>(null);
 
   useReservationReminders();
+
+  const [currentStep, setCurrentStep] = useState<"customer" | "vehicle" | "details">("customer");
+
+  const validateCustomerStep = () => {
+    if (formCustomerId) return true;
+    const name = newCustomerName.trim();
+    const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
+    if (!name) {
+      toast.error("Enter customer name");
+      return false;
+    }
+    if (phoneDigits.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number");
+      return false;
+    }
+    return true;
+  };
+
+  const validateVehicleStep = () => {
+    if (formCustomerId) {
+      if (!formVehicleId) {
+        toast.error("Please select a vehicle or add a new one");
+        return false;
+      }
+      return true;
+    }
+    const reg = newVehicleReg.trim().toUpperCase();
+    const make = newVehicleMake.trim();
+    const model = newVehicleModel.trim();
+    if (!reg || !make || !model) {
+      toast.error("Enter vehicle registration, make, and model");
+      return false;
+    }
+    if (!isValidIndianVehicleRegistration(reg)) {
+      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
+      return false;
+    }
+    const dup = findVehicleByNormalizedReg(vehicles, reg);
+    if (dup) {
+      toast.error(`${dup.registrationNumber} is already in the system.`);
+      return false;
+    }
+    return true;
+  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [lookupQuery, setLookupQuery] = useState("");
@@ -202,7 +251,18 @@ export default function AppointmentsPage() {
     return vehicles.filter((v) => v.customerId === formCustomerId);
   }, [formCustomerId, vehicles]);
 
+  const [extraBrands, setExtraBrands] = useState<string[]>([]);
+  const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
+  const [newBrandOpen, setNewBrandOpen] = useState(false);
+  const [newBrandDraft, setNewBrandDraft] = useState("");
+  const [newModelOpen, setNewModelOpen] = useState(false);
+  const [newModelDraft, setNewModelDraft] = useState("");
+
   const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
+  const allBrandsSorted = useMemo(
+    () => [...new Set([...makeOptions, ...extraBrands])].sort((a, b) => a.localeCompare(b)),
+    [makeOptions, extraBrands]
+  );
   const modelOptions = useMemo(
     () => (newVehicleMake ? getModels(newVehicleMake) : []),
     [getModels, newVehicleMake]
@@ -211,6 +271,11 @@ export default function AppointmentsPage() {
     () => (newVehicleMakeInput ? getModels(newVehicleMakeInput) : []),
     [getModels, newVehicleMakeInput]
   );
+  const allModelsSorted = useMemo(() => {
+    const catalog = newVehicleMakeInput ? getModels(newVehicleMakeInput).map((m) => m.name) : [];
+    const extra = newVehicleMakeInput ? extraModelsByBrand[newVehicleMakeInput] ?? [] : [];
+    return [...new Set([...catalog, ...extra])].sort((a, b) => a.localeCompare(b));
+  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
 
   const selectedExistingCustomer = useMemo(
     () => customers.find((c) => c.id === formCustomerId) ?? null,
@@ -311,6 +376,7 @@ export default function AppointmentsPage() {
       return;
     }
 
+    const inferredSegment = getModelSegment(make, model) ?? "HATCHBACK";
     const newVehicle: Vehicle = {
       id: `veh-apt-${Date.now()}`,
       customerId: formCustomerId,
@@ -318,7 +384,7 @@ export default function AppointmentsPage() {
       registrationNumber: reg,
       make,
       model,
-      segment: newVehicleSegmentInput,
+      segment: inferredSegment,
       fuelType: "PETROL",
       color: "—",
       year: new Date().getFullYear(),
@@ -337,6 +403,7 @@ export default function AppointmentsPage() {
   };
 
   const resetAppointmentForm = () => {
+    setCurrentStep("customer");
     setLookupQuery("");
     setLookupPanelCustomers([]);
     setNewCustomerName("");
@@ -706,425 +773,706 @@ export default function AppointmentsPage() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleNewAppointmentSubmit} className="space-y-4 mt-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="apt-customer-lookup" className="text-muted-foreground">
-                    Search Mobile or Vehicle Number
-                  </Label>
-                  <Input
-                    id="apt-customer-lookup"
-                    value={lookupQuery}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setLookupQuery(next);
-                      if (!next.trim()) clearSelectedCustomer();
-                    }}
-                    placeholder="Type mobile or vehicle number"
-                  />
-                  {lookupQuery.trim() ? (
-                    <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto">
-                      {lookupPanelCustomers.length > 0 ? (
-                        <div className="space-y-1">
-                          {lookupPanelCustomers.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
-                              onClick={() => applySelectedCustomer(c.id)}
-                            >
-                              <p className="text-sm font-medium text-foreground">{c.name}</p>
-                              <p className="text-xs text-muted-foreground">{c.phone}</p>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground px-1">
-                          No customer found. Continue below to create a new customer.
-                        </p>
-                      )}
+                {/* Stepper Progress Indicator */}
+                <div className="space-y-2 border-b pb-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                      Step {currentStep === "customer" ? 1 : currentStep === "vehicle" ? 2 : 3} of 3 —{" "}
+                      {currentStep === "customer"
+                        ? "Customer Information"
+                        : currentStep === "vehicle"
+                        ? "Vehicle Details"
+                        : "Appointment Details"}
+                    </p>
+                    <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        style={{
+                          width: currentStep === "customer" ? "33.3%" : currentStep === "vehicle" ? "66.6%" : "100%",
+                        }}
+                        role="progressbar"
+                        aria-valuenow={currentStep === "customer" ? 33 : currentStep === "vehicle" ? 66 : 100}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      />
                     </div>
-                  ) : null}
+                    <span className="text-[10px] font-medium tabular-nums text-muted-foreground shrink-0">
+                      {currentStep === "customer" ? "33%" : currentStep === "vehicle" ? "66%" : "100%"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground leading-snug">
+                    <span className={cn("font-medium", currentStep === "customer" && "text-primary font-semibold")}>Customer</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className={cn("font-medium", currentStep === "vehicle" && "text-primary font-semibold")}>Vehicle details</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className={cn("font-medium", currentStep === "details" && "text-primary font-semibold")}>Review &amp; details</span>
+                  </div>
                 </div>
 
-                {hasExistingCustomer ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* STEP 1: Customer Information */}
+                {currentStep === "customer" && (
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="apt-customer">Customer</Label>
-                      <Input
-                        id="apt-customer"
-                        value={selectedExistingCustomer?.name ?? ""}
-                        disabled
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="apt-vehicle">Vehicle</Label>
-                      <Select
-                        value={formVehicleId}
-                        onValueChange={handleExistingCustomerVehicleSelection}
-                        disabled={!formCustomerId}
-                      >
-                        <SelectTrigger id="apt-vehicle">
-                          <SelectValue placeholder={formCustomerId ? "Select vehicle" : "Select customer first"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {vehiclesForCustomer.length === 0 ? (
-                            <SelectItem value="__none__" disabled>
-                              No vehicles for this customer
-                            </SelectItem>
+                      <Label htmlFor="apt-customer-lookup" className="text-sm font-medium">Search Existing Customer</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          id="apt-customer-lookup"
+                          className="pl-9"
+                          value={lookupQuery}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setLookupQuery(next);
+                            if (!next.trim()) clearSelectedCustomer();
+                          }}
+                          placeholder="Enter Mobile or Vehicle number"
+                          autoComplete="off"
+                        />
+                      </div>
+                      {lookupQuery.trim() ? (
+                        <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto">
+                          {lookupPanelCustomers.length > 0 ? (
+                            <div className="space-y-1">
+                              {lookupPanelCustomers.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
+                                  onClick={() => applySelectedCustomer(c.id)}
+                                >
+                                  <p className="text-sm font-medium text-foreground">{c.name}</p>
+                                  <p className="text-xs text-muted-foreground">{c.phone}</p>
+                                </button>
+                              ))}
+                            </div>
                           ) : (
-                            vehiclesForCustomer.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.registrationNumber} — {v.make} {v.model}
-                              </SelectItem>
-                            ))
+                            <p className="text-xs text-muted-foreground px-1 py-1.5">
+                              No customer found. Continue below to fill details for a new customer.
+                            </p>
                           )}
-                          <SelectItem value="__add_new_vehicle__">+ Add New Vehicle</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="link"
-                        className="h-auto px-0 text-xs"
-                        disabled={!formCustomerId}
-                        onClick={() => handleExistingCustomerVehicleSelection("__add_new_vehicle__")}
-                      >
-                        + Add New Vehicle
-                      </Button>
-                      {formCustomerId && vehiclesForCustomer.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No vehicles yet for this customer. Click + Add New Vehicle.
-                        </p>
+                        </div>
                       ) : null}
                     </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="apt-customer-phone">Phone</Label>
-                      <Input
-                        id="apt-customer-phone"
-                        value={selectedExistingCustomer?.phone ?? ""}
-                        disabled
-                      />
+
+                    <div className="space-y-3">
+                      <p className="font-semibold text-sm">Customer Details</p>
+                      {hasExistingCustomer ? (
+                        <div className="flex items-center justify-between border rounded-lg p-3 bg-muted/20">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{selectedExistingCustomer?.name}</p>
+                            <p className="text-xs text-muted-foreground tabular-nums">{selectedExistingCustomer?.phone}</p>
+                            {selectedExistingCustomer?.email && (
+                              <p className="text-xs text-muted-foreground truncate">{selectedExistingCustomer.email}</p>
+                            )}
+                            {selectedExistingCustomer?.address && (
+                              <p className="text-xs text-muted-foreground truncate">{selectedExistingCustomer.address}</p>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={clearSelectedCustomer}
+                            className="shrink-0"
+                          >
+                            Change Customer
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid gap-3 sm:grid-cols-2 border rounded-lg p-3.5 bg-muted/5">
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="apt-new-name" className="text-xs">Full Name *</Label>
+                            <Input
+                              id="apt-new-name"
+                              value={newCustomerName}
+                              onChange={(e) => setNewCustomerName(e.target.value)}
+                              placeholder="Customer name"
+                              autoComplete="name"
+                              className="h-9"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="apt-new-phone" className="text-xs">Phone Number *</Label>
+                            <Input
+                              id="apt-new-phone"
+                              value={newCustomerPhone}
+                              onChange={(e) => setNewCustomerPhone(e.target.value.replace(/\D/g, "").slice(-10))}
+                              placeholder="Phone number"
+                              maxLength={10}
+                              className="h-9"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="apt-new-email" className="text-xs">Email (Optional)</Label>
+                            <Input
+                              id="apt-new-email"
+                              type="email"
+                              value={newCustomerEmail}
+                              onChange={(e) => setNewCustomerEmail(e.target.value)}
+                              placeholder="Email address"
+                              autoComplete="email"
+                              className="h-9"
+                            />
+                          </div>
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="apt-new-address" className="text-xs">Address (Optional)</Label>
+                            <Input
+                              id="apt-new-address"
+                              value={newCustomerAddress}
+                              onChange={(e) => setNewCustomerAddress(e.target.value)}
+                              placeholder="City / area"
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
-                    <p className="text-sm font-medium text-foreground">New customer &amp; vehicle</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="apt-new-name">
-                          Full name <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          id="apt-new-name"
-                          value={newCustomerName}
-                          onChange={(e) => setNewCustomerName(e.target.value)}
-                          placeholder="Customer name"
-                          autoComplete="name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="apt-new-phone">
-                          Mobile <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          id="apt-new-phone"
-                          type="tel"
-                          inputMode="numeric"
-                          value={newCustomerPhone}
-                          onChange={(e) => setNewCustomerPhone(e.target.value)}
-                          placeholder="10-digit number"
-                          autoComplete="tel"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="apt-new-email">Email (optional)</Label>
-                        <Input
-                          id="apt-new-email"
-                          type="email"
-                          value={newCustomerEmail}
-                          onChange={(e) => setNewCustomerEmail(e.target.value)}
-                          placeholder="email@example.com"
-                          autoComplete="email"
-                        />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="apt-new-address">Address (optional)</Label>
-                        <Input
-                          id="apt-new-address"
-                          value={newCustomerAddress}
-                          onChange={(e) => setNewCustomerAddress(e.target.value)}
-                          placeholder="City / area"
-                        />
-                      </div>
-                    </div>
-                    <div className="border-t border-border pt-4 space-y-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Vehicle
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="apt-new-reg">
-                            Registration <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="apt-new-reg"
-                            value={newVehicleReg}
-                            onChange={(e) => setNewVehicleReg(e.target.value.toUpperCase())}
-                            placeholder="e.g. KA01AB1234"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="apt-new-seg">Type</Label>
-                          <Select
-                            value={newVehicleSegment}
-                            onValueChange={(v) => setNewVehicleSegment(v as VehicleSegment)}
-                          >
-                            <SelectTrigger id="apt-new-seg">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {APPOINTMENT_VEHICLE_SEGMENTS.map((o) => (
-                                <SelectItem key={o.value} value={o.value}>
-                                  {o.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="apt-new-make">
-                            Make <span className="text-destructive">*</span>
-                          </Label>
-                          <Select
-                            value={newVehicleMake || undefined}
-                            onValueChange={(value) => {
-                              setNewVehicleMake(value);
-                              setNewVehicleModel("");
-                            }}
-                          >
-                            <SelectTrigger id="apt-new-make">
-                              <SelectValue placeholder="Select make" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {makeOptions.map((make) => (
-                                <SelectItem key={make} value={make}>
-                                  {make}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="apt-new-model">
-                            Model <span className="text-destructive">*</span>
-                          </Label>
-                          <Select
-                            value={newVehicleModel || undefined}
-                            onValueChange={setNewVehicleModel}
-                            disabled={!newVehicleMake}
-                          >
-                            <SelectTrigger id="apt-new-model">
-                              <SelectValue placeholder={newVehicleMake ? "Select model" : "Select make first"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {modelOptions.map((model) => (
-                                <SelectItem key={model.name} value={model.name}>
-                                  {model.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
+
+                    <div className="flex justify-end gap-2 pt-3 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleAppointmentDialogChange(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (validateCustomerStep()) {
+                            setCurrentStep("vehicle");
+                          }
+                        }}
+                      >
+                        Next
+                      </Button>
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="apt-service">Service</Label>
-                    <Select required value={formServiceId} onValueChange={setFormServiceId}>
-                      <SelectTrigger id="apt-service">
-                        <SelectValue placeholder="Select service" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalog
-                          .filter((s) => s.isActive)
-                          .map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="apt-mechanic">Mechanic (optional)</Label>
-                    <Select value={formMechanicId || "__none__"} onValueChange={(v) => setFormMechanicId(v === "__none__" ? "" : v)}>
-                      <SelectTrigger id="apt-mechanic">
-                        <SelectValue placeholder="Assign mechanic" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {staff
-                          .filter((s) => s.role === "MECHANIC")
-                          .map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="apt-date">Date</Label>
-                    <Input
-                      id="apt-date"
-                      type="date"
-                      required
-                      min={minCalendarDate}
-                      value={formDate}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v < minCalendarDate) {
-                          setFormDate(minCalendarDate);
-                          setFormTime(localTimeInputMinNow());
-                          return;
-                        }
-                        setFormDate(v);
-                        if (v === minCalendarDate) {
-                          const nowT = localTimeInputMinNow();
-                          setFormTime((prev) => (prev < nowT ? nowT : prev));
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="apt-time">Time</Label>
-                    <Input
-                      id="apt-time"
-                      type="time"
-                      required
-                      min={timeInputMin}
-                      value={formTime}
-                      onChange={(e) => setFormTime(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="apt-notes">Notes (optional)</Label>
-                    <Input
-                      id="apt-notes"
-                      placeholder="Any special instructions..."
-                      value={formNotes}
-                      onChange={(e) => setFormNotes(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => handleAppointmentDialogChange(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Schedule</Button>
-                </div>
-              </form>
-
-              <Dialog
-                open={addVehicleForExistingCustomerDialogOpen}
-                onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
-              >
-                <DialogContent className="max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Add New Vehicle</DialogTitle>
-                    <DialogDescription>
-                      Link a new vehicle to {selectedExistingCustomer?.name ?? "the selected customer"} and continue scheduling.
-                    </DialogDescription>
-                  </DialogHeader>
+                {/* STEP 2: Vehicle Details */}
+                {currentStep === "vehicle" && (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Customer</Label>
-                      <Input value={selectedExistingCustomer?.name ?? ""} readOnly disabled />
+                    {hasExistingCustomer ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-sm">Vehicle Details</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setNewVehicleRegInput("");
+                              setNewVehicleMakeInput("");
+                              setNewVehicleModelInput("");
+                              setNewVehicleSegmentInput("HATCHBACK");
+                              setAddVehicleForExistingCustomerDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-1.5" />
+                            Add New Vehicle
+                          </Button>
+                        </div>
+
+                        {vehiclesForCustomer.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                            {vehiclesForCustomer.map((v) => {
+                              const isSelected = formVehicleId === v.id;
+                              return (
+                                <button
+                                  key={v.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormVehicleId(v.id);
+                                  }}
+                                  className={cn(
+                                    "rounded-xl border-2 p-3 text-left transition-all flex flex-col justify-between h-28",
+                                    isSelected
+                                      ? "border-primary bg-primary/5 shadow-sm"
+                                      : "border-border hover:border-primary/30"
+                                  )}
+                                >
+                                  <div className="flex items-start justify-between gap-2 w-full">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Car className="w-8 h-8 shrink-0 text-muted-foreground" />
+                                      <div className="min-w-0">
+                                        <p className="font-semibold text-sm truncate">
+                                          {v.make} {v.model}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                          Reg: {v.registrationNumber}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {isSelected && (
+                                      <Badge className="shrink-0 bg-primary text-primary-foreground hover:bg-primary">
+                                        Selected
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <Badge variant="secondary" className="text-[10px] self-start mt-1">
+                                    {v.segment.replace("_", " ")}
+                                  </Badge>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 border border-dashed rounded-lg bg-muted/10">
+                            <Car className="w-8 h-8 mx-auto text-muted-foreground/60 mb-2" />
+                            <p className="text-sm font-medium">No vehicles registered for this customer</p>
+                            <p className="text-xs text-muted-foreground mt-1">Click Add New Vehicle above to register one.</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                        <p className="text-sm font-semibold">New Vehicle Details</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="apt-new-reg" className="text-xs">Registration Number *</Label>
+                            <Input
+                              id="apt-new-reg"
+                              value={newVehicleReg}
+                              onChange={(e) => setNewVehicleReg(e.target.value.toUpperCase())}
+                              placeholder="e.g. KA01AB1234"
+                              maxLength={16}
+                              className="font-mono uppercase h-9"
+                            />
+                            <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="apt-new-seg" className="text-xs">Type</Label>
+                            <Select
+                              value={newVehicleSegment}
+                              onValueChange={(v) => setNewVehicleSegment(v as VehicleSegment)}
+                            >
+                              <SelectTrigger id="apt-new-seg" className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {APPOINTMENT_VEHICLE_SEGMENTS.map((o) => (
+                                  <SelectItem key={o.value} value={o.value}>
+                                    {o.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="apt-new-make" className="text-xs">Make *</Label>
+                            <Select
+                              value={newVehicleMake || undefined}
+                              onValueChange={(value) => {
+                                setNewVehicleMake(value);
+                                setNewVehicleModel("");
+                              }}
+                            >
+                              <SelectTrigger id="apt-new-make" className="h-9">
+                                <SelectValue placeholder="Select make" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {makeOptions.map((make) => (
+                                  <SelectItem key={make} value={make}>
+                                    {make}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="apt-new-model" className="text-xs">Model *</Label>
+                            <Select
+                              value={newVehicleModel || undefined}
+                              onValueChange={(value) => {
+                                setNewVehicleModel(value);
+                                const inferredSegment = getModelSegment(newVehicleMake, value);
+                                if (inferredSegment) {
+                                  setNewVehicleSegment(inferredSegment);
+                                }
+                              }}
+                              disabled={!newVehicleMake}
+                            >
+                              <SelectTrigger id="apt-new-model" className="h-9">
+                                <SelectValue placeholder={newVehicleMake ? "Select model" : "Select make first"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {modelOptions.map((model) => (
+                                  <SelectItem key={model.name} value={model.name}>
+                                    {model.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Secondary popup/dialog for adding new vehicle to existing customer */}
+                    <Dialog
+                      open={addVehicleForExistingCustomerDialogOpen}
+                      onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
+                    >
+                      <DialogContent className="max-w-lg">
+                        <DialogHeader>
+                          <DialogTitle>Add New Vehicle</DialogTitle>
+                          <DialogDescription>
+                            Enter registration, brand, and model. Use + New if a brand or model is not in the list.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="apt-existing-vehicle-reg">Registration Number *</Label>
+                            <Input
+                              id="apt-existing-vehicle-reg"
+                              value={newVehicleRegInput}
+                              onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
+                              placeholder="e.g. KA01AB1234"
+                              maxLength={16}
+                              className="font-mono uppercase"
+                            />
+                            <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <Label htmlFor="apt-existing-vehicle-make">Brand *</Label>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                                  onClick={() => {
+                                    setNewBrandDraft("");
+                                    setNewBrandOpen(true);
+                                  }}
+                                >
+                                  + New
+                                </Button>
+                              </div>
+                              <Select
+                                value={newVehicleMakeInput || undefined}
+                                onValueChange={(value) => {
+                                  setNewVehicleMakeInput(value);
+                                  setNewVehicleModelInput("");
+                                  setNewVehicleSegmentInput("HATCHBACK");
+                                }}
+                              >
+                                <SelectTrigger id="apt-existing-vehicle-make">
+                                  <SelectValue placeholder="Select brand" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {allBrandsSorted.map((brand) => (
+                                    <SelectItem key={brand} value={brand}>
+                                      {brand}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <Label htmlFor="apt-existing-vehicle-model">Model *</Label>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!newVehicleMakeInput}
+                                  className="h-7 shrink-0 px-2.5 text-xs font-medium disabled:opacity-50"
+                                  onClick={() => {
+                                    if (!newVehicleMakeInput) return;
+                                    setNewModelDraft("");
+                                    setNewModelOpen(true);
+                                  }}
+                                >
+                                  + New
+                                </Button>
+                              </div>
+                              <Select
+                                value={newVehicleModelInput || undefined}
+                                onValueChange={(value) => {
+                                  setNewVehicleModelInput(value);
+                                  const inferredSegment = getModelSegment(newVehicleMakeInput, value);
+                                  if (inferredSegment) {
+                                    setNewVehicleSegmentInput(inferredSegment);
+                                  }
+                                }}
+                                disabled={!newVehicleMakeInput}
+                              >
+                                <SelectTrigger id="apt-existing-vehicle-model">
+                                  <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {allModelsSorted.map((model) => (
+                                    <SelectItem key={model} value={model}>
+                                      {model}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
+                            Done
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* Brand add nested dialog */}
+                    <Dialog
+                      open={newBrandOpen}
+                      onOpenChange={setNewBrandOpen}
+                    >
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Add brand</DialogTitle>
+                          <DialogDescription>
+                            Add a brand name when it is not in the catalog search list.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Input
+                          placeholder="Brand name"
+                          value={newBrandDraft}
+                          onChange={(e) => setNewBrandDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const t = newBrandDraft.trim();
+                              if (!t) return;
+                              if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                                toast.message("Brand already in list");
+                                return;
+                              }
+                              setExtraBrands((prev) => [...prev, t]);
+                              setNewVehicleMakeInput(t);
+                              setNewVehicleModelInput("");
+                              setNewBrandOpen(false);
+                              setNewBrandDraft("");
+                              toast.success("Brand added", { description: t });
+                            }
+                          }}
+                        />
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              const t = newBrandDraft.trim();
+                              if (!t) {
+                                toast.error("Enter a brand name");
+                                return;
+                              }
+                              if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                                toast.message("Brand already in list");
+                                return;
+                              }
+                              setExtraBrands((prev) => [...prev, t]);
+                              setNewVehicleMakeInput(t);
+                              setNewVehicleModelInput("");
+                              setNewBrandOpen(false);
+                              setNewBrandDraft("");
+                              toast.success("Brand added", { description: t });
+                            }}
+                          >
+                            Add brand
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* Model add nested dialog */}
+                    <Dialog
+                      open={newModelOpen}
+                      onOpenChange={setNewModelOpen}
+                    >
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Add model</DialogTitle>
+                          <DialogDescription>
+                            Add a model for <span className="font-medium text-foreground">{newVehicleMakeInput}</span> when it is not listed.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <Input
+                          placeholder="Model name"
+                          value={newModelDraft}
+                          onChange={(e) => setNewModelDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const t = newModelDraft.trim();
+                              if (!t || !newVehicleMakeInput.trim()) return;
+                              setExtraModelsByBrand((prev) => ({
+                                ...prev,
+                                [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] ?? []), t],
+                              }));
+                              setNewVehicleModelInput(t);
+                              const seg = getModelSegment(newVehicleMakeInput, t);
+                              if (seg) setNewVehicleSegmentInput(seg);
+                              setNewModelOpen(false);
+                              setNewModelDraft("");
+                              toast.success("Model added", { description: t });
+                            }
+                          }}
+                        />
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              const t = newModelDraft.trim();
+                              if (!t) {
+                                toast.error("Enter a model name");
+                                return;
+                              }
+                              if (!newVehicleMakeInput.trim()) return;
+                              setExtraModelsByBrand((prev) => ({
+                                ...prev,
+                                [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] ?? []), t],
+                              }));
+                              setNewVehicleModelInput(t);
+                              const seg = getModelSegment(newVehicleMakeInput, t);
+                              if (seg) setNewVehicleSegmentInput(seg);
+                              setNewModelOpen(false);
+                              setNewModelDraft("");
+                              toast.success("Model added", { description: t });
+                            }}
+                          >
+                            Add model
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <div className="flex justify-between pt-3 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCurrentStep("customer")}
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (validateVehicleStep()) {
+                            setCurrentStep("details");
+                          }
+                        }}
+                      >
+                        Next
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="apt-existing-vehicle-reg">Registration *</Label>
-                      <Input
-                        id="apt-existing-vehicle-reg"
-                        value={newVehicleRegInput}
-                        onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
-                        placeholder="e.g. KA01AB1234"
-                        maxLength={16}
-                        className="font-mono uppercase"
-                      />
-                      <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                  </div>
+                )}
+
+                {/* STEP 3: Appointment Details */}
+                {currentStep === "details" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="apt-existing-vehicle-segment">Type</Label>
-                        <Select
-                          value={newVehicleSegmentInput}
-                          onValueChange={(value) => setNewVehicleSegmentInput(value as VehicleSegment)}
-                        >
-                          <SelectTrigger id="apt-existing-vehicle-segment">
-                            <SelectValue />
+                        <Label htmlFor="apt-service">Service</Label>
+                        <Select required value={formServiceId} onValueChange={setFormServiceId}>
+                          <SelectTrigger id="apt-service">
+                            <SelectValue placeholder="Select service" />
                           </SelectTrigger>
                           <SelectContent>
-                            {APPOINTMENT_VEHICLE_SEGMENTS.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
+                            {catalog
+                              .filter((s) => s.isActive)
+                              .map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="apt-existing-vehicle-make">Make *</Label>
-                        <Select
-                          value={newVehicleMakeInput || undefined}
-                          onValueChange={(value) => {
-                            setNewVehicleMakeInput(value);
-                            setNewVehicleModelInput("");
-                          }}
-                        >
-                          <SelectTrigger id="apt-existing-vehicle-make">
-                            <SelectValue placeholder="Select make" />
+                        <Label htmlFor="apt-mechanic">Mechanic (optional)</Label>
+                        <Select value={formMechanicId || "__none__"} onValueChange={(v) => setFormMechanicId(v === "__none__" ? "" : v)}>
+                          <SelectTrigger id="apt-mechanic">
+                            <SelectValue placeholder="Assign mechanic" />
                           </SelectTrigger>
                           <SelectContent>
-                            {makeOptions.map((make) => (
-                              <SelectItem key={make} value={make}>
-                                {make}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="__none__">None</SelectItem>
+                            {staff
+                              .filter((s) => s.role === "MECHANIC")
+                              .map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="apt-date">Date</Label>
+                        <Input
+                          id="apt-date"
+                          type="date"
+                          required
+                          min={minCalendarDate}
+                          value={formDate}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v < minCalendarDate) {
+                              setFormDate(minCalendarDate);
+                              setFormTime(localTimeInputMinNow());
+                              return;
+                            }
+                            setFormDate(v);
+                            if (v === minCalendarDate) {
+                              const nowT = localTimeInputMinNow();
+                              setFormTime((prev) => (prev < nowT ? nowT : prev));
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="apt-time">Time</Label>
+                        <Input
+                          id="apt-time"
+                          type="time"
+                          required
+                          min={timeInputMin}
+                          value={formTime}
+                          onChange={(e) => setFormTime(e.target.value)}
+                        />
                       </div>
                       <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="apt-existing-vehicle-model">Model *</Label>
-                        <Select
-                          value={newVehicleModelInput || undefined}
-                          onValueChange={setNewVehicleModelInput}
-                          disabled={!newVehicleMakeInput}
-                        >
-                          <SelectTrigger id="apt-existing-vehicle-model">
-                            <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select make first"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {modelOptionsForExistingCustomer.map((model) => (
-                              <SelectItem key={model.name} value={model.name}>
-                                {model.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="apt-notes">Notes (optional)</Label>
+                        <Input
+                          id="apt-notes"
+                          placeholder="Any special instructions..."
+                          value={formNotes}
+                          onChange={(e) => setFormNotes(e.target.value)}
+                        />
                       </div>
                     </div>
+
+                    <div className="flex justify-between pt-3 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCurrentStep("vehicle")}
+                      >
+                        Back
+                      </Button>
+                      <Button type="submit">Schedule</Button>
+                    </div>
                   </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
-                      Save vehicle
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                )}
+              </form>
             </DialogContent>
           </Dialog>
         }
