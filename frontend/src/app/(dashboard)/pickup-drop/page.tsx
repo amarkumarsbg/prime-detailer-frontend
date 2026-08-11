@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -27,10 +28,11 @@ import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useCustomerStore } from "@/store/customer-store";
+import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { cn } from "@/lib/utils";
-import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
-import { Plus, ChevronsUpDown, Search, Check } from "lucide-react";
+import type { PickupDropRequest, PickupDropStatus, PickupDropType, VehicleSegment } from "@/types";
+import { Plus, ChevronsUpDown, Search, Check, ChevronRight, Car } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
@@ -45,6 +47,13 @@ import {
   isDatetimeLocalInPast,
   localDatetimeLocalInputMin,
 } from "@/lib/booking-calendar-validation";
+import {
+  INDIAN_VEHICLE_REG_HINT,
+  isValidIndianVehicleRegistration,
+  sanitizeVehicleRegistrationInput,
+  findVehicleByNormalizedReg,
+} from "@/lib/vehicle-registration";
+import { useVehicleStore } from "@/store/vehicle-store";
 import { PickupDropJobGroupCard } from "@/components/pickup-drop/pickup-drop-job-group-card";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import {
@@ -110,6 +119,80 @@ export default function PickupDropPage() {
   const [statusFilter, setStatusFilter] = useState<PickupDropStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<PickupDropType | "ALL">("ALL");
   const [createOpen, setCreateOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState<"customer" | "vehicle" | "details">("customer");
+  const vehicles = useVehicleStore((s) => s.vehicles);
+  const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
+
+  const [vehicleReg, setVehicleReg] = useState("");
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment>("HATCHBACK");
+
+  const [extraBrands, setExtraBrands] = useState<string[]>([]);
+  const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
+  const [newBrandOpen, setNewBrandOpen] = useState(false);
+  const [newBrandDraft, setNewBrandDraft] = useState("");
+  const [newModelOpen, setNewModelOpen] = useState(false);
+  const [newModelDraft, setNewModelDraft] = useState("");
+
+  const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
+  const allBrandsSorted = useMemo(
+    () => [...new Set([...makeOptions, ...extraBrands])].sort((a, b) => a.localeCompare(b)),
+    [makeOptions, extraBrands]
+  );
+  const allModelsSorted = useMemo(() => {
+    const catalog = vehicleMake ? getModels(vehicleMake).map((m) => m.name) : [];
+    const extra = vehicleMake ? extraModelsByBrand[vehicleMake] ?? [] : [];
+    return [...new Set([...catalog, ...extra])].sort((a, b) => a.localeCompare(b));
+  }, [vehicleMake, getModels, extraModelsByBrand]);
+
+  const validateCustomerStep = () => {
+    if (createMode === "existing") {
+      if (!bookingId) {
+        toast.error("Please select a booking/job card.");
+        return false;
+      }
+    } else {
+      if (!newCustomerName.trim()) {
+        toast.error("Enter the customer name.");
+        return false;
+      }
+      const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
+      if (newCustomerPhone.trim() && phoneDigits.length !== 10) {
+        toast.error("Enter a valid 10-digit mobile number or leave phone empty.");
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const validateVehicleStep = () => {
+    if (createMode === "existing") return true;
+    const reg = vehicleReg.trim().toUpperCase();
+    const make = vehicleMake.trim();
+    const model = vehicleModel.trim();
+    if (!reg || !make || !model) {
+      toast.error("Enter vehicle registration, make, and model.");
+      return false;
+    }
+    if (!isValidIndianVehicleRegistration(reg)) {
+      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
+      return false;
+    }
+    const dup = findVehicleByNormalizedReg(vehicles, reg);
+    if (dup) {
+      toast.error(`${dup.registrationNumber} is already in the system.`);
+      return false;
+    }
+    return true;
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setCreateOpen(open);
+    if (!open) {
+      resetForm();
+    }
+  };
 
   const [createMode, setCreateMode] = useState<"existing" | "new">("existing");
   const [bookingId, setBookingId] = useState<string>("");
@@ -136,7 +219,8 @@ export default function PickupDropPage() {
     return scopedJobCards.filter(
       (jc) =>
         jc.jobNumber.toLowerCase().includes(q) ||
-        jc.customerName.toLowerCase().includes(q)
+        jc.customerName.toLowerCase().includes(q) ||
+        (jc.customerPhone && jc.customerPhone.toLowerCase().includes(q))
     );
   }, [scopedJobCards, searchQuery]);
 
@@ -173,6 +257,7 @@ export default function PickupDropPage() {
   }, [scopedRequests]);
 
   const resetForm = () => {
+    setCurrentStep("customer");
     setCreateMode("existing");
     setBookingId("");
     setNewCustomerName("");
@@ -185,6 +270,16 @@ export default function PickupDropPage() {
     setNotes("");
     setSearchQuery("");
     setPopoverOpen(false);
+    setVehicleReg("");
+    setVehicleMake("");
+    setVehicleModel("");
+    setVehicleSegment("HATCHBACK");
+    setExtraBrands([]);
+    setExtraModelsByBrand({});
+    setNewBrandOpen(false);
+    setNewBrandDraft("");
+    setNewModelOpen(false);
+    setNewModelDraft("");
   };
 
   const handleCreate = () => {
@@ -268,6 +363,8 @@ export default function PickupDropPage() {
       driverId: driver?.id,
       driverName: driver?.name,
       notes: combinedNotes || undefined,
+      vehicleMakeModel: vehicleMake && vehicleModel ? `${vehicleMake} ${vehicleModel}` : undefined,
+      vehicleRegNumber: vehicleReg ? vehicleReg.trim().toUpperCase() : undefined,
     });
     setCreateOpen(false);
     resetForm();
@@ -466,8 +563,7 @@ export default function PickupDropPage() {
           })}
         </div>
       )}
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent
           className={cn("sm:max-w-lg", dialogSurfaceClass)}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -477,123 +573,377 @@ export default function PickupDropPage() {
               Create Pickup/Drop Request
             </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-2 max-h-[min(70vh,28rem)] overflow-y-auto pr-1">
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">Customer</Label>
-              <div className="flex rounded-lg border border-input bg-muted/30 p-1 gap-1">
-                <Button
-                  type="button"
-                  variant={createMode === "existing" ? "default" : "ghost"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    setCreateMode("existing");
-                    if (bookingId) {
-                      const jc = scopedJobCards.find((j) => j.id === bookingId);
-                      setRequestAddress(
-                        jc
-                          ? resolvePickupDropAddressForJobCard(jc, appointments, customers)
-                          : ""
-                      );
-                    } else {
-                      setRequestAddress("");
-                    }
-                  }}
-                >
-                  Existing booking
-                </Button>
-                <Button
-                  type="button"
-                  variant={createMode === "new" ? "default" : "ghost"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    setCreateMode("new");
-                    setRequestAddress("");
-                    setNewBranchId((prev) => prev || scopedBranches[0]?.id || "");
-                    setNewScheduledLocal((prev) => prev || defaultScheduledDatetimeLocal());
-                  }}
-                >
-                  New customer
-                </Button>
-              </div>
-            </div>
 
-            {createMode === "existing" ? (
-              <div className="grid gap-2">
-                <Label htmlFor="pd-booking">Select booking</Label>
-                {scopedJobCards.length === 0 ? (
-                  <p className="text-sm text-muted-foreground rounded-md border border-dashed border-border px-3 py-2.5">
-                    No job cards in this branch. Switch to <strong className="font-medium text-foreground">New customer</strong> to create a request without a job card.
-                  </p>
-                ) : (
-                  <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="pd-booking"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={popoverOpen}
-                        className={cn(
-                          "w-full justify-between font-normal text-slate-800 dark:text-foreground bg-transparent border-input hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors text-left pl-3 pr-2",
-                          selectTriggerClass
-                        )}
-                      >
-                        {selectedJobCard ? (
-                          <span className="truncate">{selectedJobCard.jobNumber} · {selectedJobCard.customerName}</span>
-                        ) : (
-                          <span className="text-muted-foreground">Select a job card…</span>
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-muted-foreground" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent 
-                      className="w-[var(--radix-popover-trigger-width)] p-0 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md z-[60]"
-                      align="start"
-                    >
-                      <div className="flex items-center border-b border-slate-100 dark:border-slate-800 px-3 py-2 gap-2">
-                        <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                        <input
-                          className="flex h-7 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-slate-400 border-0 p-0 focus:ring-0 text-slate-800 dark:text-slate-100"
-                          placeholder="Search job card or customer…"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                      </div>
-                      <div className="max-h-[220px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
-                        {filteredJobCards.length === 0 ? (
-                          <div className="py-6 text-center text-xs text-muted-foreground">No job cards found.</div>
-                        ) : (
-                          filteredJobCards.map((jc) => (
-                            <button
-                              key={jc.id}
-                              type="button"
-                              onClick={() => {
-                                setBookingId(jc.id);
-                                setRequestAddress(
-                                  resolvePickupDropAddressForJobCard(jc, appointments, customers)
-                                );
-                                setPopoverOpen(false);
-                                setSearchQuery("");
-                              }}
-                              className={cn(
-                                "w-full text-left px-2.5 py-2 text-xs rounded-md transition-colors cursor-pointer flex items-center justify-between outline-none focus:bg-slate-100 dark:focus:bg-slate-800",
-                                bookingId === jc.id
-                                  ? "bg-indigo-50 text-indigo-600 font-bold dark:bg-indigo-950/40 dark:text-indigo-400"
-                                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                              )}
-                            >
-                              <span className="truncate">{jc.jobNumber} · {jc.customerName}</span>
-                              {bookingId === jc.id && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
+          {/* Stepper Progress Indicator */}
+          <div className="space-y-2 border-b pb-4 mb-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Step {currentStep === "customer" ? 1 : currentStep === "vehicle" ? 2 : 3} of 3 —{" "}
+                {currentStep === "customer"
+                  ? "Customer details"
+                  : currentStep === "vehicle"
+                  ? "Vehicle details"
+                  : "Request details"}
+              </p>
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{
+                    width: currentStep === "customer" ? "33.3%" : currentStep === "vehicle" ? "66.6%" : "100%",
+                  }}
+                  role="progressbar"
+                  aria-valuenow={currentStep === "customer" ? 33 : currentStep === "vehicle" ? 66 : 100}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                />
+              </div>
+              <span className="text-[10px] font-medium tabular-nums text-muted-foreground shrink-0">
+                {currentStep === "customer" ? "33%" : currentStep === "vehicle" ? "66%" : "100%"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground leading-snug">
+              <span className={cn("font-medium", currentStep === "customer" && "text-primary font-semibold")}>Customer</span>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className={cn("font-medium", currentStep === "vehicle" && "text-primary font-semibold")}>Vehicle details</span>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className={cn("font-medium", currentStep === "details" && "text-primary font-semibold")}>Request details</span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 py-2 max-h-[min(70vh,28rem)] overflow-y-auto pr-1">
+            {/* STEP 1: Customer Details */}
+            {currentStep === "customer" && (
+              <div className="space-y-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="pd-existing-address">{addressFieldLabel}</Label>
+                  <Label className="text-muted-foreground">Select Mode</Label>
+                  <div className="flex rounded-lg border border-input bg-muted/30 p-1 gap-1">
+                    <Button
+                      type="button"
+                      variant={createMode === "existing" ? "default" : "ghost"}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setCreateMode("existing");
+                        if (bookingId) {
+                          const jc = scopedJobCards.find((j) => j.id === bookingId);
+                          setRequestAddress(
+                            jc
+                              ? resolvePickupDropAddressForJobCard(jc, appointments, customers)
+                              : ""
+                          );
+                        } else {
+                          setRequestAddress("");
+                        }
+                      }}
+                    >
+                      Existing booking
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={createMode === "new" ? "default" : "ghost"}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setCreateMode("new");
+                        setRequestAddress("");
+                        setNewBranchId((prev) => prev || scopedBranches[0]?.id || "");
+                        setNewScheduledLocal((prev) => prev || defaultScheduledDatetimeLocal());
+                      }}
+                    >
+                      New customer
+                    </Button>
+                  </div>
+                </div>
+
+                {createMode === "existing" ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="pd-booking">Select booking/job card</Label>
+                    {scopedJobCards.length === 0 ? (
+                      <p className="text-sm text-muted-foreground rounded-md border border-dashed border-border px-3 py-2.5">
+                        No job cards in this branch. Switch to <strong className="font-medium text-foreground">New customer</strong> to create a request without a job card.
+                      </p>
+                    ) : (
+                      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            id="pd-booking"
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={popoverOpen}
+                            className={cn(
+                              "w-full justify-between font-normal text-slate-800 dark:text-foreground bg-transparent border-input hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors text-left pl-3 pr-2",
+                              selectTriggerClass
+                            )}
+                          >
+                            {selectedJobCard ? (
+                              <span className="truncate">
+                                {selectedJobCard.jobNumber} · {selectedJobCard.customerName}
+                                {selectedJobCard.customerPhone ? ` (${selectedJobCard.customerPhone})` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Select a job card…</span>
+                            )}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent 
+                          className="w-[var(--radix-popover-trigger-width)] p-0 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md z-[60]"
+                          align="start"
+                        >
+                          <div className="flex items-center border-b border-slate-100 dark:border-slate-800 px-3 py-2 gap-2">
+                            <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                            <input
+                              className="flex h-7 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-slate-400 border-0 p-0 focus:ring-0 text-slate-800 dark:text-slate-100"
+                              placeholder="Search job card, customer or phone…"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                          </div>
+                          <div className="max-h-[220px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
+                            {filteredJobCards.length === 0 ? (
+                              <div className="py-6 text-center text-xs text-muted-foreground">No job cards found.</div>
+                            ) : (
+                              filteredJobCards.map((jc) => (
+                                <button
+                                  key={jc.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setBookingId(jc.id);
+                                    setRequestAddress(
+                                      resolvePickupDropAddressForJobCard(jc, appointments, customers)
+                                    );
+                                    setPopoverOpen(false);
+                                    setSearchQuery("");
+                                  }}
+                                  className={cn(
+                                    "w-full text-left px-2.5 py-2 text-xs rounded-md transition-colors cursor-pointer flex items-center justify-between outline-none focus:bg-slate-100 dark:focus:bg-slate-800",
+                                    bookingId === jc.id
+                                      ? "bg-indigo-50 text-indigo-600 font-bold dark:bg-indigo-950/40 dark:text-indigo-400"
+                                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                  )}
+                                >
+                                  <span className="truncate">
+                                    {jc.jobNumber} · {jc.customerName}
+                                    {jc.customerPhone ? ` (${jc.customerPhone})` : ""}
+                                  </span>
+                                  {bookingId === jc.id && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="pd-new-name">Customer name *</Label>
+                      <Input
+                        id="pd-new-name"
+                        value={newCustomerName}
+                        onChange={(e) => setNewCustomerName(e.target.value)}
+                        placeholder="Full name"
+                        className="border-input"
+                        autoComplete="name"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="pd-new-phone">Phone (optional)</Label>
+                      <Input
+                        id="pd-new-phone"
+                        type="tel"
+                        value={newCustomerPhone}
+                        onChange={(e) => setNewCustomerPhone(e.target.value)}
+                        placeholder="10-digit mobile"
+                        className="border-input"
+                        autoComplete="tel"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-3 border-t">
+                  <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateCustomerStep()) {
+                        setCurrentStep("vehicle");
+                      }
+                    }}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Vehicle Details */}
+            {currentStep === "vehicle" && (
+              <div className="space-y-4">
+                {createMode === "existing" ? (
+                  <div className="space-y-3">
+                    <p className="font-semibold text-sm">Linked Booking Vehicle</p>
+                    {selectedJobCard ? (
+                      <div className="rounded-xl border p-4 bg-muted/20 flex items-start gap-3">
+                        <Car className="w-8 h-8 text-muted-foreground shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm">
+                            {selectedJobCard.vehicleMakeModel || "Unknown Vehicle"}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                            Reg: {selectedJobCard.vehicleRegNumber || "Not Provided"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Select a booking in Step 1 first.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                    <p className="text-sm font-semibold">New Vehicle Details</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="pd-new-reg" className="text-xs">Registration Number *</Label>
+                        <Input
+                          id="pd-new-reg"
+                          value={vehicleReg}
+                          onChange={(e) => setVehicleReg(e.target.value.toUpperCase())}
+                          placeholder="e.g. KA01AB1234"
+                          maxLength={16}
+                          className="font-mono uppercase h-9"
+                        />
+                        <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pd-new-seg" className="text-xs">Type</Label>
+                        <Select
+                          value={vehicleSegment}
+                          onValueChange={(v) => setVehicleSegment(v as VehicleSegment)}
+                        >
+                          <SelectTrigger id="pd-new-seg" className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="HATCHBACK">Hatchback</SelectItem>
+                            <SelectItem value="SEDAN">Sedan</SelectItem>
+                            <SelectItem value="COMPACT_SUV">Compact SUV</SelectItem>
+                            <SelectItem value="SUV">SUV</SelectItem>
+                            <SelectItem value="LUXURY">Luxury</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label htmlFor="pd-new-make" className="text-xs">Brand *</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 shrink-0 border-sky-300 bg-white px-2 text-[10px] font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                            onClick={() => {
+                              setNewBrandOpen(true);
+                              setNewBrandDraft("");
+                            }}
+                          >
+                            + New
+                          </Button>
+                        </div>
+                        <Select
+                          value={vehicleMake || undefined}
+                          onValueChange={(value) => {
+                            setVehicleMake(value);
+                            setVehicleModel("");
+                          }}
+                        >
+                          <SelectTrigger id="pd-new-make" className="h-9">
+                            <SelectValue placeholder="Select brand" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allBrandsSorted.map((brand) => (
+                              <SelectItem key={brand} value={brand}>
+                                {brand}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label htmlFor="pd-new-model" className="text-xs">Model *</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!vehicleMake}
+                            className="h-6 shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
+                            onClick={() => {
+                              if (!vehicleMake) return;
+                              setNewModelOpen(true);
+                              setNewModelDraft("");
+                            }}
+                          >
+                            + New
+                          </Button>
+                        </div>
+                        <Select
+                          value={vehicleModel || undefined}
+                          onValueChange={(value) => {
+                            setVehicleModel(value);
+                            const inferredSegment = getModelSegment(vehicleMake, value);
+                            if (inferredSegment) {
+                              setVehicleSegment(inferredSegment);
+                            }
+                          }}
+                          disabled={!vehicleMake}
+                        >
+                          <SelectTrigger id="pd-new-model" className="h-9">
+                            <SelectValue placeholder={vehicleMake ? "Select model" : "Select brand first"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allModelsSorted.map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between pt-3 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep("customer")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateVehicleStep()) {
+                        setCurrentStep("details");
+                      }
+                    }}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Request details */}
+            {currentStep === "details" && (
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="pd-existing-address">{addressFieldLabel} *</Label>
                   <Textarea
                     id="pd-existing-address"
                     value={requestAddress}
@@ -601,136 +951,234 @@ export default function PickupDropPage() {
                     rows={3}
                     className="resize-none border-input"
                     placeholder="Street, landmark, pincode…"
-                    disabled={!bookingId}
                   />
                 </div>
-              </div>
-            ) : (
-              <>
+
+                {createMode === "new" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="pd-new-branch">Branch *</Label>
+                      {scopedBranches.length === 0 ? (
+                        <p className="text-sm text-destructive rounded-md border border-dashed px-3 py-2.5">
+                          No active branch available for your scope.
+                        </p>
+                      ) : (
+                        <Select value={newBranchId || undefined} onValueChange={setNewBranchId}>
+                          <SelectTrigger id="pd-new-branch" className={selectTriggerClass}>
+                            <SelectValue placeholder="Select branch…" />
+                          </SelectTrigger>
+                          <SelectContent className={selectContentClass}>
+                            {scopedBranches.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>
+                                {b.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="pd-new-when">Scheduled date &amp; time *</Label>
+                      <Input
+                        id="pd-new-when"
+                        type="datetime-local"
+                        min={localDatetimeLocalInputMin()}
+                        value={newScheduledLocal}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) {
+                            setNewScheduledLocal(v);
+                            return;
+                          }
+                          if (!isDatetimeLocalInPast(v)) {
+                            setNewScheduledLocal(v);
+                          } else {
+                            setNewScheduledLocal(localDatetimeLocalInputMin());
+                          }
+                        }}
+                        className="border-input"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid gap-2">
-                  <Label htmlFor="pd-new-name">Customer name</Label>
-                  <Input
-                    id="pd-new-name"
-                    value={newCustomerName}
-                    onChange={(e) => setNewCustomerName(e.target.value)}
-                    placeholder="Full name"
-                    className="border-input"
-                    autoComplete="name"
+                  <Label>Request Type</Label>
+                  <Select value={reqType} onValueChange={(v) => setReqType(v as PickupDropType)}>
+                    <SelectTrigger className={selectTriggerClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className={selectContentClass}>
+                      <SelectItem value="PICKUP">Pickup</SelectItem>
+                      <SelectItem value="DROP">Drop</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Assign Driver (Optional)</Label>
+                  <PickupDriverSelect
+                    branchId={
+                      createMode === "existing"
+                        ? scopedJobCards.find((j) => j.id === bookingId)?.branchId ?? selectedBranchId ?? ""
+                        : newBranchId
+                    }
+                    value={driverId}
+                    onValueChange={(id) => setDriverId(id)}
+                    branchScoped={!!selectedBranchId}
                   />
                 </div>
+
                 <div className="grid gap-2">
-                  <Label htmlFor="pd-new-phone">Phone (optional)</Label>
-                  <Input
-                    id="pd-new-phone"
-                    type="tel"
-                    value={newCustomerPhone}
-                    onChange={(e) => setNewCustomerPhone(e.target.value)}
-                    placeholder="10-digit mobile"
-                    className="border-input"
-                    autoComplete="tel"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="pd-new-address">{addressFieldLabel}</Label>
+                  <Label htmlFor="pd-notes">Notes (Optional)</Label>
                   <Textarea
-                    id="pd-new-address"
-                    value={requestAddress}
-                    onChange={(e) => setRequestAddress(e.target.value)}
+                    id="pd-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                     rows={3}
                     className="resize-none border-input"
-                    placeholder="Street, landmark, pincode…"
+                    placeholder="Add any notes…"
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="pd-new-branch">Branch</Label>
-                  {scopedBranches.length === 0 ? (
-                    <p className="text-sm text-destructive rounded-md border border-dashed px-3 py-2.5">
-                      No active branch available for your scope.
-                    </p>
-                  ) : (
-                    <Select value={newBranchId || undefined} onValueChange={setNewBranchId}>
-                      <SelectTrigger id="pd-new-branch" className={selectTriggerClass}>
-                        <SelectValue placeholder="Select branch…" />
-                      </SelectTrigger>
-                      <SelectContent className={selectContentClass}>
-                        {scopedBranches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+
+                <div className="flex justify-between pt-3 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep("vehicle")}
+                  >
+                    Back
+                  </Button>
+                  <Button onClick={handleCreate}>
+                    Create Request
+                  </Button>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="pd-new-when">Scheduled date &amp; time</Label>
-                  <Input
-                    id="pd-new-when"
-                    type="datetime-local"
-                    min={localDatetimeLocalInputMin()}
-                    value={newScheduledLocal}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (!v) {
-                        setNewScheduledLocal(v);
-                        return;
-                      }
-                      if (!isDatetimeLocalInPast(v)) {
-                        setNewScheduledLocal(v);
-                      } else {
-                        setNewScheduledLocal(localDatetimeLocalInputMin());
-                      }
-                    }}
-                    className="border-input"
-                  />
-                </div>
-              </>
+              </div>
             )}
-            <div className="grid gap-2">
-              <Label>Request Type</Label>
-              <Select value={reqType} onValueChange={(v) => setReqType(v as PickupDropType)}>
-                <SelectTrigger className={selectTriggerClass}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className={selectContentClass}>
-                  <SelectItem value="PICKUP">Pickup</SelectItem>
-                  <SelectItem value="DROP">Drop</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Assign Driver (Optional)</Label>
-              <PickupDriverSelect
-                branchId={
-                  createMode === "existing"
-                    ? scopedJobCards.find((j) => j.id === bookingId)?.branchId ?? selectedBranchId ?? ""
-                    : newBranchId
-                }
-                value={driverId}
-                onValueChange={(id) => setDriverId(id)}
-                branchScoped={!!selectedBranchId}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="pd-notes">Notes (Optional)</Label>
-              <Textarea
-                id="pd-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="resize-none border-input"
-                placeholder="Add any notes…"
-              />
-            </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+        </DialogContent>
+      </Dialog>
+
+      {/* Brand add nested dialog */}
+      <Dialog open={newBrandOpen} onOpenChange={setNewBrandOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add brand</DialogTitle>
+            <DialogDescription>
+              Add a brand name when it is not in the catalog search list.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Brand name"
+            value={newBrandDraft}
+            onChange={(e) => setNewBrandDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const t = newBrandDraft.trim();
+                if (!t) return;
+                if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                  toast.message("Brand already in list");
+                  return;
+                }
+                setExtraBrands((prev) => [...prev, t]);
+                setVehicleMake(t);
+                setVehicleModel("");
+                setNewBrandOpen(false);
+                setNewBrandDraft("");
+                toast.success("Brand added", { description: t });
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={!canSubmitCreate} onClick={handleCreate}>
-              Create Request
+            <Button
+              type="button"
+              onClick={() => {
+                const t = newBrandDraft.trim();
+                if (!t) {
+                  toast.error("Enter a brand name");
+                  return;
+                }
+                if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                  toast.message("Brand already in list");
+                  return;
+                }
+                setExtraBrands((prev) => [...prev, t]);
+                setVehicleMake(t);
+                setVehicleModel("");
+                setNewBrandOpen(false);
+                setNewBrandDraft("");
+                toast.success("Brand added", { description: t });
+              }}
+            >
+              Add brand
             </Button>
-          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Model add nested dialog */}
+      <Dialog open={newModelOpen} onOpenChange={setNewModelOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add model</DialogTitle>
+            <DialogDescription>
+              Add a model for <span className="font-medium text-foreground">{vehicleMake}</span> when it is not listed.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Model name"
+            value={newModelDraft}
+            onChange={(e) => setNewModelDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const t = newModelDraft.trim();
+                if (!t || !vehicleMake.trim()) return;
+                setExtraModelsByBrand((prev) => ({
+                  ...prev,
+                  [vehicleMake]: [...(prev[vehicleMake] ?? []), t],
+                }));
+                setVehicleModel(t);
+                const seg = getModelSegment(vehicleMake, t);
+                if (seg) setVehicleSegment(seg);
+                setNewModelOpen(false);
+                setNewModelDraft("");
+                toast.success("Model added", { description: t });
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const t = newModelDraft.trim();
+                if (!t) {
+                  toast.error("Enter a model name");
+                  return;
+                }
+                if (!vehicleMake.trim()) return;
+                setExtraModelsByBrand((prev) => ({
+                  ...prev,
+                  [vehicleMake]: [...(prev[vehicleMake] ?? []), t],
+                }));
+                setVehicleModel(t);
+                const seg = getModelSegment(vehicleMake, t);
+                if (seg) setVehicleSegment(seg);
+                setNewModelOpen(false);
+                setNewModelDraft("");
+                toast.success("Model added", { description: t });
+              }}
+            >
+              Add model
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
