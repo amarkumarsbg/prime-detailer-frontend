@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,9 +31,10 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import { cn } from "@/lib/utils";
-import type { PickupDropRequest, PickupDropStatus, PickupDropType, VehicleSegment } from "@/types";
+import type { Customer, Vehicle, PickupDropRequest, PickupDropStatus, PickupDropType, VehicleSegment } from "@/types";
 import { Plus, ChevronsUpDown, Search, Check, ChevronRight, Car } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -52,10 +53,15 @@ import {
   isValidIndianVehicleRegistration,
   sanitizeVehicleRegistrationInput,
   findVehicleByNormalizedReg,
+  normalizeRegistrationNumber,
 } from "@/lib/vehicle-registration";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { PickupDropJobGroupCard } from "@/components/pickup-drop/pickup-drop-job-group-card";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
+import {
+  computeCustomerLookupMatches,
+  queryLooksLikeVehicleReg,
+} from "@/lib/customer-vehicle-lookup";
 import {
   groupPickupDropByJob,
   pickupDropAddressFieldLabel,
@@ -147,27 +153,27 @@ export default function PickupDropPage() {
   }, [vehicleMake, getModels, extraModelsByBrand]);
 
   const validateCustomerStep = () => {
-    if (createMode === "existing") {
-      if (!bookingId) {
-        toast.error("Please select a booking/job card.");
-        return false;
-      }
-    } else {
-      if (!newCustomerName.trim()) {
-        toast.error("Enter the customer name.");
-        return false;
-      }
-      const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
-      if (newCustomerPhone.trim() && phoneDigits.length !== 10) {
-        toast.error("Enter a valid 10-digit mobile number or leave phone empty.");
-        return false;
-      }
+    if (hasExistingCustomer) return true;
+    if (!newCustomerName.trim()) {
+      toast.error("Enter the customer name.");
+      return false;
+    }
+    const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
+    if (!newCustomerPhone.trim() || phoneDigits.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number.");
+      return false;
     }
     return true;
   };
 
   const validateVehicleStep = () => {
-    if (createMode === "existing") return true;
+    if (hasExistingCustomer) {
+      if (!selectedVehicleId) {
+        toast.error("Select a vehicle or add a new one.");
+        return false;
+      }
+      return true;
+    }
     const reg = vehicleReg.trim().toUpperCase();
     const make = vehicleMake.trim();
     const model = vehicleModel.trim();
@@ -189,15 +195,30 @@ export default function PickupDropPage() {
 
   const handleDialogOpenChange = (open: boolean) => {
     setCreateOpen(open);
-    if (!open) {
+    if (open) {
+      setNewBranchId(selectedBranchId || scopedBranches[0]?.id || "");
+      setNewScheduledLocal(defaultScheduledDatetimeLocal());
+    } else {
       resetForm();
     }
   };
 
-  const [createMode, setCreateMode] = useState<"existing" | "new">("existing");
-  const [bookingId, setBookingId] = useState<string>("");
+  const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[]>([]);
+
+  // Nested vehicle creation dialog for existing customers
+  const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
+  const [newVehicleRegInput, setNewVehicleRegInput] = useState("");
+  const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
+  const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
+  const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
+
   const [requestAddress, setRequestAddress] = useState("");
   const [newBranchId, setNewBranchId] = useState<string>("");
   const [newScheduledLocal, setNewScheduledLocal] = useState("");
@@ -210,25 +231,124 @@ export default function PickupDropPage() {
     [jobCards, selectedBranchId]
   );
 
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const selectedExistingCustomer = useMemo(
+    () => customers.find((c) => c.id === existingCustomerId) ?? null,
+    [customers, existingCustomerId]
+  );
 
-  const filteredJobCards = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return scopedJobCards;
-    return scopedJobCards.filter(
-      (jc) =>
-        jc.jobNumber.toLowerCase().includes(q) ||
-        jc.customerName.toLowerCase().includes(q) ||
-        (jc.customerPhone && jc.customerPhone.toLowerCase().includes(q)) ||
-        (jc.vehicleMakeModel && jc.vehicleMakeModel.toLowerCase().includes(q)) ||
-        (jc.vehicleRegNumber && jc.vehicleRegNumber.toLowerCase().includes(q))
-    );
-  }, [scopedJobCards, searchQuery]);
+  const hasExistingCustomer = Boolean(selectedExistingCustomer);
 
-  const selectedJobCard = useMemo(() => {
-    return scopedJobCards.find((jc) => jc.id === bookingId);
-  }, [scopedJobCards, bookingId]);
+  const vehiclesForCustomer = useMemo(() => {
+    if (!existingCustomerId) return [];
+    return vehicles.filter((v) => v.customerId === existingCustomerId);
+  }, [existingCustomerId, vehicles]);
+
+  const allModelsSortedForExistingCustomer = useMemo(() => {
+    const catalog = newVehicleMakeInput ? getModels(newVehicleMakeInput).map((m) => m.name) : [];
+    const extra = newVehicleMakeInput ? extraModelsByBrand[newVehicleMakeInput] ?? [] : [];
+    return [...new Set([...catalog, ...extra])].sort((a, b) => a.localeCompare(b));
+  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
+
+  useEffect(() => {
+    const trimmed = lookupQuery.trim();
+    if (!trimmed) {
+      setLookupPanelCustomers([]);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setLookupPanelCustomers(computeCustomerLookupMatches(trimmed, customers, vehicles));
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [lookupQuery, customers, vehicles]);
+
+  useEffect(() => {
+    if (hasExistingCustomer) return;
+    const q = lookupQuery.trim();
+    if (!q) return;
+    const digits = q.replace(/\D/g, "");
+    if (queryLooksLikeVehicleReg(q)) {
+      const reg = sanitizeVehicleRegistrationInput(q);
+      setVehicleReg((prev) => (prev === reg ? prev : reg));
+      return;
+    }
+    if (digits.length >= 10) {
+      const p10 = digits.slice(-10);
+      setNewCustomerPhone((prev) => (prev === p10 ? prev : p10));
+    }
+  }, [lookupQuery, hasExistingCustomer]);
+
+  const applySelectedCustomer = (customerId: string) => {
+    const c = customers.find((row) => row.id === customerId);
+    if (!c) return;
+    setExistingCustomerId(c.id);
+    setLookupQuery("");
+    const owned = vehicles
+      .filter((v) => v.customerId === c.id)
+      .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+    setSelectedVehicleId(owned[0]?.id ?? "");
+    setLookupPanelCustomers([]);
+  };
+
+  const clearSelectedCustomer = () => {
+    setExistingCustomerId(null);
+    setSelectedVehicleId(null);
+  };
+
+  const handleSaveVehicleForExistingCustomer = () => {
+    if (!existingCustomerId) {
+      toast.error("Select customer first");
+      return;
+    }
+
+    const reg = newVehicleRegInput.trim().toUpperCase();
+    const make = newVehicleMakeInput.trim();
+    const model = newVehicleModelInput.trim();
+    if (!reg || !make || !model) {
+      toast.error("Enter registration, make, and model");
+      return;
+    }
+
+    if (!isValidIndianVehicleRegistration(reg)) {
+      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
+      return;
+    }
+
+    const existingVehicle = findVehicleByNormalizedReg(vehicles, reg);
+    if (existingVehicle) {
+      toast.error("Registration already in the system", {
+        description: `${existingVehicle.registrationNumber} is already assigned to ${existingVehicle.customerName}.`,
+      });
+      return;
+    }
+
+    const customer = customers.find((c) => c.id === existingCustomerId);
+    if (!customer) {
+      toast.error("Could not find selected customer");
+      return;
+    }
+
+    const inferredSegment = getModelSegment(make, model) ?? newVehicleSegmentInput;
+    const newVehicle: Vehicle = {
+      id: `veh-pd-${Date.now()}`,
+      customerId: existingCustomerId,
+      customerName: customer.name,
+      registrationNumber: reg,
+      make,
+      model,
+      segment: inferredSegment,
+      fuelType: "PETROL",
+      color: "—",
+      year: new Date().getFullYear(),
+    };
+
+    useVehicleStore.setState((state) => ({
+      vehicles: [newVehicle, ...state.vehicles],
+    }));
+
+    setSelectedVehicleId(newVehicle.id);
+    setAddVehicleForExistingCustomerDialogOpen(false);
+    toast.success("Vehicle registered", { description: `${make} ${model} (${reg})` });
+  };
 
   const scopedRequests = useMemo(
     () => filterByBranchId(requests, (r) => r.branchId, selectedBranchId),
@@ -260,18 +380,20 @@ export default function PickupDropPage() {
 
   const resetForm = () => {
     setCurrentStep("customer");
-    setCreateMode("existing");
-    setBookingId("");
+    setExistingCustomerId(null);
+    setSelectedVehicleId(null);
     setNewCustomerName("");
     setNewCustomerPhone("");
+    setNewCustomerEmail("");
+    setNewCustomerAddress("");
+    setLookupQuery("");
+    setLookupPanelCustomers([]);
     setRequestAddress("");
     setNewBranchId("");
     setNewScheduledLocal("");
     setReqType("PICKUP");
     setDriverId("unassigned");
     setNotes("");
-    setSearchQuery("");
-    setPopoverOpen(false);
     setVehicleReg("");
     setVehicleMake("");
     setVehicleModel("");
@@ -282,6 +404,11 @@ export default function PickupDropPage() {
     setNewBrandDraft("");
     setNewModelOpen(false);
     setNewModelDraft("");
+    setAddVehicleForExistingCustomerDialogOpen(false);
+    setNewVehicleRegInput("");
+    setNewVehicleMakeInput("");
+    setNewVehicleModelInput("");
+    setNewVehicleSegmentInput("HATCHBACK");
   };
 
   const handleCreate = () => {
@@ -290,40 +417,7 @@ export default function PickupDropPage() {
         ? staff.find((d) => d.id === driverId)
         : undefined;
 
-    if (createMode === "existing") {
-      const jc = scopedJobCards.find((j) => j.id === bookingId);
-      if (!jc) return;
-      const addr = requestAddress.trim();
-      if (!addr) {
-        toast.error(`Enter the ${pickupDropAddressFieldLabel(reqType).toLowerCase()}.`);
-        return;
-      }
-      addRequest({
-        jobCardId: jc.id,
-        jobNumber: jc.jobNumber,
-        branchId: jc.branchId,
-        customerName: jc.customerName,
-        vehicleMakeModel: jc.vehicleMakeModel,
-        vehicleRegNumber: jc.vehicleRegNumber,
-        customerPhone: jc.customerPhone,
-        address: addr,
-        scheduledTime: jc.expectedDelivery,
-        type: reqType,
-        driverId: driver?.id,
-        driverName: driver?.name,
-        notes: notes.trim() || undefined,
-      });
-      setCreateOpen(false);
-      resetForm();
-      return;
-    }
-
-    const name = newCustomerName.trim();
     const addr = requestAddress.trim();
-    if (!name) {
-      toast.error("Enter the customer name.");
-      return;
-    }
     if (!addr) {
       toast.error(`Enter the ${pickupDropAddressFieldLabel(reqType).toLowerCase()}.`);
       return;
@@ -348,41 +442,81 @@ export default function PickupDropPage() {
       return;
     }
 
-    const phoneLine = newCustomerPhone.trim()
-      ? `Phone: ${newCustomerPhone.trim()}`
+    let customerNameStr = "";
+    let customerPhoneStr = "";
+    let vehicleMakeModelStr = "";
+    let vehicleRegNumberStr = "";
+    let regStored = "";
+
+    if (hasExistingCustomer) {
+      customerNameStr = selectedExistingCustomer!.name;
+      customerPhoneStr = selectedExistingCustomer!.phone || "";
+      const matchedVeh = vehicles.find((v) => v.id === selectedVehicleId);
+      if (matchedVeh) {
+        vehicleMakeModelStr = `${matchedVeh.make} ${matchedVeh.model}`.trim();
+        vehicleRegNumberStr = matchedVeh.registrationNumber;
+        regStored = normalizeRegistrationNumber(matchedVeh.registrationNumber);
+      }
+    } else {
+      customerNameStr = newCustomerName.trim();
+      customerPhoneStr = newCustomerPhone.trim();
+      vehicleMakeModelStr = `${vehicleMake} ${vehicleModel}`.trim();
+      vehicleRegNumberStr = vehicleReg.trim().toUpperCase();
+      regStored = normalizeRegistrationNumber(vehicleReg);
+    }
+
+    // Lookup active job card for this vehicle!
+    const activeJob = scopedJobCards.find(
+      (j) =>
+        !["DELIVERED", "CANCELLED"].includes(j.status) &&
+        ((selectedVehicleId && j.vehicleId === selectedVehicleId) ||
+          normalizeRegistrationNumber(j.vehicleRegNumber) === regStored)
+    );
+
+    const targetJobCardId = activeJob
+      ? activeJob.id
+      : `new-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())}`;
+    const targetJobNumber = activeJob ? activeJob.jobNumber : "NEW";
+
+    const phoneLine = customerPhoneStr
+      ? `Phone: ${customerPhoneStr}`
       : "";
     const combinedNotes = [phoneLine, notes.trim()].filter(Boolean).join("\n\n");
 
     addRequest({
-      jobCardId: `new-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())}`,
-      jobNumber: "NEW",
+      jobCardId: targetJobCardId,
+      jobNumber: targetJobNumber,
       branchId: newBranchId,
-      customerName: name,
-      customerPhone: newCustomerPhone.trim() || undefined,
+      customerName: customerNameStr,
+      customerPhone: customerPhoneStr || undefined,
       address: addr,
       scheduledTime: scheduled.toISOString(),
       type: reqType,
       driverId: driver?.id,
       driverName: driver?.name,
       notes: combinedNotes || undefined,
-      vehicleMakeModel: vehicleMake && vehicleModel ? `${vehicleMake} ${vehicleModel}` : undefined,
-      vehicleRegNumber: vehicleReg ? vehicleReg.trim().toUpperCase() : undefined,
+      vehicleMakeModel: vehicleMakeModelStr || undefined,
+      vehicleRegNumber: vehicleRegNumberStr || undefined,
     });
+
     setCreateOpen(false);
     resetForm();
   };
 
   const addressFieldLabel = pickupDropAddressFieldLabel(reqType);
 
-  const canSubmitCreate =
-    createMode === "existing"
-      ? !!(bookingId && requestAddress.trim())
-      : !!(
-          newCustomerName.trim() &&
-          requestAddress.trim() &&
-          newBranchId &&
-          newScheduledLocal
-        );
+  const canSubmitCreate = hasExistingCustomer
+    ? !!(existingCustomerId && selectedVehicleId && requestAddress.trim() && newBranchId && newScheduledLocal)
+    : !!(
+        newCustomerName.trim() &&
+        newCustomerPhone.trim() &&
+        vehicleReg.trim() &&
+        vehicleMake.trim() &&
+        vehicleModel.trim() &&
+        requestAddress.trim() &&
+        newBranchId &&
+        newScheduledLocal
+      );
 
   const handlePickupDropWhatsApp = async (r: PickupDropRequest) => {
     const phone = customerPhoneFromPickupRequest(r);
@@ -616,161 +750,124 @@ export default function PickupDropPage() {
             {/* STEP 1: Customer Details */}
             {currentStep === "customer" && (
               <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">Select Mode</Label>
-                  <div className="flex rounded-lg border border-input bg-muted/30 p-1 gap-1">
-                    <Button
-                      type="button"
-                      variant={createMode === "existing" ? "default" : "ghost"}
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        setCreateMode("existing");
-                        if (bookingId) {
-                          const jc = scopedJobCards.find((j) => j.id === bookingId);
-                          setRequestAddress(
-                            jc
-                              ? resolvePickupDropAddressForJobCard(jc, appointments, customers)
-                              : ""
-                          );
-                        } else {
-                          setRequestAddress("");
-                        }
+                <div className="space-y-2">
+                  <Label htmlFor="pd-customer-lookup" className="text-sm font-medium">Search Existing Customer</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      id="pd-customer-lookup"
+                      className="pl-9 border-input"
+                      value={lookupQuery}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setLookupQuery(next);
+                        if (!next.trim()) clearSelectedCustomer();
                       }}
-                    >
-                      Existing booking
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={createMode === "new" ? "default" : "ghost"}
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => {
-                        setCreateMode("new");
-                        setRequestAddress("");
-                        setNewBranchId((prev) => prev || scopedBranches[0]?.id || "");
-                        setNewScheduledLocal((prev) => prev || defaultScheduledDatetimeLocal());
-                      }}
-                    >
-                      New customer
-                    </Button>
+                      placeholder="Enter Mobile or Vehicle number"
+                      autoComplete="off"
+                    />
                   </div>
+                  {lookupQuery.trim() ? (
+                    <div className="rounded-md border border-border bg-background p-2 max-h-44 overflow-auto scrollbar-thin">
+                      {lookupPanelCustomers.length > 0 ? (
+                        <div className="space-y-1">
+                          {lookupPanelCustomers.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
+                              onClick={() => applySelectedCustomer(c.id)}
+                            >
+                              <p className="text-sm font-medium text-foreground">{c.name}</p>
+                              <p className="text-xs text-muted-foreground">{c.phone}</p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground px-1 py-1.5">
+                          No customer found. Continue below to fill details for a new customer.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
-                {createMode === "existing" ? (
-                  <div className="grid gap-2">
-                    <Label htmlFor="pd-booking">Select booking/job card</Label>
-                    {scopedJobCards.length === 0 ? (
-                      <p className="text-sm text-muted-foreground rounded-md border border-dashed border-border px-3 py-2.5">
-                        No job cards in this branch. Switch to <strong className="font-medium text-foreground">New customer</strong> to create a request without a job card.
-                      </p>
-                    ) : (
-                      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            id="pd-booking"
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={popoverOpen}
-                            className={cn(
-                              "w-full justify-between font-normal text-slate-800 dark:text-foreground bg-transparent border-input hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors text-left pl-3 pr-2",
-                              selectTriggerClass
-                            )}
-                          >
-                            {selectedJobCard ? (
-                              <span className="truncate">
-                                {selectedJobCard.jobNumber} · {selectedJobCard.customerName}
-                                {selectedJobCard.customerPhone ? ` · ${selectedJobCard.customerPhone}` : ""}
-                                {selectedJobCard.vehicleMakeModel ? ` · ${selectedJobCard.vehicleMakeModel}` : ""}
-                                {selectedJobCard.vehicleRegNumber ? ` (${selectedJobCard.vehicleRegNumber})` : ""}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">Select a job card…</span>
-                            )}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent 
-                          className="w-[var(--radix-popover-trigger-width)] p-0 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md z-[60]"
-                          align="start"
-                        >
-                          <div className="flex items-center border-b border-slate-100 dark:border-slate-800 px-3 py-2 gap-2">
-                            <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                            <input
-                              className="flex h-7 w-full rounded-md bg-transparent text-sm outline-none placeholder:text-slate-400 border-0 p-0 focus:ring-0 text-slate-800 dark:text-slate-100"
-                              placeholder="Search job card, customer, phone or vehicle…"
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                          </div>
-                          <div className="max-h-[220px] overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
-                            {filteredJobCards.length === 0 ? (
-                              <div className="py-6 text-center text-xs text-muted-foreground">No job cards found.</div>
-                            ) : (
-                              filteredJobCards.map((jc) => (
-                                <button
-                                  key={jc.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setBookingId(jc.id);
-                                    setRequestAddress(
-                                      resolvePickupDropAddressForJobCard(jc, appointments, customers)
-                                    );
-                                    setPopoverOpen(false);
-                                    setSearchQuery("");
-                                  }}
-                                  className={cn(
-                                    "w-full text-left px-2.5 py-2 text-xs rounded-md transition-colors cursor-pointer flex items-center justify-between outline-none focus:bg-slate-100 dark:focus:bg-slate-800",
-                                    bookingId === jc.id
-                                      ? "bg-indigo-50 text-indigo-600 font-bold dark:bg-indigo-950/40 dark:text-indigo-400"
-                                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                  )}
-                                >
-                                  <span className="truncate">
-                                    {jc.jobNumber} · {jc.customerName}
-                                    {jc.customerPhone ? ` · ${jc.customerPhone}` : ""}
-                                    {jc.vehicleMakeModel ? ` · ${jc.vehicleMakeModel}` : ""}
-                                    {jc.vehicleRegNumber ? ` (${jc.vehicleRegNumber})` : ""}
-                                  </span>
-                                  {bookingId === jc.id && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="pd-new-name">Customer name *</Label>
-                      <Input
-                        id="pd-new-name"
-                        value={newCustomerName}
-                        onChange={(e) => setNewCustomerName(e.target.value)}
-                        placeholder="Full name"
-                        className="border-input"
-                        autoComplete="name"
-                      />
+                <div className="space-y-3">
+                  <p className="font-semibold text-sm">Customer Details</p>
+                  {hasExistingCustomer ? (
+                    <div className="flex items-center justify-between border rounded-lg p-3 bg-muted/20">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{selectedExistingCustomer?.name}</p>
+                        <p className="text-xs text-muted-foreground tabular-nums">{selectedExistingCustomer?.phone}</p>
+                        {selectedExistingCustomer?.email && (
+                          <p className="text-xs text-muted-foreground truncate">{selectedExistingCustomer.email}</p>
+                        )}
+                        {selectedExistingCustomer?.address && (
+                          <p className="text-xs text-muted-foreground truncate">{selectedExistingCustomer.address}</p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearSelectedCustomer}
+                        className="shrink-0"
+                      >
+                        Change Customer
+                      </Button>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="pd-new-phone">Phone (optional)</Label>
-                      <Input
-                        id="pd-new-phone"
-                        type="tel"
-                        value={newCustomerPhone}
-                        onChange={(e) => setNewCustomerPhone(e.target.value)}
-                        placeholder="10-digit mobile"
-                        className="border-input"
-                        autoComplete="tel"
-                      />
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 border rounded-lg p-3.5 bg-muted/5">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="pd-new-name" className="text-xs">Full Name *</Label>
+                        <Input
+                          id="pd-new-name"
+                          value={newCustomerName}
+                          onChange={(e) => setNewCustomerName(e.target.value)}
+                          placeholder="Customer name"
+                          autoComplete="name"
+                          className="h-9 border-input"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pd-new-phone" className="text-xs">Phone Number *</Label>
+                        <Input
+                          id="pd-new-phone"
+                          value={newCustomerPhone}
+                          onChange={(e) => setNewCustomerPhone(e.target.value.replace(/\D/g, "").slice(-10))}
+                          placeholder="Phone number"
+                          maxLength={10}
+                          className="h-9 border-input"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pd-new-email" className="text-xs">Email (Optional)</Label>
+                        <Input
+                          id="pd-new-email"
+                          type="email"
+                          value={newCustomerEmail}
+                          onChange={(e) => setNewCustomerEmail(e.target.value)}
+                          placeholder="Email address"
+                          autoComplete="email"
+                          className="h-9 border-input"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="pd-new-address" className="text-xs">Address (Optional)</Label>
+                        <Input
+                          id="pd-new-address"
+                          value={newCustomerAddress}
+                          onChange={(e) => setNewCustomerAddress(e.target.value)}
+                          placeholder="City / area"
+                          className="h-9 border-input"
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 <div className="flex justify-end gap-2 pt-3 border-t">
-                  <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                  <Button variant="outline" type="button" onClick={() => setCreateOpen(false)}>
                     Cancel
                   </Button>
                   <Button
@@ -790,23 +887,76 @@ export default function PickupDropPage() {
             {/* STEP 2: Vehicle Details */}
             {currentStep === "vehicle" && (
               <div className="space-y-4">
-                {createMode === "existing" ? (
-                  <div className="space-y-3">
-                    <p className="font-semibold text-sm">Linked Booking Vehicle</p>
-                    {selectedJobCard ? (
-                      <div className="rounded-xl border p-4 bg-muted/20 flex items-start gap-3">
-                        <Car className="w-8 h-8 text-muted-foreground shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm">
-                            {selectedJobCard.vehicleMakeModel || "Unknown Vehicle"}
-                          </p>
-                          <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                            Reg: {selectedJobCard.vehicleRegNumber || "Not Provided"}
-                          </p>
-                        </div>
+                {hasExistingCustomer ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-sm">Vehicle Details</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setNewVehicleRegInput("");
+                          setNewVehicleMakeInput("");
+                          setNewVehicleModelInput("");
+                          setNewVehicleSegmentInput("HATCHBACK");
+                          setAddVehicleForExistingCustomerDialogOpen(true);
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Add New Vehicle
+                      </Button>
+                    </div>
+
+                    {vehiclesForCustomer.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
+                        {vehiclesForCustomer.map((v) => {
+                          const isSelected = selectedVehicleId === v.id;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedVehicleId(v.id);
+                              }}
+                              className={cn(
+                                "rounded-xl border-2 p-3 text-left transition-all flex flex-col justify-between h-28",
+                                isSelected
+                                  ? "border-primary bg-primary/5 shadow-sm"
+                                  : "border-border hover:border-primary/30"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2 w-full">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Car className="w-8 h-8 shrink-0 text-muted-foreground" />
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-sm truncate">
+                                      {v.make} {v.model}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                      Reg: {v.registrationNumber}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <Badge className="shrink-0 bg-primary text-primary-foreground hover:bg-primary">
+                                    Selected
+                                  </Badge>
+                                )}
+                              </div>
+                              <Badge variant="secondary" className="text-[10px] self-start mt-1">
+                                {v.segment.replace("_", " ")}
+                              </Badge>
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Select a booking in Step 1 first.</p>
+                      <div className="text-center py-8 border border-dashed rounded-lg bg-muted/10">
+                        <Car className="w-8 h-8 mx-auto text-muted-foreground/60 mb-2" />
+                        <p className="text-sm font-medium">No vehicles registered for this customer</p>
+                        <p className="text-xs text-muted-foreground mt-1">Click Add New Vehicle above to register one.</p>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -821,7 +971,7 @@ export default function PickupDropPage() {
                           onChange={(e) => setVehicleReg(e.target.value.toUpperCase())}
                           placeholder="e.g. KA01AB1234"
                           maxLength={16}
-                          className="font-mono uppercase h-9"
+                          className="font-mono uppercase h-9 border-input"
                         />
                         <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
                       </div>
@@ -831,7 +981,7 @@ export default function PickupDropPage() {
                           value={vehicleSegment}
                           onValueChange={(v) => setVehicleSegment(v as VehicleSegment)}
                         >
-                          <SelectTrigger id="pd-new-seg" className="h-9">
+                          <SelectTrigger id="pd-new-seg" className="h-9 border-input">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -866,10 +1016,10 @@ export default function PickupDropPage() {
                             setVehicleModel("");
                           }}
                         >
-                          <SelectTrigger id="pd-new-make" className="h-9">
+                          <SelectTrigger id="pd-new-make" className="h-9 border-input">
                             <SelectValue placeholder="Select brand" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className={selectContentClass}>
                             {allBrandsSorted.map((brand) => (
                               <SelectItem key={brand} value={brand}>
                                 {brand}
@@ -907,10 +1057,10 @@ export default function PickupDropPage() {
                           }}
                           disabled={!vehicleMake}
                         >
-                          <SelectTrigger id="pd-new-model" className="h-9">
+                          <SelectTrigger id="pd-new-model" className="h-9 border-input">
                             <SelectValue placeholder={vehicleMake ? "Select model" : "Select brand first"} />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className={selectContentClass}>
                             {allModelsSorted.map((model) => (
                               <SelectItem key={model} value={model}>
                                 {model}
@@ -960,53 +1110,51 @@ export default function PickupDropPage() {
                   />
                 </div>
 
-                {createMode === "new" && (
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="pd-new-branch">Branch *</Label>
-                      {scopedBranches.length === 0 ? (
-                        <p className="text-sm text-destructive rounded-md border border-dashed px-3 py-2.5">
-                          No active branch available for your scope.
-                        </p>
-                      ) : (
-                        <Select value={newBranchId || undefined} onValueChange={setNewBranchId}>
-                          <SelectTrigger id="pd-new-branch" className={selectTriggerClass}>
-                            <SelectValue placeholder="Select branch…" />
-                          </SelectTrigger>
-                          <SelectContent className={selectContentClass}>
-                            {scopedBranches.map((b) => (
-                              <SelectItem key={b.id} value={b.id}>
-                                {b.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="pd-new-when">Scheduled date &amp; time *</Label>
-                      <Input
-                        id="pd-new-when"
-                        type="datetime-local"
-                        min={localDatetimeLocalInputMin()}
-                        value={newScheduledLocal}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (!v) {
-                            setNewScheduledLocal(v);
-                            return;
-                          }
-                          if (!isDatetimeLocalInPast(v)) {
-                            setNewScheduledLocal(v);
-                          } else {
-                            setNewScheduledLocal(localDatetimeLocalInputMin());
-                          }
-                        }}
-                        className="border-input"
-                      />
-                    </div>
+                <div className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="pd-new-branch">Branch *</Label>
+                    {scopedBranches.length === 0 ? (
+                      <p className="text-sm text-destructive rounded-md border border-dashed px-3 py-2.5">
+                        No active branch available for your scope.
+                      </p>
+                    ) : (
+                      <Select value={newBranchId || undefined} onValueChange={setNewBranchId}>
+                        <SelectTrigger id="pd-new-branch" className={selectTriggerClass}>
+                          <SelectValue placeholder="Select branch…" />
+                        </SelectTrigger>
+                        <SelectContent className={selectContentClass}>
+                          {scopedBranches.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
-                )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="pd-new-when">Scheduled date &amp; time *</Label>
+                    <Input
+                      id="pd-new-when"
+                      type="datetime-local"
+                      min={localDatetimeLocalInputMin()}
+                      value={newScheduledLocal}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) {
+                          setNewScheduledLocal(v);
+                          return;
+                        }
+                        if (!isDatetimeLocalInPast(v)) {
+                          setNewScheduledLocal(v);
+                        } else {
+                          setNewScheduledLocal(localDatetimeLocalInputMin());
+                        }
+                      }}
+                      className="border-input"
+                    />
+                  </div>
+                </div>
 
                 <div className="grid gap-2">
                   <Label>Request Type</Label>
@@ -1024,11 +1172,7 @@ export default function PickupDropPage() {
                 <div className="grid gap-2">
                   <Label>Assign Driver (Optional)</Label>
                   <PickupDriverSelect
-                    branchId={
-                      createMode === "existing"
-                        ? scopedJobCards.find((j) => j.id === bookingId)?.branchId ?? selectedBranchId ?? ""
-                        : newBranchId
-                    }
+                    branchId={newBranchId || selectedBranchId || ""}
                     value={driverId}
                     onValueChange={(id) => setDriverId(id)}
                     branchScoped={!!selectedBranchId}
@@ -1055,13 +1199,146 @@ export default function PickupDropPage() {
                   >
                     Back
                   </Button>
-                  <Button onClick={handleCreate}>
+                  <Button onClick={handleCreate} disabled={!canSubmitCreate}>
                     Create Request
                   </Button>
                 </div>
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nested Add Vehicle dialog for existing customer */}
+      <Dialog
+        open={addVehicleForExistingCustomerDialogOpen}
+        onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add New Vehicle</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a vehicle for the selected existing customer.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-3 sm:grid-cols-2 py-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="pd-dialog-veh-reg" className="text-xs">Registration Number *</Label>
+              <Input
+                id="pd-dialog-veh-reg"
+                value={newVehicleRegInput}
+                onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
+                placeholder="e.g. KA01AB1234"
+                maxLength={16}
+                className="font-mono uppercase h-9 border-input"
+              />
+              <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pd-dialog-veh-seg" className="text-xs">Type</Label>
+              <Select
+                value={newVehicleSegmentInput}
+                onValueChange={(v) => setNewVehicleSegmentInput(v as VehicleSegment)}
+              >
+                <SelectTrigger id="pd-dialog-veh-seg" className="h-9 border-input">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HATCHBACK">Hatchback</SelectItem>
+                  <SelectItem value="SEDAN">Sedan</SelectItem>
+                  <SelectItem value="COMPACT_SUV">Compact SUV</SelectItem>
+                  <SelectItem value="SUV">SUV</SelectItem>
+                  <SelectItem value="LUXURY">Luxury</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="pd-dialog-veh-make" className="text-xs">Brand *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 shrink-0 border-sky-300 bg-white px-2 text-[10px] font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                  onClick={() => {
+                    setNewBrandOpen(true);
+                    setNewBrandDraft("");
+                  }}
+                >
+                  + New
+                </Button>
+              </div>
+              <Select
+                value={newVehicleMakeInput || undefined}
+                onValueChange={(value) => {
+                  setNewVehicleMakeInput(value);
+                  setNewVehicleModelInput("");
+                }}
+              >
+                <SelectTrigger id="pd-dialog-veh-make" className="h-9 border-input">
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent className={selectContentClass}>
+                  {allBrandsSorted.map((brand) => (
+                    <SelectItem key={brand} value={brand}>
+                      {brand}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="pd-dialog-veh-model" className="text-xs">Model *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!newVehicleMakeInput}
+                  className="h-6 shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
+                  onClick={() => {
+                    if (!newVehicleMakeInput) return;
+                    setNewModelOpen(true);
+                    setNewModelDraft("");
+                  }}
+                >
+                  + New
+                </Button>
+              </div>
+              <Select
+                value={newVehicleModelInput || undefined}
+                onValueChange={(value) => {
+                  setNewVehicleModelInput(value);
+                  const inferredSegment = getModelSegment(newVehicleMakeInput, value);
+                  if (inferredSegment) {
+                    setNewVehicleSegmentInput(inferredSegment);
+                  }
+                }}
+                disabled={!newVehicleMakeInput}
+              >
+                <SelectTrigger id="pd-dialog-veh-model" className="h-9 border-input">
+                  <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
+                </SelectTrigger>
+                <SelectContent className={selectContentClass}>
+                  {allModelsSortedForExistingCustomer.map((model) => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
+              Register Vehicle
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
