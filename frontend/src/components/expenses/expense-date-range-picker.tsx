@@ -203,6 +203,7 @@ export function ExpenseDateRangePicker({
                 <Input
                   id="exp-range-start"
                   type="date"
+                  className="date-input-icon-end pr-9"
                   value={draftStart}
                   onChange={(e) => setDraftStart(e.target.value)}
                 />
@@ -214,6 +215,7 @@ export function ExpenseDateRangePicker({
                 <Input
                   id="exp-range-end"
                   type="date"
+                  className="date-input-icon-end pr-9"
                   value={draftEnd}
                   onChange={(e) => setDraftEnd(e.target.value)}
                 />

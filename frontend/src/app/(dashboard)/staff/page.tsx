@@ -710,6 +710,7 @@ export default function StaffPage() {
                           <Input
                             id="birthday"
                             type="date"
+                            className="date-input-icon-end pr-9"
                             value={newBirthday}
                             onChange={(e) => setNewBirthday(e.target.value)}
                           />
@@ -719,6 +720,7 @@ export default function StaffPage() {
                           <Input
                             id="anniversary"
                             type="date"
+                            className="date-input-icon-end pr-9"
                             value={newAnniversary}
                             onChange={(e) => setNewAnniversary(e.target.value)}
                           />

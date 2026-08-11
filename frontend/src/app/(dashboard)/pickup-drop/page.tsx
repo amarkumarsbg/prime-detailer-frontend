@@ -1137,6 +1137,7 @@ export default function PickupDropPage() {
                     <Input
                       id="pd-new-when"
                       type="datetime-local"
+                      className="date-input-icon-end pr-9 border-input"
                       min={localDatetimeLocalInputMin()}
                       value={newScheduledLocal}
                       onChange={(e) => {
@@ -1151,7 +1152,6 @@ export default function PickupDropPage() {
                           setNewScheduledLocal(localDatetimeLocalInputMin());
                         }
                       }}
-                      className="border-input"
                     />
                   </div>
                 </div>

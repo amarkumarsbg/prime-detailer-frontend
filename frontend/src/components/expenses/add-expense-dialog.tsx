@@ -303,6 +303,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
                     <Input
                       id="exp-date"
                       type="date"
+                      className="date-input-icon-end pr-9"
                       value={dateStr}
                       onChange={(e) => setDateStr(e.target.value)}
                     />

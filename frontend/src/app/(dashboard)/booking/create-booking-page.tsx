@@ -509,6 +509,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [mechanicIncentivePercentOverride, setMechanicIncentivePercentOverride] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
+  const [directDiscountType, setDirectDiscountType] = useState<"percentage" | "fixed">("percentage");
+  const [directDiscountValue, setDirectDiscountValue] = useState("");
   const [branchId, setBranchId] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [selectedPartLines, setSelectedPartLines] = useState<SelectedPartLine[]>([]);
@@ -1384,9 +1386,25 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return Math.round(catalogSubtotalExclGst * 0.1 * 100) / 100;
   }, [couponApplied, catalogSubtotalExclGst]);
 
+  const directDiscountAmount = useMemo(() => {
+    const val = directDiscountValue.trim();
+    if (val === "") return 0;
+    const num = parseFloat(val);
+    if (isNaN(num) || num <= 0) return 0;
+    if (directDiscountType === "percentage") {
+      return Math.round(catalogSubtotalExclGst * (num / 100) * 100) / 100;
+    } else {
+      return Math.min(num, catalogSubtotalExclGst);
+    }
+  }, [directDiscountType, directDiscountValue, catalogSubtotalExclGst]);
+
+  const totalDiscount = useMemo(() => {
+    return Math.min(catalogSubtotalExclGst, discountAmount + directDiscountAmount);
+  }, [catalogSubtotalExclGst, discountAmount, directDiscountAmount]);
+
   /** Catalog after coupon + high-end program amounts + parts (all excl. GST). */
   const afterDiscount =
-    Math.max(0, catalogSubtotalExclGst - discountAmount) +
+    Math.max(0, catalogSubtotalExclGst - totalDiscount) +
     highEndSubtotalExclGst +
     partsSubtotalExclGst;
   const gstAmount = Math.round(afterDiscount * GST_RATE * 100) / 100;
@@ -1752,6 +1770,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         internalNotes && `Internal: ${internalNotes}`,
         pickupRequired && "Pickup required: Yes",
         couponApplied && "Coupon: WELCOME10",
+        directDiscountValue.trim() !== "" &&
+          `Direct Discount: ${directDiscountType === "percentage" ? `${directDiscountValue}%` : `₹${directDiscountValue}`}`,
       ]
         .filter(Boolean)
         .join("\n") || undefined;
@@ -2632,6 +2652,55 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         </div>
         <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
         <div className="flex items-center gap-2">
+          <Percent className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <span className={cn("font-medium text-sm", compactJobCardDesktop && "text-xs")}>Direct Discount</span>
+        </div>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                "flex-1 text-xs gap-1 h-9 rounded-md transition-all",
+                directDiscountType === "percentage"
+                  ? "bg-amber-50 hover:bg-amber-100/80 border-amber-300 text-amber-700 hover:text-amber-800 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-400 font-semibold"
+                  : "text-muted-foreground border-border hover:bg-muted"
+              )}
+              onClick={() => setDirectDiscountType("percentage")}
+            >
+              % Percentage
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                "flex-1 text-xs gap-1 h-9 rounded-md transition-all",
+                directDiscountType === "fixed"
+                  ? "bg-amber-50 hover:bg-amber-100/80 border-amber-300 text-amber-700 hover:text-amber-800 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-400 font-semibold"
+                  : "text-muted-foreground border-border hover:bg-muted"
+              )}
+              onClick={() => setDirectDiscountType("fixed")}
+            >
+              ₹ Fixed Amount
+            </Button>
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">
+              {directDiscountType === "percentage" ? "%" : "₹"}
+            </span>
+            <Input
+              type="number"
+              min={0}
+              max={directDiscountType === "percentage" ? 100 : undefined}
+              placeholder={directDiscountType === "percentage" ? "e.g. 10" : "e.g. 500"}
+              value={directDiscountValue}
+              onChange={(e) => setDirectDiscountValue(e.target.value)}
+              className={cn("pl-8 text-xs tabular-nums", compactJobCardDesktop && "h-8 text-[11px]")}
+            />
+          </div>
+        </div>
+        <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
+        <div className="flex items-center gap-2">
           <Banknote className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           <span className={cn("font-medium text-sm", compactJobCardDesktop && "text-xs")}>Advance (₹)</span>
         </div>
@@ -2735,7 +2804,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             ? cn(
                 "flex min-h-0 flex-1 flex-col overflow-x-hidden",
                 isDesktopWide
-                  ? "h-full overflow-hidden lg:flex-row lg:items-stretch lg:gap-3"
+                  ? "h-full overflow-hidden lg:flex-row lg:items-stretch lg:gap-6"
                   : "h-auto overflow-visible"
               )
             : "lg:flex lg:flex-row lg:items-start lg:gap-8",
@@ -2746,7 +2815,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       >
         <div
           className={cn(
-            "min-w-0 flex-1 lg:min-w-0",
+            "min-w-0 flex-1 lg:min-w-0 lg:max-w-[760px]",
             !useBookingWizard && "space-y-6",
             useBookingWizard &&
               "flex flex-col overflow-x-hidden px-3 py-2 sm:px-6 sm:pt-3 sm:pb-0",
@@ -2766,7 +2835,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               </Button>
               <h1 className="text-lg font-bold tracking-tight sm:text-xl leading-tight">{desktopTitle}</h1>
               <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:text-xs">
-                Use Next for each step — summary and Create stay on the right.
+                {isJobCard
+                  ? "Review the summary, select branch, then create the job card."
+                  : "Review the summary, select branch, then create the booking."}
               </p>
             </div>
           )}
@@ -4986,7 +5057,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               </Button>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground text-right max-w-[14rem] hidden lg:block mr-2">
+                <span className="text-xs text-muted-foreground text-right whitespace-nowrap hidden lg:block mr-2">
                   Review the summary, select branch, then create the {isJobCard ? "job card" : "booking"}.
                 </span>
                 <Button type="button" variant="outline" size="sm" asChild>
@@ -5018,7 +5089,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
         <aside
           className={cn(
-            "mt-4 w-full shrink-0 sm:mt-6 lg:mt-0 lg:min-h-0 lg:w-[min(100%,340px)]",
+            "mt-4 w-full shrink-0 sm:mt-6 lg:mt-0 lg:min-h-0 lg:w-[min(100%,440px)]",
             useBookingWizard &&
               cn(
                 "hidden lg:flex lg:flex-col lg:overflow-y-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5",

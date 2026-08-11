@@ -386,6 +386,7 @@ export function PartyFormPage({ mode, party }: PartyFormPageProps) {
             <Field label="Date of Birth">
               <Input
                 type="date"
+                className="date-input-icon-end pr-9"
                 value={form.dateOfBirth}
                 onChange={(e) => set("dateOfBirth", e.target.value)}
               />

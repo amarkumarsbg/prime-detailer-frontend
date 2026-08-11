@@ -475,14 +475,14 @@ export function CashBankClient() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Input
                           type="date"
-                          className="w-[150px]"
+                          className="w-[150px] date-input-icon-end pr-9"
                           value={customStart}
                           onChange={(e) => setCustomStart(e.target.value)}
                         />
                         <span className="text-muted-foreground">to</span>
                         <Input
                           type="date"
-                          className="w-[150px]"
+                          className="w-[150px] date-input-icon-end pr-9"
                           value={customEnd}
                           onChange={(e) => setCustomEnd(e.target.value)}
                         />
@@ -761,7 +761,7 @@ function AddBankAccountDialog({
             </div>
             <div className="space-y-2">
               <Label>As of Date</Label>
-              <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+              <Input type="date" className="date-input-icon-end pr-9" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
             </div>
           </div>
           <Separator />
@@ -927,7 +927,7 @@ function AdjustBalanceDialog({
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
-              <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
+              <Input type="date" className="date-input-icon-end pr-9" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
             </div>
           </div>
           <div className="space-y-2">
@@ -1074,7 +1074,7 @@ function TransferDialog({
             </div>
             <div className="space-y-2">
               <Label className="text-sky-800/90 dark:text-sky-200/90">Date</Label>
-              <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
+              <Input type="date" className="date-input-icon-end pr-9" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
             </div>
           </div>
           <div className="space-y-2">
@@ -1343,7 +1343,7 @@ function EditBankForm({
           </div>
           <div className="space-y-2">
             <Label>As of Date</Label>
-            <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <Input type="date" className="date-input-icon-end pr-9" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
           </div>
         </div>
         <Separator />

@@ -826,6 +826,7 @@ export function MembershipPageClient() {
                   <Input
                     id="mem-start"
                     type="date"
+                    className="date-input-icon-end pr-9"
                     value={assignStartDate}
                     onChange={(e) => setAssignStartDate(e.target.value)}
                   />

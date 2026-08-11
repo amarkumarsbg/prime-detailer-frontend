@@ -594,6 +594,7 @@ export function BalanceSheetReport() {
               <Input
                 id="bs-date"
                 type="date"
+                className="date-input-icon-end pr-9"
                 value={formDate}
                 onChange={(e) => setFormDate(e.target.value)}
               />

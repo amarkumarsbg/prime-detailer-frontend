@@ -294,7 +294,7 @@ export default function PayrollPage() {
           type="date"
           value={viewDate}
           onChange={(e) => setViewDate(e.target.value)}
-          className="h-9"
+          className="h-9 date-input-icon-end pr-9"
         />
         <p className="text-[11px] leading-tight text-muted-foreground">{viewLabel}</p>
       </div>
@@ -308,7 +308,7 @@ export default function PayrollPage() {
                 type="date"
                 value={viewDate}
                 onChange={(e) => setViewDate(e.target.value)}
-                className="w-full"
+                className="w-full date-input-icon-end pr-9"
               />
             </div>
             {showBranchPicker ? (
