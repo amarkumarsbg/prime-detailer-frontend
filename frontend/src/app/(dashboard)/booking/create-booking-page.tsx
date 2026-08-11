@@ -133,6 +133,7 @@ import type {
   JobCard,
   JobCardPartItem,
   Appointment,
+  CustomerMembership,
 } from "@/types";
 
 const GST_RATE = 0.18;
@@ -1095,7 +1096,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return match?.id ?? null;
   }, [existingCustomerId, selectedVehicleId, vehicleNumber, ownedVehicles]);
 
-  const activeMembershipForSelectedVehicle = useMemo(() => {
+  const dbMembershipForSelectedVehicle = useMemo(() => {
     if (!existingCustomerId) return undefined;
     if (membershipLookupVehicleId) {
       return getActiveMembership(existingCustomerId, membershipLookupVehicleId);
@@ -1114,9 +1115,39 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     subscriptionEffectiveStatus,
   ]);
 
+  const activeMembershipForSelectedVehicle = useMemo(() => {
+    if (dbMembershipForSelectedVehicle) return dbMembershipForSelectedVehicle;
+    if (wizardMembershipPackageId) {
+      const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
+      if (pkg) {
+        const days = MEMBERSHIP_TIER_DAYS[pkg.tier] || 365;
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + days);
+        return {
+          id: "virtual-new-sub",
+          customerId: existingCustomerId || "new-cust",
+          packageId: wizardMembershipPackageId,
+          startDate: new Date().toISOString(),
+          endDate: endDate.toISOString(),
+          status: "ACTIVE",
+          notes: "Activating during this visit",
+          vehicleId: selectedVehicleId || undefined,
+          usageHistory: [],
+        } as CustomerMembership;
+      }
+    }
+    return undefined;
+  }, [
+    dbMembershipForSelectedVehicle,
+    wizardMembershipPackageId,
+    membershipPackagesAll,
+    existingCustomerId,
+    selectedVehicleId,
+  ]);
+
   useEffect(() => {
-    if (activeMembershipForSelectedVehicle) setWizardMembershipPackageId(null);
-  }, [activeMembershipForSelectedVehicle]);
+    if (dbMembershipForSelectedVehicle) setWizardMembershipPackageId(null);
+  }, [dbMembershipForSelectedVehicle]);
 
   useEffect(() => {
     setMembershipVisitChoice(null);
@@ -3645,7 +3676,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     <div className="flex items-start gap-2">
                       <Crown className="w-5 h-5 shrink-0 text-violet-600 dark:text-violet-400 mt-0.5" />
                       <div className="min-w-0 space-y-1">
-                        <p className="font-semibold text-foreground">{activeMembershipPackageRow.name}</p>
+                        <p className="font-semibold text-foreground">
+                          {activeMembershipPackageRow.name}
+                          {activeMembershipForSelectedVehicle.id === "virtual-new-sub" && " (Activating on this visit)"}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {membershipTierLabel(activeMembershipPackageRow.tier)} · valid until{" "}
                           {new Date(activeMembershipForSelectedVehicle.endDate).toLocaleDateString(undefined, {
@@ -3725,11 +3759,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     </div>
                   ) : null}
 
-                  {(activeMembershipForSelectedVehicle.usageHistory?.length ?? 0) > 0 ? (
+                  {activeMembershipForSelectedVehicle.usageHistory && activeMembershipForSelectedVehicle.usageHistory.length > 0 ? (
                     <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2">
                       <p className="text-xs font-semibold text-foreground mb-2">Membership usage history</p>
                       <ul className="max-h-36 space-y-1.5 overflow-y-auto text-[11px] text-muted-foreground">
-                        {[...(activeMembershipForSelectedVehicle.usageHistory ?? [])]
+                        {[...activeMembershipForSelectedVehicle.usageHistory]
                           .sort(
                             (a: MembershipServiceUsage, b: MembershipServiceUsage) =>
                               new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime()
@@ -3756,6 +3790,54 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       </ul>
                     </div>
                   ) : null}
+
+                  {/* If virtual membership (buying right now), also show the packages list underneath so they can change/clear it! */}
+                  {activeMembershipForSelectedVehicle.id === "virtual-new-sub" && (
+                    <div className="space-y-4 pt-4 border-t border-dashed">
+                      <p className="text-sm font-semibold text-foreground">Select a different plan or tap to clear</p>
+                      <div className="grid min-w-0 w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {activeMembershipPackages.map((pkg) => {
+                          const selected = wizardMembershipPackageId === pkg.id;
+                          const durationDays = MEMBERSHIP_TIER_DAYS[pkg.tier];
+                          return (
+                            <button
+                              key={pkg.id}
+                              type="button"
+                              onClick={() => {
+                                setWizardMembershipPackageId(selected ? null : pkg.id);
+                                // Clear choice if plan is cleared
+                                if (selected) {
+                                  setMembershipVisitChoice(null);
+                                  setMembershipRedeemServiceIds([]);
+                                }
+                              }}
+                              className={cn(
+                                "flex min-h-[148px] min-w-0 flex-col rounded-2xl border-2 bg-card p-4 text-left shadow-sm transition-all",
+                                selected
+                                  ? "border-violet-600 bg-violet-50/5 dark:border-violet-500 dark:bg-violet-950/10"
+                                  : "border-border hover:border-violet-600/30"
+                              )}
+                            >
+                              <div className="flex flex-1 flex-col justify-between">
+                                <div>
+                                  <p className="font-bold text-foreground text-sm leading-snug line-clamp-1">{pkg.name}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {membershipTierLabel(pkg.tier)} · {durationDays} days
+                                  </p>
+                                  <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 mt-2">
+                                    {formatCurrency(pkg.price)}
+                                  </p>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground mt-3 line-clamp-2">
+                                  {pkg.includedServiceIds.length} service(s) included.
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : existingCustomerId &&
                 !membershipLookupVehicleId &&

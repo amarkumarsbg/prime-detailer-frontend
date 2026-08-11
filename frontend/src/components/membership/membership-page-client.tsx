@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -46,9 +47,18 @@ import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
 import { cn, formatDate, formatInrFull } from "@/lib/utils";
-import { Crown, Package, Pencil, UserPlus } from "lucide-react";
+import { Crown, Package, Pencil, UserPlus, Search, X, Plus, CheckCircle2, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
+import { computeCustomerLookupMatches } from "@/lib/customer-vehicle-lookup";
+import {
+  INDIAN_VEHICLE_REG_HINT,
+  findVehicleByNormalizedReg,
+  isValidIndianVehicleRegistration,
+  normalizeRegistrationNumber,
+} from "@/lib/vehicle-registration";
+import type { Customer, Vehicle, VehicleSegment } from "@/types";
 
 const TIER_OPTIONS: { value: MembershipTier; label: string }[] = [
   { value: "MONTHLY", label: "Monthly (~30 days)" },
@@ -304,10 +314,41 @@ export function MembershipPageClient() {
     setPkgDialogOpen(false);
   };
 
+  const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
+  const [extraBrands, setExtraBrands] = useState<string[]>([]);
+  const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
+
+  const allBrandsSorted = useMemo(() => {
+    const combined = new Set([...getBrandNames(), ...extraBrands]);
+    return Array.from(combined).sort();
+  }, [getBrandNames, extraBrands]);
+
   const [assignCustomerId, setAssignCustomerId] = useState<string>("");
   const [assignVehicleId, setAssignVehicleId] = useState<string>("");
   const [assignPackageId, setAssignPackageId] = useState<string>("");
   const [assignStartDate, setAssignStartDate] = useState<string>("");
+
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[]>([]);
+
+  // Nested vehicle creation dialog for existing customer
+  const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
+  const [newVehicleRegInput, setNewVehicleRegInput] = useState("");
+  const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
+  const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
+  const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
+
+  const [newBrandOpen, setNewBrandOpen] = useState(false);
+  const [newBrandDraft, setNewBrandDraft] = useState("");
+  const [newModelOpen, setNewModelOpen] = useState(false);
+  const [newModelDraft, setNewModelDraft] = useState("");
+
+  const selectedExistingCustomer = useMemo(
+    () => customers.find((c) => c.id === assignCustomerId) || null,
+    [assignCustomerId, customers]
+  );
+
+  const hasExistingCustomer = Boolean(selectedExistingCustomer);
 
   const customerVehiclesForAssign = useMemo(() => {
     if (!assignCustomerId) return [];
@@ -316,9 +357,97 @@ export function MembershipPageClient() {
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
   }, [assignCustomerId, vehicles]);
 
+  const allModelsSortedForExistingCustomer = useMemo(() => {
+    if (!newVehicleMakeInput) return [];
+    const fromCatalog = getModels(newVehicleMakeInput);
+    const fromExtra = extraModelsByBrand[newVehicleMakeInput] || [];
+    return Array.from(new Set([...fromCatalog.map((m) => (typeof m === "string" ? m : m.name)), ...fromExtra])).sort();
+  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
+
   useEffect(() => {
-    queueMicrotask(() => setAssignVehicleId(""));
-  }, [assignCustomerId]);
+    const trimmed = lookupQuery.trim();
+    if (!trimmed) {
+      setLookupPanelCustomers([]);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setLookupPanelCustomers(computeCustomerLookupMatches(trimmed, customers, vehicles));
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [lookupQuery, customers, vehicles]);
+
+  const applySelectedCustomer = (customerId: string) => {
+    const c = customers.find((row) => row.id === customerId);
+    if (!c) return;
+    setAssignCustomerId(c.id);
+    setLookupQuery("");
+    const owned = vehicles
+      .filter((v) => v.customerId === c.id)
+      .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+    setAssignVehicleId(owned[0]?.id ?? "");
+    setLookupPanelCustomers([]);
+  };
+
+  const clearSelectedCustomer = () => {
+    setAssignCustomerId("");
+    setAssignVehicleId("");
+  };
+
+  const handleSaveVehicleForExistingCustomer = () => {
+    if (!assignCustomerId) {
+      toast.error("Select customer first");
+      return;
+    }
+
+    const reg = newVehicleRegInput.trim().toUpperCase();
+    const make = newVehicleMakeInput.trim();
+    const model = newVehicleModelInput.trim();
+    if (!reg || !make || !model) {
+      toast.error("Enter registration, make, and model");
+      return;
+    }
+
+    if (!isValidIndianVehicleRegistration(reg)) {
+      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
+      return;
+    }
+
+    const existingVehicle = findVehicleByNormalizedReg(vehicles, reg);
+    if (existingVehicle) {
+      toast.error("Registration already in the system", {
+        description: `${existingVehicle.registrationNumber} is already assigned to ${existingVehicle.customerName}.`,
+      });
+      return;
+    }
+
+    const customer = customers.find((c) => c.id === assignCustomerId);
+    if (!customer) {
+      toast.error("Could not find selected customer");
+      return;
+    }
+
+    const inferredSegment = getModelSegment(make, model) ?? newVehicleSegmentInput;
+    const newVehicle: Vehicle = {
+      id: `veh-mem-${Date.now()}`,
+      customerId: assignCustomerId,
+      customerName: customer.name,
+      registrationNumber: reg,
+      make,
+      model,
+      segment: inferredSegment,
+      fuelType: "PETROL",
+      color: "—",
+      year: new Date().getFullYear(),
+    };
+
+    useVehicleStore.setState((state) => ({
+      vehicles: [newVehicle, ...state.vehicles],
+    }));
+
+    setAssignVehicleId(newVehicle.id);
+    setAddVehicleForExistingCustomerDialogOpen(false);
+    toast.success("Vehicle registered", { description: `${make} ${model} (${reg})` });
+  };
 
   const activePackages = useMemo(() => packages.filter((p) => p.isActive), [packages]);
 
@@ -530,41 +659,152 @@ export function MembershipPageClient() {
                   One active pass per vehicle. Start date is optional and defaults to today.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 sm:max-w-lg">
-                <div className="space-y-2">
-                  <Label>Customer</Label>
-                  <CustomerSearchSelect
-                    customers={sortedCustomers}
-                    selectedCustomerId={assignCustomerId}
-                    onSelectCustomer={setAssignCustomerId}
-                    placeholder="Select customer"
-                  />
+              <CardContent className="grid gap-5 sm:max-w-lg">
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">Customer</Label>
+                  {!assignCustomerId ? (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-9 h-10 border-input"
+                          value={lookupQuery}
+                          onChange={(e) => setLookupQuery(e.target.value)}
+                          placeholder="Search customer by name or phone..."
+                        />
+                        {lookupQuery.trim() && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground"
+                            onClick={() => {
+                              setLookupQuery("");
+                              setLookupPanelCustomers([]);
+                            }}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+
+                      {lookupPanelCustomers.length > 0 && (
+                        <div className="border border-border/80 rounded-xl bg-card overflow-hidden divide-y max-h-48 overflow-y-auto shadow-sm">
+                          {lookupPanelCustomers.map((c) => {
+                            const owned = vehicles.filter((v) => v.customerId === c.id);
+                            return (
+                              <div
+                                key={c.id}
+                                className="p-3 hover:bg-muted/50 cursor-pointer flex items-center justify-between gap-4 transition-colors"
+                                onClick={() => applySelectedCustomer(c.id)}
+                              >
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-sm text-foreground leading-tight">{c.name}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{c.phone || "No phone"}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className="text-[10px] bg-secondary/80 text-secondary-foreground font-medium px-2 py-0.5 rounded-full">
+                                    {owned.length} {owned.length === 1 ? "vehicle" : "vehicles"}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    selectedExistingCustomer && (
+                      <div className="rounded-xl border border-violet-200/80 bg-violet-50/50 p-4 space-y-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <p className="font-semibold text-base text-foreground leading-tight">{selectedExistingCustomer.name}</p>
+                            <p className="text-xs text-muted-foreground">{selectedExistingCustomer.phone || "No phone"} · {selectedExistingCustomer.email || "No email"}</p>
+                            {selectedExistingCustomer.address && (
+                              <p className="text-xs text-muted-foreground/80 mt-1 leading-snug">{selectedExistingCustomer.address}</p>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-violet-200 hover:bg-violet-100 text-violet-700 dark:border-violet-800 dark:hover:bg-violet-900/40 dark:text-violet-300"
+                            onClick={clearSelectedCustomer}
+                          >
+                            Change Customer
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label>Vehicle</Label>
-                  <Select
-                    value={assignVehicleId || "none"}
-                    onValueChange={(v) => setAssignVehicleId(v === "none" ? "" : v)}
-                    disabled={!assignCustomerId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={assignCustomerId ? "Select vehicle" : "Pick customer first"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Select vehicle</SelectItem>
-                      {customerVehiclesForAssign.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.registrationNumber} · {v.make} {v.model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {assignCustomerId && customerVehiclesForAssign.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No vehicles on file — add one from the customer profile first.
-                    </p>
-                  ) : null}
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <Label className="text-sm font-semibold">Vehicle</Label>
+                    {assignCustomerId && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-violet-200 text-violet-700 bg-white hover:bg-violet-50 text-[11px] font-medium animate-pulse hover:animate-none"
+                        onClick={() => {
+                          setAddVehicleForExistingCustomerDialogOpen(true);
+                          setNewVehicleRegInput("");
+                          setNewVehicleMakeInput("");
+                          setNewVehicleModelInput("");
+                          setNewVehicleSegmentInput("HATCHBACK");
+                        }}
+                      >
+                        + Register Vehicle
+                      </Button>
+                    )}
+                  </div>
+
+                  {!assignCustomerId ? (
+                    <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground bg-muted/5">
+                      Please select a customer first.
+                    </div>
+                  ) : customerVehiclesForAssign.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground bg-muted/5 space-y-2">
+                      <p>No vehicles registered under this customer profile.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
+                      {customerVehiclesForAssign.map((v) => {
+                        const selected = assignVehicleId === v.id;
+                        return (
+                          <div
+                            key={v.id}
+                            className={cn(
+                              "rounded-xl border-2 p-3 text-left transition-all cursor-pointer relative shadow-sm hover:scale-[1.01] active:scale-[0.99]",
+                              selected
+                                ? "border-violet-600 bg-violet-50/20 dark:border-violet-500 dark:bg-violet-950/15"
+                                : "border-border bg-card hover:border-violet-500/30"
+                            )}
+                            onClick={() => setAssignVehicleId(v.id)}
+                          >
+                            {selected && (
+                              <CheckCircle2 className="absolute right-2 top-2 w-4 h-4 text-violet-600 dark:text-violet-400" />
+                            )}
+                            <div className="pr-5">
+                              <p className="font-mono font-bold text-sm tracking-wider uppercase text-foreground leading-snug">
+                                {v.registrationNumber}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5 font-medium font-sans">
+                                {v.make} {v.model}
+                              </p>
+                              <span className="inline-block mt-2 text-[9px] font-bold tracking-wider uppercase bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 px-1.5 py-0.5 rounded font-sans">
+                                {v.segment}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+
                 <div className="space-y-2">
                   <Label>Package</Label>
                   <Select value={assignPackageId || "none"} onValueChange={(v) => setAssignPackageId(v === "none" ? "" : v)}>
@@ -596,6 +836,208 @@ export function MembershipPageClient() {
               </CardContent>
             </Card>
           )}
+
+      {/* Nested Add Vehicle dialog for membership customer */}
+      <Dialog
+        open={addVehicleForExistingCustomerDialogOpen}
+        onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add New Vehicle</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a vehicle for the selected existing customer.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-3 sm:grid-cols-2 py-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="mem-dialog-veh-reg" className="text-xs">Registration Number *</Label>
+              <Input
+                id="mem-dialog-veh-reg"
+                value={newVehicleRegInput}
+                onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
+                placeholder="e.g. KA01AB1234"
+                maxLength={16}
+                className="font-mono uppercase h-9 border-input"
+              />
+              <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mem-dialog-veh-seg" className="text-xs">Type</Label>
+              <Select
+                value={newVehicleSegmentInput}
+                onValueChange={(v) => setNewVehicleSegmentInput(v as VehicleSegment)}
+              >
+                <SelectTrigger id="mem-dialog-veh-seg" className="h-9 border-input">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HATCHBACK">Hatchback</SelectItem>
+                  <SelectItem value="SEDAN">Sedan</SelectItem>
+                  <SelectItem value="COMPACT_SUV">Compact SUV</SelectItem>
+                  <SelectItem value="SUV">SUV</SelectItem>
+                  <SelectItem value="LUXURY">Luxury</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="mem-dialog-veh-make" className="text-xs">Brand *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 shrink-0 border-sky-300 bg-white px-2 text-[10px] font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                  onClick={() => {
+                    setNewBrandOpen(true);
+                    setNewBrandDraft("");
+                  }}
+                >
+                  + New
+                </Button>
+              </div>
+              <Select
+                value={newVehicleMakeInput || undefined}
+                onValueChange={(value) => {
+                  setNewVehicleMakeInput(value);
+                  setNewVehicleModelInput("");
+                }}
+              >
+                <SelectTrigger id="mem-dialog-veh-make" className="h-9 border-input">
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allBrandsSorted.map((brand) => (
+                    <SelectItem key={brand} value={brand}>
+                      {brand}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="mem-dialog-veh-model" className="text-xs">Model *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!newVehicleMakeInput}
+                  className="h-6 shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
+                  onClick={() => {
+                    if (!newVehicleMakeInput) return;
+                    setNewModelOpen(true);
+                    setNewModelDraft("");
+                  }}
+                >
+                  + New
+                </Button>
+              </div>
+              <Select
+                value={newVehicleModelInput || undefined}
+                onValueChange={(value) => {
+                  setNewVehicleModelInput(value);
+                  const inferredSegment = getModelSegment(newVehicleMakeInput, value);
+                  if (inferredSegment) {
+                    setNewVehicleSegmentInput(inferredSegment);
+                  }
+                }}
+                disabled={!newVehicleMakeInput}
+              >
+                <SelectTrigger id="mem-dialog-veh-model" className="h-9 border-input">
+                  <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {allModelsSortedForExistingCustomer.map((model) => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
+              Register Vehicle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nested Brand add dialog */}
+      <Dialog open={newBrandOpen} onOpenChange={setNewBrandOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add brand</DialogTitle>
+            <DialogDescription>
+              Add a brand name when it is not in the catalog search list.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Brand name"
+            value={newBrandDraft}
+            onChange={(e) => setNewBrandDraft(e.target.value)}
+            className="border-input"
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const b = newBrandDraft.trim();
+                if (!b) return;
+                setExtraBrands((prev) => [...prev, b]);
+                setNewVehicleMakeInput(b);
+                setNewBrandOpen(false);
+              }}
+            >
+              Add Brand
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nested Model add dialog */}
+      <Dialog open={newModelOpen} onOpenChange={setNewModelOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add model</DialogTitle>
+            <DialogDescription>
+              Add a model name under brand "{newVehicleMakeInput}".
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Model name"
+            value={newModelDraft}
+            onChange={(e) => setNewModelDraft(e.target.value)}
+            className="border-input"
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const m = newModelDraft.trim();
+                if (!m) return;
+                setExtraModelsByBrand((prev) => ({
+                  ...prev,
+                  [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] || []), m],
+                }));
+                setNewVehicleModelInput(m);
+                setNewModelOpen(false);
+              }}
+            >
+              Add Model
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
           <Card>
             <CardHeader>

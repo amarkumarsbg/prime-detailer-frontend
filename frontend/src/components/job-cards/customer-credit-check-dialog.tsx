@@ -232,12 +232,20 @@ export function CustomerCreditCheckDialog({
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 space-y-0.5">
-                          <p className="font-mono font-semibold">{inv.invoiceNumber}</p>
+                          <Link
+                            href={`/billing/${inv.id}`}
+                            className="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                          >
+                            {inv.invoiceNumber}
+                          </Link>
                           <p className="text-xs text-muted-foreground">
                             Job {inv.jobNumber} · {formatDateTime(inv.createdAt)}
                           </p>
                         </div>
-                        <Badge variant="outline" className="shrink-0 tabular-nums">
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 tabular-nums bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800/50 font-semibold"
+                        >
                           Due {formatCurrency(bal)}
                         </Badge>
                       </div>
@@ -246,7 +254,12 @@ export function CustomerCreditCheckDialog({
                           Total {formatCurrency(inv.grandTotal)} · Paid {formatCurrency(paid)}
                         </span>
                         <div className="flex flex-wrap gap-2">
-                          <Button type="button" size="sm" variant="secondary" onClick={() => openRecordFor(inv)}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 px-3 shadow-sm active:scale-95 transition-transform"
+                            onClick={() => openRecordFor(inv)}
+                          >
                             Record payment
                           </Button>
                           <Button type="button" size="sm" variant="ghost" asChild className="h-8">
