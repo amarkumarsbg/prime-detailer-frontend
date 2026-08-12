@@ -30,6 +30,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ImportCustomersDialog } from "@/components/customers/import-customers-dialog";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
@@ -258,55 +264,78 @@ export default function CustomersPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Customers"
-        inlineActionsOnMobile
         actions={
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 whitespace-nowrap"
-                  disabled={exporting}
-                >
-                  {exporting ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="mr-1.5 h-4 w-4" />
-                  )}
-                  Export
-                  <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled={exporting}
-                  onClick={() => void handleExport("pdf")}
-                >
-                  PDF
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={exporting}
-                  onClick={() => void handleExport("excel")}
-                >
-                  Excel
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              size="sm"
-              variant="outline"
-              className="shrink-0 whitespace-nowrap"
-              onClick={() => setImportDialogOpen(true)}
-            >
-              <Upload className="w-4 h-4 mr-1.5" />
-              Import
-            </Button>
-            <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              Add Customer
-            </Button>
-          </div>
+          <TooltipProvider delayDuration={300}>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        disabled={exporting}
+                        aria-label="Export customers"
+                      >
+                        {exporting ? (
+                          <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" />
+                        ) : (
+                          <Download className="h-4 w-4 sm:mr-1.5" />
+                        )}
+                        <span className="hidden sm:inline">Export</span>
+                        <ChevronDown className="ml-0.5 hidden h-3.5 w-3.5 opacity-60 sm:inline" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="sm:hidden">
+                    Export
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={exporting}
+                    onClick={() => void handleExport("pdf")}
+                  >
+                    PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={exporting}
+                    onClick={() => void handleExport("excel")}
+                  >
+                    Excel
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => setImportDialogOpen(true)}
+                    aria-label="Import customers"
+                  >
+                    <Upload className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Import</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="sm:hidden">
+                  Import
+                </TooltipContent>
+              </Tooltip>
+              <Button
+                size="sm"
+                className="min-w-0 flex-1 whitespace-nowrap sm:flex-none"
+                onClick={() => setAddDialogOpen(true)}
+                aria-label="Add customer"
+              >
+                <Plus className="mr-1.5 h-4 w-4 shrink-0" />
+                <span className="sm:hidden">Add</span>
+                <span className="hidden sm:inline">Add Customer</span>
+              </Button>
+            </div>
+          </TooltipProvider>
         }
       />
 
