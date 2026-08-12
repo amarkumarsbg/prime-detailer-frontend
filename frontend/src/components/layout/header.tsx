@@ -115,22 +115,19 @@ export function Header() {
         href="/dashboard"
         className="md:hidden max-md:[grid-area:hdr_logo] flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div
-          className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg shrink-0 ${
-            companyLogoSrc ? "bg-transparent" : "bg-primary"
-          }`}
-        >
+        <Avatar className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-lg border border-border/60 bg-transparent">
           {companyLogoSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <AvatarImage
               src={companyLogoSrc}
               alt={businessName}
-              className="h-full w-full rounded-lg object-contain"
+              className="object-cover"
+              key={companyLogoSrc}
             />
-          ) : (
-            <Wrench className="w-[1.125rem] h-[1.125rem] sm:w-5 sm:h-5 text-primary-foreground" />
-          )}
-        </div>
+          ) : null}
+          <AvatarFallback className="bg-primary text-primary-foreground">
+            <Wrench className="w-[1.125rem] h-[1.125rem] sm:w-5 sm:h-5" />
+          </AvatarFallback>
+        </Avatar>
         <div className="hidden min-[380px]:flex flex-col leading-tight min-w-0">
           <span className="text-xs sm:text-sm font-bold text-foreground truncate max-w-[5.5rem] min-[380px]:max-w-[7rem] sm:max-w-[120px]">
             {businessName}

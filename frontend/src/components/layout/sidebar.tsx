@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useDashboardFilterStore } from "@/store/dashboard-filter-store";
@@ -212,45 +212,44 @@ export function Sidebar() {
     router.push("/login");
   };
 
-  const brandHeader = (
-    <div className="flex items-center gap-3 min-w-0">
-      <div
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1",
-          companyLogoSrc
-            ? "bg-transparent ring-white/20"
-            : "bg-[var(--sidebar-active)] shadow-md shadow-black/25 ring-white/15"
-        )}
-      >
+  const brandHeader = (onClick?: () => void) => (
+    <Link
+      href="/dashboard"
+      onClick={onClick}
+      className="flex items-center gap-3 min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      aria-label="Go to dashboard"
+    >
+      <Avatar className="h-9 w-9 shrink-0 border border-white/20 bg-transparent">
         {companyLogoSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <AvatarImage
             src={companyLogoSrc}
             alt={businessName}
-            className="h-full w-full rounded-xl object-contain"
+            className="object-cover"
+            key={companyLogoSrc}
           />
-        ) : (
+        ) : null}
+        <AvatarFallback className="bg-[var(--sidebar-active)] text-[var(--sidebar-active-foreground)]">
           <CarFront
-            className="h-[22px] w-[22px] text-[var(--sidebar-active-foreground)]"
+            className="h-[22px] w-[22px]"
             strokeWidth={1.65}
             aria-hidden
           />
-        )}
-      </div>
+        </AvatarFallback>
+      </Avatar>
       <div className="overflow-hidden min-w-0">
         <h1 className="text-base font-bold text-[var(--sidebar-accent-foreground)] leading-tight truncate">
           {businessName}
         </h1>
         <p className="text-[11px] text-[var(--sidebar-foreground)] truncate opacity-80">Service management</p>
       </div>
-    </div>
+    </Link>
   );
 
   return (
     <>
       <aside className="hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-all duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border-r border-[var(--sidebar-border)]">
         <div className="flex items-center h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)] bg-white/[0.03]">
-          {brandHeader}
+          {brandHeader()}
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-transparent">
@@ -272,7 +271,7 @@ export function Sidebar() {
         )}
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--sidebar-border)] shrink-0 bg-white/[0.03]">
-          {brandHeader}
+          {brandHeader(() => setMobileOpen(false))}
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
