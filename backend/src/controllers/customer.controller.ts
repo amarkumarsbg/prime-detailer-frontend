@@ -4,6 +4,7 @@ import {
   listCustomers,
   getCustomerById,
   createCustomer,
+  createCustomersBulk,
   updateCustomer,
   deleteCustomer,
   adjustWallet,
@@ -27,6 +28,20 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial();
+
+const bulkItemSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
+  email: z.preprocess(
+    trimmed,
+    z.union([z.literal(""), z.string().email()]).optional()
+  ),
+  address: z.preprocess(trimmed, z.string().optional()),
+});
+
+const bulkSchema = z.object({
+  customers: z.array(bulkItemSchema).min(1).max(5000),
+});
 
 const walletSchema = z.object({
   amount: z.number().positive(),
@@ -71,6 +86,31 @@ export async function postCustomer(req: Request, res: Response, next: NextFuncti
       res.status(409).json({ data: null, error: { message: e.message } });
       return;
     }
+    next(e);
+  }
+}
+
+export async function postCustomersBulk(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = bulkSchema.parse(req.body);
+    const result = await createCustomersBulk(
+      body.customers.map((c) => ({
+        name: c.name,
+        phone: c.phone,
+        email: c.email ?? "",
+        address: c.address ?? "",
+      }))
+    );
+    res.status(201).json({
+      data: {
+        created: result.created,
+        skipped: result.skipped,
+        createdCount: result.created.length,
+        skippedCount: result.skipped.length,
+      },
+      error: null,
+    });
+  } catch (e) {
     next(e);
   }
 }

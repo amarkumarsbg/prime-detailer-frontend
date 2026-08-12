@@ -198,3 +198,107 @@ export async function adjustWallet(
 export async function creditWallet(customerId: string, amount: number) {
   return adjustWallet(customerId, amount, "CREDIT", "Referral Reward");
 }
+
+function generateReferralCode(): string {
+  return `REF-${randomBytes(2).toString("hex").toUpperCase()}`;
+}
+
+export type BulkCustomerInput = {
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+};
+
+export type BulkCustomerSkipped = {
+  index: number;
+  name: string;
+  phone: string;
+  reason: "DUPLICATE" | "INVALID" | "DUPLICATE_IN_BATCH";
+  message: string;
+};
+
+/**
+ * Creates many customers in one pass. Skips rows that clash on last-10 phone digits
+ * (existing DB or earlier rows in this batch). Does not update existing customers.
+ */
+export async function createCustomersBulk(inputs: BulkCustomerInput[]): Promise<{
+  created: ReturnType<typeof toApiCustomer>[];
+  skipped: BulkCustomerSkipped[];
+}> {
+  const existing = await prisma.customer.findMany({ select: { phone: true } });
+  const usedPhones = new Set(
+    existing
+      .map((c) => normalizePhone(c.phone))
+      .filter((p) => p.length === 10)
+  );
+
+  const skipped: BulkCustomerSkipped[] = [];
+  const toCreate: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    address: string;
+    referralCode: string;
+    createdAt: Date;
+  }> = [];
+
+  for (let index = 0; index < inputs.length; index++) {
+    const raw = inputs[index]!;
+    const name = (raw.name ?? "").trim();
+    const phone = (raw.phone ?? "").trim();
+    const email = (raw.email ?? "").trim();
+    const address = (raw.address ?? "").trim();
+    const norm = normalizePhone(phone);
+
+    if (!name || norm.length !== 10) {
+      skipped.push({
+        index,
+        name,
+        phone,
+        reason: "INVALID",
+        message: !name ? "Name is required" : "Phone must contain 10 digits",
+      });
+      continue;
+    }
+
+    if (usedPhones.has(norm)) {
+      const alreadyInBatch = toCreate.some((c) => normalizePhone(c.phone) === norm);
+      skipped.push({
+        index,
+        name,
+        phone,
+        reason: alreadyInBatch ? "DUPLICATE_IN_BATCH" : "DUPLICATE",
+        message: alreadyInBatch
+          ? "Duplicate phone in this import batch"
+          : "Phone already in use",
+      });
+      continue;
+    }
+
+    usedPhones.add(norm);
+    toCreate.push({
+      id: `cust-${randomBytes(4).toString("hex")}`,
+      name,
+      phone,
+      email,
+      address,
+      referralCode: generateReferralCode(),
+      createdAt: new Date(),
+    });
+  }
+
+  if (toCreate.length === 0) {
+    return { created: [], skipped };
+  }
+
+  await prisma.customer.createMany({ data: toCreate });
+  const ids = toCreate.map((c) => c.id);
+  const rows = await prisma.customer.findMany({
+    where: { id: { in: ids } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { created: rows.map(toApiCustomer), skipped };
+}

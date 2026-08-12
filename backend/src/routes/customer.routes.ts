@@ -4,6 +4,7 @@ import {
   getCustomers,
   getCustomer,
   postCustomer,
+  postCustomersBulk,
   putCustomer,
   removeCustomer,
   patchWallet,
@@ -16,6 +17,7 @@ customerRouter.use(requirePermission("CUSTOMERS"));
 
 customerRouter.get("/", getCustomers);
 customerRouter.post("/", postCustomer);
+customerRouter.post("/bulk", postCustomersBulk);
 customerRouter.patch("/:id/wallet", patchWallet);
 customerRouter.get("/:id", getCustomer);
 customerRouter.put("/:id", putCustomer);

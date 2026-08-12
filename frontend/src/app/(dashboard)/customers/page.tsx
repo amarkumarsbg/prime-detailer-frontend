@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, UserX } from "lucide-react";
+import { Plus, Upload, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -24,6 +24,7 @@ import {
   dialogMobileSheetContentClasses,
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
+import { ImportCustomersDialog } from "@/components/customers/import-customers-dialog";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
@@ -55,6 +56,7 @@ export default function CustomersPage() {
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const tableData = useMemo(() => {
     const source =
@@ -219,10 +221,21 @@ export default function CustomersPage() {
         title="Customers"
         inlineActionsOnMobile
         actions={
-          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Add Customer
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 whitespace-nowrap"
+              onClick={() => setImportDialogOpen(true)}
+            >
+              <Upload className="w-4 h-4 mr-1.5" />
+              Import
+            </Button>
+            <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add Customer
+            </Button>
+          </div>
         }
       />
 
@@ -317,6 +330,8 @@ export default function CustomersPage() {
           </>
         )}
       />
+
+      <ImportCustomersDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90vh] sm:max-w-md")}>

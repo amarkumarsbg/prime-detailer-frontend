@@ -248,7 +248,7 @@ function resetPlannedRecoveriesForEmployee(
   return recoveries.map((r) => {
     if (r.employeeId !== employeeId) return r;
     if (r.state !== "PLANNED") return r;
-    return { ...r, state: "REVERSED", recoveredAt: new Date().toISOString() };
+    return { ...r, state: "REVERSED" as const, recoveredAt: new Date().toISOString() };
   });
 }
 
@@ -591,7 +591,7 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
       recoveries = recoveries.map((r) => {
         if (r.payrollRecordId !== id) return r;
         if (r.state !== "PLANNED") return r;
-        return { ...r, state: "FINALIZED", recoveredAt: now };
+        return { ...r, state: "FINALIZED" as const, recoveredAt: now };
       });
     }
 
@@ -599,7 +599,7 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
       recoveries = recoveries.map((r) => {
         if (r.payrollRecordId !== id) return r;
         if (r.state !== "FINALIZED") return r;
-        return { ...r, state: "REVERSED", recoveredAt: now };
+        return { ...r, state: "REVERSED" as const, recoveredAt: now };
       });
     }
 
@@ -607,7 +607,7 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
       recoveries = recoveries.map((r) => {
         if (r.payrollRecordId !== id) return r;
         if (r.state !== "PLANNED") return r;
-        return { ...r, state: "REVERSED", recoveredAt: now };
+        return { ...r, state: "REVERSED" as const, recoveredAt: now };
       });
     }
 
@@ -634,10 +634,10 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
     const row = records.find((r) => r.id === id);
     if (!row) return;
 
-    let recoveries = [...get().salaryAdvanceRecoveries].map((rec) => {
+    let recoveries: SalaryAdvanceRecovery[] = [...get().salaryAdvanceRecoveries].map((rec) => {
       if (rec.payrollRecordId !== id) return rec;
       if (rec.state === "REVERSED") return rec;
-      return { ...rec, state: "REVERSED", recoveredAt: new Date().toISOString() };
+      return { ...rec, state: "REVERSED" as const, recoveredAt: new Date().toISOString() };
     });
 
     let nextRecords = records.filter((r) => r.id !== id);
@@ -761,10 +761,10 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
     const row = advances.find((a) => a.id === id);
     if (!row) return;
 
-    let recoveries = [...get().salaryAdvanceRecoveries].map((r) => {
+    let recoveries: SalaryAdvanceRecovery[] = [...get().salaryAdvanceRecoveries].map((r) => {
       if (r.advanceId !== id) return r;
       if (r.state !== "PLANNED") return r;
-      return { ...r, state: "REVERSED", recoveredAt: new Date().toISOString() };
+      return { ...r, state: "REVERSED" as const, recoveredAt: new Date().toISOString() };
     });
 
     const salaryAdvances = advances.map((a) =>

@@ -8,6 +8,26 @@ export type NewCustomerInput = Omit<Customer, "id" | "createdAt"> & {
   referralCode: string;
 };
 
+export type CustomerImportPayloadItem = {
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+};
+
+export type CustomerBulkImportResult = {
+  created: Customer[];
+  skipped: Array<{
+    index: number;
+    name: string;
+    phone: string;
+    reason: "DUPLICATE" | "INVALID" | "DUPLICATE_IN_BATCH";
+    message: string;
+  }>;
+  createdCount: number;
+  skippedCount: number;
+};
+
 interface CustomerStore {
   customers: Customer[];
   customersLoading: boolean;
@@ -15,6 +35,8 @@ interface CustomerStore {
   fetchCustomers: () => Promise<void>;
   /** Returns the created customer on success, or null if phone conflict / error. */
   addCustomer: (customer: NewCustomerInput) => Promise<Customer | null>;
+  /** Bulk-create customers; merges created rows into the store. */
+  importCustomers: (customers: CustomerImportPayloadItem[]) => Promise<CustomerBulkImportResult>;
   /** Returns false if updates.phone is already used by another customer. */
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<boolean>;
   findByPhone: (phone: string) => Customer | undefined;
@@ -61,6 +83,16 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
       if (e instanceof ApiError && e.status === 409) return null;
       throw e;
     }
+  },
+
+  importCustomers: async (customers) => {
+    const data = await apiPost<CustomerBulkImportResult>("/api/customers/bulk", {
+      customers,
+    });
+    if (data.created.length > 0) {
+      set((state) => ({ customers: [...data.created, ...state.customers] }));
+    }
+    return data;
   },
 
   updateCustomer: async (id, updates) => {
