@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Upload, UserX } from "lucide-react";
+import { Plus, Upload, UserX, Download, ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -24,12 +24,23 @@ import {
   dialogMobileSheetContentClasses,
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ImportCustomersDialog } from "@/components/customers/import-customers-dialog";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isInactiveCustomer } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
+import {
+  buildCustomerExportRows,
+  downloadCustomersExcel,
+  downloadCustomersPdf,
+} from "@/lib/customer-export";
 import { cn, formatDate, formatCurrency, getInitials } from "@/lib/utils";
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -51,12 +62,13 @@ function normalizeVehicleToken(s: string): string {
 
 export default function CustomersPage() {
   const router = useRouter();
-  const { customers, addCustomer: addCustomerToStore } = useCustomerStore();
+  const { customers, addCustomer: addCustomerToStore, fetchCustomers } = useCustomerStore();
   const vehicles = useVehicleStore((s) => s.vehicles);
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const tableData = useMemo(() => {
     const source =
@@ -215,6 +227,33 @@ export default function CustomersPage() {
     router.push(`/customers/${item.id}`);
   };
 
+  const handleExport = async (format: "excel" | "pdf") => {
+    setExporting(true);
+    try {
+      await fetchCustomers();
+      const latestCustomers = useCustomerStore.getState().customers;
+      const latestVehicles = useVehicleStore.getState().vehicles;
+      const rows = buildCustomerExportRows(latestCustomers, latestVehicles);
+      if (rows.length === 0) {
+        toast.error("No customers to export");
+        return;
+      }
+      if (format === "excel") {
+        await downloadCustomersExcel(rows);
+        toast.success(`Exported ${rows.length} customer${rows.length === 1 ? "" : "s"} to Excel`);
+      } else {
+        await downloadCustomersPdf(rows);
+        toast.success(`Exported ${rows.length} customer${rows.length === 1 ? "" : "s"} to PDF`);
+      }
+    } catch (e) {
+      toast.error("Could not export customers", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
@@ -222,6 +261,38 @@ export default function CustomersPage() {
         inlineActionsOnMobile
         actions={
           <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 whitespace-nowrap"
+                  disabled={exporting}
+                >
+                  {exporting ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-1.5 h-4 w-4" />
+                  )}
+                  Export
+                  <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={exporting}
+                  onClick={() => void handleExport("pdf")}
+                >
+                  PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={exporting}
+                  onClick={() => void handleExport("excel")}
+                >
+                  Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               size="sm"
               variant="outline"
