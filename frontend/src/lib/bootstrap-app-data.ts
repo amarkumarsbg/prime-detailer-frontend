@@ -17,6 +17,8 @@ import type {
   MembershipPackage,
   Part,
   PayrollRecord,
+  SalaryAdvance,
+  SalaryAdvanceRecovery,
   ProductPurchase,
   PickupDropRequest,
   Quotation,
@@ -178,12 +180,54 @@ export async function bootstrapAppData(): Promise<void> {
   });
 
   const payroll = c.payroll as
-    | { salaryStructures?: SalaryStructure[]; payrollRecords?: PayrollRecord[] }
+    | {
+        salaryStructures?: SalaryStructure[];
+        payrollRecords?: PayrollRecord[];
+        salaryAdvances?: SalaryAdvance[];
+        salaryAdvanceRecoveries?: SalaryAdvanceRecovery[];
+      }
     | null
     | undefined;
   usePayrollStore.setState({
     salaryStructures: Array.isArray(payroll?.salaryStructures) ? payroll.salaryStructures : [],
-    payrollRecords: Array.isArray(payroll?.payrollRecords) ? payroll.payrollRecords : [],
+    payrollRecords: Array.isArray(payroll?.payrollRecords)
+      ? payroll.payrollRecords.map((r) => ({
+          ...r,
+          netSalaryBeforeAdvance:
+            typeof r.netSalaryBeforeAdvance === "number"
+              ? r.netSalaryBeforeAdvance
+              : r.grossEarnings - r.absenceDeduction,
+          advanceDeductionPlanned:
+            typeof r.advanceDeductionPlanned === "number" ? r.advanceDeductionPlanned : 0,
+          advanceDeductionFinalized:
+            typeof r.advanceDeductionFinalized === "number" ? r.advanceDeductionFinalized : 0,
+          advanceOutstandingBefore:
+            typeof r.advanceOutstandingBefore === "number" ? r.advanceOutstandingBefore : 0,
+          advanceOutstandingAfterPlanned:
+            typeof r.advanceOutstandingAfterPlanned === "number"
+              ? r.advanceOutstandingAfterPlanned
+              : 0,
+          advanceOutstandingAfterFinalized:
+            typeof r.advanceOutstandingAfterFinalized === "number"
+              ? r.advanceOutstandingAfterFinalized
+              : 0,
+          advanceRecoveryRefs: Array.isArray(r.advanceRecoveryRefs) ? r.advanceRecoveryRefs : [],
+        }))
+      : [],
+    salaryAdvances: Array.isArray(payroll?.salaryAdvances)
+      ? payroll.salaryAdvances.map((a) => ({
+          ...a,
+          recoveredAmount: typeof a.recoveredAmount === "number" ? a.recoveredAmount : 0,
+          remainingAmount:
+            typeof a.remainingAmount === "number"
+              ? a.remainingAmount
+              : Math.max(0, (a.advanceAmount ?? 0) - (a.recoveredAmount ?? 0)),
+          status: a.status ?? "OPEN",
+        }))
+      : [],
+    salaryAdvanceRecoveries: Array.isArray(payroll?.salaryAdvanceRecoveries)
+      ? payroll.salaryAdvanceRecoveries
+      : [],
   });
 
   const membership = c.membership as

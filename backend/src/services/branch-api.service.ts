@@ -3,7 +3,16 @@ import { SINGLETON_ENTITY_ID } from "../constants/json-collections.js";
 import { prisma } from "../lib/prisma.js";
 
 export type BranchDeletionBlocker = {
-  kind: "employees" | "job_cards" | "expenses" | "pickup_drop" | "payroll" | "last_branch" | "not_found";
+  kind:
+    | "employees"
+    | "job_cards"
+    | "expenses"
+    | "pickup_drop"
+    | "payroll"
+    | "salary_advances"
+    | "salary_advance_recoveries"
+    | "last_branch"
+    | "not_found";
   count: number;
   message: string;
 };
@@ -19,14 +28,47 @@ async function countJsonCollectionBranchRefs(collection: string, branchId: strin
   }).length;
 }
 
-async function countPayrollBranchRefs(branchId: string): Promise<number> {
+async function countPayrollBranchRefs(branchId: string): Promise<{
+  payrollRecords: number;
+  salaryAdvances: number;
+  salaryAdvanceRecoveries: number;
+}> {
   const row = await prisma.appJsonRow.findUnique({
     where: { collection_entityId: { collection: "payroll", entityId: SINGLETON_ENTITY_ID } },
     select: { payload: true },
   });
-  if (!row) return 0;
-  const payload = row.payload as { payrollRecords?: { branchId?: string }[] };
-  return (payload.payrollRecords ?? []).filter((r) => r.branchId === branchId).length;
+  if (!row) {
+    return {
+      payrollRecords: 0,
+      salaryAdvances: 0,
+      salaryAdvanceRecoveries: 0,
+    };
+  }
+  const payload = row.payload as {
+    payrollRecords?: { branchId?: string }[];
+    salaryAdvances?: { id?: string; branchId?: string }[];
+    salaryAdvanceRecoveries?: { advanceId?: string }[];
+  };
+
+  const payrollRecords = (payload.payrollRecords ?? []).filter(
+    (r) => r.branchId === branchId
+  ).length;
+
+  const branchAdvances = (payload.salaryAdvances ?? []).filter(
+    (a) => a.branchId === branchId
+  );
+  const salaryAdvances = branchAdvances.length;
+  const branchAdvanceIds = new Set(branchAdvances.map((a) => a.id).filter(Boolean));
+
+  const salaryAdvanceRecoveries = (payload.salaryAdvanceRecoveries ?? []).filter((r) =>
+    r.advanceId ? branchAdvanceIds.has(r.advanceId) : false
+  ).length;
+
+  return {
+    payrollRecords,
+    salaryAdvances,
+    salaryAdvanceRecoveries,
+  };
 }
 
 export async function getBranchDeletionBlockers(branchId: string): Promise<BranchDeletionBlocker[]> {
@@ -82,12 +124,28 @@ export async function getBranchDeletionBlockers(branchId: string): Promise<Branc
     });
   }
 
-  const payrollCount = await countPayrollBranchRefs(branchId);
-  if (payrollCount > 0) {
+  const payrollRefs = await countPayrollBranchRefs(branchId);
+  if (payrollRefs.payrollRecords > 0) {
     blockers.push({
       kind: "payroll",
-      count: payrollCount,
-      message: `${payrollCount} payroll record${payrollCount === 1 ? "" : "s"} linked to this site`,
+      count: payrollRefs.payrollRecords,
+      message: `${payrollRefs.payrollRecords} payroll record${payrollRefs.payrollRecords === 1 ? "" : "s"} linked to this site`,
+    });
+  }
+
+  if (payrollRefs.salaryAdvances > 0) {
+    blockers.push({
+      kind: "salary_advances",
+      count: payrollRefs.salaryAdvances,
+      message: `${payrollRefs.salaryAdvances} salary advance${payrollRefs.salaryAdvances === 1 ? "" : "s"} linked to this site`,
+    });
+  }
+
+  if (payrollRefs.salaryAdvanceRecoveries > 0) {
+    blockers.push({
+      kind: "salary_advance_recoveries",
+      count: payrollRefs.salaryAdvanceRecoveries,
+      message: `${payrollRefs.salaryAdvanceRecoveries} salary advance recover${payrollRefs.salaryAdvanceRecoveries === 1 ? "y" : "ies"} linked to this site`,
     });
   }
 

@@ -59,6 +59,8 @@ export default function BranchesPage() {
   const expenses = useExpenseStore((s) => s.expenses);
   const pickupDropRequests = usePickupDropStore((s) => s.requests);
   const payrollRecords = usePayrollStore((s) => s.payrollRecords);
+  const salaryAdvances = usePayrollStore((s) => s.salaryAdvances);
+  const salaryAdvanceRecoveries = usePayrollStore((s) => s.salaryAdvanceRecoveries);
   const attendanceRecords = useAttendanceStore((s) => s.records);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -75,6 +77,8 @@ export default function BranchesPage() {
       expenses,
       pickupDropRequests,
       payrollRecords,
+      salaryAdvances,
+      salaryAdvanceRecoveries,
       attendanceRecords,
       totalBranches: branches.length,
     }),
@@ -84,6 +88,8 @@ export default function BranchesPage() {
       expenses,
       pickupDropRequests,
       payrollRecords,
+      salaryAdvances,
+      salaryAdvanceRecoveries,
       attendanceRecords,
       branches.length,
     ]

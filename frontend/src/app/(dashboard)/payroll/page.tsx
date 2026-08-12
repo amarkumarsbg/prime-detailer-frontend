@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -33,7 +34,13 @@ import {
   useBranchScope,
 } from "@/lib/branch-scope";
 import { roleDisplayLabel } from "@/lib/rbac";
-import type { ExperienceBand, PayrollRecordStatus, SalaryStructure, UserRole } from "@/types";
+import type {
+  ExperienceBand,
+  PayrollRecordStatus,
+  SalaryAdvance,
+  SalaryStructure,
+  UserRole,
+} from "@/types";
 import {
   TrendingUp,
   TrendingDown,
@@ -46,6 +53,10 @@ import {
   Trash2,
   SlidersHorizontal,
   Search,
+  Ban,
+  CheckCircle2,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -69,6 +80,7 @@ const STATUS_OPTIONS: (PayrollRecordStatus | "ALL")[] = [
   "PENDING",
   "PROCESSING",
   "PAID",
+  "CANCELLED",
 ];
 
 const ROLE_OPTIONS: UserRole[] = [
@@ -87,6 +99,7 @@ function statusBadge(status: PayrollRecordStatus) {
     PENDING: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
     PROCESSING: "bg-blue-500/15 text-blue-800 dark:text-blue-300",
     PAID: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
+    CANCELLED: "bg-rose-500/15 text-rose-800 dark:text-rose-300",
   };
   return <Badge className={map[status]}>{status}</Badge>;
 }
@@ -97,9 +110,14 @@ export default function PayrollPage() {
   const staff = useStaffStore((s) => s.staff);
   const salaryStructures = usePayrollStore((s) => s.salaryStructures);
   const payrollRecords = usePayrollStore((s) => s.payrollRecords);
+  const salaryAdvances = usePayrollStore((s) => s.salaryAdvances);
   const generatePayroll = usePayrollStore((s) => s.generatePayroll);
   const recalculateAll = usePayrollStore((s) => s.recalculateAll);
   const setRecordStatus = usePayrollStore((s) => s.setRecordStatus);
+  const addSalaryAdvance = usePayrollStore((s) => s.addSalaryAdvance);
+  const cancelSalaryAdvance = usePayrollStore((s) => s.cancelSalaryAdvance);
+  const closeSalaryAdvance = usePayrollStore((s) => s.closeSalaryAdvance);
+  const deleteSalaryAdvance = usePayrollStore((s) => s.deleteSalaryAdvance);
   const upsertSalaryStructure = usePayrollStore((s) => s.upsertSalaryStructure);
   const removeSalaryStructure = usePayrollStore((s) => s.removeSalaryStructure);
 
@@ -121,6 +139,14 @@ export default function PayrollPage() {
   const [formBonus, setFormBonus] = useState("");
   const [formAbsence, setFormAbsence] = useState("");
   const [recordsFilterOpen, setRecordsFilterOpen] = useState(false);
+  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
+  const [advanceEmployeeId, setAdvanceEmployeeId] = useState("");
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceMonthlyCap, setAdvanceMonthlyCap] = useState("");
+  const [advanceDate, setAdvanceDate] = useState(() => today.toISOString().slice(0, 10));
+  const [advanceNotes, setAdvanceNotes] = useState("");
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const todayMonth = today.getMonth() + 1;
   const todayYear = today.getFullYear();
   const recordsFilterCount = useMemo(() => {
@@ -250,6 +276,76 @@ export default function PayrollPage() {
     setStructDialogOpen(false);
   };
 
+  const branchScopedAdvances = useMemo(
+    () =>
+      applyBranchFilters(
+        salaryAdvances,
+        (a) => a.branchId,
+        selectedBranchId,
+        showBranchPicker,
+        branchFilter
+      ),
+    [salaryAdvances, selectedBranchId, showBranchPicker, branchFilter]
+  );
+
+  const eligibleAdvanceStaff = useMemo(() => {
+    return staff
+      .filter((s) => s.isActive)
+      .filter((s) => !branchFilterId || s.branchId === branchFilterId);
+  }, [staff, branchFilterId]);
+
+  const filteredAdvanceStaff = useMemo(() => {
+    const query = employeeSearch.trim().toLowerCase();
+    if (!query) return eligibleAdvanceStaff;
+    const digits = query.replace(/\D/g, "");
+    return eligibleAdvanceStaff.filter((s) => {
+      const nameMatch = s.name.toLowerCase().includes(query);
+      const roleMatch = s.role.toLowerCase().includes(query);
+      const phoneMatch = digits ? s.phone.replace(/\D/g, "").includes(digits) : false;
+      return nameMatch || roleMatch || phoneMatch;
+    });
+  }, [eligibleAdvanceStaff, employeeSearch]);
+
+  const selectedAdvanceEmployee = useMemo(() => {
+    return eligibleAdvanceStaff.find((s) => s.id === advanceEmployeeId) ?? null;
+  }, [eligibleAdvanceStaff, advanceEmployeeId]);
+
+  const saveAdvance = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(advanceAmount);
+    const monthly = advanceMonthlyCap.trim() ? Number(advanceMonthlyCap) : undefined;
+    if (!advanceEmployeeId || !advanceDate || !Number.isFinite(amount) || amount <= 0) {
+      toast.error("Select employee, date and valid amount.");
+      return;
+    }
+    if (monthly != null && (!Number.isFinite(monthly) || monthly <= 0)) {
+      toast.error("Monthly deduction must be a positive number.");
+      return;
+    }
+    const emp = staff.find((s) => s.id === advanceEmployeeId);
+    if (!emp) {
+      toast.error("Employee not found.");
+      return;
+    }
+    addSalaryAdvance({
+      employeeId: emp.id,
+      employeeName: emp.name,
+      branchId: emp.branchId,
+      advanceAmount: amount,
+      advanceDate,
+      monthlyDeductionAmount: monthly,
+      notes: advanceNotes,
+    });
+    toast.success("Salary advance recorded.");
+    setAdvanceDialogOpen(false);
+    setAdvanceEmployeeId("");
+    setAdvanceAmount("");
+    setAdvanceMonthlyCap("");
+    setAdvanceNotes("");
+    setEmployeeSearch("");
+    setEmployeePickerOpen(false);
+  };
+
   const handleGenerate = () => {
     const n = generatePayroll({
       year: filterYear,
@@ -354,6 +450,7 @@ export default function PayrollPage() {
         <TabsList>
           <TabsTrigger value="records">Payroll Records</TabsTrigger>
           <TabsTrigger value="structures">Salary Structures</TabsTrigger>
+          <TabsTrigger value="advances">Salary Advances</TabsTrigger>
         </TabsList>
 
         <TabsContent value="records" className="flex flex-col gap-3 md:gap-4">
@@ -426,10 +523,17 @@ export default function PayrollPage() {
                               {formatCurrency(r.netSalary)}
                             </p>
                             <p className="mt-1 text-[11px] text-muted-foreground">
-                              Base {formatCurrency(r.baseSalary)} · Ded{" "}
+                              Base {formatCurrency(r.baseSalary)} · Absence{" "}
                               <span className="text-red-600/90">
                                 {formatCurrency(r.absenceDeduction)}
                               </span>
+                              {r.advanceDeductionPlanned > 0 || r.advanceDeductionFinalized > 0 ? (
+                                <>
+                                  {" "}· Advance {formatCurrency(
+                                    r.status === "PAID" ? r.advanceDeductionFinalized : r.advanceDeductionPlanned
+                                  )}
+                                </>
+                              ) : null}
                             </p>
                             <div className="mt-1.5 flex items-center justify-between gap-2">
                               <span className="text-[10px] text-muted-foreground">
@@ -437,18 +541,32 @@ export default function PayrollPage() {
                                 {r.periodYear} · {r.attendanceDays} days
                               </span>
                               {r.status === "PENDING" ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 shrink-0 px-2.5 text-xs"
-                                  onClick={() => {
-                                    setRecordStatus(r.id, "PAID");
-                                    toast.success("Marked as paid.");
-                                  }}
-                                >
-                                  Mark paid
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 shrink-0 px-2.5 text-xs"
+                                    onClick={() => {
+                                      setRecordStatus(r.id, "PAID");
+                                      toast.success("Marked as paid.");
+                                    }}
+                                  >
+                                    Mark paid
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 shrink-0 px-2.5 text-xs text-rose-600"
+                                    onClick={() => {
+                                      setRecordStatus(r.id, "CANCELLED");
+                                      toast.success("Record cancelled.");
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
                               ) : null}
                             </div>
                           </MobileRowCard>
@@ -471,6 +589,9 @@ export default function PayrollPage() {
                         </th>
                         <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">
                           Absence ded.
+                        </th>
+                        <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">
+                          Advance ded.
                         </th>
                         <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">
                           Net salary
@@ -502,23 +623,42 @@ export default function PayrollPage() {
                           <td className="px-3 py-3 align-middle text-right tabular-nums text-red-600/90">
                             {formatCurrency(r.absenceDeduction)}
                           </td>
+                          <td className="px-3 py-3 align-middle text-right tabular-nums text-rose-600/90">
+                            {formatCurrency(
+                              r.status === "PAID" ? r.advanceDeductionFinalized : r.advanceDeductionPlanned
+                            )}
+                          </td>
                           <td className="px-3 py-3 align-middle text-right font-semibold tabular-nums">
                             {formatCurrency(r.netSalary)}
                           </td>
                           <td className="px-3 py-3 align-middle">{statusBadge(r.status)}</td>
                           <td className="px-3 py-3 align-middle text-right">
-                            {r.status === "PENDING" && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setRecordStatus(r.id, "PAID");
-                                  toast.success("Marked as paid.");
-                                }}
-                              >
-                                Mark paid
-                              </Button>
+                            {(r.status === "PENDING" || r.status === "PROCESSING") && (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setRecordStatus(r.id, "PAID");
+                                    toast.success("Marked as paid.");
+                                  }}
+                                >
+                                  Mark paid
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-rose-600"
+                                  onClick={() => {
+                                    setRecordStatus(r.id, "CANCELLED");
+                                    toast.success("Record cancelled.");
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
                             )}
                           </td>
                         </tr>
@@ -849,6 +989,321 @@ export default function PayrollPage() {
                 </tbody>
               </table>
               </DesktopTableWrap>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="advances" className="space-y-4">
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setAdvanceDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Record Advance
+            </Button>
+          </div>
+
+          <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>New salary advance</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={saveAdvance} className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label>Employee</Label>
+                  <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 w-full justify-between px-3 font-normal"
+                      >
+                        <span className="truncate text-left">
+                          {selectedAdvanceEmployee
+                            ? `${selectedAdvanceEmployee.name} (${selectedAdvanceEmployee.phone})`
+                            : "Select employee"}
+                        </span>
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <div className="flex items-center border-b border-border px-3">
+                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        <input
+                          placeholder="Search by name, phone, or role..."
+                          value={employeeSearch}
+                          onChange={(e) => setEmployeeSearch(e.target.value)}
+                          className="flex h-10 w-full rounded-md bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+                      <div className="max-h-64 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+                        {filteredAdvanceStaff.length === 0 ? (
+                          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                            No employee found.
+                          </div>
+                        ) : (
+                          filteredAdvanceStaff.slice(0, 75).map((s) => {
+                            const active = s.id === advanceEmployeeId;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => {
+                                  setAdvanceEmployeeId(s.id);
+                                  setEmployeePickerOpen(false);
+                                  setEmployeeSearch("");
+                                }}
+                                className={`flex w-full items-start gap-2 rounded-sm px-2.5 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
+                                  active ? "bg-accent text-accent-foreground" : ""
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate font-medium">{s.name}</div>
+                                  <div className="truncate text-xs text-muted-foreground">
+                                    {s.phone} · {roleDisplayLabel(s.role)}
+                                  </div>
+                                </div>
+                                {active ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : null}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Advance amount (Rs.)</Label>
+                    <Input
+                      inputMode="decimal"
+                      value={advanceAmount}
+                      onChange={(e) => setAdvanceAmount(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Advance date</Label>
+                    <Input
+                      type="date"
+                      value={advanceDate}
+                      onChange={(e) => setAdvanceDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Monthly deduction cap (optional)</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={advanceMonthlyCap}
+                    onChange={(e) => setAdvanceMonthlyCap(e.target.value)}
+                    placeholder="Leave empty for full recovery"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Notes (optional)</Label>
+                  <Input value={advanceNotes} onChange={(e) => setAdvanceNotes(e.target.value)} />
+                </div>
+                <Button type="submit" className="w-full">
+                  Save advance
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Card>
+            <CardContent className="p-0">
+              {branchScopedAdvances.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No salary advances found.
+                </p>
+              ) : (
+                <>
+                  <MobileCardList className="p-3">
+                    {branchScopedAdvances.map((a: SalaryAdvance) => (
+                      <MobileRowCard key={a.id}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold leading-tight">{a.employeeName}</p>
+                          <Badge
+                            className={
+                              a.status === "CLOSED"
+                                ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
+                                : a.status === "CANCELLED"
+                                  ? "bg-rose-500/15 text-rose-800 dark:text-rose-300"
+                                  : "bg-blue-500/15 text-blue-800 dark:text-blue-300"
+                            }
+                          >
+                            {a.status}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Advance {formatCurrency(a.advanceAmount)} · Recovered {formatCurrency(a.recoveredAmount)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Remaining {formatCurrency(a.remainingAmount)}
+                          {a.monthlyDeductionAmount ? ` · Monthly cap ${formatCurrency(a.monthlyDeductionAmount)}` : ""}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          {a.status !== "CANCELLED" && a.status !== "CLOSED" ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                cancelSalaryAdvance(a.id, "Cancelled by admin");
+                                toast.success("Advance cancelled.");
+                              }}
+                            >
+                              <Ban className="w-3.5 h-3.5 mr-1" />
+                              Cancel
+                            </Button>
+                          ) : null}
+                          {a.status !== "CLOSED" && a.status !== "CANCELLED" ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                closeSalaryAdvance(a.id, "Closed by admin");
+                                toast.success("Advance closed.");
+                              }}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                              Close
+                            </Button>
+                          ) : null}
+                          {a.recoveredAmount <= 0 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-destructive"
+                              onClick={() => {
+                                const ok = deleteSalaryAdvance(a.id);
+                                if (!ok) {
+                                  toast.error("Cannot delete recovered or linked advance.");
+                                  return;
+                                }
+                                toast.success("Advance deleted.");
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" />
+                              Delete
+                            </Button>
+                          ) : null}
+                        </div>
+                      </MobileRowCard>
+                    ))}
+                  </MobileCardList>
+
+                  <DesktopTableWrap>
+                    <table className="w-full min-w-[980px] text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/40 text-left">
+                          <th className="px-3 py-3 font-semibold">Employee</th>
+                          <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">Advance</th>
+                          <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">Recovered</th>
+                          <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">Remaining</th>
+                          <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">Monthly cap</th>
+                          <th className="px-3 py-3 font-semibold">Date</th>
+                          <th className="px-3 py-3 font-semibold">Status</th>
+                          <th className="px-3 py-3 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {branchScopedAdvances.map((a, i) => (
+                          <tr
+                            key={a.id}
+                            className={
+                              i % 2
+                                ? "bg-muted/15 border-b border-border/50"
+                                : "border-b border-border/50"
+                            }
+                          >
+                            <td className="px-3 py-3 align-middle font-medium">{a.employeeName}</td>
+                            <td className="px-3 py-3 align-middle text-right tabular-nums">
+                              {formatCurrency(a.advanceAmount)}
+                            </td>
+                            <td className="px-3 py-3 align-middle text-right tabular-nums">
+                              {formatCurrency(a.recoveredAmount)}
+                            </td>
+                            <td className="px-3 py-3 align-middle text-right tabular-nums">
+                              {formatCurrency(a.remainingAmount)}
+                            </td>
+                            <td className="px-3 py-3 align-middle text-right tabular-nums">
+                              {a.monthlyDeductionAmount
+                                ? formatCurrency(a.monthlyDeductionAmount)
+                                : "-"}
+                            </td>
+                            <td className="px-3 py-3 align-middle text-muted-foreground">
+                              {formatDate(a.advanceDate)}
+                            </td>
+                            <td className="px-3 py-3 align-middle">
+                              <Badge
+                                className={
+                                  a.status === "CLOSED"
+                                    ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
+                                    : a.status === "CANCELLED"
+                                      ? "bg-rose-500/15 text-rose-800 dark:text-rose-300"
+                                      : "bg-blue-500/15 text-blue-800 dark:text-blue-300"
+                                }
+                              >
+                                {a.status}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-3 align-middle text-right">
+                              {a.status !== "CANCELLED" && a.status !== "CLOSED" ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-rose-600"
+                                  onClick={() => {
+                                    cancelSalaryAdvance(a.id, "Cancelled by admin");
+                                    toast.success("Advance cancelled.");
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              ) : null}
+                              {a.status !== "CLOSED" && a.status !== "CANCELLED" ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    closeSalaryAdvance(a.id, "Closed by admin");
+                                    toast.success("Advance closed.");
+                                  }}
+                                >
+                                  Close
+                                </Button>
+                              ) : null}
+                              {a.recoveredAmount <= 0 ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => {
+                                    const ok = deleteSalaryAdvance(a.id);
+                                    if (!ok) {
+                                      toast.error("Cannot delete recovered or linked advance.");
+                                      return;
+                                    }
+                                    toast.success("Advance deleted.");
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </DesktopTableWrap>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

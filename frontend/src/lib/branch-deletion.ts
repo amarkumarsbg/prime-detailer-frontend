@@ -3,6 +3,8 @@ import type {
   Expense,
   JobCard,
   PayrollRecord,
+  SalaryAdvance,
+  SalaryAdvanceRecovery,
   PickupDropRequest,
   User,
 } from "@/types";
@@ -14,6 +16,8 @@ export type BranchDeletionBlocker = {
     | "expenses"
     | "pickup_drop"
     | "payroll"
+    | "salary_advances"
+    | "salary_advance_recoveries"
     | "attendance"
     | "last_branch";
   count: number;
@@ -26,6 +30,8 @@ export interface BranchDeletionContext {
   expenses: Expense[];
   pickupDropRequests: PickupDropRequest[];
   payrollRecords: PayrollRecord[];
+  salaryAdvances: SalaryAdvance[];
+  salaryAdvanceRecoveries: SalaryAdvanceRecovery[];
   attendanceRecords: AttendanceRecord[];
   totalBranches: number;
 }
@@ -86,6 +92,29 @@ export function getBranchDeletionBlockers(
       kind: "payroll",
       count: payrollCount,
       message: `${payrollCount} payroll record${payrollCount === 1 ? "" : "s"} linked to this site`,
+    });
+  }
+
+  const advanceCount = ctx.salaryAdvances.filter((a) => a.branchId === branchId).length;
+  if (advanceCount > 0) {
+    blockers.push({
+      kind: "salary_advances",
+      count: advanceCount,
+      message: `${advanceCount} salary advance${advanceCount === 1 ? "" : "s"} linked to this site`,
+    });
+  }
+
+  const branchAdvanceIds = new Set(
+    ctx.salaryAdvances.filter((a) => a.branchId === branchId).map((a) => a.id)
+  );
+  const recoveryCount = ctx.salaryAdvanceRecoveries.filter((r) =>
+    branchAdvanceIds.has(r.advanceId)
+  ).length;
+  if (recoveryCount > 0) {
+    blockers.push({
+      kind: "salary_advance_recoveries",
+      count: recoveryCount,
+      message: `${recoveryCount} salary advance recover${recoveryCount === 1 ? "y" : "ies"} linked to this site`,
     });
   }
 
