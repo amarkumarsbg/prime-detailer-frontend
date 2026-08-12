@@ -107,7 +107,7 @@ export function buildQuotationWhatsAppMessage(q: Quotation): string {
     serviceLines,
     ``,
     `Subtotal: ${formatCurrency(q.subtotal)}`,
-    `GST: ${formatCurrency(q.taxAmount)}`,
+    q.taxAmount > 0 ? `GST: ${formatCurrency(q.taxAmount)}` : "",
     `*Total:* *${formatCurrency(q.grandTotal)}*`,
     valid ? `Valid until: *${valid}*` : "",
     ``,

@@ -3682,7 +3682,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   <TrendingUp className="w-3.5 h-3.5" />
                   Trending at This Branch
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {trendingServices.map((s) => {
                     const on = selectedMainIds.includes(s.id);
                     const pr = vehicleSegment ? priceForService(s, vehicleSegment) : s.defaultPrice;
@@ -3693,7 +3693,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         type="button"
                         onClick={() => toggleTrending(s.id)}
                         className={cn(
-                          "rounded-xl border-2 p-3 text-left transition-all w-full sm:w-[calc(50%-0.25rem)] lg:w-[220px]",
+                          "rounded-xl border-2 p-3 text-left transition-all w-full",
                           on
                             ? "border-primary bg-primary/5 shadow-sm"
                             : "border-border bg-card hover:border-primary/30"
@@ -5023,11 +5023,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         {useBookingWizard && (
           <div
             className={cn(
-              "hidden shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border md:flex",
+              "hidden shrink-0 flex-nowrap items-center justify-between gap-3 border-t border-border md:flex w-full",
               compactJobCardDesktop ? "pt-2 pb-0.5" : "pt-2.5 pb-0.5"
             )}
           >
-            <div className="flex items-center gap-3 min-w-0">
+            {/* Left: Back button + Summary */}
+            <div className="flex items-center gap-3 shrink-0 min-w-0">
               <Button
                 type="button"
                 variant="outline"
@@ -5041,40 +5042,46 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 <p className="text-xs text-muted-foreground truncate hidden lg:block">{wizardSelectionSummary}</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+
+            {/* Middle: Instructional text (centered and flex-1) */}
+            {jobCreateStep === jobWizardStepCount - 1 && (
+              <span className="text-xs text-muted-foreground text-center truncate hidden lg:block flex-1 px-4">
+                Review the summary, select branch, then create the {isJobCard ? "job card" : "booking"}.
+              </span>
+            )}
+
+            {/* Right: Action buttons (Cancel / Create / Next) */}
+            <div className="flex items-center gap-2 shrink-0">
               {wizardSelectionSummary && (
                 <p className="text-xs text-muted-foreground truncate lg:hidden">{wizardSelectionSummary}</p>
               )}
-            {jobCreateStep < jobWizardStepCount - 1 ? (
-              <Button
-                type="button"
-                size="sm"
-                onClick={goNextJobWizard}
-                disabled={notesStepNextBlocked}
-                title={notesStepNextBlocked ? "Select an expected delivery date to continue" : undefined}
-              >
-                Next
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground text-right whitespace-nowrap hidden lg:block mr-2">
-                  Review the summary, select branch, then create the {isJobCard ? "job card" : "booking"}.
-                </span>
-                <Button type="button" variant="outline" size="sm" asChild>
-                  <Link href={isJobCard ? "/job-cards" : "/bookings"}>Cancel</Link>
-                </Button>
+              {jobCreateStep < jobWizardStepCount - 1 ? (
                 <Button
-                  type="submit"
+                  type="button"
                   size="sm"
-                  disabled={bookingWizardIncomplete}
-                  title={
-                    bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
-                  }
+                  onClick={goNextJobWizard}
+                  disabled={notesStepNextBlocked}
+                  title={notesStepNextBlocked ? "Select an expected delivery date to continue" : undefined}
                 >
-                  {isJobCard ? "Create job card" : "Create booking"}
+                  Next
                 </Button>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <Link href={isJobCard ? "/job-cards" : "/bookings"}>Cancel</Link>
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={bookingWizardIncomplete}
+                    title={
+                      bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
+                    }
+                  >
+                    {isJobCard ? "Create job card" : "Create booking"}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}

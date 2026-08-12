@@ -1023,14 +1023,18 @@ ${businessNameVal}`;
                       <span className="font-mono">-{formatCurrency(activeReferralDiscount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-semibold border-t border-border pt-1.5 text-[13px]">
-                    <span>Taxable Subtotal</span>
-                    <span className="font-mono">{formatCurrency(taxableSubtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>GST ({Math.round(taxRate * 100)}%)</span>
-                    <span className="font-mono">{formatCurrency(taxAmount)}</span>
-                  </div>
+                  {gstRegistrationStatus !== "NOT_REGISTERED" ? (
+                    <>
+                      <div className="flex justify-between font-semibold border-t border-border pt-1.5 text-[13px]">
+                        <span>Taxable Subtotal</span>
+                        <span className="font-mono">{formatCurrency(taxableSubtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>GST ({Math.round(taxRate * 100)}%)</span>
+                        <span className="font-mono">{formatCurrency(taxAmount)}</span>
+                      </div>
+                    </>
+                  ) : null}
                   <div className="flex justify-between font-bold text-sm border-t border-border pt-1.5 text-primary">
                     <span>Revised Grand Total</span>
                     <span className="font-mono">{formatCurrency(grandTotalComputed)}</span>

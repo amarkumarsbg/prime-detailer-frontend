@@ -1312,6 +1312,16 @@ export default function JobCardDetailPage() {
     currentStatus !== "CANCELLED" &&
     (currentStatus === "DELIVERED" || currentStatusIndex < WORKFLOW_STATUSES.length - 1);
 
+  const visualSteps = [
+    { id: "RECEIVED", label: "Received", statusIndex: 0 },
+    { id: "INSPECTION", label: "Inspection", statusIndex: 1 },
+    { id: "AWAITING_SERVICE", label: "Service", statusIndex: 2 },
+    { id: "QUALITY_CHECK", label: "QC", statusIndex: 3 },
+    { id: "READY", label: "Ready", statusIndex: 4 },
+    { id: "INVOICE", label: "Invoice", statusIndex: -1 },
+    { id: "DELIVERED", label: "Delivered", statusIndex: 5 },
+  ];
+
   return (
     <div
       className={cn(
@@ -1358,42 +1368,67 @@ export default function JobCardDetailPage() {
                 aria-label="Job workflow progress"
               >
                 <div className="flex w-full min-w-0 items-start overflow-hidden">
-                  {WORKFLOW_STATUSES.map((status, index) => {
-                    const isLast = index === WORKFLOW_STATUSES.length - 1;
-                    const isCompleted =
-                      index < currentStatusIndex ||
-                      (currentStatus === "DELIVERED" && isLast && index === currentStatusIndex);
-                    const isCurrent =
-                      index === currentStatusIndex && !(currentStatus === "DELIVERED" && isLast);
+                  {visualSteps.map((step, index) => {
+                    const isLast = index === visualSteps.length - 1;
+                    let isCompleted = false;
+                    let isCurrent = false;
+
+                    if (step.id === "INVOICE") {
+                      isCompleted = invoiceForJob != null || currentStatus === "DELIVERED";
+                      isCurrent = currentStatus === "READY" && !invoiceForJob;
+                    } else if (step.id === "DELIVERED") {
+                      isCompleted = currentStatus === "DELIVERED";
+                      isCurrent = currentStatus === "DELIVERED";
+                    } else {
+                      const idx = step.statusIndex;
+                      isCompleted = idx < currentStatusIndex || (currentStatus === "READY" && idx === 4) || currentStatus === "DELIVERED";
+                      isCurrent = idx === currentStatusIndex && !(currentStatus === "READY" && idx === 4);
+                    }
+
+                    const stepNumber = step.id === "DELIVERED" ? 6 : index + 1;
+                    const showFileIcon = step.id === "INVOICE";
+                    const isClickable = step.id === "INVOICE" && isCurrent;
 
                     return (
-                      <Fragment key={status}>
-                        <div className="flex min-w-0 flex-1 flex-col items-center px-0.5">
+                      <Fragment key={step.id}>
+                        <div
+                          className={cn(
+                            "flex min-w-0 flex-1 flex-col items-center px-0.5 select-none",
+                            isClickable && "group/step cursor-pointer"
+                          )}
+                          onClick={isClickable ? handleGenerateInvoice : undefined}
+                          title={isClickable ? "Click to Generate Invoice" : undefined}
+                        >
                           <div
                             className={cn(
-                              "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-8 sm:w-8",
+                              "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all sm:h-8 sm:w-8",
                               isCompleted
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : isCurrent
-                                  ? "border-primary bg-primary/10 text-primary"
+                                  ? isClickable
+                                    ? "border-primary bg-primary/10 text-primary animate-pulse shadow-md shadow-primary/20 hover:bg-primary/20 scale-105"
+                                    : "border-primary bg-primary/10 text-primary"
                                   : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
                             )}
                           >
                             {isCompleted ? (
                               <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            ) : showFileIcon ? (
+                              <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             ) : (
-                              <span className="text-[10px] font-medium sm:text-xs">{index + 1}</span>
+                              <span className="text-[10px] font-medium sm:text-xs">{stepNumber}</span>
                             )}
                           </div>
                           <span
                             className={cn(
                               "mt-1 w-full text-center text-[8px] leading-[1.2] line-clamp-2 sm:text-[10px] sm:leading-tight",
-                              isCurrent || (currentStatus === "DELIVERED" && isLast)
+                              isCurrent || isCompleted
                                 ? "font-semibold text-foreground"
-                                : "text-muted-foreground"
+                                : "text-muted-foreground",
+                              isClickable && "group-hover/step:text-primary transition-colors"
                             )}
                           >
-                            {WORKFLOW_LABELS[status]}
+                            {step.label}
                           </span>
                         </div>
                         {!isLast && (

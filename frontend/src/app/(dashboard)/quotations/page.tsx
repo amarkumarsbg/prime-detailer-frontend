@@ -1805,10 +1805,12 @@ export default function QuotationsPage() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="font-medium tabular-nums">{formatCurrency(formCalculations.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax ({Math.round((gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE) * 100)}%)</span>
-                    <span className="font-medium tabular-nums">{formatCurrency(formCalculations.taxAmount)}</span>
-                  </div>
+                  {gstRegistrationStatus !== "NOT_REGISTERED" && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tax ({Math.round(TAX_RATE * 100)}%)</span>
+                      <span className="font-medium tabular-nums">{formatCurrency(formCalculations.taxAmount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-semibold pt-2 border-t border-border text-foreground">
                     <span>Grand Total</span>
                     <span className="tabular-nums">{formatCurrency(formCalculations.grandTotal)}</span>
@@ -1912,10 +1914,12 @@ export default function QuotationsPage() {
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>{formatCurrency(selectedQuotation.subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tax ({Math.round((selectedQuotation.taxRate ?? 0) * 100)}%)</span>
-                  <span>{formatCurrency(selectedQuotation.taxAmount)}</span>
-                </div>
+                {selectedQuotation.taxRate > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tax ({Math.round((selectedQuotation.taxRate ?? 0) * 100)}%)</span>
+                    <span>{formatCurrency(selectedQuotation.taxAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-semibold">
                   <span>Grand Total</span>
                   <span>{formatCurrency(selectedQuotation.grandTotal)}</span>
