@@ -51,10 +51,12 @@ function isNavItemActive(pathname: string, href: string): boolean {
 
 function SidebarContent({
   onNavClick,
+  onCollapse,
   navOverflow = "hidden",
   className,
 }: {
   onNavClick?: () => void;
+  onCollapse?: () => void;
   navOverflow?: "hidden" | "auto";
   className?: string;
 }) {
@@ -67,6 +69,9 @@ function SidebarContent({
     ...group,
     items: group.items.filter((item) => canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions)),
   })).filter((group) => group.items.length > 0);
+
+  const collapseSectionLabel =
+    filteredGroups.find((g) => /customers/i.test(g.label))?.label ?? filteredGroups[0]?.label;
 
   const navRef = useRef<HTMLElement>(null);
   const navContentRef = useRef<HTMLDivElement>(null);
@@ -137,15 +142,30 @@ function SidebarContent({
               className="space-y-1"
               aria-labelledby={`nav-section-${navSectionSlug(group.label)}`}
             >
-              <h2
-                id={`nav-section-${navSectionSlug(group.label)}`}
+              <div
                 className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--sidebar-section-heading)] px-3 pb-1.5",
+                  "flex items-center gap-1 px-3 pb-1.5",
                   groupIndex === 0 ? "pt-0" : "pt-4"
                 )}
               >
-                {group.label}
-              </h2>
+                <h2
+                  id={`nav-section-${navSectionSlug(group.label)}`}
+                  className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--sidebar-section-heading)]"
+                >
+                  {group.label}
+                </h2>
+                {onCollapse && group.label === collapseSectionLabel ? (
+                  <button
+                    type="button"
+                    onClick={onCollapse}
+                    className="flex items-center justify-center w-7 h-7 -mr-1 rounded-lg text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors shrink-0"
+                    aria-label="Hide sidebar"
+                    title="Hide sidebar"
+                  >
+                    <PanelLeftClose className="w-3.5 h-3.5" />
+                  </button>
+                ) : null}
+              </div>
               <div className="space-y-0.5 px-1.5">
                 {group.items.map((item) => {
                   const isActive = isNavItemActive(pathname, item.href);
@@ -255,21 +275,16 @@ export function Sidebar() {
         )}
         aria-hidden={collapsed}
       >
-        <div className="flex items-center justify-between gap-2 h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)] bg-white/[0.03]">
+        <div className="flex items-center h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)] bg-white/[0.03]">
           {brandHeader()}
-          <button
-            type="button"
-            onClick={() => setCollapsed(true)}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors shrink-0"
-            aria-label="Hide sidebar"
-            title="Hide sidebar"
-          >
-            <PanelLeftClose className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-transparent">
-          <SidebarContent className="flex-1 min-h-0" navOverflow="auto" />
+          <SidebarContent
+            className="flex-1 min-h-0"
+            navOverflow="auto"
+            onCollapse={() => setCollapsed(true)}
+          />
         </div>
       </aside>
 
