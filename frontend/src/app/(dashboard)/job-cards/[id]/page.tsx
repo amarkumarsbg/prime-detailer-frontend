@@ -1300,10 +1300,12 @@ export default function JobCardDetailPage() {
     }
   };
 
-  const handleGenerateInvoice = () => {
+  const handleGenerateInvoice = async () => {
     if (!jobCard) return;
 
-    if (currentStatus === "READY") {
+    let jobForInvoice: JobCard = jobCard;
+
+    if (currentStatus === "READY" || jobCard.status === "READY") {
       const nowIso = new Date().toISOString();
       const patch: Partial<JobCard> = {
         status: "DELIVERED",
@@ -1349,11 +1351,19 @@ export default function JobCardDetailPage() {
         });
       }
 
-      updateJobCard(jobCard.id, patch);
-      setCurrentStatus("DELIVERED");
+      try {
+        await updateJobCard(jobCard.id, patch);
+      } catch (e) {
+        toast.error("Could not mark job as delivered", {
+          description: e instanceof Error ? e.message : "Please try again",
+        });
+        return;
+      }
 
-      const mergedJob: JobCard = { ...jobCard, ...patch };
-      notifyJobDeliveredWhatsApp(mergedJob, businessName);
+      setCurrentStatus("DELIVERED");
+      jobForInvoice = { ...jobCard, ...patch };
+
+      notifyJobDeliveredWhatsApp(jobForInvoice, businessName);
 
       pushActivityLog({
         action: "STATUS_CHANGED",
@@ -1362,9 +1372,12 @@ export default function JobCardDetailPage() {
         entityLabel: jobCard.jobNumber,
         details: `${jobCard.jobNumber} marked delivered`,
       });
+    } else if (currentStatus === "DELIVERED" && jobCard.status !== "DELIVERED") {
+      // UI already shows delivered while store sync is catching up
+      jobForInvoice = { ...jobCard, status: "DELIVERED" };
     }
 
-    const result = createOrGetInvoiceForJob(jobCard.id);
+    const result = createOrGetInvoiceForJob(jobCard.id, jobForInvoice);
     if (!result.ok) {
       if (result.code === "NOT_DELIVERED") {
         toast.error("Deliver the job before generating an invoice");

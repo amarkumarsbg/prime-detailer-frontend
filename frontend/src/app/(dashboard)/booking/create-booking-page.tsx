@@ -445,7 +445,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     businessPhone,
     businessEmail,
     businessWebsite,
+    gstRegistrationStatus,
   } = useSettingsStore();
+  const isGstRegistered = gstRegistrationStatus !== "NOT_REGISTERED";
+  const activeGstRate = isGstRegistered ? GST_RATE : 0;
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
@@ -1419,7 +1422,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     Math.max(0, catalogSubtotalExclGst - totalDiscount) +
     highEndSubtotalExclGst +
     partsSubtotalExclGst;
-  const gstAmount = Math.round(afterDiscount * GST_RATE * 100) / 100;
+  const gstAmount = Math.round(afterDiscount * activeGstRate * 100) / 100;
   const totalPayable = Math.round((afterDiscount + gstAmount) * 100) / 100;
 
   /** Parsed advance for summary & cap (matches submit logic). */
@@ -1878,7 +1881,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         entityType: "APPOINTMENT",
         entityId: aptId,
         entityLabel: bookingId,
-        details: `Booking ${bookingId} — ${customerName.trim()} (${formatCurrency(totalPayable)} incl. GST)`,
+        details: `Booking ${bookingId} — ${customerName.trim()} (${formatCurrency(totalPayable)}${isGstRegistered ? " incl. GST" : ""})`,
       });
 
       toast.success("Booking created", {
@@ -2532,7 +2535,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   );
 
   const renderSummaryCard = (branchBlockId: string) => (
-    <Card className="border-border/80 shadow-sm">
+    <Card className="w-full border-border/80 shadow-sm">
       <CardHeader
         className={cn(
           "pb-2",
@@ -2731,24 +2734,29 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         </div>
         {!compactJobCardDesktop && (
           <p className="text-[10px] text-muted-foreground">
-            In rupees (incl. GST), capped at gross total below ({formatCurrency(totalPayable)}). Deducted in the summary
-            total. Saved on the job card for billing. Leave empty if none.
+            In rupees{isGstRegistered ? " (incl. GST)" : ""}, capped at gross total below (
+            {formatCurrency(totalPayable)}). Deducted in the summary total. Saved on the job card for
+            billing. Leave empty if none.
           </p>
         )}
         <Separator className={cn(compactJobCardDesktop ? "my-1" : "my-2")} />
         <div className={cn("space-y-1 text-sm", compactJobCardDesktop && "space-y-0.5 text-[11px]")}>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal (excl. GST)</span>
+            <span className="text-muted-foreground">
+              {isGstRegistered ? "Subtotal (excl. GST)" : "Subtotal"}
+            </span>
             <span className="tabular-nums">{formatCurrency(afterDiscount)}</span>
           </div>
-          <div className="flex justify-between text-amber-700 dark:text-amber-400">
-            <span>GST (18%)</span>
-            <span className="tabular-nums">+{formatCurrency(gstAmount)}</span>
-          </div>
+          {isGstRegistered ? (
+            <div className="flex justify-between text-amber-700 dark:text-amber-400">
+              <span>GST (18%)</span>
+              <span className="tabular-nums">+{formatCurrency(gstAmount)}</span>
+            </div>
+          ) : null}
           {summaryAdvanceAmount > 0 ? (
             <>
               <div className="flex justify-between text-muted-foreground text-xs pt-0.5">
-                <span>Total (incl. GST)</span>
+                <span>{isGstRegistered ? "Total (incl. GST)" : "Total"}</span>
                 <span className="tabular-nums">{formatCurrency(totalPayable)}</span>
               </div>
               <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
@@ -2816,7 +2824,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             ? cn(
                 "flex min-h-0 flex-1 flex-col overflow-x-hidden",
                 isDesktopWide
-                  ? "h-full overflow-hidden lg:flex-row lg:items-stretch lg:gap-6"
+                  ? "h-full overflow-hidden lg:flex-row lg:items-stretch lg:justify-between lg:gap-6"
                   : "h-auto overflow-visible"
               )
             : "lg:flex lg:flex-row lg:items-start lg:gap-8",
@@ -2827,7 +2835,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       >
         <div
           className={cn(
-            "min-w-0 flex-1 lg:min-w-0 lg:max-w-[760px]",
+            "min-w-0 flex-1 lg:min-w-0",
             !useBookingWizard && "space-y-6",
             useBookingWizard &&
               "flex flex-col overflow-x-hidden px-3 py-2 sm:px-6 sm:pt-3 sm:pb-0",
@@ -5108,7 +5116,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
         <aside
           className={cn(
-            "mt-4 w-full shrink-0 sm:mt-6 lg:mt-0 lg:min-h-0 lg:w-[min(100%,440px)]",
+            "mt-4 w-full shrink-0 sm:mt-6 lg:mt-0 lg:min-h-0 lg:w-[min(100%,460px)] lg:shrink-0 lg:ml-auto lg:pr-1",
             useBookingWizard &&
               cn(
                 "hidden lg:flex lg:flex-col lg:overflow-y-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5",
@@ -5281,7 +5289,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           <DialogHeader>
             <DialogTitle className="pr-8">{pricingService?.name}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground mb-3">Pricing for other vehicle types (base, excl. GST)</p>
+          <p className="text-sm text-muted-foreground mb-3">
+            Pricing for other vehicle types (base{isGstRegistered ? ", excl. GST" : ""})
+          </p>
           <div className="rounded-md border divide-y">
             {pricingService &&
               (Object.entries(pricingService.segmentPricing) as [VehicleSegment, number][]).map(([seg, price]) => (
@@ -5291,7 +5301,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 </div>
               ))}
           </div>
-          <p className="text-xs text-muted-foreground mt-2">+ 18.00% GST applies on the booked segment price.</p>
+          {isGstRegistered ? (
+            <p className="text-xs text-muted-foreground mt-2">
+              + 18.00% GST applies on the booked segment price.
+            </p>
+          ) : null}
         </DialogContent>
       </Dialog>
 

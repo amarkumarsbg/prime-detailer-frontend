@@ -94,9 +94,13 @@ function priceDetailsBlock(apt: Appointment): string {
     apt.priceGstAmount != null &&
     apt.priceGrandTotal != null
   ) {
+    const priceLine =
+      apt.priceGstAmount > 0
+        ? `${formatRs(apt.priceSubtotalExGst)} + ${formatInrPlain(apt.priceGstAmount)} (GST) = ${formatInrPlain(apt.priceGrandTotal)}`
+        : `${formatRs(apt.priceGrandTotal)}`;
     return [
       `*PRICE DETAILS:*`,
-      `${formatRs(apt.priceSubtotalExGst)} + ${formatInrPlain(apt.priceGstAmount)} (GST) = ${formatInrPlain(apt.priceGrandTotal)}`,
+      priceLine,
       apt.advancePaid != null ? `Advance: ${formatRs(apt.advancePaid)}` : "",
       `Note: ${advanceNote}`,
     ]

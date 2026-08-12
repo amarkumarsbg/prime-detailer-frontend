@@ -232,10 +232,15 @@ function jobHasInvoiceableLines(job: JobCard): boolean {
 /**
  * Returns an existing invoice for the job or creates one from a delivered job card.
  * Used by Billing (?jobCardId=) and job card “Generate Invoice”.
+ * Pass `jobOverride` when the store may not have the delivered status yet (same-click deliver + invoice).
  */
-export function createOrGetInvoiceForJob(jobCardId: string): CreateInvoiceForJobResult {
-  const jc = useJobCardStore.getState().jobCards.find((j) => j.id === jobCardId);
-  if (!jc) return { ok: false, code: "NOT_FOUND" };
+export function createOrGetInvoiceForJob(
+  jobCardId: string,
+  jobOverride?: JobCard
+): CreateInvoiceForJobResult {
+  const jc =
+    jobOverride ?? useJobCardStore.getState().jobCards.find((j) => j.id === jobCardId);
+  if (!jc || jc.id !== jobCardId) return { ok: false, code: "NOT_FOUND" };
 
   const existing = useInvoiceStore.getState().invoices.find((inv) => inv.jobCardId === jobCardId);
   if (existing) {

@@ -27,12 +27,23 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
     const prev = get().jobCards.find((jc) => jc.id === id);
     if (!prev) return;
     const next = { ...prev, ...updates };
-    await putCollectionDocument("jobCards", id, next);
+    // Apply locally first so same-click flows (e.g. deliver + invoice) see the new status.
     set((state) => ({
       jobCards: state.jobCards.map((jc) => (jc.id === id ? next : jc)),
     }));
     if (updates.status) {
       syncPickupFromJobCard(id, next.status);
+    }
+    try {
+      await putCollectionDocument("jobCards", id, next);
+    } catch (err) {
+      set((state) => ({
+        jobCards: state.jobCards.map((jc) => (jc.id === id ? prev : jc)),
+      }));
+      if (updates.status) {
+        syncPickupFromJobCard(id, prev.status);
+      }
+      throw err;
     }
   },
 

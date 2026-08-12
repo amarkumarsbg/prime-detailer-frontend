@@ -158,11 +158,11 @@ function SidebarContent({
                   <button
                     type="button"
                     onClick={onCollapse}
-                    className="flex items-center justify-center w-7 h-7 -mr-1 rounded-lg text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors shrink-0"
+                    className="flex items-center justify-center w-8 h-8 -mr-0.5 rounded-lg text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors shrink-0"
                     aria-label="Hide sidebar"
                     title="Hide sidebar"
                   >
-                    <PanelLeftClose className="w-3.5 h-3.5" />
+                    <PanelLeftClose className="w-4.5 h-4.5" strokeWidth={2.25} />
                   </button>
                 ) : null}
               </div>

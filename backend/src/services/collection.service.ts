@@ -59,27 +59,33 @@ export async function replaceCollectionArray(collection: string, items: { id: st
   if (!isArrayCollection(collection)) {
     throw new Error("replaceCollectionArray only for array collections");
   }
-  // Deduplicate items by id to prevent database unique constraint failures
-  const seenIds = new Set<string>();
-  const uniqueItems: typeof items = [];
+  // Last-wins dedupe by id (guards duplicate payloads from the client).
+  const byId = new Map<string, { id: string }>();
   for (const item of items) {
-    if (item && item.id && !seenIds.has(item.id)) {
-      seenIds.add(item.id);
-      uniqueItems.push(item);
-    }
+    if (!item || typeof item.id !== "string") continue;
+    const id = item.id.trim();
+    if (!id) continue;
+    byId.set(id, { ...item, id });
   }
+  const uniqueItems = [...byId.values()];
 
-  await prisma.$transaction(async (tx) => {
-    await tx.appJsonRow.deleteMany({ where: { collection } });
-    if (uniqueItems.length === 0) return;
-    await tx.appJsonRow.createMany({
-      data: uniqueItems.map((item) => ({
-        collection,
-        entityId: item.id,
-        payload: item as object,
-      })),
-    });
-  });
+  await prisma.$transaction(
+    async (tx) => {
+      // Serialize concurrent snapshot replaces for the same collection (delete+insert race).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appJsonRow:${collection}`}))`;
+      await tx.appJsonRow.deleteMany({ where: { collection } });
+      if (uniqueItems.length === 0) return;
+      await tx.appJsonRow.createMany({
+        data: uniqueItems.map((item) => ({
+          collection,
+          entityId: item.id,
+          payload: item as object,
+        })),
+        skipDuplicates: true,
+      });
+    },
+    { timeout: 30_000 }
+  );
 }
 
 export async function upsertSingleton(collection: string, payload: unknown): Promise<void> {
