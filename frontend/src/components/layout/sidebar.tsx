@@ -214,13 +214,20 @@ export function Sidebar() {
 
   const brandHeader = (
     <div className="flex items-center gap-3 min-w-0">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sidebar-active)] shadow-md shadow-black/25 ring-1 ring-white/15">
+      <div
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1",
+          companyLogoSrc
+            ? "bg-transparent ring-white/20"
+            : "bg-[var(--sidebar-active)] shadow-md shadow-black/25 ring-white/15"
+        )}
+      >
         {companyLogoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={companyLogoSrc}
             alt={businessName}
-            className="h-full w-full rounded-xl object-cover"
+            className="h-full w-full rounded-xl object-contain"
           />
         ) : (
           <CarFront

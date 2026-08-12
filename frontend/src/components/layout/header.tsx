@@ -115,13 +115,17 @@ export function Header() {
         href="/dashboard"
         className="md:hidden max-md:[grid-area:hdr_logo] flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary shrink-0">
+        <div
+          className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg shrink-0 ${
+            companyLogoSrc ? "bg-transparent" : "bg-primary"
+          }`}
+        >
           {companyLogoSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={companyLogoSrc}
               alt={businessName}
-              className="h-full w-full rounded-lg object-cover"
+              className="h-full w-full rounded-lg object-contain"
             />
           ) : (
             <Wrench className="w-[1.125rem] h-[1.125rem] sm:w-5 sm:h-5 text-primary-foreground" />
