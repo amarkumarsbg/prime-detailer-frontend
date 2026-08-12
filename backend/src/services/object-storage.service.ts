@@ -92,3 +92,21 @@ export async function persistJobInspectionPhoto(opts: {
   }
   return writeLocalUpload(segments, filename, opts.buffer);
 }
+
+/**
+ * Business/company logo for app branding.
+ */
+export async function persistBusinessLogoFile(opts: {
+  buffer: Buffer;
+  mimeType: string;
+  uploadedBy: string;
+}): Promise<string> {
+  const ext = avatarExtensionForMime(opts.mimeType);
+  const safeBy = opts.uploadedBy.replace(/[^\w-]/g, "_").slice(0, 80);
+  const filename = `logo-${safeBy}-${Date.now()}${ext}`;
+  const key = `avatars/branding/${filename}`;
+  if (isObjectStorageConfigured()) {
+    return putPublicObject(key, opts.buffer, opts.mimeType);
+  }
+  return writeLocalUpload(["avatars", "branding"], filename, opts.buffer);
+}

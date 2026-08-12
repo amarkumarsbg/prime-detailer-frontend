@@ -1,7 +1,7 @@
 /**
  * One-time AWS S3 setup for Prime Detailers:
  * 1. Turns OFF bucket-level Block Public Access (all four switches).
- * 2. Sets a bucket policy allowing anonymous s3:GetObject under avatars/* and job-cards/*.
+ * 2. Sets a bucket policy allowing anonymous s3:GetObject under avatars/*, job-cards/*, and branding/*.
  *
  * Run from backend/:   npm run s3:setup-aws-public-read
  *
@@ -44,13 +44,14 @@ function bucketPolicyJson(bucket: string): string {
       Version: "2012-10-17",
       Statement: [
         {
-          Sid: "PrimeDetailersPublicReadAvatarsAndJobCards",
+          Sid: "PrimeDetailersPublicReadAssets",
           Effect: "Allow",
           Principal: "*",
           Action: "s3:GetObject",
           Resource: [
             `arn:aws:s3:::${bucket}/avatars/*`,
             `arn:aws:s3:::${bucket}/job-cards/*`,
+            `arn:aws:s3:::${bucket}/branding/*`,
           ],
         },
       ],
@@ -142,7 +143,7 @@ Continuing to step 2 (bucket policy). If this fails too, add s3:PutBucketPolicy 
     }
   }
 
-  console.log("\n2) Applying bucket policy (public GetObject on avatars/*, job-cards/*)…");
+  console.log("\n2) Applying bucket policy (public GetObject on avatars/*, job-cards/*, branding/*)…");
   await client.send(
     new PutBucketPolicyCommand({
       Bucket: bucket,

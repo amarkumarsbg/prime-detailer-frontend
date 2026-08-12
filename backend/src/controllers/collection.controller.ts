@@ -13,6 +13,7 @@ import {
   deleteCollectionItem,
   replaceCollectionArray,
 } from "../services/collection.service.js";
+import { persistBusinessLogoFile } from "../services/object-storage.service.js";
 
 function forbidden(res: Response, message: string) {
   res.status(403).json({ data: null, error: { message } });
@@ -121,6 +122,28 @@ export async function deleteCollectionRow(req: Request, res: Response, next: Nex
       return;
     }
     res.json({ data: { ok: true }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function postAppSettingsLogo(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const file = req.file;
+    if (!file?.buffer) {
+      res.status(400).json({ data: null, error: { message: "No image file provided." } });
+      return;
+    }
+    const url = await persistBusinessLogoFile({
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+      uploadedBy: req.auth.id,
+    });
+    res.json({ data: { url }, error: null });
   } catch (e) {
     next(e);
   }

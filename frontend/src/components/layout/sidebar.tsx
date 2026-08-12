@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -200,8 +201,10 @@ export function Sidebar() {
   const router = useRouter();
   const { mobileOpen, setMobileOpen } = useSidebarStore();
   const businessName = useSettingsStore((s) => s.businessName);
+  const businessLogo = useSettingsStore((s) => s.businessLogo);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const companyLogoSrc = resolveUploadsPublicUrl(businessLogo);
 
   const handleMobileLogout = () => {
     logout();
@@ -212,11 +215,20 @@ export function Sidebar() {
   const brandHeader = (
     <div className="flex items-center gap-3 min-w-0">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sidebar-active)] shadow-md shadow-black/25 ring-1 ring-white/15">
-        <CarFront
-          className="h-[22px] w-[22px] text-[var(--sidebar-active-foreground)]"
-          strokeWidth={1.65}
-          aria-hidden
-        />
+        {companyLogoSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={companyLogoSrc}
+            alt={businessName}
+            className="h-full w-full rounded-xl object-cover"
+          />
+        ) : (
+          <CarFront
+            className="h-[22px] w-[22px] text-[var(--sidebar-active-foreground)]"
+            strokeWidth={1.65}
+            aria-hidden
+          />
+        )}
       </div>
       <div className="overflow-hidden min-w-0">
         <h1 className="text-base font-bold text-[var(--sidebar-accent-foreground)] leading-tight truncate">

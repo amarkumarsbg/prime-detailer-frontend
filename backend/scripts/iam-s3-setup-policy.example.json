@@ -18,7 +18,8 @@
       "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
       "Resource": [
         "arn:aws:s3:::REPLACE_WITH_YOUR_BUCKET_NAME/avatars/*",
-        "arn:aws:s3:::REPLACE_WITH_YOUR_BUCKET_NAME/job-cards/*"
+        "arn:aws:s3:::REPLACE_WITH_YOUR_BUCKET_NAME/job-cards/*",
+        "arn:aws:s3:::REPLACE_WITH_YOUR_BUCKET_NAME/branding/*"
       ]
     },
     {
@@ -28,7 +29,7 @@
       "Resource": "arn:aws:s3:::REPLACE_WITH_YOUR_BUCKET_NAME",
       "Condition": {
         "StringLike": {
-          "s3:prefix": ["avatars/*", "job-cards/*"]
+          "s3:prefix": ["avatars/*", "job-cards/*", "branding/*"]
         }
       }
     }

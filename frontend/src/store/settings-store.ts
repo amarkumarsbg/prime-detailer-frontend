@@ -6,6 +6,7 @@ import { putSingletonDocument } from "@/lib/collection-sync";
 export interface SerializableAppSettings {
   gstRegistrationStatus: "REGISTERED" | "NOT_REGISTERED";
   businessName: string;
+  businessLogo: string;
   businessTagline: string;
   businessPhone: string;
   businessWhatsApp: string;
@@ -27,6 +28,7 @@ export interface SerializableAppSettings {
 export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
   gstRegistrationStatus: "REGISTERED",
   businessName: "Prime Detailers",
+  businessLogo: "",
   businessTagline: "Car Wash & Detailing Studio",
   businessPhone: "+91-80-4123-4567",
   businessWhatsApp: "+91-80-4123-4567",
@@ -49,6 +51,7 @@ function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings 
   return {
     gstRegistrationStatus: s.gstRegistrationStatus,
     businessName: s.businessName,
+    businessLogo: s.businessLogo,
     businessTagline: s.businessTagline,
     businessPhone: s.businessPhone,
     businessWhatsApp: s.businessWhatsApp,
@@ -91,6 +94,7 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
   assignStr(
     "gstRegistrationStatus",
     "businessName",
+    "businessLogo",
     "businessTagline",
     "businessPhone",
     "businessWhatsApp",
@@ -124,6 +128,7 @@ interface SettingsState extends SerializableAppSettings {
         SerializableAppSettings,
         | "gstRegistrationStatus"
         | "businessName"
+        | "businessLogo"
         | "businessTagline"
         | "businessPhone"
         | "businessWhatsApp"

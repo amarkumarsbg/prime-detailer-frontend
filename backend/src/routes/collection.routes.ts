@@ -6,11 +6,15 @@ import {
   postSnapshot,
   putCollectionItem,
   deleteCollectionRow,
+  postAppSettingsLogo,
 } from "../controllers/collection.controller.js";
+import { logoUploadHandler } from "../middleware/logo-upload.js";
 
 export const collectionRouter = Router();
 
 collectionRouter.use(requireAuth);
+
+collectionRouter.post("/appSettings/logo", logoUploadHandler, postAppSettingsLogo);
 
 const COLLECTION_PERMISSION_MAP: Record<string, string> = {
   jobCards: "JOB_CARDS",
