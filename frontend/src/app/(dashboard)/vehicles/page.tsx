@@ -301,7 +301,12 @@ export default function VehiclesPage() {
                     Export
                   </TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent
+                  align="start"
+                  side="bottom"
+                  sideOffset={4}
+                  className="min-w-0 w-[var(--radix-popper-anchor-width)]"
+                >
                   <DropdownMenuItem disabled={exporting} onClick={() => void handleExport("excel")}>
                     Excel
                   </DropdownMenuItem>
