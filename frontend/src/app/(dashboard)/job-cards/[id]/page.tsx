@@ -242,6 +242,7 @@ export default function JobCardDetailPage() {
   const getUsedIncludedServiceCount = useMembershipStore((s) => s.getUsedIncludedServiceCount);
   const getRemainingIncludedServiceCount = useMembershipStore((s) => s.getRemainingIncludedServiceCount);
   const redeemMembershipServiceUsage = useMembershipStore((s) => s.redeemMembershipServiceUsage);
+  const rollbackMembershipServiceUsage = useMembershipStore((s) => s.rollbackMembershipServiceUsage);
 
   /** Advance UI: premium programs and/or any catalog line marked high-end (not only the PPF wizard step). */
   const jobQualifiesForHighEndAdvance = useMemo(() => {
@@ -799,34 +800,118 @@ export default function JobCardDetailPage() {
     return m;
   }, [jobCard, getActiveMembership, membershipPackages, getRemainingIncludedServiceCount, getUsedIncludedServiceCount]);
 
+  const redeemMembershipForCompletion = (items: ServiceItem[]): { ok: true } | { ok: false } => {
+    if (!jobCard || items.length === 0) return { ok: true };
+    const sub = getActiveMembership(jobCard.customerId, jobCard.vehicleId);
+    const pkg = sub ? membershipPackages.find((p) => p.id === sub.packageId) : undefined;
+    if (!sub || !pkg) return { ok: true };
+
+    const demandByCatalogId = new Map<string, { name: string; quantity: number }>();
+    for (const item of items) {
+      const isMembershipBenefit = item.price <= 0;
+      if (!isMembershipBenefit) continue;
+      if (!pkg.includedServiceIds.includes(item.serviceCatalogId)) continue;
+      const prev = demandByCatalogId.get(item.serviceCatalogId);
+      if (prev) {
+        demandByCatalogId.set(item.serviceCatalogId, {
+          ...prev,
+          quantity: prev.quantity + 1,
+        });
+      } else {
+        demandByCatalogId.set(item.serviceCatalogId, { name: item.name, quantity: 1 });
+      }
+    }
+    if (demandByCatalogId.size === 0) return { ok: true };
+
+    for (const [serviceCatalogId, demand] of demandByCatalogId) {
+      const remaining = getRemainingIncludedServiceCount(sub, pkg, serviceCatalogId);
+      if (remaining < demand.quantity) {
+        toast.error(
+          `No remaining membership usage for ${demand.name} (${remaining} left, ${demand.quantity} needed).`
+        );
+        return { ok: false };
+      }
+    }
+
+    for (const [serviceCatalogId, demand] of demandByCatalogId) {
+      const redeemed = redeemMembershipServiceUsage({
+        subscriptionId: sub.id,
+        serviceCatalogId,
+        serviceName: demand.name,
+        jobCardId: jobCard.id,
+        quantity: demand.quantity,
+      });
+      if (!redeemed.ok) {
+        toast.error(redeemed.error);
+        return { ok: false };
+      }
+      pushActivityLog({
+        action: "UPDATED",
+        entityType: "JOB_CARD",
+        entityId: jobCard.id,
+        entityLabel: jobCard.jobNumber,
+        details: `Membership redeemed: ${demand.name} x${demand.quantity} (remaining ${redeemed.remaining})`,
+      });
+    }
+    return { ok: true };
+  };
+
+  const rollbackMembershipForUncompletion = (items: ServiceItem[]): { ok: true } | { ok: false } => {
+    if (!jobCard || items.length === 0) return { ok: true };
+    const sub = getActiveMembership(jobCard.customerId, jobCard.vehicleId);
+    const pkg = sub ? membershipPackages.find((p) => p.id === sub.packageId) : undefined;
+    if (!sub || !pkg) return { ok: true };
+
+    const demandByCatalogId = new Map<string, { name: string; quantity: number }>();
+    for (const item of items) {
+      const isMembershipBenefit = item.price <= 0;
+      if (!isMembershipBenefit) continue;
+      if (!pkg.includedServiceIds.includes(item.serviceCatalogId)) continue;
+      const prev = demandByCatalogId.get(item.serviceCatalogId);
+      if (prev) {
+        demandByCatalogId.set(item.serviceCatalogId, {
+          ...prev,
+          quantity: prev.quantity + 1,
+        });
+      } else {
+        demandByCatalogId.set(item.serviceCatalogId, { name: item.name, quantity: 1 });
+      }
+    }
+    if (demandByCatalogId.size === 0) return { ok: true };
+
+    for (const [serviceCatalogId, demand] of demandByCatalogId) {
+      const rolledBack = rollbackMembershipServiceUsage({
+        subscriptionId: sub.id,
+        serviceCatalogId,
+        jobCardId: jobCard.id,
+        quantity: demand.quantity,
+      });
+      if (!rolledBack.ok) {
+        toast.error(`Could not rollback membership usage for ${demand.name}: ${rolledBack.error}`);
+        return { ok: false };
+      }
+      pushActivityLog({
+        action: "UPDATED",
+        entityType: "JOB_CARD",
+        entityId: jobCard.id,
+        entityLabel: jobCard.jobNumber,
+        details: `Membership rollback: ${demand.name} x${demand.quantity} (remaining ${rolledBack.remaining})`,
+      });
+    }
+    return { ok: true };
+  };
+
   const toggleServiceComplete = (serviceId: string) => {
     if (!jobCard) return;
     const target = serviceItems.find((s) => s.id === serviceId);
     if (!target) return;
     const markingComplete = !target.isCompleted;
     if (markingComplete) {
-      const sub = getActiveMembership(jobCard.customerId, jobCard.vehicleId);
-      const pkg = sub ? membershipPackages.find((p) => p.id === sub.packageId) : undefined;
-      const isMembershipBenefit = target.price <= 0;
-      if (sub && pkg && isMembershipBenefit && pkg.includedServiceIds.includes(target.serviceCatalogId)) {
-        const remaining = getRemainingIncludedServiceCount(sub, pkg, target.serviceCatalogId);
-        if (remaining <= 0) {
-          toast.error(`No remaining membership usage for ${target.name}.`);
-          return;
-        }
-        const redeemed = redeemMembershipServiceUsage({
-          subscriptionId: sub.id,
-          serviceCatalogId: target.serviceCatalogId,
-          serviceName: target.name,
-          jobCardId: jobCard.id,
-          quantity: 1,
-        });
-        if (!redeemed.ok) {
-          toast.error(redeemed.error);
-          return;
-        }
-        toast.success(`${target.name} marked used via membership. Remaining: ${redeemed.remaining}`);
-      }
+      const redemption = redeemMembershipForCompletion([target]);
+      if (!redemption.ok) return;
+    } else {
+      const rollback = rollbackMembershipForUncompletion([target]);
+      if (!rollback.ok) return;
     }
 
     const nowIso = new Date().toISOString();
@@ -874,6 +959,15 @@ export default function JobCardDetailPage() {
 
   const setAllServicesComplete = (completed: boolean) => {
     if (!jobCard || serviceItems.length === 0) return;
+    if (completed) {
+      const toComplete = serviceItems.filter((s) => !s.isCompleted);
+      const redemption = redeemMembershipForCompletion(toComplete);
+      if (!redemption.ok) return;
+    } else {
+      const toUncomplete = serviceItems.filter((s) => s.isCompleted);
+      const rollback = rollbackMembershipForUncompletion(toUncomplete);
+      if (!rollback.ok) return;
+    }
     const next = serviceItems.map((s) => ({ ...s, isCompleted: completed }));
     setServiceItems(next);
     updateJobCard(jobCard.id, {

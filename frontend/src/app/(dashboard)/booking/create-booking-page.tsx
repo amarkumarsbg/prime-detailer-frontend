@@ -760,7 +760,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setCustomerAddress(found.address || "");
     const owned = vehicles.filter((v) => v.customerId === found.id);
     if (owned.length > 0) {
-      const v = [...owned].sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber))[0];
+      const pickupVehicleReg = sourcePickupId
+        ? normalizeRegistrationNumber(sanitizeVehicleRegistrationInput(vehicleNumber))
+        : "";
+      const pickupVehicleMatch = pickupVehicleReg
+        ? owned.find(
+            (v) => normalizeRegistrationNumber(v.registrationNumber) === pickupVehicleReg
+          )
+        : undefined;
+      const v =
+        pickupVehicleMatch ??
+        [...owned].sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber))[0];
       setSelectedVehicleId(v.id);
       setAddingNewVehicle(false);
       setVehicleNumber(v.registrationNumber);
@@ -780,6 +790,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     brandNames,
     vehicles,
     isJobCard,
+    sourcePickupId,
+    vehicleNumber,
     openCreditDialogIfCustomerHasDues,
   ]);
 

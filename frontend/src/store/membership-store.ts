@@ -136,6 +136,12 @@ interface MembershipState {
     jobCardId?: string;
     quantity?: number;
   }) => { ok: true; remaining: number } | { ok: false; error: string; remaining: number };
+  rollbackMembershipServiceUsage: (input: {
+    subscriptionId: string;
+    serviceCatalogId: string;
+    jobCardId?: string;
+    quantity?: number;
+  }) => { ok: true; remaining: number } | { ok: false; error: string; remaining: number };
   getUsedIncludedServiceCount: (sub: CustomerMembership, serviceCatalogId: string) => number;
   getRemainingIncludedServiceCount: (
     sub: CustomerMembership,
@@ -321,6 +327,73 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
     });
 
     return { ok: true, remaining: remaining - quantity };
+  },
+
+  rollbackMembershipServiceUsage: (input) => {
+    const quantity = toPositiveInt(input.quantity, 1);
+    const sub = get().subscriptions.find((s) => s.id === input.subscriptionId);
+    if (!sub) return { ok: false, error: "Membership subscription not found", remaining: 0 };
+    const pkg = get().packages.find((p) => p.id === sub.packageId);
+    if (!pkg || !pkg.includedServiceIds.includes(input.serviceCatalogId)) {
+      return { ok: false, error: "Service is not included in this membership", remaining: 0 };
+    }
+
+    const history = sub.usageHistory ?? [];
+    const matchesRow = (u: MembershipServiceUsage) => {
+      if (u.serviceCatalogId !== input.serviceCatalogId) return false;
+      if (input.jobCardId && u.jobCardId !== input.jobCardId) return false;
+      return true;
+    };
+
+    let available = 0;
+    for (const u of history) {
+      if (!matchesRow(u)) continue;
+      available += usageQuantity(u);
+    }
+    const included = membershipIncludedQuantity(pkg, input.serviceCatalogId);
+    const used = usedMembershipCounts(sub).get(input.serviceCatalogId) ?? 0;
+    const remaining = Math.max(0, included - used);
+
+    if (available < quantity) {
+      return {
+        ok: false,
+        error: `No usage available to rollback (${available} found, ${quantity} needed)`,
+        remaining,
+      };
+    }
+
+    const nextHistory: MembershipServiceUsage[] = history.map((u) => ({
+      ...u,
+      quantity: usageQuantity(u),
+    }));
+    let toRollback = quantity;
+    for (let i = nextHistory.length - 1; i >= 0 && toRollback > 0; i -= 1) {
+      const u = nextHistory[i];
+      if (!matchesRow(u)) continue;
+      const qty = usageQuantity(u);
+      if (qty <= toRollback) {
+        nextHistory.splice(i, 1);
+        toRollback -= qty;
+      } else {
+        nextHistory[i] = { ...u, quantity: qty - toRollback };
+        toRollback = 0;
+      }
+    }
+
+    set((s) => {
+      const subscriptions = s.subscriptions.map((row) =>
+        row.id === input.subscriptionId
+          ? {
+              ...row,
+              usageHistory: nextHistory,
+            }
+          : row
+      );
+      persistMembership(s.packages, subscriptions);
+      return { subscriptions };
+    });
+
+    return { ok: true, remaining: Math.min(included, remaining + quantity) };
   },
 
   getUsedIncludedServiceCount: (sub, serviceCatalogId) => {
