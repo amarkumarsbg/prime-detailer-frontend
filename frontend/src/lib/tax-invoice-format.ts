@@ -173,6 +173,11 @@ export function buildTaxInvoicePrintHtml(
   const displayGrandTotal = isGstRegistered
     ? invoice.grandTotal
     : Math.max(0, invoice.grandTotal - invoice.taxAmount);
+  const displayTotalPaid = Math.max(0, Math.min(totalPaid, displayGrandTotal));
+  const displayBalanceDue = Math.max(
+    0,
+    Math.round((displayGrandTotal - displayTotalPaid) * 100) / 100
+  );
   const { cgst, sgst } = splitCgstSgst(displayTaxAmount);
 
   // Generate UPI QR Code SVG if a UPI ID is configured.
@@ -183,8 +188,8 @@ export function buildTaxInvoicePrintHtml(
   if (isUpiConfigured) {
     try {
       let upiContent = `upi://pay?pa=${encodeURIComponent(rawUpi)}&pn=${encodeURIComponent(business.businessName.trim())}&cu=INR`;
-      if (remainingBalance > 0) {
-        upiContent += `&am=${Math.round(remainingBalance).toFixed(2)}`;
+      if (displayBalanceDue > 0) {
+        upiContent += `&am=${displayBalanceDue.toFixed(2)}`;
       }
       const qr = new QRCode({
         content: upiContent,
@@ -522,8 +527,8 @@ table.inv .b { font-weight: 700; color: #171717; }
         ${isGstRegistered ? `<div class="tot-row cgst"><span>CGST (${gstHalfPercentLabel(displayTaxRate)}):</span><span>${formatCurrency(cgst)}</span></div>` : ""}
         ${isGstRegistered ? `<div class="tot-row sgst"><span>SGST (${gstHalfPercentLabel(displayTaxRate)}):</span><span>${formatCurrency(sgst)}</span></div>` : ""}
         <div class="tot-row grand"><span>GRAND TOTAL:</span><span>${formatCurrency(displayGrandTotal)}</span></div>
-        ${totalPaid > 0 && remainingBalance > 0 ? `<div class="tot-row"><span>Advance Paid:</span><span>${formatCurrency(totalPaid)}</span></div>` : ""}
-        <div class="tot-row balance"><span>Balance Due:</span><span>${formatCurrency(Math.max(0, displayGrandTotal - totalPaid))}</span></div>
+        ${displayTotalPaid > 0 && displayBalanceDue > 0.01 ? `<div class="tot-row"><span>Advance Paid:</span><span>${formatCurrency(displayTotalPaid)}</span></div>` : ""}
+        <div class="tot-row balance"><span>Balance Due:</span><span>${formatCurrency(displayBalanceDue)}</span></div>
       </div>
 
       <div style="margin-top: 10px; padding: 8px 10px; border: 1px solid #d4d4d4; border-radius: 4px; background: #fafafa; font-size: 9px;">
