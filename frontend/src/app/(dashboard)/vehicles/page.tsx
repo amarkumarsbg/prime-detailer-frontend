@@ -1,10 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { useVehicleStore } from "@/store/vehicle-store";
+import type { Vehicle, FuelType, VehicleSegment } from "@/types";
+import { Plus, User, Upload, Download, ChevronDown, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import {
+  findVehicleByNormalizedReg,
+  INDIAN_VEHICLE_REG_ERROR_SHORT,
+  isValidIndianVehicleRegistration,
+} from "@/lib/vehicle-registration";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ImportVehiclesDialog } from "@/components/vehicles/import-vehicles-dialog";
+import {
+  buildVehicleExportRows,
+  downloadVehiclesCsv,
+  downloadVehiclesExcel,
+  downloadVehiclesPdf,
+} from "@/lib/vehicle-export";
 import { useCustomerStore } from "@/store/customer-store";
+import { useVehicleStore } from "@/store/vehicle-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
@@ -30,15 +49,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Vehicle, FuelType, VehicleSegment } from "@/types";
-import { Plus, User } from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import {
-  findVehicleByNormalizedReg,
-  INDIAN_VEHICLE_REG_ERROR_SHORT,
-  isValidIndianVehicleRegistration,
-} from "@/lib/vehicle-registration";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
 
 const fuelTypes: FuelType[] = ["PETROL", "DIESEL", "CNG", "ELECTRIC", "HYBRID"];
 
@@ -80,8 +93,11 @@ export default function VehiclesPage() {
   const customers = useCustomerStore((s) => s.customers);
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const fetchVehicles = useVehicleStore((s) => s.fetchVehicles);
   const { getBrandNames, getModels } = useVehicleCatalogStore();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const {
     register,
@@ -217,18 +233,90 @@ export default function VehiclesPage() {
     },
   ];
 
+  const handleExport = async (format: "excel" | "csv" | "pdf") => {
+    setExporting(true);
+    try {
+      await fetchVehicles();
+      const latestVehicles = useVehicleStore.getState().vehicles;
+      const latestCustomers = useCustomerStore.getState().customers;
+      const rows = buildVehicleExportRows(latestVehicles, latestCustomers);
+      if (rows.length === 0) {
+        toast.error("No vehicles to export");
+        return;
+      }
+      if (format === "excel") {
+        await downloadVehiclesExcel(rows);
+        toast.success(`Exported ${rows.length} vehicle${rows.length === 1 ? "" : "s"} to Excel`);
+      } else if (format === "csv") {
+        downloadVehiclesCsv(rows);
+        toast.success(`Exported ${rows.length} vehicle${rows.length === 1 ? "" : "s"} to CSV`);
+      } else {
+        await downloadVehiclesPdf(rows);
+        toast.success(`Exported ${rows.length} vehicle${rows.length === 1 ? "" : "s"} to PDF`);
+      }
+    } catch (e) {
+      toast.error("Could not export vehicles", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Vehicles"
         inlineActionsOnMobile
         actions={
-          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Add Vehicle
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 whitespace-nowrap"
+                  disabled={exporting}
+                >
+                  {exporting ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-1.5 h-4 w-4" />
+                  )}
+                  Export
+                  <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={exporting} onClick={() => void handleExport("excel")}>
+                  Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={exporting} onClick={() => void handleExport("csv")}>
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={exporting} onClick={() => void handleExport("pdf")}>
+                  PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 whitespace-nowrap"
+              onClick={() => setImportDialogOpen(true)}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              Import
+            </Button>
+            <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add Vehicle
+            </Button>
+          </div>
         }
       />
+
+      <ImportVehiclesDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
 
       <DataTable<Vehicle & Record<string, unknown>>
         data={tableData}

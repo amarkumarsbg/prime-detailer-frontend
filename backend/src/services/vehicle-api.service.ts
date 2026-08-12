@@ -19,6 +19,10 @@ export function toApiVehicle(v: VehicleRow) {
   };
 }
 
+function registrationDuplicateKey(reg: string): string {
+  return reg.trim().toUpperCase().replace(/[\s-]/g, "");
+}
+
 export async function listVehiclesApi() {
   const rows = await prisma.vehicle.findMany({ orderBy: { id: "asc" } });
   return rows.map(toApiVehicle);
@@ -140,4 +144,134 @@ export async function replaceAllVehiclesApi(items: VehicleUpsertInput[]): Promis
       });
     }
   });
+}
+
+export type BulkVehicleInput = {
+  registrationNumber: string;
+  customerId: string;
+  customerName: string;
+  make: string;
+  model: string;
+  fuelType: VehicleRow["fuelType"];
+  segment: VehicleRow["segment"];
+  year: number;
+  color: string;
+  variant?: string;
+  notes?: string;
+};
+
+export type BulkVehicleSkipped = {
+  index: number;
+  registrationNumber: string;
+  reason: "DUPLICATE" | "INVALID" | "DUPLICATE_IN_BATCH" | "CUSTOMER_NOT_FOUND";
+  message: string;
+};
+
+/**
+ * Creates many vehicles in one pass. Skips duplicate registrations (compact key)
+ * and missing customers. Does not replace existing rows.
+ */
+export async function createVehiclesBulk(inputs: BulkVehicleInput[]): Promise<{
+  created: ReturnType<typeof toApiVehicle>[];
+  skipped: BulkVehicleSkipped[];
+}> {
+  const [existingVehicles, customers] = await Promise.all([
+    prisma.vehicle.findMany({ select: { registrationNumber: true } }),
+    prisma.customer.findMany({ select: { id: true } }),
+  ]);
+
+  const usedRegs = new Set(
+    existingVehicles.map((v) => registrationDuplicateKey(v.registrationNumber)).filter(Boolean)
+  );
+  const customerIds = new Set(customers.map((c) => c.id));
+
+  const skipped: BulkVehicleSkipped[] = [];
+  const toCreate: Array<{
+    id: string;
+    customerId: string;
+    customerName: string;
+    registrationNumber: string;
+    make: string;
+    model: string;
+    segment: VehicleRow["segment"];
+    variant: string | null;
+    fuelType: VehicleRow["fuelType"];
+    color: string;
+    year: number;
+    notes: string | null;
+  }> = [];
+
+  const stamp = Date.now();
+
+  inputs.forEach((input, index) => {
+    const registrationNumber = String(input.registrationNumber ?? "").trim().toUpperCase();
+    const make = String(input.make ?? "").trim();
+    const model = String(input.model ?? "").trim();
+    const customerId = String(input.customerId ?? "").trim();
+    const customerName = String(input.customerName ?? "").trim();
+    const regKey = registrationDuplicateKey(registrationNumber);
+
+    if (!registrationNumber || !make || !model || !customerId || !customerName) {
+      skipped.push({
+        index,
+        registrationNumber,
+        reason: "INVALID",
+        message: "Registration, customer, make, and model are required",
+      });
+      return;
+    }
+
+    if (!customerIds.has(customerId)) {
+      skipped.push({
+        index,
+        registrationNumber,
+        reason: "CUSTOMER_NOT_FOUND",
+        message: "Customer not found",
+      });
+      return;
+    }
+
+    if (usedRegs.has(regKey)) {
+      const alreadyInBatch = toCreate.some(
+        (c) => registrationDuplicateKey(c.registrationNumber) === regKey
+      );
+      skipped.push({
+        index,
+        registrationNumber,
+        reason: alreadyInBatch ? "DUPLICATE_IN_BATCH" : "DUPLICATE",
+        message: alreadyInBatch
+          ? "Duplicate registration in this import batch"
+          : "Registration already in use",
+      });
+      return;
+    }
+
+    usedRegs.add(regKey);
+    toCreate.push({
+      id: `veh-${stamp}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+      customerId,
+      customerName,
+      registrationNumber,
+      make,
+      model,
+      segment: input.segment,
+      variant: input.variant?.trim() ? input.variant.trim() : null,
+      fuelType: input.fuelType,
+      color: input.color?.trim() ? input.color.trim() : "—",
+      year: input.year,
+      notes: input.notes?.trim() ? input.notes.trim() : null,
+    });
+  });
+
+  if (toCreate.length === 0) {
+    return { created: [], skipped };
+  }
+
+  await prisma.vehicle.createMany({ data: toCreate });
+  const ids = toCreate.map((c) => c.id);
+  const rows = await prisma.vehicle.findMany({
+    where: { id: { in: ids } },
+  });
+
+  return { created: rows.map(toApiVehicle), skipped };
 }

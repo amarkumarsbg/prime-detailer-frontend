@@ -15,67 +15,72 @@ import {
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { useCustomerStore } from "@/store/customer-store";
-import { normalizeImportPhone } from "@/lib/customer-import/normalize";
-import { parseCustomerImportFile } from "@/lib/customer-import/parse-tabular";
-import { downloadCustomerImportTemplate } from "@/lib/customer-import/template";
+import { useVehicleStore } from "@/store/vehicle-store";
+import { parseVehicleImportFile } from "@/lib/vehicle-import/parse-tabular";
+import { downloadVehicleImportTemplate } from "@/lib/vehicle-import/template";
+import { mappingHasRequiredFields, mappingHasCustomerField } from "@/lib/vehicle-import/normalize";
 import {
   applyColumnMapping,
   summarizeImportRows,
   validateImportRows,
-} from "@/lib/customer-import/validate-rows";
+} from "@/lib/vehicle-import/validate-rows";
+import { registrationDuplicateKey } from "@/lib/vehicle-registration";
 import type {
-  CustomerImportParseResult,
-  CustomerImportRowStatus,
-  ValidatedCustomerImportRow,
-} from "@/lib/customer-import/types";
+  VehicleImportParseResult,
+  VehicleImportRowStatus,
+  ValidatedVehicleImportRow,
+} from "@/lib/vehicle-import/types";
 import { cn } from "@/lib/utils";
 
 type Step = "upload" | "preview";
-type StatusFilter = "all" | CustomerImportRowStatus;
+type StatusFilter = "all" | VehicleImportRowStatus;
 
-const STATUS_LABEL: Record<CustomerImportRowStatus, string> = {
+const STATUS_LABEL: Record<VehicleImportRowStatus, string> = {
   ready: "Ready",
   invalid: "Invalid",
+  unmatched_customer: "Unmatched Customer",
   already_exists: "Already Exists",
-  duplicate_in_file: "Duplicate in File",
+  duplicate_in_file: "Dup in File",
 };
 
 const STATUS_VARIANT: Record<
-  CustomerImportRowStatus,
+  VehicleImportRowStatus,
   "success" | "destructive" | "warning" | "secondary"
 > = {
   ready: "success",
   invalid: "destructive",
+  unmatched_customer: "warning",
   already_exists: "warning",
   duplicate_in_file: "secondary",
 };
 
-interface ImportCustomersDialogProps {
+interface ImportVehiclesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDialogProps) {
+export function ImportVehiclesDialog({ open, onOpenChange }: ImportVehiclesDialogProps) {
   const customers = useCustomerStore((s) => s.customers);
-  const importCustomers = useCustomerStore((s) => s.importCustomers);
+  const vehicles = useVehicleStore((s) => s.vehicles);
+  const importVehicles = useVehicleStore((s) => s.importVehicles);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>("upload");
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [parseResult, setParseResult] = useState<CustomerImportParseResult | null>(null);
-  const [validated, setValidated] = useState<ValidatedCustomerImportRow[]>([]);
+  const [parseResult, setParseResult] = useState<VehicleImportParseResult | null>(null);
+  const [validated, setValidated] = useState<ValidatedVehicleImportRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const existingPhoneKeys = useMemo(() => {
+  const existingRegKeys = useMemo(() => {
     const set = new Set<string>();
-    for (const c of customers) {
-      const key = normalizeImportPhone(c.phone);
-      if (key.length === 10) set.add(key);
+    for (const v of vehicles) {
+      const key = registrationDuplicateKey(v.registrationNumber);
+      if (key) set.add(key);
     }
     return set;
-  }, [customers]);
+  }, [vehicles]);
 
   const reset = useCallback(() => {
     setStep("upload");
@@ -97,23 +102,30 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
     if (!file) return;
     setParsing(true);
     try {
-      const result = await parseCustomerImportFile(file);
-      const hasName = result.mapping.some((m) => m.mappedTo === "name");
-      const hasPhone = result.mapping.some((m) => m.mappedTo === "phone");
-      if (!hasName || !hasPhone) {
-        toast.error("Could not find Name and Phone columns", {
-          description:
-            'Use headers like "Name" / "Customer Name" and "Phone" / "Mobile" / "Phone Number".',
+      const result = await parseVehicleImportFile(file);
+      if (!mappingHasRequiredFields(result.mapping)) {
+        const found = result.headers.filter(Boolean).join(", ") || "(none)";
+        toast.error("Could not find required columns", {
+          description: `Need Registration, Make, and Model. Found headers: ${found}`,
         });
         return;
       }
-      const parsed = applyColumnMapping(result.headers, result.rows, result.mapping);
-      if (parsed.length === 0) {
-        toast.error("No customer rows found in this file");
+      if (!mappingHasCustomerField(result.mapping)) {
+        toast.error("Missing Customer column", {
+          description:
+            'Add "Customer Phone" (or Customer Name / Customer ID) — vehicles must link to an existing customer. Example: Registration Number,Customer Phone,Make,Model',
+        });
         return;
       }
+
+      const parsed = applyColumnMapping(result.headers, result.rows, result.mapping);
+      if (parsed.length === 0) {
+        toast.error("No vehicle rows found in this file");
+        return;
+      }
+
       setParseResult(result);
-      setValidated(validateImportRows(parsed, existingPhoneKeys));
+      setValidated(validateImportRows(parsed, customers, existingRegKeys));
       setStatusFilter("all");
       setStep("preview");
     } catch (e) {
@@ -138,23 +150,30 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
     }
     setImporting(true);
     try {
-      const result = await importCustomers(
+      const result = await importVehicles(
         ready.map((r) => ({
-          name: r.name,
-          phone: r.phone,
-          email: r.email,
-          address: r.address,
+          registrationNumber: r.registrationNumber,
+          customerId: r.resolvedCustomerId!,
+          customerName: r.resolvedCustomerName!,
+          make: r.make.trim(),
+          model: r.model.trim(),
+          fuelType: r.resolvedFuelType!,
+          segment: r.resolvedSegment!,
+          year: r.resolvedYear!,
+          color: r.resolvedColor!,
+          variant: r.variant.trim() || undefined,
+          notes: r.notes.trim() || undefined,
         }))
       );
       toast.success(
-        `Imported ${result.createdCount} customer${result.createdCount === 1 ? "" : "s"}`,
+        `Imported ${result.createdCount} vehicle${result.createdCount === 1 ? "" : "s"}`,
         result.skippedCount > 0
           ? { description: `${result.skippedCount} row(s) skipped by the server.` }
           : undefined
       );
       handleOpenChange(false);
     } catch (e) {
-      toast.error("Could not import customers", {
+      toast.error("Could not import vehicles", {
         description:
           e instanceof Error
             ? e.message
@@ -169,15 +188,13 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         mobileVariant="fullscreen"
-        className={cn(
-          dialogMobileSheetContentClasses,
-          "max-h-[92vh] sm:max-w-3xl"
-        )}
+        className={cn(dialogMobileSheetContentClasses, "max-h-[92vh] sm:max-w-4xl")}
       >
         <DialogHeader className={dialogMobileSheetHeaderClasses}>
-          <DialogTitle>Import Customers</DialogTitle>
+          <DialogTitle>Import Vehicles</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Upload CSV, Excel (.xlsx), or PDF. Only Name and Phone are required.
+            Upload CSV, Excel (.xlsx), or PDF. Registration, Customer, Make, and Model are
+            required. PDF must be text-based — unclear rows are marked invalid.
           </p>
         </DialogHeader>
 
@@ -225,7 +242,7 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
+                  accept=".csv,.xlsx,.xls,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
                   className="hidden"
                   onChange={(e) => void handleFile(e.target.files?.[0])}
                 />
@@ -234,7 +251,7 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={downloadCustomerImportTemplate}
+                onClick={downloadVehicleImportTemplate}
               >
                 <Download className="mr-1.5 h-4 w-4" />
                 Download CSV template
@@ -258,6 +275,7 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
                     ["all", `All (${summary.total})`],
                     ["ready", `Ready (${summary.ready})`],
                     ["invalid", `Invalid (${summary.invalid})`],
+                    ["unmatched_customer", `Unmatched (${summary.unmatchedCustomer})`],
                     ["already_exists", `Already Exists (${summary.alreadyExists})`],
                     ["duplicate_in_file", `Dup in File (${summary.duplicateInFile})`],
                   ] as const
@@ -275,13 +293,16 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
               </div>
 
               <div className="overflow-x-auto rounded-md border">
-                <table className="w-full min-w-[640px] text-left text-sm">
+                <table className="w-full min-w-[900px] text-left text-sm">
                   <thead className="bg-muted/50 text-xs text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2 font-medium">#</th>
-                      <th className="px-3 py-2 font-medium">Name</th>
-                      <th className="px-3 py-2 font-medium">Phone</th>
-                      <th className="px-3 py-2 font-medium">Email</th>
+                      <th className="px-3 py-2 font-medium">Registration</th>
+                      <th className="px-3 py-2 font-medium">Customer</th>
+                      <th className="px-3 py-2 font-medium">Make</th>
+                      <th className="px-3 py-2 font-medium">Model</th>
+                      <th className="px-3 py-2 font-medium">Fuel</th>
+                      <th className="px-3 py-2 font-medium">Segment</th>
                       <th className="px-3 py-2 font-medium">Status</th>
                       <th className="px-3 py-2 font-medium">Message</th>
                     </tr>
@@ -289,22 +310,33 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
                   <tbody>
                     {filteredRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                        <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
                           No rows in this filter
                         </td>
                       </tr>
                     ) : (
                       filteredRows.map((row, index) => (
-                        <tr key={`${row.rowNumber}-${row.phoneKey}`} className="border-t">
+                        <tr key={`${row.rowNumber}-${row.regKey}`} className="border-t">
                           <td className="px-3 py-2 tabular-nums text-muted-foreground">
                             {index + 1}
                           </td>
-                          <td className="px-3 py-2 font-medium">{row.name || "—"}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{row.phone || "—"}</td>
-                          <td className="max-w-[180px] truncate px-3 py-2 text-muted-foreground">
-                            {row.email?.endsWith("@customers.placeholder")
-                              ? "—"
-                              : row.email || "—"}
+                          <td className="px-3 py-2 font-medium whitespace-nowrap">
+                            {row.registrationNumber || "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.resolvedCustomerName ||
+                              row.customerName ||
+                              row.customerPhone ||
+                              row.customerId ||
+                              "—"}
+                          </td>
+                          <td className="px-3 py-2">{row.make || "—"}</td>
+                          <td className="px-3 py-2">{row.model || "—"}</td>
+                          <td className="px-3 py-2">
+                            {row.resolvedFuelType || row.fuelType || "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.resolvedSegment || row.segment || "—"}
                           </td>
                           <td className="px-3 py-2">
                             <Badge variant={STATUS_VARIANT[row.status]}>
@@ -344,7 +376,7 @@ export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDia
                     Importing…
                   </>
                 ) : (
-                  `Import ${summary.ready} customer${summary.ready === 1 ? "" : "s"}`
+                  `Import ${summary.ready} vehicle${summary.ready === 1 ? "" : "s"}`
                 )}
               </Button>
             </>

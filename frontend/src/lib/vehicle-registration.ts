@@ -5,9 +5,14 @@ export function normalizeRegistrationNumber(reg: string): string {
   return reg.trim().toUpperCase().replace(/\s/g, "");
 }
 
+/** Compact key for import/export duplicate checks (ignores spaces and hyphens). */
+export function registrationDuplicateKey(reg: string): string {
+  return normalizeRegistrationNumber(reg).replace(/-/g, "");
+}
+
 export function findVehicleByNormalizedReg(vehicles: Vehicle[], registrationInput: string): Vehicle | undefined {
-  const key = normalizeRegistrationNumber(registrationInput);
-  return vehicles.find((v) => normalizeRegistrationNumber(v.registrationNumber) === key);
+  const key = registrationDuplicateKey(registrationInput);
+  return vehicles.find((v) => registrationDuplicateKey(v.registrationNumber) === key);
 }
 
 /** Short message for inline form errors. */

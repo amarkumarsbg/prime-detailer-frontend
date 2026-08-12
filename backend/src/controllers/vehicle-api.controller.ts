@@ -6,6 +6,7 @@ import {
   updateVehicleApi,
   deleteVehicleApi,
   replaceAllVehiclesApi,
+  createVehiclesBulk,
 } from "../services/vehicle-api.service.js";
 import { FuelType, VehicleSegment } from "@prisma/client";
 
@@ -44,6 +45,24 @@ const vehicleSchema = z.object({
 
 const patchVehicleSchema = vehicleSchema.partial().omit({ id: true });
 
+const bulkItemSchema = z.object({
+  registrationNumber: z.string().min(1),
+  customerId: z.string().min(1),
+  customerName: z.string().min(1),
+  make: z.string().min(1),
+  model: z.string().min(1),
+  fuelType: fuelEnum.default("PETROL"),
+  segment: segmentEnum.default("HATCHBACK"),
+  year: z.number().int().optional(),
+  color: z.string().optional(),
+  variant: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const bulkSchema = z.object({
+  vehicles: z.array(bulkItemSchema).min(1).max(5000),
+});
+
 export async function getVehicles(_req: Request, res: Response, next: NextFunction) {
   try {
     const vehicles = await listVehiclesApi();
@@ -62,6 +81,39 @@ export async function postVehicle(req: Request, res: Response, next: NextFunctio
       fuelType: body.fuelType as FuelType,
     });
     res.status(201).json({ data: { vehicle }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function postVehiclesBulk(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = bulkSchema.parse(req.body);
+    const yearDefault = new Date().getFullYear();
+    const result = await createVehiclesBulk(
+      body.vehicles.map((v) => ({
+        registrationNumber: v.registrationNumber,
+        customerId: v.customerId,
+        customerName: v.customerName,
+        make: v.make,
+        model: v.model,
+        fuelType: v.fuelType as FuelType,
+        segment: v.segment as VehicleSegment,
+        year: v.year ?? yearDefault,
+        color: v.color?.trim() ? v.color : "—",
+        variant: v.variant,
+        notes: v.notes,
+      }))
+    );
+    res.status(201).json({
+      data: {
+        created: result.created,
+        skipped: result.skipped,
+        createdCount: result.created.length,
+        skippedCount: result.skipped.length,
+      },
+      error: null,
+    });
   } catch (e) {
     next(e);
   }
