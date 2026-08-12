@@ -32,12 +32,23 @@ function highEndSubtotalExclGst(job: JobCard): number {
   return sum;
 }
 
-/** Align stored line prices with job estimate (fixes legacy ÷100 coupon rounding bug). */
+/** Align stored line prices with job estimate (fixes legacy ÷100 coupon rounding bug).
+ * Skipped when any line has a custom price, or when estimate already matches (incl. parts).
+ */
 function normalizedServicePrices(job: JobCard): ServiceItem[] {
+  if (job.services.some((s) => s.isCustomPrice || s.priceSource === "CUSTOM")) {
+    return job.services;
+  }
   const hesSubtotal = highEndSubtotalExclGst(job);
-  const catalogTarget = Math.max(0, job.estimatedAmount - hesSubtotal);
+  const partsSubtotal = (job.parts ?? []).reduce((s, p) => s + p.lineTotal, 0);
+  const catalogTarget = Math.max(0, job.estimatedAmount - hesSubtotal - partsSubtotal);
   const rawSubtotal = job.services.reduce((s, x) => s + x.price, 0);
   if (rawSubtotal <= 0 || Math.abs(rawSubtotal - catalogTarget) < 0.01) {
+    return job.services;
+  }
+  // Only rescale when the estimate is clearly the services-only target (legacy coupon bug).
+  // If estimate looks tax-inclusive vs services (≈1.18×), skip rescaling.
+  if (rawSubtotal > 0 && Math.abs(job.estimatedAmount / rawSubtotal - 1.18) < 0.05) {
     return job.services;
   }
   const factor = catalogTarget / rawSubtotal;
@@ -81,10 +92,13 @@ function serviceLineItem(
   membershipRedeemed: Set<string>,
   catalog: ServiceCatalogItem[]
 ): InvoiceLineItem {
-  const isMembershipBenefit = membershipRedeemed.has(s.serviceCatalogId);
+  const isMembershipBenefit =
+    membershipRedeemed.has(s.serviceCatalogId) || s.priceSource === "MEMBERSHIP";
   if (isMembershipBenefit) {
     const cat = catalog.find((c) => c.id === s.serviceCatalogId);
-    const fullRate = cat ? catalogPriceForSegment(cat, job.vehicleSegment) : 0;
+    const fullRate =
+      s.catalogPrice ??
+      (cat ? catalogPriceForSegment(cat, job.vehicleSegment) : 0);
     if (fullRate > 0) {
       return {
         id: `li-${invoiceId}-svc-${index}`,
@@ -188,6 +202,17 @@ export function buildInvoiceFromJobCard(
     });
   }
 
+  const membershipStore = useMembershipStore.getState();
+  const membership =
+    membershipStore.subscriptions.find((sub) =>
+      (sub.usageHistory ?? []).some((u) => u.jobCardId === job.id)
+    ) ??
+    membershipStore.getActiveMembership(job.customerId, job.vehicleId) ??
+    membershipStore.getActiveMembership(job.customerId);
+  const membershipPackageName = membership
+    ? membershipStore.packages.find((p) => p.id === membership.packageId)?.name
+    : undefined;
+
   return {
     id: invoiceId,
     invoiceNumber,
@@ -211,6 +236,8 @@ export function buildInvoiceFromJobCard(
     mechanicName: job.mechanicName,
     notes: job.notes,
     createdAt,
+    membershipId: membership?.id,
+    membershipPackageName,
   };
 }
 

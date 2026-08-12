@@ -12,9 +12,10 @@ import {
   Share2,
   Gift,
   Coins,
-  Percent,
   Ticket,
   Trash2,
+  Pencil,
+  Plus,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -49,8 +50,13 @@ import { useAuthStore } from "@/store/auth-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
+import { useMembershipStore } from "@/store/membership-store";
+import { useInventoryStore } from "@/store/inventory-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { getSelectableUnits, getUnitPrice, partMatchesInventorySearch } from "@/lib/inventory/multi-unit";
+import { ServiceSearchInput } from "@/components/services/searchable-service-select";
 import { buildInvoiceWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
   sendCustomerWhatsApp,
@@ -74,10 +80,157 @@ import {
   warmInvoicePdfEngine,
   type InvoicePdfOpts,
 } from "@/lib/invoice-pdf";
-import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml } from "@/lib/tax-invoice-format";
+import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
-import type { PaymentMethod } from "@/types";
+import type { InvoiceLineItem, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
+import { Textarea } from "@/components/ui/textarea";
+
+function InvoicePartPickSelect({
+  parts,
+  onPick,
+}: {
+  parts: Part[];
+  onPick: (part: Part) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const list = parts.filter((p) => partMatchesInventorySearch(p, query));
+    return list.slice(0, 80);
+  }, [parts, query]);
+
+  return (
+    <Select
+      value=""
+      onValueChange={(id) => {
+        const part = parts.find((p) => p.id === id);
+        if (part) onPick(part);
+      }}
+      onOpenChange={(open) => {
+        if (!open) setQuery("");
+      }}
+    >
+      <SelectTrigger className="h-9">
+        <SelectValue placeholder="Pick from inventory parts…" />
+      </SelectTrigger>
+      <SelectContent className="max-h-[min(18rem,50vh)]">
+        <div
+          className="sticky top-0 z-10 border-b border-border bg-popover p-2"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <ServiceSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search name, SKU, barcode…"
+          />
+        </div>
+        {filtered.length === 0 ? (
+          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+            No parts match
+          </div>
+        ) : (
+          filtered.map((p) => (
+            <SelectItem key={p.id} value={p.id}>
+              <span className="flex flex-col gap-0.5 py-0.5 text-left">
+                <span className="text-sm leading-snug">{p.name}</span>
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  SKU {p.sku} · {formatCurrency(getUnitPrice(p, getSelectableUnits(p)[0]))}/
+                  {getSelectableUnits(p)[0]}
+                </span>
+              </span>
+            </SelectItem>
+          ))
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function InvoiceServicePickSelect({
+  services,
+  onPick,
+}: {
+  services: ServiceCatalogItem[];
+  onPick: (svc: ServiceCatalogItem) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const active = services.filter((s) => s.isActive !== false);
+    if (!q) return active.slice(0, 80);
+    return active
+      .filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.category.toLowerCase().includes(q)
+      )
+      .slice(0, 80);
+  }, [services, query]);
+
+  return (
+    <Select
+      value=""
+      onValueChange={(id) => {
+        const svc = services.find((s) => s.id === id);
+        if (svc) onPick(svc);
+      }}
+      onOpenChange={(open) => {
+        if (!open) setQuery("");
+      }}
+    >
+      <SelectTrigger className="h-9">
+        <SelectValue placeholder="Pick from services…" />
+      </SelectTrigger>
+      <SelectContent className="max-h-[min(18rem,50vh)]">
+        <div
+          className="sticky top-0 z-10 border-b border-border bg-popover p-2"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <ServiceSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search services…"
+          />
+        </div>
+        {filtered.length === 0 ? (
+          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+            No services match
+          </div>
+        ) : (
+          filtered.map((s) => (
+            <SelectItem key={s.id} value={s.id}>
+              <span className="flex flex-col gap-0.5 py-0.5 text-left">
+                <span className="text-sm leading-snug">{s.name}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {s.category} · {formatCurrency(s.defaultPrice)}
+                </span>
+              </span>
+            </SelectItem>
+          ))
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function recalculateInvoiceFromLines(
+  lineItems: InvoiceLineItem[],
+  taxRate: number,
+  discountAmount: number,
+  rewardDiscount: number,
+  referralDiscount: number,
+  walletAmountUsed: number,
+  gstRegistered: boolean
+) {
+  const subtotal =
+    Math.round(lineItems.reduce((sum, li) => sum + li.total, 0) * 100) / 100;
+  const reductions = Math.max(0, discountAmount) + Math.max(0, rewardDiscount) + Math.max(0, referralDiscount);
+  const taxable = Math.max(0, subtotal - reductions);
+  const effectiveRate = gstRegistered ? taxRateAsFraction(taxRate) : 0;
+  const taxAmount = Math.round(taxable * effectiveRate * 100) / 100;
+  const grandTotal = Math.round((taxable + taxAmount) * 100) / 100;
+  return { subtotal, taxAmount, grandTotal, walletAmountUsed };
+}
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: typeof Banknote }[] = [
   { value: "CASH", label: "Cash", icon: Banknote },
@@ -109,8 +262,14 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const invoices = useInvoiceStore((s) => s.invoices);
   const recordInvoicePayment = useInvoiceStore((s) => s.recordPayment);
+  const updateInvoice = useInvoiceStore((s) => s.updateInvoice);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const user = useAuthStore((s) => s.user);
+  const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
+  const membershipPackages = useMembershipStore((s) => s.packages);
+  const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
+  const inventoryParts = useInventoryStore((s) => s.parts);
+  const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
 
   const invoice = useMemo(
     () => invoices.find((inv) => inv.id === id),
@@ -148,8 +307,59 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     [invoice, customers]
   );
 
+  const membershipForInvoice = useMemo(() => {
+    if (!invoice) return null;
+    if (invoice.membershipId) {
+      const snap = membershipSubscriptions.find((s) => s.id === invoice.membershipId);
+      if (snap) return snap;
+      return {
+        id: invoice.membershipId,
+        customerId: invoice.customerId,
+        packageId: "",
+        startDate: "",
+        endDate: "",
+        status: "ACTIVE" as const,
+      };
+    }
+    const viaUsage = membershipSubscriptions.find((sub) =>
+      (sub.usageHistory ?? []).some((u) => u.jobCardId === invoice.jobCardId)
+    );
+    if (viaUsage) return viaUsage;
+    return (
+      getActiveMembership(invoice.customerId, jobCard?.vehicleId) ??
+      getActiveMembership(invoice.customerId) ??
+      null
+    );
+  }, [invoice, jobCard?.vehicleId, getActiveMembership, membershipSubscriptions]);
+
+  const membershipPackageName = useMemo(() => {
+    if (invoice?.membershipPackageName) return invoice.membershipPackageName;
+    if (!membershipForInvoice?.packageId) return undefined;
+    return membershipPackages.find((p) => p.id === membershipForInvoice.packageId)?.name;
+  }, [invoice?.membershipPackageName, membershipForInvoice, membershipPackages]);
+
+  // Persist membership snapshot on older invoices so PDF / public share keep the ID.
+  useEffect(() => {
+    if (!invoice || invoice.membershipId || !membershipForInvoice?.id) return;
+    void updateInvoice(invoice.id, {
+      membershipId: membershipForInvoice.id,
+      membershipPackageName,
+    });
+  }, [invoice, membershipForInvoice?.id, membershipPackageName, updateInvoice]);
+
   const payments = useMemo(() => invoice?.payments ?? [], [invoice]);
+  const canEditInvoice =
+    Boolean(invoice) &&
+    payments.length === 0 &&
+    (invoice?.walletAmountUsed ?? 0) <= 0 &&
+    invoice?.status !== "PAID" &&
+    invoice?.status !== "PARTIALLY_PAID";
+
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editLines, setEditLines] = useState<InvoiceLineItem[]>([]);
+  const [editNotes, setEditNotes] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [referenceNumber, setReferenceNumber] = useState("");
@@ -300,7 +510,12 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const discountTotal = activeFlatDiscount + activeRewardDiscount + activeReferralDiscount;
   const taxableSubtotal = Math.max(0, subtotal - discountTotal);
-  const taxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : invoice ? invoice.taxRate : 0.18;
+  const taxRate =
+    gstRegistrationStatus === "NOT_REGISTERED"
+      ? 0
+      : invoice
+        ? taxRateAsFraction(invoice.taxRate)
+        : 0.18;
   const taxAmount = Math.round(taxableSubtotal * taxRate * 100) / 100;
   const grandTotalComputed = Math.round((taxableSubtotal + taxAmount) * 100) / 100;
   const pointsToEarn = Math.floor(taxableSubtotal / 100);
@@ -362,8 +577,6 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     }
   };
 
-  const updateInvoiceDiscounts = useInvoiceStore((s) => s.updateInvoice);
-
   const handleSaveDiscounts = async () => {
     if (!invoice) return;
     if (pointsErrorMsg) {
@@ -373,7 +586,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
     setIsApplying(true);
     try {
-      await updateInvoiceDiscounts(invoice.id, {
+      await updateInvoice(invoice.id, {
         discountAmount: activeFlatDiscount,
         rewardDiscount: activeRewardDiscount,
         referralDiscount: activeReferralDiscount,
@@ -441,6 +654,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       referralCode: invoiceCustomer?.referralCode,
       referralRewardAmount,
       newCustomerDiscount,
+      membershipId: membershipForInvoice?.id,
+      membershipPackageName,
     };
   }, [
     invoice,
@@ -466,6 +681,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     bankUpi,
     referralRewardAmount,
     newCustomerDiscount,
+    membershipForInvoice?.id,
+    membershipPackageName,
   ]);
 
   useEffect(() => {
@@ -492,10 +709,149 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
         referralCode: o.referralCode,
         referralRewardAmount: o.referralRewardAmount,
         newCustomerDiscount: o.newCustomerDiscount,
+        membershipId: o.membershipId,
+        membershipPackageName: o.membershipPackageName,
       },
       { includePrintScript: false }
     );
   }, [invoicePdfOpts]);
+
+  const openEditInvoice = () => {
+    if (!invoice || !canEditInvoice) return;
+    setEditLines(invoice.lineItems.map((li) => ({ ...li })));
+    setEditNotes(invoice.notes ?? "");
+    setEditDialogOpen(true);
+  };
+
+  const updateEditLine = (id: string, patch: Partial<InvoiceLineItem>) => {
+    setEditLines((prev) =>
+      prev.map((li) => {
+        if (li.id !== id) return li;
+        const next = { ...li, ...patch };
+        const qty = Math.max(0, Number(next.quantity) || 0);
+        const unitPrice = Math.max(0, Number(next.unitPrice) || 0);
+        const lineDiscount = Math.max(0, Number(next.lineDiscount) || 0);
+        const total = Math.max(0, Math.round((qty * unitPrice - lineDiscount) * 100) / 100);
+        let description = next.description;
+        if (
+          next.type === "PARTS" &&
+          patch.quantity != null &&
+          /—\s*[\d.]+(\s+\S+)?\s*$/.test(description)
+        ) {
+          description = description.replace(/—\s*[\d.]+/, `— ${qty}`);
+        }
+        return { ...next, description, quantity: qty, unitPrice, lineDiscount, total };
+      })
+    );
+  };
+
+  const addEditLine = () => {
+    setEditLines((prev) => [
+      ...prev,
+      {
+        id: `li-edit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        description: "",
+        type: "OTHER",
+        quantity: 1,
+        unitPrice: 0,
+        total: 0,
+        lineDiscount: 0,
+      },
+    ]);
+  };
+
+  const applyPartToEditLine = (lineId: string, part: Part) => {
+    const unit = getSelectableUnits(part)[0] || part.primaryUnit || "pcs";
+    const unitPrice = getUnitPrice(part, unit);
+    updateEditLine(lineId, {
+      description: `${part.name} — 1 ${unit}`,
+      type: "PARTS",
+      quantity: 1,
+      unitPrice,
+      lineDiscount: 0,
+    });
+  };
+
+  const applyServiceToEditLine = (lineId: string, svc: ServiceCatalogItem) => {
+    const unitPrice = svc.defaultPrice;
+    updateEditLine(lineId, {
+      description: svc.name,
+      type: "SERVICE",
+      quantity: 1,
+      unitPrice,
+      lineDiscount: 0,
+    });
+  };
+
+  const addPartLine = (part: Part) => {
+    const unit = getSelectableUnits(part)[0] || part.primaryUnit || "pcs";
+    const unitPrice = getUnitPrice(part, unit);
+    const qty = 1;
+    const total = Math.round(qty * unitPrice * 100) / 100;
+    setEditLines((prev) => [
+      ...prev,
+      {
+        id: `li-edit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        description: `${part.name} — ${qty} ${unit}`,
+        type: "PARTS",
+        quantity: qty,
+        unitPrice,
+        total,
+        lineDiscount: 0,
+      },
+    ]);
+  };
+
+  const removeEditLine = (id: string) => {
+    setEditLines((prev) => (prev.length <= 1 ? prev : prev.filter((li) => li.id !== id)));
+  };
+
+  const handleSaveInvoiceEdit = async () => {
+    if (!invoice || !canEditInvoice) return;
+    const cleaned = editLines
+      .map((li) => ({
+        ...li,
+        description: li.description.trim(),
+      }))
+      .filter((li) => li.description.length > 0);
+    if (cleaned.length === 0) {
+      toast.error("Add at least one line item with a description");
+      return;
+    }
+    const gstRegistered = gstRegistrationStatus !== "NOT_REGISTERED";
+    const totals = recalculateInvoiceFromLines(
+      cleaned,
+      invoice.taxRate,
+      invoice.discountAmount || 0,
+      invoice.rewardDiscount || 0,
+      invoice.referralDiscount || 0,
+      invoice.walletAmountUsed || 0,
+      gstRegistered
+    );
+    setEditSaving(true);
+    try {
+      await updateInvoice(invoice.id, {
+        lineItems: cleaned,
+        notes: editNotes.trim() || undefined,
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        grandTotal: totals.grandTotal,
+      });
+      pushActivityLog({
+        action: "UPDATED",
+        entityType: "INVOICE",
+        entityId: invoice.id,
+        entityLabel: invoice.invoiceNumber,
+        details: `Edited line items on ${invoice.invoiceNumber}`,
+      });
+      toast.success("Invoice updated");
+      setEditDialogOpen(false);
+    } catch {
+      toast.error("Failed to update invoice");
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const openRecordDialog = () => {
     setDialogRemainingBalance(remainingBalance);
@@ -644,6 +1000,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       referralCode: invoiceCustomer?.referralCode,
       referralRewardAmount,
       newCustomerDiscount,
+      membershipId: membershipForInvoice?.id,
+      membershipPackageName,
     });
     printWindow.document.write(html);
     printWindow.document.close();
@@ -813,6 +1171,12 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
           <InvoiceStatusBadge status={invoice.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canEditInvoice && (
+            <Button variant="outline" size="sm" onClick={openEditInvoice}>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit Invoice
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handlePrint}>
             <Download className="mr-1.5 h-4 w-4" />
             Download PDF
@@ -938,13 +1302,15 @@ ${businessNameVal}`;
                   </Label>
                   <Input
                     id="reward-points"
-                    type="number"
-                    min="0"
-                    max="200"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Enter points"
                     value={pointsRedeemStr}
                     disabled={isPointsDisabled}
-                    onChange={(e) => handlePointsRedeemChange(e.target.value)}
+                    onChange={(e) =>
+                      handlePointsRedeemChange(e.target.value.replace(/[^\d]/g, ""))
+                    }
+                    className="[appearance:textfield]"
                   />
                   {isPointsDisabled && (
                     <p className="text-[11px] text-amber-600">Disabled because flat discount is applied.</p>
@@ -1030,7 +1396,7 @@ ${businessNameVal}`;
                         <span className="font-mono">{formatCurrency(taxableSubtotal)}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>GST ({Math.round(taxRate * 100)}%)</span>
+                        <span>GST ({taxRateAsPercentLabel(taxRate)})</span>
                         <span className="font-mono">{formatCurrency(taxAmount)}</span>
                       </div>
                     </>
@@ -1118,6 +1484,145 @@ ${businessNameVal}`;
           </Card>
         </div>
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-hidden flex flex-col sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Invoice</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
+            <div className="space-y-3">
+              {editLines.map((li, idx) => (
+                <div
+                  key={li.id}
+                  className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Line {idx + 1}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      disabled={editLines.length <= 1}
+                      onClick={() => removeEditLine(li.id)}
+                      aria-label="Remove line"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>From inventory / catalog</Label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <InvoicePartPickSelect
+                        parts={inventoryParts}
+                        onPick={(part) => applyPartToEditLine(li.id, part)}
+                      />
+                      <InvoiceServicePickSelect
+                        services={serviceCatalog}
+                        onPick={(svc) => applyServiceToEditLine(li.id, svc)}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Selecting a part or service fills description and rate. You can still edit them below.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`edit-desc-${li.id}`}>Description</Label>
+                    <Input
+                      id={`edit-desc-${li.id}`}
+                      value={li.description}
+                      onChange={(e) => updateEditLine(li.id, { description: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`edit-qty-${li.id}`}>Qty</Label>
+                      <Input
+                        id={`edit-qty-${li.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        value={String(li.quantity)}
+                        onChange={(e) =>
+                          updateEditLine(li.id, {
+                            quantity: Number(e.target.value.replace(/,/g, "")) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`edit-rate-${li.id}`}>Rate (₹)</Label>
+                      <Input
+                        id={`edit-rate-${li.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        value={String(li.unitPrice)}
+                        onChange={(e) =>
+                          updateEditLine(li.id, {
+                            unitPrice: Number(e.target.value.replace(/,/g, "")) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`edit-disc-${li.id}`}>Line disc. (₹)</Label>
+                      <Input
+                        id={`edit-disc-${li.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        value={String(li.lineDiscount ?? 0)}
+                        onChange={(e) =>
+                          updateEditLine(li.id, {
+                            lineDiscount: Number(e.target.value.replace(/,/g, "")) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Line total</Label>
+                      <p className="flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm font-medium tabular-nums">
+                        {formatCurrency(li.total)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={addEditLine}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add blank line
+              </Button>
+              <div className="min-w-[12rem] flex-1 sm:max-w-xs">
+                <InvoicePartPickSelect parts={inventoryParts} onPick={addPartLine} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-invoice-notes">Notes</Label>
+              <Textarea
+                id="edit-invoice-notes"
+                rows={3}
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="Optional notes on the invoice"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Subtotal and GST recalculate on save. Invoice-level discounts stay as already applied.
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={editSaving} onClick={() => void handleSaveInvoiceEdit()}>
+              {editSaving ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={recordDialogOpen} onOpenChange={setRecordDialogOpen}>
         <DialogContent>

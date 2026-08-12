@@ -179,77 +179,111 @@ export function JobCardPartsPicker({
     onSelectedLinesChange(selectedLines.filter((l) => l.partId !== partId));
   };
 
-  const renderSelectedPartControls = ({
+  const renderSelectedPartRow = ({
     part,
     line,
     qtyValue,
     lineTotal,
     units,
+    equivalent,
+    stock,
+    stockCheck,
   }: {
     part: Part;
     line: SelectedPartLine;
     qtyValue: string;
     lineTotal: number;
     units: string[];
+    equivalent: string | null;
+    stock: ReturnType<typeof getStockStatus>;
+    stockCheck: ReturnType<typeof validateStockConsumption>;
   }) => {
     const unitPrice = getUnitPrice(part, line.unit);
     return (
-      <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-        {units.length > 1 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Unit</span>
-            <Select value={line.unit} onValueChange={(unit) => updateLine(part.id, { unit })}>
-              <SelectTrigger className="h-8 w-[5.5rem] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {units.map((u) => (
-                  <SelectItem key={u} value={u}>
-                    {u}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-sm font-medium leading-snug break-words">{part.name}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              SKU {part.sku}
+              {part.barcode ? ` · ${part.barcode}` : ""}
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Available: {formatAvailableStock(part, line.unit)}
+              {equivalent ? ` (= ${equivalent})` : ""}
+            </p>
+            {!stockCheck.ok && (
+              <p className="text-xs text-destructive flex items-start gap-1">
+                <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                <span>{stockCheck.message}</span>
+              </p>
+            )}
+            <Badge variant="outline" className={cn("mt-0.5 text-[10px]", stock.className)}>
+              {stockStatusShortLabel(stock.label)}
+            </Badge>
           </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <label className="text-xs text-muted-foreground" htmlFor={`part-qty-${part.id}`}>
-            Qty
-          </label>
-          <Input
-            id={`part-qty-${part.id}`}
-            type="text"
-            inputMode="decimal"
-            value={qtyValue}
-            onChange={(e) => setQtyDraft(part.id, e.target.value)}
-            onBlur={(e) => commitQty(part.id, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitQty(part.id, (e.target as HTMLInputElement).value);
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            className="h-8 w-20 text-sm tabular-nums"
-          />
-          <span className="text-xs text-muted-foreground">{line.unit}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => removePart(part.id)}
+            aria-label={`Remove ${part.name}`}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <div className="text-right min-w-[5.5rem]">
-          <p className="text-sm font-semibold tabular-nums text-emerald-600">{formatCurrency(lineTotal)}</p>
-          <p className="text-[10px] text-muted-foreground">
-            @ {formatCurrency(unitPrice)}/{line.unit}
-          </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/60 pt-3">
+          {units.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground shrink-0">Unit</span>
+              <Select value={line.unit} onValueChange={(unit) => updateLine(part.id, { unit })}>
+                <SelectTrigger className="h-8 w-[5.5rem] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-muted-foreground shrink-0" htmlFor={`part-qty-${part.id}`}>
+              Qty
+            </label>
+            <Input
+              id={`part-qty-${part.id}`}
+              type="text"
+              inputMode="decimal"
+              value={qtyValue}
+              onChange={(e) => setQtyDraft(part.id, e.target.value)}
+              onBlur={(e) => commitQty(part.id, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitQty(part.id, (e.target as HTMLInputElement).value);
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              className="h-8 w-20 text-sm tabular-nums"
+            />
+            {units.length === 1 ? (
+              <span className="text-xs text-muted-foreground">{line.unit}</span>
+            ) : null}
+          </div>
+          <div className="ml-auto text-right">
+            <p className="text-sm font-semibold tabular-nums text-emerald-600">
+              {formatCurrency(lineTotal)}
+            </p>
+            <p className="text-[10px] text-muted-foreground whitespace-nowrap">
+              @ {formatCurrency(unitPrice)}/{line.unit}
+            </p>
+          </div>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={() => removePart(part.id)}
-          aria-label={`Remove ${part.name}`}
-        >
-          <X className="h-4 w-4" />
-        </Button>
       </div>
     );
   };
@@ -301,36 +335,16 @@ export function JobCardPartsPicker({
                     const units = getSelectableUnits(part);
                     const equivalent = formatDualUnitStockEquivalent(part);
                     return (
-                      <div
-                        key={part.id}
-                        className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium leading-tight">{part.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            SKU {part.sku}
-                            {part.barcode ? ` · ${part.barcode}` : ""}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Available: {formatAvailableStock(part, line.unit)}
-                            {equivalent ? ` (= ${equivalent})` : ""}
-                          </p>
-                          {!stockCheck.ok && (
-                            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3 shrink-0" />
-                              {stockCheck.message}
-                            </p>
-                          )}
-                          <Badge variant="outline" className={cn("mt-1.5 text-[10px]", stock.className)}>
-                            {stockStatusShortLabel(stock.label)}
-                          </Badge>
-                        </div>
-                        {renderSelectedPartControls({
+                      <div key={part.id}>
+                        {renderSelectedPartRow({
                           part,
                           line,
                           qtyValue,
                           lineTotal,
                           units,
+                          equivalent,
+                          stock,
+                          stockCheck,
                         })}
                       </div>
                     );
@@ -353,36 +367,16 @@ export function JobCardPartsPicker({
                 const units = getSelectableUnits(part);
                 const equivalent = formatDualUnitStockEquivalent(part);
                 return (
-                  <div
-                    key={part.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-tight">{part.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        SKU {part.sku}
-                        {part.barcode ? ` · ${part.barcode}` : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Available: {formatAvailableStock(part, line.unit)}
-                        {equivalent ? ` (= ${equivalent})` : ""}
-                      </p>
-                      {!stockCheck.ok && (
-                        <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3 shrink-0" />
-                          {stockCheck.message}
-                        </p>
-                      )}
-                      <Badge variant="outline" className={cn("mt-1.5 text-[10px]", stock.className)}>
-                        {stockStatusShortLabel(stock.label)}
-                      </Badge>
-                    </div>
-                    {renderSelectedPartControls({
+                  <div key={part.id}>
+                    {renderSelectedPartRow({
                       part,
                       line,
                       qtyValue,
                       lineTotal,
                       units,
+                      equivalent,
+                      stock,
+                      stockCheck,
                     })}
                   </div>
                 );

@@ -22,8 +22,22 @@ export function splitCgstSgst(taxAmount: number): { cgst: number; sgst: number }
   return { cgst: half, sgst: half };
 }
 
+/**
+ * Normalize GST rate to a fraction (e.g. 0.18).
+ * Seed/demo data sometimes stores percent (18); app create paths store 0.18.
+ */
+export function taxRateAsFraction(rate: number): number {
+  if (!Number.isFinite(rate) || rate <= 0) return 0;
+  return rate > 1 ? rate / 100 : rate;
+}
+
+/** Human-readable GST percent label, e.g. "18%". */
+export function taxRateAsPercentLabel(rate: number): string {
+  return `${Math.round(taxRateAsFraction(rate) * 100)}%`;
+}
+
 export function gstHalfPercentLabel(taxRate: number): string {
-  return `${Math.round(taxRate * 50)}%`;
+  return `${Math.round(taxRateAsFraction(taxRate) * 50)}%`;
 }
 
 /** List / MRP style rate before line discount (falls back to line total when no line discount). */
@@ -87,6 +101,10 @@ export type TaxInvoiceDocumentOpts = {
   referralCode?: string;
   referralRewardAmount?: number;
   newCustomerDiscount?: number;
+  /** Active membership subscription id for this customer/vehicle (Bill To). */
+  membershipId?: string;
+  /** Optional package name shown next to membership id. */
+  membershipPackageName?: string;
 };
 
 export function numberToWords(amount: number): string {
@@ -165,6 +183,8 @@ export function buildTaxInvoicePrintHtml(
     referralCode,
     referralRewardAmount = 0,
     newCustomerDiscount = 0,
+    membershipId,
+    membershipPackageName,
   } = opts;
 
   const isGstRegistered = business.gstRegistrationStatus !== "NOT_REGISTERED";
@@ -431,6 +451,15 @@ table.inv .b { font-weight: 700; color: #171717; }
       ${customerWhatsApp ? `<p><span style="color:#737373;">WhatsApp:</span> <strong>${escapeHtml(customerWhatsApp)}</strong></p>` : ""}
       ${customerEmail ? `<p><span style="color:#737373;">Email:</span> <strong>${escapeHtml(customerEmail)}</strong></p>` : ""}
       ${customerAddress ? `<p><span style="color:#737373;">Address:</span> <strong>${escapeHtml(customerAddress)}</strong></p>` : ""}
+      ${
+        membershipId
+          ? `<p><span style="color:#737373;">Membership ID:</span> <strong style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(membershipId)}</strong>${
+              membershipPackageName
+                ? ` <span style="color:#737373; font-weight:500;">(${escapeHtml(membershipPackageName)})</span>`
+                : ""
+            }</p>`
+          : ""
+      }
     </div>
     <div style="flex: 1; border: 1px solid #d4d4d4; border-radius: 4px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; background: #fafafa;">
       <h4 style="font-size: 9.5px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; border-bottom: 1px solid #e5e5e5; padding-bottom: 4px;">Booking Details</h4>

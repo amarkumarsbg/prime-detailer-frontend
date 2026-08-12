@@ -1,9 +1,11 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { JobCard } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
 import { syncPickupFromJobCard } from "@/lib/sync-pickup-from-job-card";
+import { jobCardUpdateAllowed } from "@/lib/job-card-edit-policy";
 
 interface JobCardStore {
   jobCards: JobCard[];
@@ -26,6 +28,10 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
   updateJobCard: async (id, updates) => {
     const prev = get().jobCards.find((jc) => jc.id === id);
     if (!prev) return;
+    if (!jobCardUpdateAllowed(prev, updates)) {
+      toast.error("This job card can no longer be edited");
+      return;
+    }
     const next = { ...prev, ...updates };
     // Apply locally first so same-click flows (e.g. deliver + invoice) see the new status.
     set((state) => ({

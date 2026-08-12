@@ -1,8 +1,10 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { Quotation } from "@/types";
 import { putCollectionDocument } from "@/lib/collection-sync";
+import { quotationUpdateAllowed } from "@/lib/quotation-edit-policy";
 
 interface QuotationStore {
   quotations: Quotation[];
@@ -22,6 +24,10 @@ export const useQuotationStore = create<QuotationStore>((set, get) => ({
   updateQuotation: async (id, patch) => {
     const prev = get().quotations.find((x) => x.id === id);
     if (!prev) return;
+    if (!quotationUpdateAllowed(prev, patch)) {
+      toast.error("This quotation can no longer be edited");
+      return;
+    }
     const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
     await putCollectionDocument("quotations", id, next);
     set((s) => ({

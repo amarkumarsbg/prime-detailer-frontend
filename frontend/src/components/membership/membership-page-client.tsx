@@ -48,6 +48,8 @@ import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
 import { cn, formatDate, formatInrFull } from "@/lib/utils";
 import { Crown, Package, Pencil, UserPlus, Search, X, Plus, CheckCircle2, ChevronRight } from "lucide-react";
+import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
+import { ServiceSearchInput } from "@/components/services/searchable-service-select";
 import { toast } from "sonner";
 import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
@@ -238,6 +240,7 @@ export function MembershipPageClient() {
   const [formPrice, setFormPrice] = useState("");
   const [formServiceQuantities, setFormServiceQuantities] = useState<Record<string, number>>({});
   const [serviceFilter, setServiceFilter] = useState("");
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
 
   const selectedServiceIds = useMemo(
     () => Object.keys(formServiceQuantities),
@@ -1143,9 +1146,21 @@ export function MembershipPageClient() {
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Included services</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {selectedServiceIds.length} selected
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {selectedServiceIds.length} selected
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0"
+                      onClick={() => setAddServiceOpen(true)}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Add services
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Only active catalog services are listed below.
@@ -1156,12 +1171,20 @@ export function MembershipPageClient() {
                     {orphanedSelectedIds.join(", ")}. Re-add matching services or remove them from the package.
                   </p>
                 )}
-                <Input
-                  placeholder="Search services by name or category…"
+                <ServiceSearchInput
                   value={serviceFilter}
-                  onChange={(e) => setServiceFilter(e.target.value)}
-                  className="h-9"
-                  aria-label="Filter services list"
+                  onChange={setServiceFilter}
+                />
+                <AddServicePackageDialog
+                  open={addServiceOpen}
+                  onOpenChange={setAddServiceOpen}
+                  onCreated={(item) => {
+                    setFormServiceQuantities((prev) => ({
+                      ...prev,
+                      [item.id]: Math.max(1, Math.floor(prev[item.id] ?? 1)),
+                    }));
+                    setServiceFilter("");
+                  }}
                 />
                 <ScrollArea className="h-[200px] rounded-md border border-border p-3">
                   <div className="space-y-3 pr-3">

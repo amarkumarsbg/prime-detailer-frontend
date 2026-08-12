@@ -39,6 +39,8 @@ import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
 import { useReservationReminders } from "@/hooks/use-reservation-reminders";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
+import { appointmentIsEditable } from "@/lib/appointment-edit-policy";
+import { EditReservationDialog } from "@/components/reservations/edit-reservation-dialog";
 import type { Appointment, JobCard, JobCardStatus } from "@/types";
 import {
   Plus,
@@ -51,6 +53,7 @@ import {
   Search,
   Loader2,
   CalendarRange,
+  Pencil,
 } from "lucide-react";
 
 function compactRegForSearch(s: string): string {
@@ -127,6 +130,8 @@ export default function BookingsPage() {
   const [creatingFromAppointmentId, setCreatingFromAppointmentId] = useState<string | null>(
     null
   );
+  const [editingReservation, setEditingReservation] = useState<Appointment | null>(null);
+  const [editReservationOpen, setEditReservationOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<JobCardStatus | "ALL">("ALL");
   const [branchFilterId, setBranchFilterId] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -453,7 +458,20 @@ export default function BookingsPage() {
                       <p className="text-xs text-emerald-600 mt-1">Converted to job card</p>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {appointmentIsEditable(apt) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingReservation(apt);
+                          setEditReservationOpen(true);
+                        }}
+                      >
+                        <Pencil className="w-4 h-4 mr-1" />
+                        Edit
+                      </Button>
+                    ) : null}
                     {apt.jobCardId ? (
                       <Button size="sm" variant="outline" asChild>
                         <Link href={`/job-cards/${apt.jobCardId}`}>View job</Link>
@@ -618,19 +636,35 @@ export default function BookingsPage() {
                     <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
                       {apt.serviceType}
                     </p>
-                    <Button
-                      type="button"
-                      className="mt-3 w-full"
-                      disabled={creatingFromAppointmentId === apt.id}
-                      onClick={() => void createJobFromAppointment(apt)}
-                    >
-                      {creatingFromAppointmentId === apt.id ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Plus className="w-4 h-4 mr-2" />
-                      )}
-                      Create job card
-                    </Button>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {appointmentIsEditable(apt) ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setEditingReservation(apt);
+                            setEditReservationOpen(true);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        className="w-full"
+                        disabled={creatingFromAppointmentId === apt.id}
+                        onClick={() => void createJobFromAppointment(apt)}
+                      >
+                        {creatingFromAppointmentId === apt.id ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-2" />
+                        )}
+                        Create job card
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -669,20 +703,37 @@ export default function BookingsPage() {
                           {apt.serviceType}
                         </td>
                         <td className="p-3 text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="whitespace-nowrap"
-                            disabled={creatingFromAppointmentId === apt.id}
-                            onClick={() => void createJobFromAppointment(apt)}
-                          >
-                            {creatingFromAppointmentId === apt.id ? (
-                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                            ) : (
-                              <Plus className="w-3.5 h-3.5 mr-1.5" />
-                            )}
-                            Create job card
-                          </Button>
+                          <div className="inline-flex flex-wrap justify-end gap-1.5">
+                            {appointmentIsEditable(apt) ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="whitespace-nowrap"
+                                onClick={() => {
+                                  setEditingReservation(apt);
+                                  setEditReservationOpen(true);
+                                }}
+                              >
+                                <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                                Edit
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="whitespace-nowrap"
+                              disabled={creatingFromAppointmentId === apt.id}
+                              onClick={() => void createJobFromAppointment(apt)}
+                            >
+                              {creatingFromAppointmentId === apt.id ? (
+                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                              ) : (
+                                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                              )}
+                              Create job card
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -901,6 +952,14 @@ export default function BookingsPage() {
           </div>
         </div>
       </MobileFilterSheet>
+      <EditReservationDialog
+        appointment={editingReservation}
+        open={editReservationOpen}
+        onOpenChange={(open) => {
+          setEditReservationOpen(open);
+          if (!open) setEditingReservation(null);
+        }}
+      />
     </div>
   );
 }

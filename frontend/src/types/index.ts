@@ -345,7 +345,14 @@ export interface ServiceItem {
   jobCardId: string;
   serviceCatalogId: string;
   name: string;
+  /** Effective billable amount (ex-GST) for this job line. */
   price: number;
+  /** Catalog/list price at selection time (for display + reset). */
+  catalogPrice?: number;
+  /** True when the user overrode the catalog price for this document only. */
+  isCustomPrice?: boolean;
+  /** How `price` was derived; membership lines stay 0 without looking like a custom ₹0. */
+  priceSource?: "CATALOG" | "CUSTOM" | "MEMBERSHIP";
   isCompleted: boolean;
   completedAt?: string;
   completedBy?: string;
@@ -469,7 +476,14 @@ export interface Quotation {
   vehicleRegNumber: string;
   vehicleMakeModel: string;
   vehicleSegment: VehicleSegment;
-  services: { serviceCatalogId: string; name: string; price: number }[];
+  services: {
+    serviceCatalogId: string;
+    name: string;
+    price: number;
+    catalogPrice?: number;
+    isCustomPrice?: boolean;
+    priceSource?: "CATALOG" | "CUSTOM" | "MEMBERSHIP";
+  }[];
   subtotal: number;
   taxRate: number;
   taxAmount: number;
@@ -548,6 +562,9 @@ export interface Invoice {
   referralDiscount?: number;
   referralAdvocateId?: string;
   referralCodeUsed?: string;
+  /** Snapshot of membership subscription id at invoice time (Bill To). */
+  membershipId?: string;
+  membershipPackageName?: string;
 }
 
 export interface DashboardStats {

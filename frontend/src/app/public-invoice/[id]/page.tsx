@@ -101,6 +101,8 @@ export default function PublicInvoicePage() {
         referralCode: invoice.referralCodeUsed,
         referralRewardAmount: invoice.rewardDiscount || 0,
         newCustomerDiscount: invoice.discountAmount || 0,
+        membershipId: invoice.membershipId,
+        membershipPackageName: invoice.membershipPackageName,
       },
       { includePrintScript: false }
     );

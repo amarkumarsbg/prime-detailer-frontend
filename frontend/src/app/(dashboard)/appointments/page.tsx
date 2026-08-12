@@ -67,6 +67,7 @@ import {
   Search,
   ArrowLeft,
   Info,
+  Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
@@ -79,6 +80,9 @@ import { getNextAppointmentNumber, getAppointmentDisplayId } from "@/lib/appoint
 import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
 import { findCatalogServiceForAppointment } from "@/lib/job-from-appointment";
 import { useReservationReminders } from "@/hooks/use-reservation-reminders";
+import { appointmentIsEditable } from "@/lib/appointment-edit-policy";
+import { EditReservationDialog } from "@/components/reservations/edit-reservation-dialog";
+import { SearchableServiceSelect } from "@/components/services/searchable-service-select";
 import { useAuthStore } from "@/store/auth-store";
 import {
   sendCustomerWhatsApp,
@@ -169,6 +173,8 @@ export default function AppointmentsPage() {
   const businessName = useSettingsStore((s) => s.businessName);
   const branches = useBranchStore((s) => s.branches);
   const [creatingJobForId, setCreatingJobForId] = useState<string | null>(null);
+  const [editingReservation, setEditingReservation] = useState<Appointment | null>(null);
+  const [editReservationOpen, setEditReservationOpen] = useState(false);
 
   useReservationReminders();
 
@@ -1382,20 +1388,13 @@ export default function AppointmentsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="apt-service">Service</Label>
-                        <Select required value={formServiceId} onValueChange={setFormServiceId}>
-                          <SelectTrigger id="apt-service">
-                            <SelectValue placeholder="Select service" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {catalog
-                              .filter((s) => s.isActive)
-                              .map((s) => (
-                                <SelectItem key={s.id} value={s.id}>
-                                  {s.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableServiceSelect
+                          id="apt-service"
+                          required
+                          value={formServiceId}
+                          onChange={setFormServiceId}
+                          services={catalog}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="apt-mechanic">Mechanic (optional)</Label>
@@ -1444,6 +1443,7 @@ export default function AppointmentsPage() {
                         <Input
                           id="apt-time"
                           type="time"
+                          className="date-input-icon-end pr-9"
                           required
                           min={timeInputMin}
                           value={formTime}
@@ -1655,6 +1655,20 @@ export default function AppointmentsPage() {
                               <p className="text-xs text-muted-foreground">Mechanic: {apt.mechanicName}</p>
                             )}
                             <div className="flex flex-wrap items-center gap-2">
+                              {appointmentIsEditable(apt) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs"
+                                  onClick={() => {
+                                    setEditingReservation(apt);
+                                    setEditReservationOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="w-3 h-3 mr-1" />
+                                  Edit
+                                </Button>
+                              )}
                               {apt.status === "SCHEDULED" && (
                                 <Button
                                   size="sm"
@@ -1748,6 +1762,20 @@ export default function AppointmentsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {appointmentIsEditable(apt) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => {
+                              setEditingReservation(apt);
+                              setEditReservationOpen(true);
+                            }}
+                          >
+                            <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                            Edit
+                          </Button>
+                        )}
                         {apt.status === "SCHEDULED" && (
                           <Button
                             size="sm"
@@ -1804,6 +1832,14 @@ export default function AppointmentsPage() {
       </Tabs>
         </CardContent>
       </Card>
+      <EditReservationDialog
+        appointment={editingReservation}
+        open={editReservationOpen}
+        onOpenChange={(open) => {
+          setEditReservationOpen(open);
+          if (!open) setEditingReservation(null);
+        }}
+      />
     </div>
   );
 }

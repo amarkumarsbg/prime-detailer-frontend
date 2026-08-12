@@ -79,6 +79,9 @@ import { CustomerCreditCheckDialog } from "@/components/job-cards/customer-credi
 import { JobCardPartsPicker, type SelectedPartLine, buildJobCardPartItems, jobCardPartsSubtotal, selectedLinesFromJobParts } from "@/components/job-cards/job-card-parts-picker";
 import { AddAddonDialog } from "@/components/services/add-addon-dialog";
 import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
+import { ServiceSearchInput } from "@/components/services/searchable-service-select";
+import { ServiceCustomPriceControl } from "@/components/services/service-custom-price-control";
+import { withCatalogPrice, withCustomPrice } from "@/lib/service-line-price";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -505,6 +508,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       ? localTimeInputMinNow()
       : undefined;
   const [selectedMainIds, setSelectedMainIds] = useState<string[]>([]);
+  /** Document-scoped custom prices keyed by catalog service id. */
+  const [customPriceByServiceId, setCustomPriceByServiceId] = useState<Record<string, number>>({});
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [mechanicId, setMechanicId] = useState("");
   const [mechanicSearch, setMechanicSearch] = useState("");
@@ -516,6 +521,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [directDiscountValue, setDirectDiscountValue] = useState("");
   const [branchId, setBranchId] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
+  const [addonSearch, setAddonSearch] = useState("");
+  const [highEndSearch, setHighEndSearch] = useState("");
+  const [membershipRedeemSearch, setMembershipRedeemSearch] = useState("");
   const [selectedPartLines, setSelectedPartLines] = useState<SelectedPartLine[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [pickupRequired, setPickupRequired] = useState(false);
@@ -1080,6 +1088,22 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     [serviceCatalog]
   );
 
+  const filteredAddonServices = useMemo(() => {
+    const q = addonSearch.trim().toLowerCase();
+    if (!q) return addonServices;
+    return addonServices.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.category.toLowerCase().includes(q)
+    );
+  }, [addonServices, addonSearch]);
+
+  const filteredHighEndServices = useMemo(() => {
+    const q = highEndSearch.trim().toLowerCase();
+    if (!q) return highEndServices;
+    return highEndServices.filter((h) => h.name.toLowerCase().includes(q));
+  }, [highEndServices, highEndSearch]);
+
   const trendingServices = useMemo(
     () =>
       TRENDING_IDS.map((id) => serviceCatalog.find((s) => s.id === id)).filter(
@@ -1293,9 +1317,33 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return selectedCatalogItems.reduce((sum, s) => {
       const isMain = selectedMainIds.includes(s.id);
       if (isMain && membershipMainServiceZeroIds.has(s.id)) return sum;
-      return sum + priceForService(s, vehicleSegment);
+      const catalogPrice = priceForService(s, vehicleSegment);
+      const custom = customPriceByServiceId[s.id];
+      return sum + (custom != null ? custom : catalogPrice);
     }, 0);
-  }, [selectedCatalogItems, vehicleSegment, selectedMainIds, membershipMainServiceZeroIds]);
+  }, [
+    selectedCatalogItems,
+    vehicleSegment,
+    selectedMainIds,
+    membershipMainServiceZeroIds,
+    customPriceByServiceId,
+  ]);
+
+  const clearCustomPrice = (id: string) => {
+    setCustomPriceByServiceId((prev) => {
+      if (!(id in prev)) return prev;
+      const { [id]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const setCustomPrice = (id: string, next: number | null) => {
+    if (next == null) {
+      clearCustomPrice(id);
+      return;
+    }
+    setCustomPriceByServiceId((prev) => ({ ...prev, [id]: next }));
+  };
 
   const highEndSubtotalExclGst = useMemo(() => {
     return selectedHighEndIds.reduce((sum, hid) => {
@@ -1441,21 +1489,33 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   );
 
   const toggleMain = (id: string) => {
-    setSelectedMainIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setSelectedMainIds((prev) => {
+      if (prev.includes(id)) {
+        clearCustomPrice(id);
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
+    });
   };
 
   const toggleAddon = (id: string) => {
-    setSelectedAddonIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setSelectedAddonIds((prev) => {
+      if (prev.includes(id)) {
+        clearCustomPrice(id);
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
+    });
   };
 
   const toggleTrending = (id: string) => {
-    setSelectedMainIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setSelectedMainIds((prev) => {
+      if (prev.includes(id)) {
+        clearCustomPrice(id);
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
+    });
   };
 
   const applyCoupon = () => {
@@ -1697,32 +1757,48 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
 
     const serviceItems = selectedCatalogItems.map((s) => {
+      const catalogPrice = priceForService(s, seg);
       const isFreeMain =
         membershipVisitChoice === "yes" &&
         membershipRedeemServiceIds.includes(s.id) &&
         selectedMainIds.includes(s.id);
       if (isFreeMain) {
+        const priced = withCatalogPrice(catalogPrice, { membership: true });
         return {
           id: `si-${id}-${s.id}`,
           jobCardId: id,
           serviceCatalogId: s.id,
           name: s.name,
-          price: 0,
+          ...priced,
           isCompleted: false,
           durationMinutes: s.durationMinutes,
         };
       }
-      const base = priceForService(s, seg);
+      const custom = customPriceByServiceId[s.id];
+      const base =
+        custom != null
+          ? withCustomPrice(catalogPrice, custom).price
+          : catalogPrice;
       const share =
         catalogSubtotalExclGst > 0 ? base / catalogSubtotalExclGst : 1 / selectedCatalogItems.length;
       const discounted =
         Math.round((base - discountAmount * share + Number.EPSILON) * 100) / 100;
+      const priced =
+        custom != null
+          ? {
+              ...withCustomPrice(catalogPrice, custom),
+              price: Math.max(0, discounted),
+            }
+          : {
+              ...withCatalogPrice(catalogPrice),
+              price: Math.max(0, discounted),
+            };
       return {
         id: `si-${id}-${s.id}`,
         jobCardId: id,
         serviceCatalogId: s.id,
         name: s.name,
-        price: Math.max(0, discounted),
+        ...priced,
         isCompleted: false,
         durationMinutes: s.durationMinutes,
       };
@@ -4004,6 +4080,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             open={membershipServicesDialogOpen}
             onOpenChange={(open) => {
               if (!open) guardBookingShellFromNestedClose();
+              if (open) setMembershipRedeemSearch("");
               setMembershipServicesDialogOpen(open);
             }}
           >
@@ -4017,7 +4094,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               </DialogHeader>
               {activeMembershipForSelectedVehicle && activeMembershipPackageRow ? (
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1 space-y-2">
-                  {activeMembershipPackageRow.includedServiceIds.map((sid) => {
+                  <ServiceSearchInput
+                    value={membershipRedeemSearch}
+                    onChange={setMembershipRedeemSearch}
+                  />
+                  {activeMembershipPackageRow.includedServiceIds
+                    .filter((sid) => {
+                      const q = membershipRedeemSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      const cat = serviceCatalog.find((c) => c.id === sid);
+                      const name = (cat?.name ?? sid).toLowerCase();
+                      const category = (cat?.category ?? "").toLowerCase();
+                      return name.includes(q) || category.includes(q);
+                    })
+                    .map((sid) => {
                     const cat = serviceCatalog.find((c) => c.id === sid);
                     const included = Math.max(
                       1,
@@ -4273,52 +4363,75 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
                       {filteredMainServices.map((s) => {
-                        const pr = priceForService(s, vehicleSegment);
+                        const catalogPrice = priceForService(s, vehicleSegment);
+                        const custom = customPriceByServiceId[s.id];
                         const on = selectedMainIds.includes(s.id);
+                        const isMembershipZero =
+                          on && membershipMainServiceZeroIds.has(s.id);
+                        const pr = isMembershipZero
+                          ? 0
+                          : custom != null
+                            ? custom
+                            : catalogPrice;
                         return (
                           <div
                             key={s.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => toggleMain(s.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                toggleMain(s.id);
-                              }
-                            }}
                             className={cn(
-                              "rounded-xl border-2 p-3 text-left transition-all flex flex-col cursor-pointer min-h-0",
+                              "rounded-xl border-2 p-3 text-left transition-all flex flex-col min-h-0",
                               on
                                 ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/15"
                                 : "border-border bg-card hover:border-primary/25"
                             )}
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-semibold text-sm leading-tight flex-1">{s.name}</p>
-                              {on && (
-                                <Badge className="shrink-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0">
-                                  <Check className="h-3 w-3 mr-0.5" />
-                                  Selected
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <p className="text-base font-bold text-emerald-600 tabular-nums">{formatCurrency(pr)}</p>
-                              <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
-                                <Clock className="w-3 h-3" />
-                                {formatServiceDurationLabel(s)}
+                            <button
+                              type="button"
+                              className="text-left w-full"
+                              onClick={() => toggleMain(s.id)}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-semibold text-sm leading-tight flex-1">{s.name}</p>
+                                {on && (
+                                  <Badge className="shrink-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0">
+                                    <Check className="h-3 w-3 mr-0.5" />
+                                    Selected
+                                  </Badge>
+                                )}
                               </div>
-                            </div>
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <p className="text-base font-bold text-emerald-600 tabular-nums">
+                                  {formatCurrency(pr)}
+                                </p>
+                                <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+                                  <Clock className="w-3 h-3" />
+                                  {formatServiceDurationLabel(s)}
+                                </div>
+                              </div>
+                            </button>
+                            {on && !isMembershipZero && (
+                              <div
+                                className="mt-2 border-t border-border/60 pt-2"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              >
+                                <ServiceCustomPriceControl
+                                  dense
+                                  catalogPrice={catalogPrice}
+                                  customPrice={custom ?? null}
+                                  onChange={(next) => setCustomPrice(s.id, next)}
+                                />
+                              </div>
+                            )}
+                            {on && isMembershipZero && (
+                              <p className="mt-2 text-[11px] text-muted-foreground border-t border-border/60 pt-2">
+                                Membership benefit — billed at ₹0
+                              </p>
+                            )}
                             <Button
                               type="button"
                               size="sm"
                               variant={on ? "default" : "outline"}
                               className="mt-2.5 h-8 w-full text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleMain(s.id);
-                              }}
+                              onClick={() => toggleMain(s.id)}
                             >
                               {on ? "Selected" : "Select"}
                             </Button>
@@ -4364,9 +4477,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   and continue with main services and/or add-ons only.
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                <ServiceSearchInput
+                  value={highEndSearch}
+                  onChange={setHighEndSearch}
+                  placeholder="Search high-end services..."
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {highEndServices.map((hes) => {
+                  {filteredHighEndServices.length === 0 ? (
+                    <p className="col-span-full text-sm text-muted-foreground py-6 text-center">
+                      No high-end services match.
+                    </p>
+                  ) : (
+                  filteredHighEndServices.map((hes) => {
                     const isSelected = selectedHighEndIds.includes(hes.id);
                     const comparisonTag = highEndComparisonTag(hes.name);
                     return (
@@ -4634,7 +4757,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         )}
                       </div>
                     );
-                  })}
+                  })
+                  )}
                 </div>
                 {selectedHighEndIds.length > 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
@@ -4739,24 +4863,47 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </CardHeader>
             {showAddons && (
               <CardContent className="space-y-2">
-                {addonServices.map((s) => {
-                  const pr = vehicleSegment ? priceForService(s, vehicleSegment) : s.defaultPrice;
+                <ServiceSearchInput
+                  value={addonSearch}
+                  onChange={setAddonSearch}
+                  placeholder="Search add-ons..."
+                />
+                {filteredAddonServices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No add-ons match.</p>
+                ) : (
+                filteredAddonServices.map((s) => {
+                  const catalogPrice = vehicleSegment
+                    ? priceForService(s, vehicleSegment)
+                    : s.defaultPrice;
+                  const custom = customPriceByServiceId[s.id];
+                  const pr = custom != null ? custom : catalogPrice;
                   const on = selectedAddonIds.includes(s.id);
                   return (
-                    <label
+                    <div
                       key={s.id}
-                      className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer"
+                      className="rounded-lg border p-3 space-y-2"
                     >
-                      <Checkbox checked={on} onCheckedChange={() => toggleAddon(s.id)} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{s.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Duration: {formatServiceDurationLabel(s)} · + {formatCurrency(pr)}
-                        </p>
-                      </div>
-                    </label>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox checked={on} onCheckedChange={() => toggleAddon(s.id)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{s.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Duration: {formatServiceDurationLabel(s)} · + {formatCurrency(pr)}
+                          </p>
+                        </div>
+                      </label>
+                      {on && (
+                        <ServiceCustomPriceControl
+                          dense
+                          catalogPrice={catalogPrice}
+                          customPrice={custom ?? null}
+                          onChange={(next) => setCustomPrice(s.id, next)}
+                        />
+                      )}
+                    </div>
                   );
-                })}
+                })
+                )}
               </CardContent>
             )}
           </Card>

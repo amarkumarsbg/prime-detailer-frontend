@@ -1,9 +1,11 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { Appointment, JobCard } from "@/types";
 import { putCollectionDocument } from "@/lib/collection-sync";
 import { listStaleAppointmentPatches } from "@/lib/appointment-status";
+import { appointmentUpdateAllowed } from "@/lib/appointment-edit-policy";
 
 interface AppointmentStore {
   appointments: Appointment[];
@@ -26,6 +28,10 @@ export const useAppointmentStore = create<AppointmentStore>((set, get) => ({
   updateAppointment: async (id, updates) => {
     const prev = get().appointments.find((a) => a.id === id);
     if (!prev) return;
+    if (!appointmentUpdateAllowed(prev, updates)) {
+      toast.error("This booking can no longer be edited");
+      return;
+    }
     const next = { ...prev, ...updates };
     await putCollectionDocument("appointments", id, next);
     set((state) => ({

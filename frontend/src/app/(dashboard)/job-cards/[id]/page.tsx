@@ -32,10 +32,17 @@ import {
   CalendarDays,
   Package,
   Plus,
+  Pencil,
 } from "lucide-react";
 import { TimerControlsBufferCard } from "@/components/job-cards/timer-controls-buffer-card";
 import { ServiceTimerDeliverySummary } from "@/components/job-cards/service-timer-delivery-summary";
+import { EditJobCardDetailsDialog } from "@/components/job-cards/edit-job-card-details-dialog";
 import { useJobTimer } from "@/hooks/use-job-timer";
+import {
+  jobCardIsEditable,
+  jobCardPartsEditable,
+  jobCardPricingEditable,
+} from "@/lib/job-card-edit-policy";
 import { computeServiceTimerSnapshot, getServiceTimerSummaryForJob, initialServiceTimerPatch } from "@/lib/job-timer";
 import { PageHeader } from "@/components/shared/page-header";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
@@ -306,13 +313,21 @@ export default function JobCardDetailPage() {
   );
   const [partsDialogOpen, setPartsDialogOpen] = useState(false);
   const [partsDraftLines, setPartsDraftLines] = useState<SelectedPartLine[]>([]);
+  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
 
   const inventoryParts = useInventoryStore((s) => s.parts);
 
-  const canEditParts =
-    currentStatus !== "DELIVERED" &&
-    currentStatus !== "CANCELLED" &&
-    !jobCard?.inventoryConsumedAt;
+  const canEditJobDetails = Boolean(jobCard && jobCardIsEditable({ status: currentStatus }));
+  const canEditParts = Boolean(
+    jobCard &&
+      jobCardPartsEditable({
+        status: currentStatus,
+        inventoryConsumedAt: jobCard.inventoryConsumedAt,
+      })
+  );
+  const canEditPricing = Boolean(
+    jobCard && jobCardPricingEditable({ status: currentStatus }, Boolean(invoiceForJob))
+  );
 
   const persistHighEndCompletion = useCallback(
     (next: Record<string, number>) => {
@@ -808,7 +823,8 @@ export default function JobCardDetailPage() {
 
     const demandByCatalogId = new Map<string, { name: string; quantity: number }>();
     for (const item of items) {
-      const isMembershipBenefit = item.price <= 0;
+      const isMembershipBenefit =
+        item.priceSource === "MEMBERSHIP" || (item.priceSource == null && item.price <= 0);
       if (!isMembershipBenefit) continue;
       if (!pkg.includedServiceIds.includes(item.serviceCatalogId)) continue;
       const prev = demandByCatalogId.get(item.serviceCatalogId);
@@ -864,7 +880,8 @@ export default function JobCardDetailPage() {
 
     const demandByCatalogId = new Map<string, { name: string; quantity: number }>();
     for (const item of items) {
-      const isMembershipBenefit = item.price <= 0;
+      const isMembershipBenefit =
+        item.priceSource === "MEMBERSHIP" || (item.priceSource == null && item.price <= 0);
       if (!isMembershipBenefit) continue;
       if (!pkg.includedServiceIds.includes(item.serviceCatalogId)) continue;
       const prev = demandByCatalogId.get(item.serviceCatalogId);
@@ -903,6 +920,10 @@ export default function JobCardDetailPage() {
 
   const toggleServiceComplete = (serviceId: string) => {
     if (!jobCard) return;
+    if (!jobCardIsEditable({ status: currentStatus })) {
+      toast.error("This job card can no longer be edited");
+      return;
+    }
     const target = serviceItems.find((s) => s.id === serviceId);
     if (!target) return;
     const markingComplete = !target.isCompleted;
@@ -959,6 +980,10 @@ export default function JobCardDetailPage() {
 
   const setAllServicesComplete = (completed: boolean) => {
     if (!jobCard || serviceItems.length === 0) return;
+    if (!jobCardIsEditable({ status: currentStatus })) {
+      toast.error("This job card can no longer be edited");
+      return;
+    }
     if (completed) {
       const toComplete = serviceItems.filter((s) => !s.isCompleted);
       const redemption = redeemMembershipForCompletion(toComplete);
@@ -986,10 +1011,7 @@ export default function JobCardDetailPage() {
     }
   };
 
-  const highEndAdvanceReadOnly =
-    Boolean(invoiceForJob) ||
-    currentStatus === "DELIVERED" ||
-    currentStatus === "CANCELLED";
+  const highEndAdvanceReadOnly = !canEditPricing;
 
   const clearHighEndAdvance = () => {
     if (!jobCard) return;
@@ -1093,10 +1115,18 @@ export default function JobCardDetailPage() {
   };
 
   const addNote = () => {
-    if (newNote.trim()) {
-      setNotes((prev) => prev + (prev ? "\n\n" : "") + newNote.trim());
-      setNewNote("");
+    if (!jobCard || !newNote.trim()) return;
+    if (!jobCardIsEditable({ status: currentStatus })) {
+      toast.error("This job card can no longer be edited");
+      return;
     }
+    const nextNotes = notes + (notes ? "\n\n" : "") + newNote.trim();
+    setNotes(nextNotes);
+    setNewNote("");
+    void updateJobCard(jobCard.id, {
+      notes: nextNotes,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const handleUpdateStatus = () => {
@@ -1892,8 +1922,19 @@ export default function JobCardDetailPage() {
             </div>
             <div className="lg:col-span-7 space-y-4">
               <Card className="border-border/80 shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/60 bg-muted/15">
+                <CardHeader className="pb-3 border-b border-border/60 bg-muted/15 flex flex-row items-center justify-between gap-2 space-y-0">
                   <CardTitle className="text-base">Job summary</CardTitle>
+                  {canEditJobDetails ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditDetailsOpen(true)}
+                    >
+                      <Pencil className="w-4 h-4 mr-1.5" />
+                      Edit details
+                    </Button>
+                  ) : null}
                 </CardHeader>
                 <CardContent className="pt-3 space-y-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -1965,9 +2006,17 @@ export default function JobCardDetailPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">
-                      Invoice <span className="font-mono font-medium text-foreground">{invoiceForJob.invoiceNumber}</span>
-                    </p>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm text-muted-foreground">
+                        Invoice{" "}
+                        <span className="font-mono font-medium text-foreground">
+                          {invoiceForJob.invoiceNumber}
+                        </span>
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        Invoice issued — pricing is locked on this job card.
+                      </p>
+                    </div>
                     <Button size="sm" className="shrink-0" asChild>
                       <Link href={`/billing/${invoiceForJob.id}`}>
                         Open billing &amp; payments
@@ -2067,6 +2116,7 @@ export default function JobCardDetailPage() {
                 <div className="flex items-center gap-3">
                   <Checkbox
                     checked={item.isCompleted}
+                    disabled={!canEditJobDetails}
                     onCheckedChange={() => toggleServiceComplete(item.id)}
                   />
                   <div>
@@ -3190,7 +3240,7 @@ export default function JobCardDetailPage() {
       </Dialog>
 
       <Dialog open={partsDialogOpen} onOpenChange={setPartsDialogOpen}>
-        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh] sm:max-w-2xl")}>
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>Parts &amp; materials</DialogTitle>
             <DialogDescription>
@@ -3236,6 +3286,7 @@ export default function JobCardDetailPage() {
                 <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-background/80 px-3 py-2">
                   <Checkbox
                     id="checklist-select-all"
+                    disabled={!canEditJobDetails}
                     checked={
                       completedCount > 0 && completedCount < totalCount
                         ? "indeterminate"
@@ -3259,6 +3310,7 @@ export default function JobCardDetailPage() {
                       <Checkbox
                         id={`checklist-gate-${item.id}`}
                         checked={item.isCompleted}
+                        disabled={!canEditJobDetails}
                         onCheckedChange={() => toggleServiceComplete(item.id)}
                       />
                       <label htmlFor={`checklist-gate-${item.id}`} className="min-w-0 cursor-pointer select-none">
@@ -3492,6 +3544,15 @@ export default function JobCardDetailPage() {
           </div>
         </div>
       ) : null}
+      <EditJobCardDetailsDialog
+        jobCard={jobCard}
+        open={editDetailsOpen}
+        onOpenChange={setEditDetailsOpen}
+        onSaved={(next) => {
+          setServiceItems(next.services);
+          setNotes(next.notes ?? "");
+        }}
+      />
     </div>
   );
 }

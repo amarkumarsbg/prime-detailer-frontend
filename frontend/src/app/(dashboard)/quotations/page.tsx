@@ -49,6 +49,7 @@ import { resolveJobBranchId } from "@/lib/job-from-appointment";
 import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { cn, formatCurrency } from "@/lib/utils";
+import { taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -95,8 +96,17 @@ import {
   ArrowLeft,
   Info,
   Check,
+  Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { quotationIsEditable } from "@/lib/quotation-edit-policy";
+import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
+import {
+  ServiceSearchInput,
+  filterCatalogServices,
+} from "@/components/services/searchable-service-select";
+import { ServiceCustomPriceControl } from "@/components/services/service-custom-price-control";
+import { withCatalogPrice, withCustomPrice } from "@/lib/service-line-price";
 
 function quotationCanConvertToJob(status: QuotationStatus): boolean {
   return status !== "CONVERTED" && status !== "REJECTED";
@@ -181,6 +191,7 @@ export default function QuotationsPage() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
+  const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
   const [convertingQuotationId, setConvertingQuotationId] = useState<string | null>(null);
 
   // New quotation form state
@@ -292,6 +303,10 @@ export default function QuotationsPage() {
   const [newVehicleMakeError, setNewVehicleMakeError] = useState("");
   const [newVehicleModelError, setNewVehicleModelError] = useState("");
   const [formServiceIds, setFormServiceIds] = useState<Set<string>>(new Set());
+  /** Per-service custom override (document-scoped). null/absent = catalog price. */
+  const [formCustomPrices, setFormCustomPrices] = useState<Record<string, number>>({});
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
   const [formNotes, setFormNotes] = useState("");
   const [formTerms, setFormTerms] = useState("");
 
@@ -321,17 +336,24 @@ export default function QuotationsPage() {
     const segment = effectiveSegment;
     let subtotal = 0;
     formServiceIds.forEach((sid) => {
-      subtotal += getServicePrice(catalog, sid, segment);
+      const catalogPrice = getServicePrice(catalog, sid, segment);
+      const custom = formCustomPrices[sid];
+      subtotal += custom != null ? custom : catalogPrice;
     });
     const activeTaxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE;
     const taxAmount = Math.round(subtotal * activeTaxRate);
     const grandTotal = subtotal + taxAmount;
     return { subtotal, taxAmount, grandTotal };
-  }, [formServiceIds, effectiveSegment, catalog, gstRegistrationStatus]);
+  }, [formServiceIds, formCustomPrices, effectiveSegment, catalog, gstRegistrationStatus]);
 
   const segmentSelectLocked = hasExistingCustomer && !!selectedVehicle;
   const canSelectServices =
     hasExistingCustomer ? !!formVehicleId : true;
+
+  const filteredQuotationServices = useMemo(
+    () => filterCatalogServices(catalog, serviceSearch),
+    [catalog, serviceSearch]
+  );
 
   const kpis = useMemo(() => {
     const total = quotationList.length;
@@ -393,6 +415,7 @@ export default function QuotationsPage() {
   };
 
   const resetForm = () => {
+    setEditingQuotation(null);
     setCurrentStep("customer");
     setLookupQuery("");
     setLookupPanelCustomers([]);
@@ -416,8 +439,36 @@ export default function QuotationsPage() {
     setNewVehicleMakeError("");
     setNewVehicleModelError("");
     setFormServiceIds(new Set());
+    setFormCustomPrices({});
+    setServiceSearch("");
     setFormNotes("");
     setFormTerms("");
+  };
+
+  const openEditQuotation = (q: Quotation, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!quotationIsEditable(q)) {
+      toast.error("This quotation can no longer be edited");
+      return;
+    }
+    resetForm();
+    setEditingQuotation(q);
+    setFormCustomerId(q.customerId);
+    setFormVehicleId(q.vehicleId);
+    setFormSegment(q.vehicleSegment);
+    setFormServiceIds(new Set(q.services.map((s) => s.serviceCatalogId)));
+    const customs: Record<string, number> = {};
+    for (const s of q.services) {
+      if (s.isCustomPrice || s.priceSource === "CUSTOM") {
+        customs[s.serviceCatalogId] = s.price;
+      }
+    }
+    setFormCustomPrices(customs);
+    setFormNotes(q.notes ?? "");
+    setFormTerms(q.termsAndConditions ?? "");
+    setCurrentStep("details");
+    setDetailsDialogOpen(false);
+    setNewDialogOpen(true);
   };
 
   const handleExistingCustomerVehicleSelection = (value: string) => {
@@ -635,6 +686,69 @@ export default function QuotationsPage() {
       ]);
     }
 
+    const services = Array.from(formServiceIds).map((sid) => {
+      const svc = catalog.find((s) => s.id === sid)!;
+      const catalogPrice = getServicePrice(catalog, sid, vehicleSegment);
+      const custom = formCustomPrices[sid];
+      const priced =
+        custom != null ? withCustomPrice(catalogPrice, custom) : withCatalogPrice(catalogPrice);
+      return {
+        serviceCatalogId: sid,
+        name: svc.name,
+        price: priced.price,
+        catalogPrice: priced.catalogPrice,
+        isCustomPrice: priced.isCustomPrice,
+        priceSource: priced.priceSource,
+      };
+    });
+    const taxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE;
+
+    if (editingQuotation) {
+      if (!quotationIsEditable(editingQuotation)) {
+        toast.error("This quotation can no longer be edited");
+        return;
+      }
+      const patch: Partial<Quotation> = {
+        customerId,
+        customerName,
+        customerPhone,
+        vehicleId,
+        vehicleRegNumber,
+        vehicleMakeModel,
+        vehicleSegment,
+        services,
+        subtotal: formCalculations.subtotal,
+        taxRate,
+        taxAmount: formCalculations.taxAmount,
+        grandTotal: formCalculations.grandTotal,
+        notes: formNotes.trim() || undefined,
+        termsAndConditions: formTerms || undefined,
+        // Keep status (DRAFT/SENT/APPROVED); offer re-send via WhatsApp after edit
+        sentViaWhatsApp:
+          editingQuotation.status === "SENT" ? false : editingQuotation.sentViaWhatsApp,
+      };
+      await updateQuotation(editingQuotation.id, patch);
+      pushActivityLog({
+        action: "UPDATED",
+        entityType: "QUOTATION",
+        entityId: editingQuotation.id,
+        entityLabel: editingQuotation.quotationNumber,
+        details: `Quotation ${editingQuotation.quotationNumber} updated`,
+      });
+      toast.success("Quotation updated", {
+        description:
+          editingQuotation.status === "SENT"
+            ? `${editingQuotation.quotationNumber} saved. Re-send via WhatsApp if the customer needs the revised estimate.`
+            : `${editingQuotation.quotationNumber} has been saved.`,
+      });
+      setSelectedQuotation((sel) =>
+        sel?.id === editingQuotation.id ? { ...sel, ...patch, updatedAt: new Date().toISOString() } : sel
+      );
+      setNewDialogOpen(false);
+      resetForm();
+      return;
+    }
+
     const createdBy = authUser?.id ?? "usr-004";
     const newQuotation: Quotation = {
       id: `quot-${Date.now()}`,
@@ -646,13 +760,9 @@ export default function QuotationsPage() {
       vehicleRegNumber,
       vehicleMakeModel,
       vehicleSegment,
-      services: Array.from(formServiceIds).map((sid) => {
-        const svc = catalog.find((s) => s.id === sid)!;
-        const price = getServicePrice(catalog, sid, vehicleSegment);
-        return { serviceCatalogId: sid, name: svc.name, price };
-      }),
+      services,
       subtotal: formCalculations.subtotal,
-      taxRate: gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE,
+      taxRate,
       taxAmount: formCalculations.taxAmount,
       grandTotal: formCalculations.grandTotal,
       status: "DRAFT",
@@ -755,19 +865,25 @@ export default function QuotationsPage() {
 
     const serviceItems: ServiceItem[] = q.services.map((s, idx) => {
       const cat = catalog.find((c) => c.id === s.serviceCatalogId);
+      const catalogPrice =
+        s.catalogPrice ??
+        (cat ? getServicePrice(catalog, s.serviceCatalogId, q.vehicleSegment) : s.price);
       return {
         id: `si-${jobId}-${idx}`,
         jobCardId: jobId,
         serviceCatalogId: s.serviceCatalogId,
         name: s.name,
         price: s.price,
+        catalogPrice,
+        isCustomPrice: s.isCustomPrice ?? s.priceSource === "CUSTOM",
+        priceSource: s.priceSource ?? (s.isCustomPrice ? "CUSTOM" : "CATALOG"),
         isCompleted: false,
         durationMinutes: cat?.durationMinutes,
       };
     });
 
     const incentivePercent = 5;
-    const incentiveAmount = Math.round((q.grandTotal * incentivePercent) / 100);
+    const incentiveAmount = Math.round((q.subtotal * incentivePercent) / 100);
 
     const newJob: JobCard = {
       id: jobId,
@@ -784,7 +900,7 @@ export default function QuotationsPage() {
       reportedIssues: `Converted from quotation ${q.quotationNumber}`,
       expectedDelivery: new Date(Date.now() + 86400000).toISOString(),
       services: serviceItems,
-      estimatedAmount: q.grandTotal,
+      estimatedAmount: q.subtotal,
       incentivePercent,
       incentiveAmount,
       termsAndConditions: q.termsAndConditions,
@@ -859,8 +975,16 @@ export default function QuotationsPage() {
   const toggleService = (serviceId: string) => {
     setFormServiceIds((prev) => {
       const next = new Set(prev);
-      if (next.has(serviceId)) next.delete(serviceId);
-      else next.add(serviceId);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+        setFormCustomPrices((prices) => {
+          if (!(serviceId in prices)) return prices;
+          const { [serviceId]: _, ...rest } = prices;
+          return rest;
+        });
+      } else {
+        next.add(serviceId);
+      }
       return next;
     });
   };
@@ -935,13 +1059,21 @@ export default function QuotationsPage() {
                     <Eye className="mr-2 h-4 w-4" />
                     View Details
                   </DropdownMenuItem>
+                  {quotationIsEditable(item) && (
+                    <DropdownMenuItem onClick={(e) => openEditQuotation(item, e)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
                   {quotationCanConvertToJob(item.status) && (
                     <>
                       <DropdownMenuItem
                         onClick={(e) => handleSendWhatsApp(item, e)}
                       >
                         <MessageCircle className="mr-2 h-4 w-4" />
-                        Send via WhatsApp
+                        {item.status === "SENT" && !item.sentViaWhatsApp
+                          ? "Re-send via WhatsApp"
+                          : "Send via WhatsApp"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         disabled={convertingQuotationId === item.id}
@@ -982,7 +1114,14 @@ export default function QuotationsPage() {
         hideDescriptionOnMobile
         inlineActionsOnMobile
         actions={
-          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setNewDialogOpen(true)}>
+          <Button
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={() => {
+              resetForm();
+              setNewDialogOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4 mr-1.5" />
             New Quotation
           </Button>
@@ -1117,7 +1256,11 @@ export default function QuotationsPage() {
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Quotation</DialogTitle>
+            <DialogTitle>
+              {editingQuotation
+                ? `Edit ${editingQuotation.quotationNumber}`
+                : "New Quotation"}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleNewQuotationSubmit} className="space-y-4">
             {/* Stepper Progress Indicator */}
@@ -1770,34 +1913,90 @@ export default function QuotationsPage() {
             {currentStep === "details" && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Services</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Services</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0"
+                      onClick={() => setAddServiceOpen(true)}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Add services
+                    </Button>
+                  </div>
+                  <ServiceSearchInput
+                    value={serviceSearch}
+                    onChange={setServiceSearch}
+                  />
                   <div className="rounded-lg border border-border p-3 max-h-48 overflow-y-auto space-y-2 bg-background">
-                    {catalog.filter((s) => s.isActive).map((svc) => {
-                      const price = getServicePrice(catalog, svc.id, effectiveSegment);
+                    {filteredQuotationServices.length === 0 ? (
+                      <p className="py-3 text-center text-sm text-muted-foreground">
+                        No services match
+                      </p>
+                    ) : (
+                      filteredQuotationServices.map((svc) => {
+                      const catalogPrice = getServicePrice(catalog, svc.id, effectiveSegment);
+                      const custom = formCustomPrices[svc.id];
+                      const selected = formServiceIds.has(svc.id);
+                      const displayPrice = custom != null ? custom : catalogPrice;
                       return (
                         <div
                           key={svc.id}
-                          className="flex items-center space-x-2"
+                          className="rounded-md border border-transparent px-1 py-1.5 hover:bg-muted/40"
                         >
-                          <Checkbox
-                            id={`svc-${svc.id}`}
-                            checked={formServiceIds.has(svc.id)}
-                            onCheckedChange={() => toggleService(svc.id)}
-                            disabled={!canSelectServices}
-                          />
-                          <label
-                            htmlFor={`svc-${svc.id}`}
-                            className="text-sm font-medium leading-none cursor-pointer flex-1 text-foreground"
-                          >
-                            {svc.name}
-                          </label>
-                          <span className="text-sm text-muted-foreground tabular-nums">
-                            {formatCurrency(price)}
-                          </span>
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              id={`svc-${svc.id}`}
+                              checked={selected}
+                              onCheckedChange={() => toggleService(svc.id)}
+                              disabled={!canSelectServices}
+                              className="mt-0.5"
+                            />
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <label
+                                  htmlFor={`svc-${svc.id}`}
+                                  className="text-sm font-medium leading-snug cursor-pointer text-foreground"
+                                >
+                                  {svc.name}
+                                </label>
+                                <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">
+                                  {formatCurrency(displayPrice)}
+                                </span>
+                              </div>
+                              {selected && canSelectServices && (
+                                <ServiceCustomPriceControl
+                                  dense
+                                  catalogPrice={catalogPrice}
+                                  customPrice={custom ?? null}
+                                  onChange={(next) => {
+                                    setFormCustomPrices((prev) => {
+                                      if (next == null) {
+                                        const { [svc.id]: _, ...rest } = prev;
+                                        return rest;
+                                      }
+                                      return { ...prev, [svc.id]: next };
+                                    });
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
                         </div>
                       );
-                    })}
+                    })
+                    )}
                   </div>
+                  <AddServicePackageDialog
+                    open={addServiceOpen}
+                    onOpenChange={setAddServiceOpen}
+                    onCreated={(item) => {
+                      setFormServiceIds((prev) => new Set(prev).add(item.id));
+                      setServiceSearch("");
+                    }}
+                  />
                 </div>
 
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
@@ -1851,7 +2050,9 @@ export default function QuotationsPage() {
                   >
                     Back
                   </Button>
-                  <Button type="submit">Create Quotation</Button>
+                  <Button type="submit">
+                    {editingQuotation ? "Save Changes" : "Create Quotation"}
+                  </Button>
                 </div>
               </div>
             )}
@@ -1861,74 +2062,83 @@ export default function QuotationsPage() {
 
       {/* View Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedQuotation?.quotationNumber ?? "Quotation Details"}
-            </DialogTitle>
-            <DialogDescription>
-              Full quotation details and status
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          mobileVariant="centered"
+          className="flex max-h-[min(90dvh,720px)] w-[calc(100vw-1.5rem)] max-w-lg flex-col gap-0 overflow-hidden p-0"
+        >
+          <div className="shrink-0 space-y-1 border-b border-border/60 px-6 pb-4 pt-6 pr-12">
+            <DialogHeader className="max-sm:pt-0 space-y-1">
+              <DialogTitle>
+                {selectedQuotation?.quotationNumber ?? "Quotation Details"}
+              </DialogTitle>
+              <DialogDescription>
+                Full quotation details and status
+              </DialogDescription>
+            </DialogHeader>
+          </div>
           {selectedQuotation && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <QuotationStatusBadge status={selectedQuotation.status} />
-                <span className="text-sm text-muted-foreground">
-                  Valid until {format(new Date(selectedQuotation.validUntil), "dd MMM yyyy")}
-                </span>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">Customer</p>
-                  <p className="font-medium">{selectedQuotation.customerName}</p>
-                  <p className="text-sm text-muted-foreground">{selectedQuotation.customerPhone}</p>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center gap-2">
+                  <QuotationStatusBadge status={selectedQuotation.status} />
+                  <span className="text-sm text-muted-foreground shrink-0">
+                    Valid until {format(new Date(selectedQuotation.validUntil), "dd MMM yyyy")}
+                  </span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Customer</p>
+                    <p className="font-medium truncate">{selectedQuotation.customerName}</p>
+                    <p className="text-sm text-muted-foreground truncate">{selectedQuotation.customerPhone}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Vehicle</p>
+                    <p className="font-medium truncate">{selectedQuotation.vehicleRegNumber}</p>
+                    <p className="text-sm text-muted-foreground truncate">{selectedQuotation.vehicleMakeModel}</p>
+                  </div>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Vehicle</p>
-                  <p className="font-medium">{selectedQuotation.vehicleRegNumber}</p>
-                  <p className="text-sm text-muted-foreground">{selectedQuotation.vehicleMakeModel}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Services</p>
+                  <ul className="space-y-1">
+                    {selectedQuotation.services.map((s) => (
+                      <li key={s.serviceCatalogId} className="flex justify-between gap-3 text-sm">
+                        <span className="min-w-0 truncate">{s.name}</span>
+                        <span className="shrink-0 tabular-nums">{formatCurrency(s.price)}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Services</p>
-                <ul className="space-y-1">
-                  {selectedQuotation.services.map((s) => (
-                    <li key={s.serviceCatalogId} className="flex justify-between text-sm">
-                      <span>{s.name}</span>
-                      <span>{formatCurrency(s.price)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              {selectedQuotation.notes?.trim() && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Notes</p>
-                  <p className="text-sm whitespace-pre-wrap rounded-md border border-border bg-muted/30 px-3 py-2">
-                    {selectedQuotation.notes}
-                  </p>
-                </div>
-              )}
-              <div className="pt-2 border-t border-border space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(selectedQuotation.subtotal)}</span>
-                </div>
-                {selectedQuotation.taxRate > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax ({Math.round((selectedQuotation.taxRate ?? 0) * 100)}%)</span>
-                    <span>{formatCurrency(selectedQuotation.taxAmount)}</span>
+                {selectedQuotation.notes?.trim() && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Notes</p>
+                    <p className="text-sm whitespace-pre-wrap rounded-md border border-border bg-muted/30 px-3 py-2">
+                      {selectedQuotation.notes}
+                    </p>
                   </div>
                 )}
-                <div className="flex justify-between font-semibold">
-                  <span>Grand Total</span>
-                  <span>{formatCurrency(selectedQuotation.grandTotal)}</span>
+                <div className="pt-2 border-t border-border space-y-1">
+                  <div className="flex justify-between text-sm gap-3">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="tabular-nums">{formatCurrency(selectedQuotation.subtotal)}</span>
+                  </div>
+                  {taxRateAsFraction(selectedQuotation.taxRate) > 0 && (
+                    <div className="flex justify-between text-sm gap-3">
+                      <span className="text-muted-foreground">
+                        Tax ({taxRateAsPercentLabel(selectedQuotation.taxRate)})
+                      </span>
+                      <span className="tabular-nums">{formatCurrency(selectedQuotation.taxAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold gap-3">
+                    <span>Grand Total</span>
+                    <span className="tabular-nums">{formatCurrency(selectedQuotation.grandTotal)}</span>
+                  </div>
                 </div>
               </div>
             </div>
           )}
           {selectedQuotation && (
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-background px-6 py-4 sm:flex-row sm:flex-wrap sm:justify-end sm:space-x-0 sm:gap-2">
               {selectedQuotation.convertedToJobCardId ? (
                 <Button variant="default" asChild className="w-full sm:w-auto">
                   <Link href={`/job-cards/${selectedQuotation.convertedToJobCardId}`}>
@@ -1937,6 +2147,17 @@ export default function QuotationsPage() {
                 </Button>
               ) : quotationCanConvertToJob(selectedQuotation.status) ? (
                 <>
+                  {quotationIsEditable(selectedQuotation) && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      onClick={() => openEditQuotation(selectedQuotation)}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -1944,7 +2165,9 @@ export default function QuotationsPage() {
                     onClick={(e) => void handleSendWhatsApp(selectedQuotation, e)}
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    Send via WhatsApp
+                    {selectedQuotation.status === "SENT" && !selectedQuotation.sentViaWhatsApp
+                      ? "Re-send via WhatsApp"
+                      : "Send via WhatsApp"}
                   </Button>
                   <Button
                     type="button"
