@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { PICKUP_DROP_STATUS_LABEL, pickupDropStatusRank } from "@/lib/pickup-drop-flow";
+import { pickupAdvanceActionLabel } from "@/lib/pickup-drop-actions";
 import type { PickupDropStatus } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -124,18 +125,4 @@ export function PickupLegStepper({ status, className }: PickupLegStepperProps) {
   );
 }
 
-/** Short action label for table advance buttons. */
-export function pickupAdvanceActionLabel(nextStatus: PickupDropStatus): string {
-  switch (nextStatus) {
-    case "DRIVER_ASSIGNED":
-      return "Assign driver";
-    case "PICKED_UP":
-      return "Mark picked up";
-    case "IN_SERVICE":
-      return "At workshop";
-    case "DELIVERED":
-      return "Complete";
-    default:
-      return PICKUP_DROP_STATUS_LABEL[nextStatus];
-  }
-}
+export { pickupAdvanceActionLabel };

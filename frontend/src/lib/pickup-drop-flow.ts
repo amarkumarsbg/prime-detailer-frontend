@@ -70,8 +70,9 @@ export function nextPickupDropStatus(
       case "PENDING":
         return "DRIVER_ASSIGNED";
       case "DRIVER_ASSIGNED":
-        return "IN_SERVICE"; // Bypasses PICKED_UP
+        return "DELIVERED";
       case "IN_SERVICE":
+        // Legacy fallback for previously created DROP requests.
         return "DELIVERED";
       default:
         return null;
@@ -117,7 +118,7 @@ export function pickupDropDisplayLabel(
 ): string {
   if (isPickupLegComplete(req, requests)) return "Pickup complete";
   if (req.type === "DROP") {
-    if (req.status === "IN_SERVICE") return "At workshop";
+    if (req.status === "IN_SERVICE") return "Drop-off in progress";
     if (req.status === "DELIVERED") return "Complete";
   } else {
     if (req.status === "IN_SERVICE" && req.jobNumber === "NEW") {

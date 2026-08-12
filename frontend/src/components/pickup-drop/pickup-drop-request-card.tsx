@@ -216,12 +216,12 @@ export function PickupDropRequestCard({
                     disabled={!nextStatus}
                     title={
                       nextStatus
-                        ? pickupAdvanceActionLabel(nextStatus)
+                        ? pickupAdvanceActionLabel(r.type, nextStatus)
                         : PICKUP_DROP_STATUS_LABEL[r.status]
                     }
                     onClick={() => onAdvance(r)}
                   >
-                    {nextStatus ? pickupAdvanceActionLabel(nextStatus) : "Complete"}
+                    {nextStatus ? pickupAdvanceActionLabel(r.type, nextStatus) : "Complete"}
                   </Button>
                   <Button
                     type="button"

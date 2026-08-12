@@ -109,12 +109,12 @@ function LegRow({
               disabled={!nextStatus}
               title={
                 nextStatus
-                  ? pickupAdvanceActionLabel(nextStatus)
+                  ? pickupAdvanceActionLabel(leg.type, nextStatus)
                   : PICKUP_DROP_STATUS_LABEL[leg.status]
               }
               onClick={() => onAdvance(leg)}
             >
-              {nextStatus ? pickupAdvanceActionLabel(nextStatus) : "Complete"}
+              {nextStatus ? pickupAdvanceActionLabel(leg.type, nextStatus) : "Complete"}
             </Button>
           )}
           <Button
