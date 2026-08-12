@@ -176,7 +176,7 @@ export default function QuotationsPage() {
   const authUser = useAuthStore((s) => s.user);
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const branches = useBranchStore((s) => s.branches);
-  const businessName = useSettingsStore((s) => s.businessName);
+  const { businessName, gstRegistrationStatus } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -323,10 +323,11 @@ export default function QuotationsPage() {
     formServiceIds.forEach((sid) => {
       subtotal += getServicePrice(catalog, sid, segment);
     });
-    const taxAmount = Math.round(subtotal * TAX_RATE);
+    const activeTaxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE;
+    const taxAmount = Math.round(subtotal * activeTaxRate);
     const grandTotal = subtotal + taxAmount;
     return { subtotal, taxAmount, grandTotal };
-  }, [formServiceIds, effectiveSegment, catalog]);
+  }, [formServiceIds, effectiveSegment, catalog, gstRegistrationStatus]);
 
   const segmentSelectLocked = hasExistingCustomer && !!selectedVehicle;
   const canSelectServices =
@@ -651,7 +652,7 @@ export default function QuotationsPage() {
         return { serviceCatalogId: sid, name: svc.name, price };
       }),
       subtotal: formCalculations.subtotal,
-      taxRate: TAX_RATE,
+      taxRate: gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE,
       taxAmount: formCalculations.taxAmount,
       grandTotal: formCalculations.grandTotal,
       status: "DRAFT",
@@ -1805,7 +1806,7 @@ export default function QuotationsPage() {
                     <span className="font-medium tabular-nums">{formatCurrency(formCalculations.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax (18%)</span>
+                    <span className="text-muted-foreground">Tax ({Math.round((gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE) * 100)}%)</span>
                     <span className="font-medium tabular-nums">{formatCurrency(formCalculations.taxAmount)}</span>
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border text-foreground">
@@ -1912,7 +1913,7 @@ export default function QuotationsPage() {
                   <span>{formatCurrency(selectedQuotation.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tax (18%)</span>
+                  <span className="text-muted-foreground">Tax ({Math.round((selectedQuotation.taxRate ?? 0) * 100)}%)</span>
                   <span>{formatCurrency(selectedQuotation.taxAmount)}</span>
                 </div>
                 <div className="flex justify-between font-semibold">

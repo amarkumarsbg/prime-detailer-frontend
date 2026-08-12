@@ -127,6 +127,7 @@ export default function PickupDropPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<"customer" | "vehicle" | "details">("customer");
   const vehicles = useVehicleStore((s) => s.vehicles);
+  const setVehicles = useVehicleStore((s) => s.setVehicles);
   const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
 
   const [vehicleReg, setVehicleReg] = useState("");
@@ -341,9 +342,7 @@ export default function PickupDropPage() {
       year: new Date().getFullYear(),
     };
 
-    useVehicleStore.setState((state) => ({
-      vehicles: [newVehicle, ...state.vehicles],
-    }));
+    setVehicles((prev) => [newVehicle, ...prev]);
 
     setSelectedVehicleId(newVehicle.id);
     setAddVehicleForExistingCustomerDialogOpen(false);

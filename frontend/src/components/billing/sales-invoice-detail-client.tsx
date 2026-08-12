@@ -155,6 +155,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const [referenceNumber, setReferenceNumber] = useState("");
   const [useWallet, setUseWallet] = useState(false);
   const [addExtraToWallet, setAddExtraToWallet] = useState(false);
+  const [dialogRemainingBalance, setDialogRemainingBalance] = useState(0);
 
   // Local edit states for discounts
   const [flatDiscountStr, setFlatDiscountStr] = useState(() => invoice ? String(invoice.discountAmount || "") : "");
@@ -497,6 +498,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   }, [invoicePdfOpts]);
 
   const openRecordDialog = () => {
+    setDialogRemainingBalance(remainingBalance);
     setPaymentAmount(remainingBalance > 0 ? String(remainingBalance) : "");
     setPaymentMethod("CASH");
     setReferenceNumber("");
@@ -513,14 +515,14 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     const totalPaidBefore = payments.reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0);
 
     const walletAmountUsed = useWallet
-      ? Math.min(invoiceCustomer?.walletBalance || 0, remainingBalance)
+      ? Math.min(invoiceCustomer?.walletBalance || 0, dialogRemainingBalance)
       : 0;
 
-    const extraAmount = amount > (remainingBalance - walletAmountUsed)
-      ? Math.round((amount - (remainingBalance - walletAmountUsed)) * 100) / 100
+    const extraAmount = amount > (dialogRemainingBalance - walletAmountUsed)
+      ? Math.round((amount - (dialogRemainingBalance - walletAmountUsed)) * 100) / 100
       : 0;
 
-    const remainingAfter = Math.max(0, remainingBalance - walletAmountUsed - amount);
+    const remainingAfter = Math.max(0, dialogRemainingBalance - walletAmountUsed - amount);
 
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
     const result = await recordInvoicePayment(
@@ -1133,9 +1135,9 @@ ${businessNameVal}`;
                         const checked = e.target.checked;
                         setUseWallet(checked);
                         const walletUse = checked
-                          ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
+                          ? Math.min(invoiceCustomer.walletBalance, dialogRemainingBalance)
                           : 0;
-                        setPaymentAmount(String(Math.max(0, Math.round((remainingBalance - walletUse) * 100) / 100)));
+                        setPaymentAmount(String(Math.max(0, Math.round((dialogRemainingBalance - walletUse) * 100) / 100)));
                       }}
                       className="rounded border-border text-primary focus:ring-primary h-4 w-4"
                     />
@@ -1146,15 +1148,15 @@ ${businessNameVal}`;
                   <div className="text-xs space-y-1 pt-1 border-t border-emerald-500/10 font-mono text-muted-foreground">
                     <div className="flex justify-between">
                       <span>Invoice Remaining:</span>
-                      <span>₹{remainingBalance}</span>
+                      <span>₹{dialogRemainingBalance}</span>
                     </div>
                     <div className="flex justify-between text-rose-500">
                       <span>Wallet Used:</span>
-                      <span>-₹{Math.min(invoiceCustomer.walletBalance, remainingBalance)}</span>
+                      <span>-₹{Math.min(invoiceCustomer.walletBalance, dialogRemainingBalance)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-foreground">
                       <span>Amount to Pay:</span>
-                      <span>₹{Math.max(0, Math.round((remainingBalance - Math.min(invoiceCustomer.walletBalance, remainingBalance)) * 100) / 100)}</span>
+                      <span>₹{Math.max(0, Math.round((dialogRemainingBalance - Math.min(invoiceCustomer.walletBalance, dialogRemainingBalance)) * 100) / 100)}</span>
                     </div>
                   </div>
                 )}
@@ -1176,10 +1178,10 @@ ${businessNameVal}`;
 
             {(() => {
               const walletUse = useWallet
-                ? Math.min(invoiceCustomer?.walletBalance || 0, remainingBalance)
+                ? Math.min(invoiceCustomer?.walletBalance || 0, dialogRemainingBalance)
                 : 0;
               const inputAmt = Number(paymentAmount) || 0;
-              const targetBalance = remainingBalance - walletUse;
+              const targetBalance = dialogRemainingBalance - walletUse;
               const extra = inputAmt > targetBalance ? Math.round((inputAmt - targetBalance) * 100) / 100 : 0;
               
               if (extra > 0) {

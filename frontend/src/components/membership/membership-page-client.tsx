@@ -212,6 +212,7 @@ export function MembershipPageClient() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const customers = useCustomerStore((s) => s.customers);
   const vehicles = useVehicleStore((s) => s.vehicles);
+  const setVehicles = useVehicleStore((s) => s.setVehicles);
   const businessName = useSettingsStore((s) => s.businessName);
 
   const activeServices = useMemo(
@@ -440,9 +441,7 @@ export function MembershipPageClient() {
       year: new Date().getFullYear(),
     };
 
-    useVehicleStore.setState((state) => ({
-      vehicles: [newVehicle, ...state.vehicles],
-    }));
+    setVehicles((prev) => [newVehicle, ...prev]);
 
     setAssignVehicleId(newVehicle.id);
     setAddVehicleForExistingCustomerDialogOpen(false);
