@@ -17,6 +17,7 @@ import {
   X,
   LogOut,
   ChevronDown,
+  PanelLeftClose,
 } from "lucide-react";
 
 function navSectionSlug(label: string): string {
@@ -199,7 +200,7 @@ function SidebarContent({
 
 export function Sidebar() {
   const router = useRouter();
-  const { mobileOpen, setMobileOpen } = useSidebarStore();
+  const { mobileOpen, setMobileOpen, collapsed, setCollapsed } = useSidebarStore();
   const businessName = useSettingsStore((s) => s.businessName);
   const businessLogo = useSettingsStore((s) => s.businessLogo);
   const user = useAuthStore((s) => s.user);
@@ -247,9 +248,24 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-all duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border-r border-[var(--sidebar-border)]">
-        <div className="flex items-center h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)] bg-white/[0.03]">
+      <aside
+        className={cn(
+          "hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-transform duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border-r border-[var(--sidebar-border)]",
+          collapsed ? "-translate-x-full pointer-events-none" : "translate-x-0"
+        )}
+        aria-hidden={collapsed}
+      >
+        <div className="flex items-center justify-between gap-2 h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)] bg-white/[0.03]">
           {brandHeader()}
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors shrink-0"
+            aria-label="Hide sidebar"
+            title="Hide sidebar"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-transparent">

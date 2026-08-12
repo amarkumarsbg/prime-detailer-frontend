@@ -13,6 +13,8 @@ import { AppDataSync } from "@/components/layout/app-data-sync";
 import { Button } from "@/components/ui/button";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import { canAccessNavItem } from "@/lib/rbac";
+import { useSidebarStore } from "@/store/sidebar-store";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -91,6 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const runBootstrap = useAppBootstrapStore((s) => s.run);
   const resetBootstrap = useAppBootstrapStore((s) => s.reset);
   const bootstrapError = useAppBootstrapStore((s) => s.error);
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
 
   useEffect(() => {
     if (authReady && sessionChecked && !isAuthenticated) {
@@ -132,7 +135,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="fixed inset-0 z-0 flex flex-col overflow-hidden bg-background">
       <Sidebar />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-0 transition-[padding] duration-300 md:pl-[260px]">
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-0 transition-[padding] duration-300",
+          sidebarCollapsed ? "md:pl-0" : "md:pl-[260px]"
+        )}
+      >
         <Header />
         <main
           ref={mainScrollRef}

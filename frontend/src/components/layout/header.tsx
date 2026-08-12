@@ -35,9 +35,11 @@ import {
   User,
   Wrench,
   Building2,
+  PanelLeft,
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
+import { useSidebarStore } from "@/store/sidebar-store";
 
 export function Header() {
   const { user, currentBranch, logout, setBranch } = useAuthStore();
@@ -105,11 +107,23 @@ export function Header() {
   const avatarSrc = resolveUploadsPublicUrl(user.avatar);
   const companyLogoSrc = resolveUploadsPublicUrl(businessLogo);
   const count = unreadCount;
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const toggleCollapsed = useSidebarStore((s) => s.toggleCollapsed);
 
   return (
     <header
       className="shrink-0 z-30 min-w-0 border-b border-border bg-background px-3 sm:px-4 md:px-6 py-2 md:py-0 md:h-16 max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:gap-x-1.5 sm:max-md:gap-x-2 max-md:[grid-template-areas:'hdr_logo_hdr_branch_hdr_tools'] md:flex md:flex-nowrap md:items-center md:justify-between md:gap-3"
     >
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        className="hidden md:inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg border border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+        title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+      >
+        <PanelLeft className="w-4 h-4" />
+      </button>
+
       {/* Mobile only — company logo (desktop branding lives in the sidebar) */}
       <Link
         href="/dashboard"
