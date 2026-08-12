@@ -324,11 +324,18 @@ export function ImportVehiclesDialog({ open, onOpenChange }: ImportVehiclesDialo
                             {row.registrationNumber || "—"}
                           </td>
                           <td className="px-3 py-2">
-                            {row.resolvedCustomerName ||
-                              row.customerName ||
-                              row.customerPhone ||
-                              row.customerId ||
-                              "—"}
+                            {row.resolvedCustomerName ? (
+                              <span className="block">
+                                <span className="font-medium">{row.resolvedCustomerName}</span>
+                                {row.customerPhone ? (
+                                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                                    {row.customerPhone}
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : (
+                              row.customerPhone || row.customerName || row.customerId || "—"
+                            )}
                           </td>
                           <td className="px-3 py-2">{row.make || "—"}</td>
                           <td className="px-3 py-2">{row.model || "—"}</td>
