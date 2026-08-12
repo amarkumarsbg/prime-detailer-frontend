@@ -76,8 +76,8 @@ export function parseCsvText(text: string): { headers: string[]; rows: string[][
 async function parseExcelBuffer(buffer: ArrayBuffer): Promise<{ headers: string[]; rows: string[][] }> {
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
-  // ExcelJS typings accept Buffer; in browser we pass ArrayBuffer via Uint8Array
-  await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+  // Browser: ArrayBuffer via Uint8Array; ExcelJS typings expect Node Buffer
+  await workbook.xlsx.load(new Uint8Array(buffer) as never);
   const sheet = workbook.worksheets[0];
   if (!sheet) throw new Error("Workbook has no sheets");
 
