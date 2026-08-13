@@ -17,6 +17,7 @@ import {
   X,
   LogOut,
   ChevronDown,
+  PanelLeft,
   PanelLeftClose,
 } from "lucide-react";
 
@@ -51,12 +52,10 @@ function isNavItemActive(pathname: string, href: string): boolean {
 
 function SidebarContent({
   onNavClick,
-  onCollapse,
   navOverflow = "hidden",
   className,
 }: {
   onNavClick?: () => void;
-  onCollapse?: () => void;
   navOverflow?: "hidden" | "auto";
   className?: string;
 }) {
@@ -69,9 +68,6 @@ function SidebarContent({
     ...group,
     items: group.items.filter((item) => canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions)),
   })).filter((group) => group.items.length > 0);
-
-  const collapseSectionLabel =
-    filteredGroups.find((g) => /customers/i.test(g.label))?.label ?? filteredGroups[0]?.label;
 
   const navRef = useRef<HTMLElement>(null);
   const navContentRef = useRef<HTMLDivElement>(null);
@@ -154,17 +150,6 @@ function SidebarContent({
                 >
                   {group.label}
                 </h2>
-                {onCollapse && group.label === collapseSectionLabel ? (
-                  <button
-                    type="button"
-                    onClick={onCollapse}
-                    className="flex items-center justify-center w-8 h-8 -mr-0.5 rounded-lg text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] transition-colors shrink-0"
-                    aria-label="Hide sidebar"
-                    title="Hide sidebar"
-                  >
-                    <PanelLeftClose className="w-4.5 h-4.5" strokeWidth={2.25} />
-                  </button>
-                ) : null}
               </div>
               <div className="space-y-0.5 px-1.5">
                 {group.items.map((item) => {
@@ -279,14 +264,39 @@ export function Sidebar() {
           {brandHeader()}
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-transparent">
+        <div className="relative flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-transparent">
           <SidebarContent
             className="flex-1 min-h-0"
             navOverflow="auto"
-            onCollapse={() => setCollapsed(true)}
           />
         </div>
+
+        {/* Desktop: pin to sidebar viewport center (not nav scroll content). */}
+        {!collapsed ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="absolute top-1/2 right-0 z-50 flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Hide sidebar"
+            title="Hide sidebar"
+          >
+            <PanelLeftClose className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        ) : null}
       </aside>
+
+      {/* Desktop: expand control stays on the left edge when sidebar is off-canvas. */}
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="fixed left-0 top-1/2 z-40 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground md:flex"
+          aria-label="Show sidebar"
+          title="Show sidebar"
+        >
+          <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
+        </button>
+      ) : null}
 
       {mobileOpen && (
         <div
