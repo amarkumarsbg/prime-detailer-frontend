@@ -17,6 +17,7 @@ export function signAuthToken(user: {
   email: string;
   role: UserRole;
   branchId: string;
+  organizationId?: string;
   name: string;
   mustChangePassword?: boolean;
   permissions?: string[];
@@ -29,6 +30,7 @@ export function signAuthToken(user: {
       email: user.email,
       role: user.role,
       branchId: user.branchId,
+      organizationId: user.organizationId,
       name: user.name,
       mustChangePassword: user.mustChangePassword === true,
       permissions: user.permissions || [],

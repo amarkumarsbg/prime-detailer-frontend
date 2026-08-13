@@ -13,11 +13,13 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "test:plan-catalog": "tsx --test scripts/plan-catalog.test.ts",
+    "saas:set-branch-limit": "tsx scripts/saas-set-branch-limit.ts",
     "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
     "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

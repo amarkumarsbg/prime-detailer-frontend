@@ -1,6 +1,7 @@
 import type { Branch } from "@prisma/client";
 import { SINGLETON_ENTITY_ID } from "../constants/json-collections.js";
 import { prisma } from "../lib/prisma.js";
+import { assertCanCreateBranch } from "./organization-subscription.service.js";
 
 export type BranchDeletionBlocker = {
   kind:
@@ -182,21 +183,29 @@ export async function listBranchesApi() {
   return rows.map(toApiBranch);
 }
 
-export async function upsertBranchApi(data: {
-  id: string;
-  name: string;
-  address: string;
-  phone: string;
-  isActive?: boolean;
-  qrCodeId?: string | null;
-  code?: string | null;
-  city?: string | null;
-  state?: string | null;
-  pincode?: string | null;
-  email?: string | null;
-  managerName?: string | null;
-  managerPhone?: string | null;
-}) {
+export async function upsertBranchApi(
+  data: {
+    id: string;
+    name: string;
+    address: string;
+    phone: string;
+    isActive?: boolean;
+    qrCodeId?: string | null;
+    code?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    email?: string | null;
+    managerName?: string | null;
+    managerPhone?: string | null;
+  },
+  organizationId: string
+) {
+  const existing = await prisma.branch.findUnique({ where: { id: data.id } });
+  if (!existing) {
+    await assertCanCreateBranch(organizationId);
+  }
+
   const row = await prisma.branch.upsert({
     where: { id: data.id },
     create: {
@@ -213,6 +222,7 @@ export async function upsertBranchApi(data: {
       email: data.email ?? null,
       managerName: data.managerName ?? null,
       managerPhone: data.managerPhone ?? null,
+      organizationId,
     },
     update: {
       name: data.name,

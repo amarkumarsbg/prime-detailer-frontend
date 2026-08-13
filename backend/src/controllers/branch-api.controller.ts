@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BRANCH_MUTATION_ROLES } from "../lib/rbac.js";
 import type { UserRole } from "@prisma/client";
 import { listBranchesApi, upsertBranchApi, patchBranchApi, getBranchDeletionBlockers, deleteBranchApi } from "../services/branch-api.service.js";
+import { prisma } from "../lib/prisma.js";
 
 function forbidden(res: Response, message: string) {
   res.status(403).json({ data: null, error: { message } });
@@ -55,8 +56,23 @@ export async function postBranch(req: Request, res: Response, next: NextFunction
       forbidden(res, "You do not have permission to create branches.");
       return;
     }
+    let orgId = req.auth?.organizationId;
+    if (!orgId && req.auth?.id) {
+      const row = await prisma.user.findUnique({
+        where: { id: req.auth.id },
+        select: { organizationId: true },
+      });
+      orgId = row?.organizationId;
+    }
+    if (!orgId) {
+      res.status(403).json({
+        data: null,
+        error: { message: "Organization not found on user", code: "ORG_MISSING" },
+      });
+      return;
+    }
     const body = branchSchema.parse(req.body);
-    const branch = await upsertBranchApi(body);
+    const branch = await upsertBranchApi(body, orgId);
     res.status(201).json({ data: { branch }, error: null });
   } catch (e) {
     next(e);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { ApiError, apiPostForm } from "@/lib/api-client";
 import { useSettingsStore } from "@/store/settings-store";
+import { useOrganizationStore } from "@/store/organization-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import type { VehicleSegment } from "@/types";
@@ -51,7 +52,14 @@ import {
   Trash2,
   Car,
   Upload,
+  CreditCard,
 } from "lucide-react";
+import {
+  branchLimitLabel,
+  resolveContactUsUrl,
+  resolveSupportPhone,
+} from "@/lib/plan-limits";
+import { PlanCtaButton } from "@/components/billing/plan-cta-link";
 
 const LOGO_MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -90,6 +98,8 @@ function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () =>
 
 export default function SettingsPage() {
   const settings = useSettingsStore();
+  const entitlement = useOrganizationStore((s) => s.entitlement);
+  const refreshEntitlement = useOrganizationStore((s) => s.refreshEntitlement);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const highEndStore = useHighEndServiceStore();
   const vehicleCatalog = useVehicleCatalogStore();
@@ -237,6 +247,10 @@ export default function SettingsPage() {
   const isGstRegistered = gstRegistrationStatus === "REGISTERED";
   const businessLogoPreview = resolveUploadsPublicUrl(businessLogo);
 
+  useEffect(() => {
+    void refreshEntitlement();
+  }, [refreshEntitlement]);
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <PageHeader title="Settings" />
@@ -253,8 +267,60 @@ export default function SettingsPage() {
           <TabsTrigger value="reminders">Reminders</TabsTrigger>
           <TabsTrigger value="staff-permissions">Staff Permissions</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="plan">Plan & billing</TabsTrigger>
           <TabsTrigger value="general">General</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="plan">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Plan & billing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {entitlement ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Current plan</p>
+                      <p className="font-medium">{entitlement.subscription.planName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Branch usage</p>
+                      <p className="font-medium">
+                        {entitlement.usage.branchesUsed} /{" "}
+                        {branchLimitLabel(entitlement.subscription.effectiveMaxBranches)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Status</p>
+                      <p className="font-medium">{entitlement.subscription.status}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Plan limits are managed by your software provider. Contact support to add
+                    branches or upgrade.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <PlanCtaButton
+                      href={resolveContactUsUrl(entitlement)}
+                      phone={resolveSupportPhone(entitlement)}
+                      dialogTitle="Contact support"
+                    >
+                      Contact support
+                    </PlanCtaButton>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Unable to load plan details. Refresh the page or contact support.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="business">
           <Card>

@@ -70,6 +70,11 @@ const schema = z.object({
   S3_PUBLIC_BASE_URL: z.string().optional(),
   /** With custom `S3_ENDPOINT`, path-style addressing is usually required. Set `false` only if your provider needs virtual-hosted style. */
   S3_FORCE_PATH_STYLE: z.string().optional(),
+  /** SaaS vendor platform API key (header X-Platform-Admin-Key). Optional in local if using PLATFORM_OWNER login. */
+  PLATFORM_ADMIN_API_KEY: z.string().optional(),
+  /** Default Contact Us / Upgrade URLs stored on new subscriptions when not overridden. */
+  DEFAULT_CONTACT_US_URL: z.string().optional(),
+  DEFAULT_UPGRADE_URL: z.string().optional(),
 });
 
 export const env = schema.parse({
@@ -93,4 +98,7 @@ export const env = schema.parse({
   S3_SECRET_ACCESS_KEY: trimOpt(process.env.S3_SECRET_ACCESS_KEY),
   S3_PUBLIC_BASE_URL: trimOpt(process.env.S3_PUBLIC_BASE_URL),
   S3_FORCE_PATH_STYLE: trimOpt(process.env.S3_FORCE_PATH_STYLE),
+  PLATFORM_ADMIN_API_KEY: trimOpt(process.env.PLATFORM_ADMIN_API_KEY),
+  DEFAULT_CONTACT_US_URL: trimOpt(process.env.DEFAULT_CONTACT_US_URL),
+  DEFAULT_UPGRADE_URL: trimOpt(process.env.DEFAULT_UPGRADE_URL),
 });
