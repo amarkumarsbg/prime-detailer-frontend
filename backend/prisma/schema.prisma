@@ -8,7 +8,6 @@ datasource db {
 }
 
 enum UserRole {
-  PLATFORM_OWNER
   SUPER_ADMIN
   ADMIN
   BRANCH_MANAGER
@@ -16,51 +15,6 @@ enum UserRole {
   SUPERVISOR
   RECEPTIONIST
   MECHANIC
-}
-
-enum PlanCode {
-  STARTER
-  GROWTH
-  BUSINESS
-  ENTERPRISE
-  CUSTOM
-}
-
-enum SubscriptionStatus {
-  ACTIVE
-  PAST_DUE
-  EXPIRED
-  CANCELLED
-}
-
-model Organization {
-  id           String                   @id
-  name         String
-  slug         String?                  @unique
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  subscription OrganizationSubscription?
-  branches     Branch[]
-  users        User[]
-}
-
-model OrganizationSubscription {
-  id                   String             @id @default(cuid())
-  organizationId       String             @unique
-  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  planCode             PlanCode
-  planName             String
-  status               SubscriptionStatus @default(ACTIVE)
-  /** Extensible caps; maxBranches null = unlimited */
-  limits               Json
-  maxBranchesOverride  Int?
-  contactUsUrl         String?
-  /** E.164 preferred, e.g. +919876543210 — used for mobile tel: dial */
-  contactPhone         String?
-  upgradeUrl           String?
-  currentPeriodEnd     DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
 }
 
 enum VehicleSegment {
@@ -89,25 +43,21 @@ enum AttendanceStatus {
 }
 
 model Branch {
-  id             String       @id
-  name           String
-  address        String
-  phone          String
-  isActive       Boolean      @default(true)
-  qrCodeId       String?
-  code           String?
-  city           String?
-  state          String?
-  pincode        String?
-  email          String?
-  managerName    String?
-  managerPhone   String?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  users          User[]
+  id           String   @id
+  name         String
+  address      String
+  phone        String
+  isActive     Boolean  @default(true)
+  qrCodeId     String?
+  code         String?
+  city         String?
+  state        String?
+  pincode      String?
+  email        String?
+  managerName  String?
+  managerPhone String?
+  users        User[]
   attendanceRecords Attendance[]
-
-  @@index([organizationId])
 }
 
 model User {
@@ -119,8 +69,6 @@ model User {
   role                 UserRole
   branchId             String
   branch               Branch   @relation(fields: [branchId], references: [id])
-  organizationId       String
-  organization         Organization @relation(fields: [organizationId], references: [id])
   avatar               String?
   isActive             Boolean  @default(true)
   emailVerified        Boolean  @default(false)
@@ -141,8 +89,6 @@ model User {
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
   attendanceRecords      Attendance[]
-
-  @@index([organizationId])
 }
 
 model Customer {

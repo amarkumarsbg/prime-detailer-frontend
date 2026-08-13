@@ -40,7 +40,6 @@ export function toApiUser(u: PrismaUser) {
     phone: u.phone,
     role: u.role,
     branchId: u.branchId,
-    organizationId: u.organizationId,
     avatar: u.avatar ?? undefined,
     isActive: u.isActive,
     emailVerified: u.emailVerified || undefined,
@@ -57,10 +56,7 @@ export function toApiUser(u: PrismaUser) {
 }
 
 export async function listUsersApi() {
-  const rows = await prisma.user.findMany({
-    where: { role: { not: "PLATFORM_OWNER" } },
-    orderBy: { id: "asc" },
-  });
+  const rows = await prisma.user.findMany({ orderBy: { id: "asc" } });
   return rows.map(toApiUser);
 }
 
@@ -71,7 +67,6 @@ export async function createUserApi(input: {
   phone: string;
   role: PrismaUser["role"];
   branchId: string;
-  organizationId: string;
   password?: string;
   avatar?: string | null;
   isActive?: boolean;
@@ -85,9 +80,6 @@ export async function createUserApi(input: {
   createdById?: string | null;
   permissions?: string[];
 }): Promise<{ user: ReturnType<typeof toApiUser>; temporaryPassword?: string }> {
-  if (input.role === "PLATFORM_OWNER") {
-    throw new Error("Cannot create platform owner via staff API");
-  }
   const useExplicitPassword = input.password !== undefined && input.password.trim() !== "";
   const plainPassword = useExplicitPassword ? input.password!.trim() : generateTemporaryPassword();
   const passwordHash = await bcrypt.hash(plainPassword, 10);
@@ -100,7 +92,6 @@ export async function createUserApi(input: {
       phone: input.phone,
       role: input.role,
       branchId: input.branchId,
-      organizationId: input.organizationId,
       passwordHash,
       mustChangePassword: !useExplicitPassword,
       passwordCreatedBy: input.createdById ?? null,

@@ -15,7 +15,6 @@ import type {
   Invoice,
   JobCard,
   MembershipPackage,
-  OrganizationEntitlement,
   Part,
   PayrollRecord,
   SalaryAdvance,
@@ -33,7 +32,6 @@ import type {
   WalletTransaction,
 } from "@/types";
 import { useBranchStore } from "@/store/branch-store";
-import { useOrganizationStore } from "@/store/organization-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -98,7 +96,6 @@ export type BootstrapPayload = {
   users: User[];
   vehicles: Vehicle[];
   collections: Record<string, unknown>;
-  entitlement?: OrganizationEntitlement | null;
 };
 
 export async function bootstrapAppData(): Promise<void> {
@@ -107,7 +104,6 @@ export async function bootstrapAppData(): Promise<void> {
   const c = data.collections;
 
   useBranchStore.setState({ branches: data.branches });
-  useOrganizationStore.getState().setEntitlement(data.entitlement ?? null);
 
   const auth = useAuthStore.getState();
   if (auth.user) {

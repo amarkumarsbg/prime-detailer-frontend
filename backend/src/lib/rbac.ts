@@ -27,12 +27,7 @@ export function isStaffManager(role: UserRole): boolean {
 }
 
 export function canAssignUserRole(actor: UserRole, targetRole: UserRole): boolean {
-  if (targetRole === "PLATFORM_OWNER") return false;
   return actor === "SUPER_ADMIN";
-}
-
-export function isPlatformOwner(role: UserRole | undefined): boolean {
-  return role === "PLATFORM_OWNER";
 }
 
 export function canChangeRoles(actor: UserRole): boolean {

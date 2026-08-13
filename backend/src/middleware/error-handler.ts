@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
-import { AppHttpError } from "../lib/app-http-error.js";
 
 export function errorHandler(
   err: unknown,
@@ -8,17 +7,6 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  if (err instanceof AppHttpError) {
-    res.status(err.status).json({
-      data: null,
-      error: {
-        message: err.message,
-        code: err.code,
-        ...(err.details ?? {}),
-      },
-    });
-    return;
-  }
   if (err instanceof ZodError) {
     res.status(400).json({
       data: null,

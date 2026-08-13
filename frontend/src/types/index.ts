@@ -1,6 +1,5 @@
 /** Org-level super user: full access including branch CRUD. */
 export type UserRole =
-  | "PLATFORM_OWNER"
   | "SUPER_ADMIN"
   | "ADMIN"
   | "BRANCH_MANAGER"
@@ -8,34 +7,6 @@ export type UserRole =
   | "SUPERVISOR"
   | "RECEPTIONIST"
   | "MECHANIC";
-
-export type PlanCode = "STARTER" | "GROWTH" | "BUSINESS" | "ENTERPRISE" | "CUSTOM";
-
-export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELLED";
-
-export type PlanLimits = {
-  maxBranches: number | null;
-  maxStaff?: number | null;
-  maxCustomers?: number | null;
-};
-
-export type OrganizationEntitlement = {
-  organization: { id: string; name: string; slug: string | null };
-  subscription: {
-    planCode: PlanCode;
-    planName: string;
-    status: SubscriptionStatus;
-    limits: PlanLimits;
-    maxBranchesOverride: number | null;
-    effectiveMaxBranches: number | null;
-    contactUsUrl: string | null;
-    contactPhone: string | null;
-    upgradeUrl: string | null;
-    currentPeriodEnd: string | null;
-  };
-  usage: { branchesUsed: number };
-  canCreateBranch: boolean;
-};
 
 export type VehicleSegment =
   | "HATCHBACK"
@@ -110,7 +81,6 @@ export interface User {
   phone: string;
   role: UserRole;
   branchId: string;
-  organizationId?: string;
   avatar?: string;
   isActive: boolean;
   /** Demo flag for directory / “verified email” stats */

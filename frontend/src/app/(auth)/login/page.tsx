@@ -98,15 +98,8 @@ export default function LoginPage() {
       const success = await login(email, password);
       setLoading(false);
       if (success) {
-        const authUser = useAuthStore.getState().user;
-        const mustChange = authUser?.mustChangePassword === true;
-        if (mustChange) {
-          window.location.assign("/change-password");
-        } else if (authUser?.role === "PLATFORM_OWNER") {
-          window.location.assign("/saas-admin/organizations");
-        } else {
-          window.location.assign("/dashboard");
-        }
+        const mustChange = useAuthStore.getState().user?.mustChangePassword === true;
+        window.location.assign(mustChange ? "/change-password" : "/dashboard");
       } else {
         setError("Invalid email or password");
       }

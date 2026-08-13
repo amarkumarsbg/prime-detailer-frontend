@@ -5,8 +5,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
-    public code?: string,
-    public details?: Record<string, unknown>
+    public code?: string
   ) {
     super(message);
     this.name = "ApiError";
@@ -17,7 +16,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
   let body: {
     data: T | null;
-    error: (Record<string, unknown> & { message?: string; code?: string }) | null;
+    error: { message?: string; code?: string } | null;
   };
   try {
     body = text ? (JSON.parse(text) as typeof body) : { data: null, error: { message: "Empty response" } };
@@ -33,12 +32,10 @@ async function parseResponse<T>(res: Response): Promise<T> {
     );
   }
   if (!res.ok || body.error) {
-    const { message, code, ...rest } = body.error ?? {};
     throw new ApiError(
       res.status,
-      (typeof message === "string" ? message : null) ?? res.statusText ?? "Request failed",
-      typeof code === "string" ? code : undefined,
-      Object.keys(rest).length ? rest : undefined
+      body.error?.message ?? res.statusText ?? "Request failed",
+      body.error?.code
     );
   }
   return body.data as T;

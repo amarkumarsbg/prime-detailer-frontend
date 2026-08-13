@@ -8,7 +8,6 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   branchId: string;
-  organizationId?: string;
   name: string;
   permissions?: string[];
 }
@@ -34,7 +33,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       email: string;
       role: UserRole;
       branchId: string;
-      organizationId?: string;
       name: string;
       permissions?: string[];
     };
@@ -43,7 +41,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       email: decoded.email,
       role: decoded.role,
       branchId: decoded.branchId,
-      organizationId: decoded.organizationId,
       name: decoded.name,
       permissions: decoded.permissions || [],
     };

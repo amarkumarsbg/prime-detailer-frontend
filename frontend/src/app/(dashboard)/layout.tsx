@@ -67,13 +67,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!authReady || !sessionChecked || !isAuthenticated) return;
-    if (user?.role === "PLATFORM_OWNER") {
-      router.replace("/saas-admin/organizations");
-    }
-  }, [authReady, sessionChecked, isAuthenticated, user?.role, router]);
-
-  useEffect(() => {
-    if (!authReady || !sessionChecked || !isAuthenticated) return;
     if (!mustChangePassword) return;
     void router.replace("/change-password");
   }, [authReady, sessionChecked, isAuthenticated, mustChangePassword, router]);
