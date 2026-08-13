@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:unit": "vitest run src/lib",
     "test:pickup-drop": "vitest run src/lib/pickup-drop-flow.test.ts src/lib/pickup-drop-actions.test.ts",
     "test:pickup-drop-ui": "vitest run src/components/pickup-drop/pickup-drop-request-card.test.tsx"
   },

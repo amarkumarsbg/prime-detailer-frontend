@@ -13,6 +13,11 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "test:collection-permissions": "tsx scripts/check-collection-permissions.ts",
+    "test:permission-keys": "tsx scripts/check-permission-keys.ts",
+    "test:collection-payloads": "tsx scripts/check-collection-payloads.ts",
+    "test:rbac": "tsx scripts/check-rbac.ts",
+    "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac",
     "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
     "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },

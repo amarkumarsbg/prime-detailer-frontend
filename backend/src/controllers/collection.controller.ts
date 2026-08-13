@@ -14,9 +14,18 @@ import {
   replaceCollectionArray,
 } from "../services/collection.service.js";
 import { persistBusinessLogoFile } from "../services/object-storage.service.js";
+import {
+  assertPayloadEntityIdMatch,
+  parseCollectionPayload,
+  parseCollectionSnapshotItems,
+} from "../validations/collection-payloads.js";
+import { ApiErrorCode } from "../lib/app-error.js";
 
 function forbidden(res: Response, message: string) {
-  res.status(403).json({ data: null, error: { message } });
+  res.status(403).json({
+    data: null,
+    error: { message, code: ApiErrorCode.FORBIDDEN },
+  });
 }
 
 function assertPayrollAccess(
@@ -68,13 +77,7 @@ export async function postSnapshot(req: Request, res: Response, next: NextFuncti
     }
     if (!assertPayrollAccess(res, collection, req.auth?.role)) return;
     const body = snapshotSchema.parse(req.body);
-    const items = body.items as { id: string }[];
-    for (const it of items) {
-      if (!it.id || typeof it.id !== "string") {
-        res.status(400).json({ data: null, error: { message: "Each item must have string id" } });
-        return;
-      }
-    }
+    const items = parseCollectionSnapshotItems(collection, body.items);
     await replaceCollectionArray(collection, items);
     res.json({ data: { ok: true }, error: null });
   } catch (e) {
@@ -87,19 +90,22 @@ export async function putCollectionItem(req: Request, res: Response, next: NextF
     const collection = collectionParam(req);
     const entityId = entityParam(req);
     if (!isArrayCollection(collection) && !isSingletonCollection(collection)) {
-      res.status(400).json({ data: null, error: { message: "Unknown collection" } });
+      res.status(400).json({
+        data: null,
+        error: { message: "Unknown collection", code: ApiErrorCode.VALIDATION },
+      });
       return;
     }
     if (isSingletonCollection(collection) && entityId !== SINGLETON_ENTITY_ID) {
-      res.status(400).json({ data: null, error: { message: "Invalid singleton id" } });
+      res.status(400).json({
+        data: null,
+        error: { message: "Invalid singleton id", code: ApiErrorCode.VALIDATION },
+      });
       return;
     }
     if (!assertPayrollAccess(res, collection, req.auth?.role)) return;
-    const payload = req.body;
-    if (payload === null || typeof payload !== "object") {
-      res.status(400).json({ data: null, error: { message: "Body must be a JSON object" } });
-      return;
-    }
+    const payload = parseCollectionPayload(collection, req.body);
+    assertPayloadEntityIdMatch(collection, entityId, payload);
     await upsertCollectionItem(collection, entityId, payload);
     res.json({ data: { ok: true }, error: null });
   } catch (e) {

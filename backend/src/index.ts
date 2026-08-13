@@ -1,6 +1,5 @@
 import "dotenv/config";
 import path from "node:path";
-import { exec } from "child_process";
 import compression from "compression";
 import express from "express";
 import cors from "cors";
@@ -23,7 +22,7 @@ import { attendanceRouter } from "./routes/attendance.routes.js";
 import { partyRouter } from "./routes/party.routes.js";
 
 import { prisma } from "./lib/prisma.js";
-import { getCollectionItem } from "./services/collection.service.js";
+import { getPublicInvoiceView } from "./services/public-invoice.service.js";
 
 const app = express();
 
@@ -56,38 +55,6 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/run-migration-prod", (req, res) => {
-  exec("npx prisma db push --accept-data-loss", (error, stdout, stderr) => {
-    if (error) {
-      res.status(500).json({ error: error.message, stderr, stdout });
-      return;
-    }
-    res.json({ stdout, stderr });
-  });
-});
-
-app.get("/api/run-seed-prod", (req, res) => {
-  exec("npx prisma db seed", (error, stdout, stderr) => {
-    if (error) {
-      res.status(500).json({ error: error.message, stderr, stdout });
-      return;
-    }
-    res.json({ stdout, stderr });
-  });
-});
-
-app.get("/api/check-user-prod", async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { email: "amarkumarsbg13@gmail.com" },
-      select: { id: true, email: true, role: true, permissions: true }
-    });
-    res.json({ user });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.get("/health/db", async (_req, res, next) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -99,40 +66,9 @@ app.get("/health/db", async (_req, res, next) => {
 
 app.get("/api/public/invoices/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const invoice = await getCollectionItem("invoices", id) as any;
-    if (!invoice) {
-      res.status(404).json({ data: null, error: { message: "Invoice not found" } });
-      return;
-    }
-    const jobCard = await getCollectionItem("jobCards", invoice.jobCardId);
-    
-    const allRows = await prisma.appJsonRow.findMany({
-      where: { collection: "invoices" }
-    });
-    const customerInvoices = allRows
-      .map(r => r.payload as any)
-      .filter(inv => inv.customerId === invoice.customerId);
-
-    const branches = await prisma.appJsonRow.findMany({
-      where: { collection: "branches" }
-    }).then(rows => rows.map(r => r.payload));
-
-    const settingsRow = await prisma.appJsonRow.findUnique({
-      where: { collection_entityId: { collection: "appSettings", entityId: "default" } }
-    });
-    const businessSettings = settingsRow?.payload ?? null;
-
-    res.json({
-      data: {
-        invoice,
-        jobCard,
-        customerInvoices,
-        branches,
-        businessSettings,
-      },
-      error: null
-    });
+    const id = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
+    const data = await getPublicInvoiceView(id);
+    res.json({ data, error: null });
   } catch (e) {
     next(e);
   }

@@ -6,7 +6,10 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["**/src/app/(dashboard)/booking/create-booking-page.tsx"],
+    files: [
+      "**/src/app/(dashboard)/booking/create-booking-page.tsx",
+      "**/src/features/booking-wizard/components/create-booking-page.tsx",
+    ],
     rules: {
       // Large wizard: many intentional effect-driven resets; refactoring would be high-risk for little gain.
       "react-hooks/set-state-in-effect": "off",

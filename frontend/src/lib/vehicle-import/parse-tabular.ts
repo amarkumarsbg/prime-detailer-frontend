@@ -1,107 +1,19 @@
-import { buildAutoMapping, cellToString, refineAutoMapping } from "./normalize";
+import { buildAutoMapping, refineAutoMapping } from "./normalize";
 import {
   MAX_VEHICLE_IMPORT_FILE_BYTES,
   MAX_VEHICLE_IMPORT_ROWS,
   type VehicleImportParseResult,
 } from "./types";
+import {
+  assertImportFileSize,
+  parseCsvText,
+  parseExcelBuffer,
+} from "@/lib/tabular-import/parse-tabular";
 
-function assertFileSize(file: File) {
-  if (file.size > MAX_VEHICLE_IMPORT_FILE_BYTES) {
-    throw new Error("File is too large (max 5 MB)");
-  }
-}
-
-/** Minimal CSV parser supporting quoted fields. */
-export function parseCsvText(text: string): { headers: string[]; rows: string[][] } {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let inQuotes = false;
-
-  const pushField = () => {
-    row.push(field.trim());
-    field = "";
-  };
-  const pushRow = () => {
-    if (row.length === 1 && row[0] === "") {
-      row = [];
-      return;
-    }
-    rows.push(row);
-    row = [];
-  };
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]!;
-    const next = text[i + 1];
-
-    if (inQuotes) {
-      if (ch === '"' && next === '"') {
-        field += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      pushField();
-    } else if (ch === "\n") {
-      pushField();
-      pushRow();
-    } else if (ch === "\r") {
-      // ignore
-    } else {
-      field += ch;
-    }
-  }
-  pushField();
-  if (row.length > 1 || (row.length === 1 && row[0] !== "")) pushRow();
-
-  if (rows.length === 0) throw new Error("CSV file is empty");
-
-  const headers = rows[0]!.map((h, idx) => h || `Column ${idx + 1}`);
-  return { headers, rows: rows.slice(1) };
-}
-
-async function parseExcelBuffer(buffer: ArrayBuffer): Promise<{ headers: string[]; rows: string[][] }> {
-  const ExcelJS = (await import("exceljs")).default;
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(new Uint8Array(buffer) as never);
-  const sheet = workbook.worksheets[0];
-  if (!sheet) throw new Error("Workbook has no sheets");
-
-  const matrix: string[][] = [];
-  sheet.eachRow({ includeEmpty: false }, (row) => {
-    const values = row.values as Array<unknown>;
-    const cells: string[] = [];
-    const max = Math.max(values.length - 1, 0);
-    for (let c = 1; c <= max; c++) {
-      cells.push(cellToString(values[c]));
-    }
-    if (cells.some((c) => c)) matrix.push(cells);
-  });
-
-  if (matrix.length === 0) throw new Error("Spreadsheet is empty");
-
-  const colCount = Math.max(...matrix.map((r) => r.length));
-  const normalized = matrix.map((r) => {
-    const copy = [...r];
-    while (copy.length < colCount) copy.push("");
-    return copy;
-  });
-
-  const headers = normalized[0]!.map((h, idx) => h || `Column ${idx + 1}`);
-  return { headers, rows: normalized.slice(1) };
-}
+export { parseCsvText } from "@/lib/tabular-import/parse-tabular";
 
 export async function parseVehicleImportFile(file: File): Promise<VehicleImportParseResult> {
-  assertFileSize(file);
+  assertImportFileSize(file, MAX_VEHICLE_IMPORT_FILE_BYTES);
   const name = file.name.toLowerCase();
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
 

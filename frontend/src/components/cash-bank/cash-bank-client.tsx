@@ -47,7 +47,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { downloadCashBankStatementPdf } from "@/lib/cash-bank-statement-pdf";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatInrFull } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
 import {
   totalCashBankBalance,
@@ -56,14 +56,8 @@ import {
   type CashBankTransaction,
 } from "@/store/cash-bank-store";
 
-function formatInrDetailed(n: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
-}
+/** Alias kept for call-site readability; canonical formatter is formatInrFull. */
+const formatInrDetailed = formatInrFull;
 
 function rowTypeLabel(t: CashBankTransaction["rowType"]): string {
   switch (t) {

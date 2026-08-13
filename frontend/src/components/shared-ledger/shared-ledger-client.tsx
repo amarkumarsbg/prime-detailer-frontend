@@ -59,6 +59,11 @@ import {
   MobileRowCard,
 } from "@/components/shared/mobile-table-layout";
 import { formatCurrency, cn, formatDate } from "@/lib/utils";
+import {
+  expenseOutstanding,
+  invoiceOutstanding,
+  invoicePaidTotal,
+} from "@/lib/party/ledger-math";
 import type { Expense, ExpensePaymentMethod, Invoice, PaymentMethod } from "@/types";
 
 type PartyKind = "customer" | "supplier";
@@ -82,20 +87,6 @@ type LedgerTx = {
   status: string;
   statusTone: "success" | "warning" | "muted";
 };
-
-function invoicePaidTotal(inv: Invoice): number {
-  return inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
-}
-
-function invoiceOutstanding(inv: Invoice): number {
-  return Math.max(0, Math.round((inv.grandTotal - invoicePaidTotal(inv)) * 100) / 100);
-}
-
-function expenseOutstanding(e: Expense): number {
-  if (e.paymentStatus === "PAID") return 0;
-  const paid = e.amountPaid ?? 0;
-  return Math.max(0, Math.round((e.amount - paid) * 100) / 100);
-}
 
 function expensePaidSoFar(e: Expense): number {
   if (e.paymentStatus === "PAID") return e.amount;

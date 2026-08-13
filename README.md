@@ -32,17 +32,29 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The API lis
 
 From the repo root you can also run `npm run dev:frontend` or `npm run dev:backend` (shortcuts to the same commands).
 
+## Architecture
+
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the hybrid frontend/backend model, AppJsonRow collections, RBAC, bootstrap data flow, and where new code should go.
+
+Coding conventions for PRs: **[docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md)**.
+
+API envelope and error codes: **[docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md)**.
+
+Folder map: **[docs/FOLDER_STRUCTURE.md](docs/FOLDER_STRUCTURE.md)** · Testing: **[docs/TESTING.md](docs/TESTING.md)**.
+
+**New developers:** read Architecture first, then this README’s setup steps.
+
 ## Attendance (Vercel / QR)
 
 On Vercel, each serverless function can run on a **different instance** with its own memory, so in-memory attendance from a phone punch may not appear on the dashboard. Set **`UPSTASH_REDIS_REST_URL`** and **`UPSTASH_REDIS_REST_TOKEN`** (e.g. Vercel → Storage → Redis / [Upstash](https://upstash.com)) — see `.env.example`. Local dev works without Redis (single-process memory).
 
 ## Tech Stack
 
-- **Framework:** Next.js 15 (App Router)
-- **Styling:** Tailwind CSS v4
+- **Frontend:** Next.js (App Router), React, Tailwind CSS v4
 - **State:** Zustand
+- **Backend:** Express, Prisma, PostgreSQL
 - **UI Components:** Radix UI, Lucide React icons
-- **Forms:** React Hook Form + Zod
+- **Forms:** React Hook Form + Zod (used selectively)
 - **Charts:** Recharts
 - **Toasts:** Sonner
 - **Theming:** next-themes

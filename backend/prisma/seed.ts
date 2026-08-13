@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PERMISSION_KEYS } from "../src/constants/permission-keys.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const raw = readFileSync(join(__dirname, "seed-data.json"), "utf8");
@@ -162,41 +163,7 @@ async function main() {
     });
   }
 
-  const ALL_PERMISSION_KEYS = [
-    "DASHBOARD",
-    "JOB_CARDS",
-    "BOOKINGS",
-    "PICKUP_DROP",
-    "QUOTATIONS",
-    "APPOINTMENTS",
-    "CUSTOMERS",
-    "MEMBERSHIP",
-    "VEHICLES",
-    "REMINDERS",
-    "FOLLOW_UPS",
-    "REFERRALS",
-    "BILLING",
-    "REPORTS",
-    "CASH_BANK",
-    "PARTIES",
-    "SHARED_LEDGER",
-    "EXPENSES",
-    "VENDORS",
-    "STAFF",
-    "ATTENDANCE",
-    "PAYROLL",
-    "SERVICES",
-    "INVENTORY",
-    "BRANCHES",
-    "PERFORMANCE",
-    "MECHANICS",
-    "ANALYTICS",
-    "ADVANCED_REPORTS",
-    "ACTIVITY",
-    "MESSAGES",
-    "SETTINGS"
-  ];
-
+const ALL_PERMISSION_KEYS = [...PERMISSION_KEYS];
   for (const u of staff) {
     await prisma.user.upsert({
       where: { id: u.id },

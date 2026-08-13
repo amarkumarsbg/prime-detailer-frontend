@@ -24,7 +24,6 @@ import {
 interface PublicInvoiceData {
   invoice: any;
   jobCard: any;
-  branches: any[];
   businessSettings: any;
 }
 

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import { AppError, ApiErrorCode } from "../lib/app-error.js";
 
 export function errorHandler(
   err: unknown,
@@ -10,10 +11,27 @@ export function errorHandler(
   if (err instanceof ZodError) {
     res.status(400).json({
       data: null,
-      error: { message: "Validation failed", details: err.flatten() },
+      error: {
+        message: "Validation failed",
+        code: ApiErrorCode.VALIDATION,
+        details: err.flatten(),
+      },
     });
     return;
   }
+
+  if (err instanceof AppError) {
+    res.status(err.status).json({
+      data: null,
+      error: {
+        message: err.message,
+        code: err.code,
+        ...(err.details !== undefined ? { details: err.details } : {}),
+      },
+    });
+    return;
+  }
+
   const tooLarge =
     err &&
     typeof err === "object" &&
@@ -25,12 +43,23 @@ export function errorHandler(
       error: {
         message:
           "Invoice PDF is too large for the server. Retry after refreshing, or use Print and email the PDF manually.",
-        code: "PAYLOAD_TOO_LARGE",
+        code: ApiErrorCode.PAYLOAD_TOO_LARGE,
       },
     });
     return;
   }
+
   const message = err instanceof Error ? err.message : "Internal server error";
-  const status = message === "Not found" ? 404 : 500;
-  res.status(status).json({ data: null, error: { message } });
+  if (message === "Not found") {
+    res.status(404).json({
+      data: null,
+      error: { message, code: ApiErrorCode.NOT_FOUND },
+    });
+    return;
+  }
+
+  res.status(500).json({
+    data: null,
+    error: { message, code: ApiErrorCode.INTERNAL },
+  });
 }

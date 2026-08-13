@@ -43,43 +43,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
+import { PERMISSIONS_FOR_UI } from "@/lib/permission-keys";
 import type { UpdatePinResult } from "@/store/staff-store";
 import type { User, UserRole } from "@/types";
 
-const ALL_PERMISSIONS = [
-  { key: "DASHBOARD", label: "Dashboard" },
-  { key: "JOB_CARDS", label: "Job Cards" },
-  { key: "BOOKINGS", label: "Bookings" },
-  { key: "PICKUP_DROP", label: "Pickup & Drop" },
-  { key: "QUOTATIONS", label: "Quotations" },
-  { key: "APPOINTMENTS", label: "Appointments" },
-  { key: "CUSTOMERS", label: "Customers" },
-  { key: "MEMBERSHIP", label: "Membership" },
-  { key: "VEHICLES", label: "Vehicles" },
-  { key: "REMINDERS", label: "Reminders" },
-  { key: "FOLLOW_UPS", label: "Follow-ups" },
-  { key: "REFERRALS", label: "Referrals" },
-  { key: "BILLING", label: "Billing" },
-  { key: "REPORTS", label: "Reports" },
-  { key: "CASH_BANK", label: "Cash & Bank" },
-  { key: "PARTIES", label: "Parties" },
-  { key: "SHARED_LEDGER", label: "Shared Ledger" },
-  { key: "EXPENSES", label: "Expenses" },
-  { key: "VENDORS", label: "Vendors" },
-  { key: "STAFF", label: "Users & Staff" },
-  { key: "ATTENDANCE", label: "Attendance" },
-  { key: "PAYROLL", label: "Salary & Payroll" },
-  { key: "SERVICES", label: "Services" },
-  { key: "INVENTORY", label: "Inventory" },
-  { key: "BRANCHES", label: "Locations" },
-  { key: "PERFORMANCE", label: "Performance" },
-  { key: "MECHANICS", label: "Mechanics" },
-  { key: "ANALYTICS", label: "Analytics" },
-  { key: "ADVANCED_REPORTS", label: "Advanced Reports" },
-  { key: "ACTIVITY", label: "Activity Log" },
-  { key: "MESSAGES", label: "Messages Log" },
-  { key: "SETTINGS", label: "Settings" }
-] as const;
+const ALL_PERMISSIONS = PERMISSIONS_FOR_UI;
 
 function StaffAttendancePinCard({
   member,

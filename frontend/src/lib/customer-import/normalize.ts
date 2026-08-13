@@ -1,30 +1,15 @@
 import type { CustomerImportColumnKey, CustomerImportColumnMapping } from "./types";
+import { normalizePhoneDigits } from "@/lib/phone";
+export { cellToString } from "@/lib/tabular-import/parse-tabular";
 
 /** Same rule as backend customer.service + customer-store.findByPhone */
 export function normalizeImportPhone(phone: string): string {
-  return String(phone ?? "")
-    .replace(/\D/g, "")
-    .slice(-10);
+  return normalizePhoneDigits(phone);
 }
 
 export function placeholderEmailForPhone(phone: string): string {
   const digits = normalizeImportPhone(phone);
   return `noemail+${digits || "unknown"}@customers.placeholder`;
-}
-
-export function cellToString(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) {
-    // Avoid scientific notation for phone numbers stored as numbers
-    if (Number.isInteger(value) && Math.abs(value) >= 1e9) {
-      return String(Math.trunc(value));
-    }
-    return String(value).trim();
-  }
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (value instanceof Date) return value.toISOString();
-  return String(value).trim();
 }
 
 const NAME_ALIASES = new Set([

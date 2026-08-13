@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import {
   getParties,
   getParty,
@@ -12,6 +12,7 @@ import {
 export const partyRouter = Router();
 
 partyRouter.use(requireAuth);
+partyRouter.use(requirePermission("PARTIES"));
 
 partyRouter.get("/", getParties);
 partyRouter.post("/", postParty);

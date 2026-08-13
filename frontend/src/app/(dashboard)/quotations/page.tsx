@@ -25,7 +25,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,28 +106,11 @@ import {
 } from "@/components/services/searchable-service-select";
 import { ServiceCustomPriceControl } from "@/components/services/service-custom-price-control";
 import { withCatalogPrice, withCustomPrice } from "@/lib/service-line-price";
-
-function quotationCanConvertToJob(status: QuotationStatus): boolean {
-  return status !== "CONVERTED" && status !== "REJECTED";
-}
-
-const TAB_VALUES: (QuotationStatus | "ALL")[] = [
-  "ALL",
-  "DRAFT",
-  "SENT",
-  "APPROVED",
-  "REJECTED",
-  "CONVERTED",
-];
-
-const TAB_LABELS: Record<QuotationStatus | "ALL", string> = {
-  ALL: "All",
-  DRAFT: "Draft",
-  SENT: "Sent",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-  CONVERTED: "Converted",
-};
+import { QuotationWorkflowBanner } from "@/components/quotations/quotation-workflow-banner";
+import {
+  QuotationStatusFilters,
+  quotationCanConvertToJob,
+} from "@/components/quotations/quotation-status-filters";
 
 const TAX_RATE = 0.18;
 
@@ -1128,31 +1110,7 @@ export default function QuotationsPage() {
         }
       />
 
-      {/* Conversion flow */}
-      <Card className="overflow-hidden border-border/80 shadow-sm">
-        <div className="h-1 bg-linear-to-r from-primary via-primary/70 to-primary/40" aria-hidden />
-        <CardContent className="py-4 sm:py-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center mb-4">
-            Typical workflow
-          </p>
-          <div className="flex items-center justify-center gap-1 sm:gap-3 flex-wrap max-w-2xl mx-auto">
-            <div className="flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5 shadow-sm">
-              <FileText className="h-4 w-4 text-primary shrink-0" />
-              <span className="text-sm font-semibold text-foreground">Quotation</span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground/70 shrink-0 hidden sm:block" />
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-4 py-2.5">
-              <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-sm font-medium text-muted-foreground">Job card</span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground/70 shrink-0 hidden sm:block" />
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-4 py-2.5">
-              <ArrowRightCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-sm font-medium text-muted-foreground">Invoice</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <QuotationWorkflowBanner />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard
@@ -1193,56 +1151,49 @@ export default function QuotationsPage() {
           </p>
         </CardHeader>
         <CardContent className="pt-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/50 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {TAB_VALUES.map((tab) => (
-                <TabsTrigger key={tab} value={tab} className="data-[state=active]:shadow-sm">
-                  {TAB_LABELS[tab]} ({tabCounts[tab] ?? 0})
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {TAB_VALUES.map((tab) => (
-              <TabsContent key={tab} value={tab} className="mt-6 focus-visible:outline-none">
-                <DataTable<Quotation>
-                  data={
-                    tab === "ALL"
-                      ? sortedQuotations
-                      : sortedQuotations.filter((q) => q.status === tab)
-                  }
-                  columns={columns}
-                  searchPlaceholder="Search by quotation #, customer, or vehicle..."
-                  searchKeys={[
-                    "quotationNumber",
-                    "customerName",
-                    "vehicleRegNumber",
-                    "vehicleMakeModel",
-                  ]}
-                  pageSize={10}
-                  onRowClick={(item) => {
-                    setSelectedQuotation(item);
-                    setDetailsDialogOpen(true);
-                  }}
-                  renderMobileCard={(item) => {
-                    const q = item as Quotation;
-                    return (
-                      <>
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-mono text-xs font-semibold">{q.quotationNumber}</span>
-                          <QuotationStatusBadge status={q.status} />
-                        </div>
-                        <p className="mt-2 font-medium leading-snug">{q.customerName}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {q.vehicleRegNumber} · {q.vehicleMakeModel}
-                        </p>
-                        <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(q.grandTotal)}</p>
-                      </>
-                    );
-                  }}
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
+          <QuotationStatusFilters
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            tabCounts={tabCounts}
+            renderTabContent={(tab) => (
+              <DataTable<Quotation>
+                data={
+                  tab === "ALL"
+                    ? sortedQuotations
+                    : sortedQuotations.filter((q) => q.status === tab)
+                }
+                columns={columns}
+                searchPlaceholder="Search by quotation #, customer, or vehicle..."
+                searchKeys={[
+                  "quotationNumber",
+                  "customerName",
+                  "vehicleRegNumber",
+                  "vehicleMakeModel",
+                ]}
+                pageSize={10}
+                onRowClick={(item) => {
+                  setSelectedQuotation(item);
+                  setDetailsDialogOpen(true);
+                }}
+                renderMobileCard={(item) => {
+                  const q = item as Quotation;
+                  return (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold">{q.quotationNumber}</span>
+                        <QuotationStatusBadge status={q.status} />
+                      </div>
+                      <p className="mt-2 font-medium leading-snug">{q.customerName}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {q.vehicleRegNumber} · {q.vehicleMakeModel}
+                      </p>
+                      <p className="mt-3 text-lg font-bold tabular-nums">{formatCurrency(q.grandTotal)}</p>
+                    </>
+                  );
+                }}
+              />
+            )}
+          />
         </CardContent>
       </Card>
 

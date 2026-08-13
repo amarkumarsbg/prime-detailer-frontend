@@ -1,24 +1,10 @@
 import type { FuelType, VehicleSegment } from "@/types";
 import type { VehicleImportColumnKey, VehicleImportColumnMapping } from "./types";
+import { normalizePhoneDigits } from "@/lib/phone";
+export { cellToString } from "@/lib/tabular-import/parse-tabular";
 
 export function normalizeImportPhone(phone: string): string {
-  return String(phone ?? "")
-    .replace(/\D/g, "")
-    .slice(-10);
-}
-
-export function cellToString(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (Number.isInteger(value) && Math.abs(value) >= 1e9) {
-      return String(Math.trunc(value));
-    }
-    return String(value).trim();
-  }
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (value instanceof Date) return value.toISOString();
-  return String(value).trim();
+  return normalizePhoneDigits(phone);
 }
 
 function normalizeHeader(header: string): string {

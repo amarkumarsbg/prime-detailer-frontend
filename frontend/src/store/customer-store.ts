@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { Customer } from "@/types";
 import { apiGet, apiPost, apiPut, apiPatch, ApiError } from "@/lib/api-client";
+import { normalizePhoneDigits } from "@/lib/phone";
 
 export type NewCustomerInput = Omit<Customer, "id" | "createdAt"> & {
   referralCode: string;
@@ -122,9 +123,9 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
   },
 
   findByPhone: (phone) => {
-    const cleaned = phone.replace(/\D/g, "").slice(-10);
+    const cleaned = normalizePhoneDigits(phone);
     if (cleaned.length !== 10) return undefined;
-    return get().customers.find((c) => c.phone.replace(/\D/g, "").slice(-10) === cleaned);
+    return get().customers.find((c) => normalizePhoneDigits(c.phone) === cleaned);
   },
 
   findByEmail: (email) => {

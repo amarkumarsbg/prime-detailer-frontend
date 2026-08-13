@@ -3,6 +3,7 @@ import {
   normalizeRegistrationNumber,
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
+import { normalizePhoneDigits } from "@/lib/phone";
 
 export function computeCustomerLookupMatches(
   queryRaw: string,
@@ -27,7 +28,7 @@ export function computeCustomerLookupMatches(
 
   if (digits.length >= 10) {
     const p10 = digits.slice(-10);
-    push(customers.find((c) => c.phone.replace(/\D/g, "").slice(-10) === p10));
+    push(customers.find((c) => normalizePhoneDigits(c.phone) === p10));
   } else if (compactDigitOnly && digits.length >= 4 && digits.length < 10) {
     for (const c of customers) {
       if (c.phone.replace(/\D/g, "").includes(digits)) push(c);

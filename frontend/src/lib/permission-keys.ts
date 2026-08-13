@@ -1,0 +1,81 @@
+/**
+ * Canonical permission keys for RBAC (nav + API).
+ * Keep aligned with backend/src/constants/permission-keys.ts and prisma seed.
+ */
+export const PERMISSION_KEYS = [
+  "DASHBOARD",
+  "JOB_CARDS",
+  "BOOKINGS",
+  "PICKUP_DROP",
+  "QUOTATIONS",
+  "APPOINTMENTS",
+  "CUSTOMERS",
+  "MEMBERSHIP",
+  "VEHICLES",
+  "REMINDERS",
+  "FOLLOW_UPS",
+  "REFERRALS",
+  "BILLING",
+  "REPORTS",
+  "CASH_BANK",
+  "PARTIES",
+  "SHARED_LEDGER",
+  "EXPENSES",
+  "VENDORS",
+  "STAFF",
+  "ATTENDANCE",
+  "PAYROLL",
+  "SERVICES",
+  "INVENTORY",
+  "BRANCHES",
+  "PERFORMANCE",
+  "MECHANICS",
+  "ANALYTICS",
+  "ADVANCED_REPORTS",
+  "ACTIVITY",
+  "MESSAGES",
+  "SETTINGS",
+] as const;
+
+export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+
+/** UI labels for staff permission editor. */
+export const PERMISSION_KEY_LABELS: Record<PermissionKey, string> = {
+  DASHBOARD: "Dashboard",
+  JOB_CARDS: "Job Cards",
+  BOOKINGS: "Bookings",
+  PICKUP_DROP: "Pickup & Drop",
+  QUOTATIONS: "Quotations",
+  APPOINTMENTS: "Appointments",
+  CUSTOMERS: "Customers",
+  MEMBERSHIP: "Membership",
+  VEHICLES: "Vehicles",
+  REMINDERS: "Reminders",
+  FOLLOW_UPS: "Follow-ups",
+  REFERRALS: "Referrals",
+  BILLING: "Billing",
+  REPORTS: "Reports",
+  CASH_BANK: "Cash & Bank",
+  PARTIES: "Parties",
+  SHARED_LEDGER: "Shared Ledger",
+  EXPENSES: "Expenses",
+  VENDORS: "Vendors",
+  STAFF: "Users & Staff",
+  ATTENDANCE: "Attendance",
+  PAYROLL: "Salary & Payroll",
+  SERVICES: "Services",
+  INVENTORY: "Inventory",
+  BRANCHES: "Locations",
+  PERFORMANCE: "Performance",
+  MECHANICS: "Mechanics",
+  ANALYTICS: "Analytics",
+  ADVANCED_REPORTS: "Advanced Reports",
+  ACTIVITY: "Activity Log",
+  MESSAGES: "Messages Log",
+  SETTINGS: "Settings",
+};
+
+export const PERMISSIONS_FOR_UI = PERMISSION_KEYS.map((key) => ({
+  key,
+  label: PERMISSION_KEY_LABELS[key],
+}));

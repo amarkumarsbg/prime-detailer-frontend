@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -37,6 +37,13 @@ import {
 import { TimerControlsBufferCard } from "@/components/job-cards/timer-controls-buffer-card";
 import { ServiceTimerDeliverySummary } from "@/components/job-cards/service-timer-delivery-summary";
 import { EditJobCardDetailsDialog } from "@/components/job-cards/edit-job-card-details-dialog";
+import {
+  JobCardWorkflowChrome,
+  JOB_CARD_STATUS_LABELS,
+} from "@/components/job-cards/job-card-workflow-chrome";
+import { JobCardHeaderCard } from "@/components/job-cards/job-card-header-card";
+import { JobCardNotesPanel } from "@/components/job-cards/job-card-notes-panel";
+import { JobCardServiceChecklist } from "@/components/job-cards/job-card-service-checklist";
 import { useJobTimer } from "@/hooks/use-job-timer";
 import {
   jobCardIsEditable,
@@ -46,12 +53,10 @@ import {
 import { computeServiceTimerSnapshot, getServiceTimerSummaryForJob, initialServiceTimerPatch } from "@/lib/job-timer";
 import { PageHeader } from "@/components/shared/page-header";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
-import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -136,26 +141,6 @@ const WORKFLOW_STATUSES: JobCardStatus[] = [
   "READY",
   "DELIVERED",
 ];
-
-const WORKFLOW_LABELS: Record<JobCardStatus, string> = {
-  RECEIVED: "Received",
-  INSPECTION: "Inspection",
-  AWAITING_SERVICE: "Service",
-  QUALITY_CHECK: "QC",
-  READY: "Ready",
-  DELIVERED: "Delivered",
-  CANCELLED: "Cancelled",
-};
-
-const STATUS_LABELS: Record<JobCardStatus, string> = {
-  RECEIVED: "Received",
-  INSPECTION: "Inspection",
-  AWAITING_SERVICE: "Awaiting / In Service",
-  QUALITY_CHECK: "Quality Check",
-  READY: "Ready",
-  DELIVERED: "Delivered",
-  CANCELLED: "Cancelled",
-};
 
 function formatSegmentLabel(segment: string): string {
   return segment
@@ -1274,7 +1259,7 @@ export default function JobCardDetailPage() {
       }
 
       toast.success("Status updated", {
-        description: `Job card moved to "${STATUS_LABELS[nextStatus]}"`,
+        description: `Job card moved to "${JOB_CARD_STATUS_LABELS[nextStatus]}"`,
       });
     }
   };
@@ -1449,16 +1434,6 @@ export default function JobCardDetailPage() {
     currentStatus !== "CANCELLED" &&
     (currentStatus === "DELIVERED" || currentStatusIndex < WORKFLOW_STATUSES.length - 1);
 
-  const visualSteps = [
-    { id: "RECEIVED", label: "Received", statusIndex: 0 },
-    { id: "INSPECTION", label: "Inspection", statusIndex: 1 },
-    { id: "AWAITING_SERVICE", label: "Service", statusIndex: 2 },
-    { id: "QUALITY_CHECK", label: "QC", statusIndex: 3 },
-    { id: "READY", label: "Ready", statusIndex: 4 },
-    { id: "INVOICE", label: "Invoice", statusIndex: -1 },
-    { id: "DELIVERED", label: "Delivered", statusIndex: 5 },
-  ];
-
   return (
     <div
       className={cn(
@@ -1477,179 +1452,20 @@ export default function JobCardDetailPage() {
         />
       </div>
 
-      {/* Page chrome: job context bar + workflow stepper (no horizontal overflow) */}
-      <div className="min-w-0 max-w-full overflow-x-hidden space-y-3 sm:space-y-4">
-        <div className="sticky top-0 z-30 -mt-4 border-b border-border/80 bg-background/98 py-2.5 backdrop-blur-sm sm:mt-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 md:hidden" asChild>
-              <Link href="/job-cards" aria-label="Back to job cards">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-mono text-sm font-bold leading-tight">{jobCard.jobNumber}</p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                Current status: {STATUS_LABELS[currentStatus]}
-              </p>
-            </div>
-            <JobCardStatusBadge status={currentStatus} className="shrink-0 text-[10px]" />
-          </div>
-        </div>
-
-        {currentStatus !== "CANCELLED" && (
-          <Card className="min-w-0 overflow-hidden border-border/80 shadow-sm">
-            <CardContent className="!px-3 !py-3 sm:!px-4 sm:!py-4">
-              <div
-                className="w-full max-w-full overflow-hidden pt-1"
-                role="navigation"
-                aria-label="Job workflow progress"
-              >
-                <div className="flex w-full min-w-0 items-start overflow-hidden">
-                  {visualSteps.map((step, index) => {
-                    const isLast = index === visualSteps.length - 1;
-                    let isCompleted = false;
-                    let isCurrent = false;
-
-                    if (step.id === "INVOICE") {
-                      isCompleted = invoiceForJob != null || currentStatus === "DELIVERED";
-                      isCurrent = currentStatus === "READY" && !invoiceForJob;
-                    } else if (step.id === "DELIVERED") {
-                      isCompleted = currentStatus === "DELIVERED";
-                      isCurrent = currentStatus === "DELIVERED";
-                    } else {
-                      const idx = step.statusIndex;
-                      isCompleted = idx < currentStatusIndex || (currentStatus === "READY" && idx === 4) || currentStatus === "DELIVERED";
-                      isCurrent = idx === currentStatusIndex && !(currentStatus === "READY" && idx === 4);
-                    }
-
-                    const stepNumber = step.id === "DELIVERED" ? 6 : index + 1;
-                    const showFileIcon = step.id === "INVOICE";
-                    const isClickable = step.id === "INVOICE" && isCurrent;
-
-                    return (
-                      <Fragment key={step.id}>
-                        <div
-                          className={cn(
-                            "flex min-w-0 flex-1 flex-col items-center px-0.5 select-none",
-                            isClickable && "group/step cursor-pointer"
-                          )}
-                          onClick={isClickable ? handleGenerateInvoice : undefined}
-                          title={isClickable ? "Click to Generate Invoice" : undefined}
-                        >
-                          <div
-                            className={cn(
-                              "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all sm:h-8 sm:w-8",
-                              isCompleted
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : isCurrent
-                                  ? isClickable
-                                    ? "border-primary bg-primary/10 text-primary animate-pulse shadow-md shadow-primary/20 hover:bg-primary/20 scale-105"
-                                    : "border-primary bg-primary/10 text-primary"
-                                  : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
-                            )}
-                          >
-                            {isCompleted ? (
-                              <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            ) : showFileIcon ? (
-                              <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            ) : (
-                              <span className="text-[10px] font-medium sm:text-xs">{stepNumber}</span>
-                            )}
-                          </div>
-                          <span
-                            className={cn(
-                              "mt-1 w-full text-center text-[8px] leading-[1.2] line-clamp-2 sm:text-[10px] sm:leading-tight",
-                              isCurrent || isCompleted
-                                ? "font-semibold text-foreground"
-                                : "text-muted-foreground",
-                              isClickable && "group-hover/step:text-primary transition-colors"
-                            )}
-                          >
-                            {step.label}
-                          </span>
-                        </div>
-                        {!isLast && (
-                          <div
-                            className={cn(
-                              "mt-3.5 h-0.5 min-w-[3px] max-w-4 flex-[0.35_0_6px] shrink-0 rounded-full sm:max-w-5",
-                              isCompleted ? "bg-primary" : "bg-muted"
-                            )}
-                            aria-hidden
-                          />
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="mt-3 space-y-2 sm:mt-4">
-                {currentStatus === "DELIVERED" || currentStatus === "READY" ? (
-                  <div className="hidden flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
-                    <p className="text-sm text-muted-foreground">
-                      {currentStatus === "DELIVERED"
-                        ? "This job is delivered — you can create the tax invoice or open it if it already exists."
-                        : "This job is ready — generate the invoice to mark it as delivered."}
-                    </p>
-                    <Button
-                      type="button"
-                      className="w-full shrink-0 sm:w-auto"
-                      onClick={handleGenerateInvoice}
-                      title="Creates the invoice if needed and opens billing to print or record payment."
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      {invoiceForJob ? "View invoice" : "Generate Invoice"}
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {advanceBlockedByMechanic && (
-                      <p className="text-sm text-amber-600 dark:text-amber-500">
-                        Assign a mechanic before moving to In Service — use the button below or the summary header.
-                      </p>
-                    )}
-                    <div className="hidden flex-col gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                      {!hasMechanicAssigned && (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="w-full sm:w-auto"
-                          onClick={() => setShowQuickAssignDialog(true)}
-                        >
-                          <User className="w-4 h-4 mr-2" />
-                          Assign mechanic
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        className="w-full sm:w-auto"
-                        onClick={handleUpdateStatus}
-                        disabled={updateStatusDisabled}
-                        title={updateStatusDisabledTitle}
-                      >
-                        Update Status
-                      </Button>
-                      <Button className="w-full sm:w-auto" variant="destructive" onClick={handleCancel}>
-                        Cancel
-                      </Button>
-                    </div>
-                    <div className="md:hidden">
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0 text-destructive"
-                        onClick={handleCancel}
-                      >
-                        Cancel job
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      <JobCardWorkflowChrome
+        jobNumber={jobCard.jobNumber}
+        currentStatus={currentStatus}
+        currentStatusIndex={currentStatusIndex}
+        invoiceForJob={invoiceForJob}
+        advanceBlockedByMechanic={advanceBlockedByMechanic}
+        hasMechanicAssigned={hasMechanicAssigned}
+        updateStatusDisabled={updateStatusDisabled}
+        updateStatusDisabledTitle={updateStatusDisabledTitle}
+        onGenerateInvoice={handleGenerateInvoice}
+        onUpdateStatus={handleUpdateStatus}
+        onCancel={handleCancel}
+        onAssignMechanic={() => setShowQuickAssignDialog(true)}
+      />
 
       {jobCard.serviceTimerStartedAt &&
         currentStatus !== "CANCELLED" &&
@@ -1671,42 +1487,12 @@ export default function JobCardDetailPage() {
         <ServiceTimerDeliverySummary snapshot={serviceTimerDeliverySummary} />
       )}
 
-      {/* Job header — competitor-style context row */}
-      <Card className="overflow-hidden border-border/80 shadow-sm">
-        <div className="h-1.5 bg-linear-to-r from-emerald-600/90 via-emerald-500/70 to-primary/60" aria-hidden />
-        <CardContent className="pt-4 pb-4 sm:pt-5 sm:pb-5 sm:p-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 mb-2 hidden h-8 text-muted-foreground hover:text-foreground md:inline-flex"
-            asChild
-          >
-            <Link href="/job-cards">
-              <ArrowLeft className="w-4 h-4 mr-1.5" />
-              All job cards
-            </Link>
-          </Button>
-          <p className="hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:block">
-            Job card
-          </p>
-          <div className="mt-0 flex flex-col gap-2 sm:mt-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <h1 className="text-xl font-bold font-mono tracking-tight sm:text-2xl md:text-3xl">
-              {jobCard.jobNumber}
-            </h1>
-            <JobCardStatusBadge status={currentStatus} className="hidden sm:inline-flex" />
-          </div>
-          <div className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <CalendarDays className="w-4 h-4 shrink-0 text-emerald-600/90" />
-              <span>{formatDate(jobCard.createdAt)}</span>
-            </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <User className="w-4 h-4 shrink-0 text-muted-foreground" />
-              <span className="font-medium text-foreground truncate">{jobCard.customerName}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <JobCardHeaderCard
+        jobNumber={jobCard.jobNumber}
+        currentStatus={currentStatus}
+        createdAt={jobCard.createdAt}
+        customerName={jobCard.customerName}
+      />
 
       <Tabs value={detailTab} onValueChange={setDetailTab} className="space-y-0">
         <Card className="border-border/80 shadow-sm overflow-hidden">
@@ -2091,70 +1877,15 @@ export default function JobCardDetailPage() {
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-4 space-y-4 outline-none">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Service Checklist</CardTitle>
-          <div className="flex items-center gap-4 mt-2">
-            <Progress value={progressPercent} className="w-32 h-2" />
-            <span className="text-sm text-muted-foreground">
-              {completedCount} of {totalCount} completed
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {serviceItems.length === 0 && (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                No services on this job card yet. Add services from the job setup flow or create the job with at least one service.
-              </p>
-            )}
-            {serviceItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-              >
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={item.isCompleted}
-                    disabled={!canEditJobDetails}
-                    onCheckedChange={() => toggleServiceComplete(item.id)}
-                  />
-                  <div>
-                    <p
-                      className={`font-medium ${
-                        item.isCompleted ? "line-through text-muted-foreground" : ""
-                      }`}
-                    >
-                      {item.name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Intl.NumberFormat("en-IN", {
-                        style: "currency",
-                        currency: "INR",
-                      }).format(item.price)}
-                    </p>
-                    {membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Included: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.included} · Used: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.used} · Remaining: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.remaining}
-                      </p>
-                    ) : null}
-                    {item.durationMinutes != null && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Est. {item.durationMinutes} min
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {item.isCompleted && (
-                  <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                    Done
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <JobCardServiceChecklist
+        serviceItems={serviceItems}
+        progressPercent={progressPercent}
+        completedCount={completedCount}
+        totalCount={totalCount}
+        canEdit={canEditJobDetails}
+        membershipUsageByCatalogId={membershipUsageByCatalogId}
+        onToggleComplete={toggleServiceComplete}
+      />
 
       {jobQualifiesForHighEndAdvance && jobCard.waiveHighEndAdvance && (
         <Card className="border-dashed">
@@ -2806,33 +2537,12 @@ export default function JobCardDetailPage() {
         </TabsContent>
 
         <TabsContent value="notes" className="mt-4 space-y-4 outline-none">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <MessageCircle className="w-4 h-4 text-muted-foreground" />
-            Notes &amp; details
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {notes && (
-            <div className="p-3 rounded-lg bg-muted/50 text-sm whitespace-pre-wrap">
-              {notes}
-            </div>
-          )}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Textarea
-              placeholder="Add a note..."
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-              rows={2}
-              className="flex-1"
-            />
-            <Button onClick={addNote} variant="secondary" className="shrink-0 sm:self-end">
-              Add Note
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <JobCardNotesPanel
+        notes={notes}
+        newNote={newNote}
+        onNewNoteChange={setNewNote}
+        onAddNote={addNote}
+      />
 
         </TabsContent>
 

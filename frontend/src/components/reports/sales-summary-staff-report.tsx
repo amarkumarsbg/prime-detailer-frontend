@@ -22,6 +22,7 @@ import { DEFAULT_REPORT_PERIOD } from "@/lib/reports/report-period-presets";
 import { ReportPeriodSelect } from "@/components/reports/report-period-select";
 import type { Invoice, InvoiceStatus } from "@/types";
 import { formatInrFull } from "@/lib/utils";
+import { splitCgstSgst } from "@/lib/tax-invoice-format";
 import {
   ArrowLeft,
   BarChart3,
@@ -89,6 +90,7 @@ function inDatePreset(iso: string, preset: string): boolean {
 }
 
 function paidTotal(inv: Invoice): number {
+  // Staff sales summary intentionally excludes wallet — do not use invoicePaidTotal.
   return (inv.payments ?? []).reduce((s, p) => s + p.amount, 0);
 }
 
@@ -119,7 +121,8 @@ function matchesStatusFilter(row: "Paid" | "Unpaid" | "Cancelled", filter: strin
 function splitGst(inv: Invoice): { cgst: number; sgst: number; igst: number } {
   const tax = inv.taxAmount ?? 0;
   if (tax <= 0) return { cgst: 0, sgst: 0, igst: 0 };
-  return { cgst: tax / 2, sgst: tax / 2, igst: 0 };
+  const { cgst, sgst } = splitCgstSgst(tax);
+  return { cgst, sgst, igst: 0 };
 }
 
 export function SalesSummaryStaffReport() {

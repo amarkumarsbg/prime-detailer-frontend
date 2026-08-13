@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import type { Customer, Invoice, JobCard } from "@/types";
+import { formatInrFull } from "@/lib/utils";
 
 const NAVY: [number, number, number] = [26, 35, 74];
 const KPI_BLUE: [number, number, number] = [79, 70, 186];
@@ -9,14 +10,7 @@ const BORDER_BLUE: [number, number, number] = [173, 216, 230];
 /** Top-right brand (light blue) */
 const BRAND_BLUE: [number, number, number] = [59, 130, 246];
 
-function formatInrPdf(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
+const formatInrPdf = formatInrFull;
 
 function slugFile(prefix: string): string {
   const d = format(new Date(), "yyyy-MM-dd-HHmm");

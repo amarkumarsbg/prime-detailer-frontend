@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import {
   postSmsTest,
   postTransactionalEmail,
@@ -11,7 +11,8 @@ export const messagingRouter = Router();
 
 messagingRouter.use(requireAuth);
 
-messagingRouter.post("/sms/test", postSmsTest);
-messagingRouter.post("/whatsapp/test", postWhatsAppTest);
+/** Test/diagnostic sends — settings admins only. Operational send stays auth-only (cross-feature). */
+messagingRouter.post("/sms/test", requirePermission("SETTINGS"), postSmsTest);
+messagingRouter.post("/whatsapp/test", requirePermission("SETTINGS"), postWhatsAppTest);
 messagingRouter.post("/whatsapp", postWhatsApp);
 messagingRouter.post("/email", postTransactionalEmail);

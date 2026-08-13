@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
+import { getCollectionPermission } from "../constants/collection-permissions.js";
 import {
   getCollection,
   postSnapshot,
@@ -14,23 +15,17 @@ export const collectionRouter = Router();
 
 collectionRouter.use(requireAuth);
 
-collectionRouter.post("/appSettings/logo", logoUploadHandler, postAppSettingsLogo);
+collectionRouter.post(
+  "/appSettings/logo",
+  requirePermission("SETTINGS"),
+  logoUploadHandler,
+  postAppSettingsLogo
+);
 
-const COLLECTION_PERMISSION_MAP: Record<string, string> = {
-  jobCards: "JOB_CARDS",
-  bookings: "BOOKINGS",
-  pickupDrops: "PICKUP_DROP",
-  expenses: "EXPENSES",
-  vendors: "VENDORS",
-  services: "SERVICES",
-  inventory: "INVENTORY",
-  appointments: "APPOINTMENTS",
-  referrals: "REFERRALS",
-  payroll: "PAYROLL",
-  invoices: "BILLING",
-  walletTransactions: "REFERRALS",
-};
-
+/**
+ * Default-deny: collection must be mapped to a permission, and the user must hold it
+ * (SUPER_ADMIN bypasses inside requirePermission / here).
+ */
 export function requireCollectionPermission(req: Request, res: Response, next: NextFunction): void {
   if (!req.auth) {
     res.status(401).json({ data: null, error: { message: "Unauthorized" } });
@@ -41,14 +36,24 @@ export function requireCollectionPermission(req: Request, res: Response, next: N
     return;
   }
   const collection = req.params.collection;
-  if (typeof collection === "string") {
-    const permission = COLLECTION_PERMISSION_MAP[collection];
-    if (permission) {
-      if (!req.auth.permissions || !req.auth.permissions.includes(permission)) {
-        res.status(403).json({ data: null, error: { message: `Forbidden: Missing permission ${permission}` } });
-        return;
-      }
-    }
+  if (typeof collection !== "string") {
+    res.status(403).json({ data: null, error: { message: "Forbidden: Unknown collection" } });
+    return;
+  }
+  const permission = getCollectionPermission(collection);
+  if (!permission) {
+    res.status(403).json({
+      data: null,
+      error: { message: `Forbidden: No permission mapping for collection ${collection}` },
+    });
+    return;
+  }
+  if (!req.auth.permissions || !req.auth.permissions.includes(permission)) {
+    res.status(403).json({
+      data: null,
+      error: { message: `Forbidden: Missing permission ${permission}` },
+    });
+    return;
   }
   next();
 }
