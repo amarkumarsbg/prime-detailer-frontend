@@ -232,6 +232,18 @@ function recalculateInvoiceFromLines(
   return { subtotal, taxAmount, grandTotal, walletAmountUsed };
 }
 
+/** Persisted `lineDiscount` is ₹; edit UI works in %. */
+function lineDiscountPercent(qty: number, unitPrice: number, discountInr: number): number {
+  const gross = qty * unitPrice;
+  if (gross <= 0) return 0;
+  return Math.min(100, Math.round((Math.max(0, discountInr) / gross) * 10000) / 100);
+}
+
+function lineDiscountInrFromPercent(qty: number, unitPrice: number, percent: number): number {
+  const p = Math.min(100, Math.max(0, percent));
+  return Math.round(qty * unitPrice * (p / 100) * 100) / 100;
+}
+
 const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: typeof Banknote }[] = [
   { value: "CASH", label: "Cash", icon: Banknote },
   { value: "UPI", label: "UPI", icon: Smartphone },
@@ -509,6 +521,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   })();
 
   const discountTotal = activeFlatDiscount + activeRewardDiscount + activeReferralDiscount;
+  const hasDiscountToApply =
+    activeFlatDiscount > 0 || activeRewardDiscount > 0 || activeReferralDiscount > 0;
   const taxableSubtotal = Math.max(0, subtotal - discountTotal);
   const taxRate =
     gstRegistrationStatus === "NOT_REGISTERED"
@@ -723,19 +737,34 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     setEditDialogOpen(true);
   };
 
-  const updateEditLine = (id: string, patch: Partial<InvoiceLineItem>) => {
+  const updateEditLine = (
+    id: string,
+    patch: Partial<InvoiceLineItem> & { lineDiscountPercent?: number }
+  ) => {
     setEditLines((prev) =>
       prev.map((li) => {
         if (li.id !== id) return li;
-        const next = { ...li, ...patch };
+        const { lineDiscountPercent: pctPatch, ...restPatch } = patch;
+        const next = { ...li, ...restPatch };
         const qty = Math.max(0, Number(next.quantity) || 0);
         const unitPrice = Math.max(0, Number(next.unitPrice) || 0);
-        const lineDiscount = Math.max(0, Number(next.lineDiscount) || 0);
-        const total = Math.max(0, Math.round((qty * unitPrice - lineDiscount) * 100) / 100);
+        const gross = qty * unitPrice;
+        let lineDiscount: number;
+        if (pctPatch != null) {
+          lineDiscount = lineDiscountInrFromPercent(qty, unitPrice, pctPatch);
+        } else if (restPatch.lineDiscount != null) {
+          lineDiscount = Math.min(gross, Math.max(0, Number(restPatch.lineDiscount) || 0));
+        } else if (restPatch.quantity != null || restPatch.unitPrice != null) {
+          const prevPct = lineDiscountPercent(li.quantity, li.unitPrice, li.lineDiscount ?? 0);
+          lineDiscount = lineDiscountInrFromPercent(qty, unitPrice, prevPct);
+        } else {
+          lineDiscount = Math.min(gross, Math.max(0, Number(next.lineDiscount) || 0));
+        }
+        const total = Math.max(0, Math.round((gross - lineDiscount) * 100) / 100);
         let description = next.description;
         if (
           next.type === "PARTS" &&
-          patch.quantity != null &&
+          restPatch.quantity != null &&
           /—\s*[\d.]+(\s+\S+)?\s*$/.test(description)
         ) {
           description = description.replace(/—\s*[\d.]+/, `— ${qty}`);
@@ -1346,7 +1375,12 @@ ${businessNameVal}`;
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     ) : (
-                      <Button variant="outline" className="shrink-0" onClick={handleVerifyReferralCode} disabled={isReferralDisabled}>
+                      <Button
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={handleVerifyReferralCode}
+                        disabled={isReferralDisabled || !referralCode.trim()}
+                      >
                         Apply
                       </Button>
                     )}
@@ -1411,7 +1445,11 @@ ${businessNameVal}`;
                   </div>
                 </div>
 
-                <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium animate-in fade-in duration-200" disabled={isApplying || Boolean(pointsErrorMsg)} onClick={handleSaveDiscounts}>
+                <Button
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium animate-in fade-in duration-200 disabled:opacity-50"
+                  disabled={isApplying || Boolean(pointsErrorMsg) || !hasDiscountToApply}
+                  onClick={handleSaveDiscounts}
+                >
                   {isApplying ? "Applying..." : "Apply to Invoice"}
                 </Button>
               </CardContent>
@@ -1486,7 +1524,7 @@ ${businessNameVal}`;
       </div>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-hidden flex flex-col sm:max-w-2xl">
+        <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] overflow-hidden flex flex-col sm:max-w-4xl lg:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Edit Invoice</DialogTitle>
           </DialogHeader>
@@ -1495,7 +1533,7 @@ ${businessNameVal}`;
               {editLines.map((li, idx) => (
                 <div
                   key={li.id}
-                  className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
+                  className="rounded-lg border border-border bg-muted/20 p-3 space-y-2 sm:p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1567,15 +1605,18 @@ ${businessNameVal}`;
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor={`edit-disc-${li.id}`}>Line disc. (₹)</Label>
+                      <Label htmlFor={`edit-disc-${li.id}`}>Line disc. (%)</Label>
                       <Input
                         id={`edit-disc-${li.id}`}
                         type="text"
                         inputMode="decimal"
-                        value={String(li.lineDiscount ?? 0)}
+                        value={String(
+                          lineDiscountPercent(li.quantity, li.unitPrice, li.lineDiscount ?? 0)
+                        )}
                         onChange={(e) =>
                           updateEditLine(li.id, {
-                            lineDiscount: Number(e.target.value.replace(/,/g, "")) || 0,
+                            lineDiscountPercent:
+                              Number(e.target.value.replace(/,/g, "")) || 0,
                           })
                         }
                       />

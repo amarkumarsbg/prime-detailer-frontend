@@ -54,6 +54,7 @@ Request → Route → Auth/Permission → Controller (Zod) → Service → Prism
 - Phone inputs / validation: `normalizePhoneDigits` from `lib/phone.ts` (not ad-hoc `.replace(/\D/g)`).
 - Brand/model “+ New” dialogs: `ensureCatalogBrand` / `ensureCatalogModel` (+ `appendExtraBrand` / `appendExtraModel`) from `lib/vehicle-catalog-extras.ts` so UI extras stay in sync with the settings catalog.
 - Zustand entity updates: prefer `updateX(id, updates: Partial<T>)` like appointments / job cards / quotations.
+- Recharts tooltips: spread `CHART_TOOLTIP_PROPS` from `lib/chart-tooltip.ts` (`cursor: false` + theme label/item colors).
 
 ## PR checklist
 

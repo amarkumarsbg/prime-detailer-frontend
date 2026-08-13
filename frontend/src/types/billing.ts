@@ -50,7 +50,7 @@ export interface InvoiceLineItem {
   total: number;
   /** SAC/HSN for GST line (e.g. 998714). Defaults in UI when omitted. */
   hsnSac?: string;
-  /** Line-level discount in ₹ (before tax). */
+  /** Line-level discount in ₹ (before tax). Edit UI enters this as a % of qty × rate. */
   lineDiscount?: number;
 }
 

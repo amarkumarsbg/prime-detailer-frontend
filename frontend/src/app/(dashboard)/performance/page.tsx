@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency, getInitials } from "@/lib/utils";
+import { CHART_TOOLTIP_PROPS } from "@/lib/chart-tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -243,13 +244,6 @@ export default function PerformancePage() {
       ? `Showing ${viewingLabel} only. Choose “All branches” in the header to compare.`
       : `No job activity for ${viewingLabel} in this period.`
     : null;
-
-  const tooltipBase = {
-    background: "var(--popover)",
-    border: "1px solid var(--border)",
-    borderRadius: "0.5rem",
-    color: "var(--popover-foreground)",
-  } as const;
 
   const jobsMax = Math.max(
     1,
@@ -1796,7 +1790,7 @@ export default function PerformancePage() {
                       tick={{ fill: "currentColor", fontSize: 11 }}
                     />
                     <Tooltip
-                      contentStyle={tooltipBase}
+                      {...CHART_TOOLTIP_PROPS}
                       formatter={(value) => [Number(value ?? 0), "Jobs completed"]}
                       labelFormatter={(_, payload) =>
                         (payload?.[0]?.payload as { fullName?: string } | undefined)
@@ -1858,7 +1852,7 @@ export default function PerformancePage() {
                         }}
                       />
                       <Tooltip
-                        contentStyle={tooltipBase}
+                        {...CHART_TOOLTIP_PROPS}
                         formatter={(value) => [
                           formatCurrency(Number(value ?? 0)),
                           "Job value",
@@ -1914,7 +1908,7 @@ export default function PerformancePage() {
                         tickFormatter={(v) => `${v}%`}
                       />
                       <Tooltip
-                        contentStyle={tooltipBase}
+                        {...CHART_TOOLTIP_PROPS}
                         formatter={(value, name) => [
                           `${Number(value ?? 0).toFixed(1)}%`,
                           String(name),
@@ -1985,7 +1979,7 @@ export default function PerformancePage() {
                           ))}
                         </Pie>
                         <Tooltip
-                          contentStyle={tooltipBase}
+                          {...CHART_TOOLTIP_PROPS}
                           formatter={(value) => [
                             formatCurrency(Number(value ?? 0)),
                             "Rewards",

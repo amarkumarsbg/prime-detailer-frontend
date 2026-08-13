@@ -1,6 +1,6 @@
 export const easeSmooth = [0.45, 0, 0.55, 1] as [number, number, number, number];
 
-/** KPI / quick-action tiles use CSS hover (see KPICard) so lift isn’t lost when nested under `StaggerGrid`’s `motion.div`. */
+/** Clickable KPI tiles use CSS hover lift; static KPI tiles stay `cursor-default` (see KPICard). */
 
 export const alertStaggerContainer = {
   hidden: { opacity: 0 },

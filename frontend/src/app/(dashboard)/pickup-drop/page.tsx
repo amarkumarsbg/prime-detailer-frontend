@@ -831,7 +831,10 @@ export default function PickupDropPage() {
       )}
       <Dialog open={createOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent
-          className={cn("sm:max-w-lg", dialogSurfaceClass)}
+          className={cn(
+            "w-[calc(100vw-1.5rem)] max-w-3xl lg:max-w-4xl",
+            dialogSurfaceClass
+          )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader>
@@ -876,7 +879,7 @@ export default function PickupDropPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 py-2 max-h-[min(70vh,28rem)] overflow-y-auto pr-1">
+          <div className="grid gap-4 py-2 max-h-[min(75vh,40rem)] overflow-y-auto pr-1">
             {/* STEP 1: Customer Details */}
             {currentStep === "customer" && (
               <div className="space-y-4">
@@ -1347,7 +1350,7 @@ export default function PickupDropPage() {
           setAddVehicleForExistingCustomerDialogOpen(open);
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add New Vehicle</DialogTitle>
             <DialogDescription className="sr-only">
@@ -1547,7 +1550,7 @@ export default function PickupDropPage() {
           if (!open) setEditRequest(null);
         }}
       >
-        <DialogContent className={cn("sm:max-w-lg", dialogSurfaceClass)}>
+        <DialogContent className={cn("w-[calc(100vw-1.5rem)] max-w-3xl lg:max-w-4xl", dialogSurfaceClass)}>
           <DialogHeader>
             <DialogTitle>Edit Pickup/Drop Request</DialogTitle>
             <DialogDescription>

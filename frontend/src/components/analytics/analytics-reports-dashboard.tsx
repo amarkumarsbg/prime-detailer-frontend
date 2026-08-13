@@ -68,16 +68,9 @@ import {
   type DateRangeKey,
 } from "@/lib/analytics/compute-metrics";
 import Link from "next/link";
+import { CHART_TOOLTIP_PROPS } from "@/lib/chart-tooltip";
 
 const EMERALD = "#059669";
-const CHART_TOOLTIP = {
-  contentStyle: {
-    background: "var(--popover)",
-    border: "1px solid var(--border)",
-    borderRadius: "0.5rem",
-    color: "var(--popover-foreground)",
-  },
-};
 
 function MotionCard({
   children,
@@ -275,7 +268,7 @@ export function AnalyticsReportsDashboard() {
                     tickFormatter={(v) => `₹${Math.round(v / 1000)}k`}
                   />
                   <Tooltip
-                    {...CHART_TOOLTIP}
+                    {...CHART_TOOLTIP_PROPS}
                     formatter={(v) => [formatCurrency(Number(v ?? 0)), "Revenue"]}
                   />
                   <Bar
@@ -295,19 +288,19 @@ export function AnalyticsReportsDashboard() {
                   label: "Total revenue",
                   value: formatCurrency(metrics.totalRev),
                   sub: "period total",
-                  tint: "from-emerald-50 to-white dark:from-emerald-950/30",
+                  tint: "from-emerald-50 to-background dark:from-emerald-950/40 dark:to-card",
                 },
                 {
                   label: "Avg / period",
                   value: formatCurrency(metrics.avgPeriod),
                   sub: "per active day",
-                  tint: "from-emerald-50 to-white dark:from-emerald-950/30",
+                  tint: "from-emerald-50 to-background dark:from-emerald-950/40 dark:to-card",
                 },
                 {
                   label: "Peak data point",
                   value: metrics.peak.label,
                   sub: formatCurrency(metrics.peak.amount),
-                  tint: "from-muted/40 to-background",
+                  tint: "from-muted/40 to-background dark:from-muted/20 dark:to-card",
                 },
               ].map((c) => (
                 <div
@@ -795,7 +788,7 @@ export function AnalyticsReportsDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/80" />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
                     <YAxis allowDecimals={false} width={32} tick={{ fontSize: 10 }} />
-                    <Tooltip {...CHART_TOOLTIP} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} />
                     <Bar dataKey="count" fill={EMERALD} radius={[6, 6, 0, 0]} animationDuration={800} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -832,7 +825,7 @@ export function AnalyticsReportsDashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/80" />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                     <YAxis allowDecimals={false} width={28} tick={{ fontSize: 10 }} />
-                    <Tooltip {...CHART_TOOLTIP} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} />
                     <Area
                       type="monotone"
                       dataKey="count"

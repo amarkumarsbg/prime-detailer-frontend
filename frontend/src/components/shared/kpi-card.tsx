@@ -187,20 +187,19 @@ export function KPICard({
       className={cn(
         "flex h-full min-h-0 flex-col translate-y-0 transform-gpu backface-hidden will-change-transform",
         "transition-[box-shadow,border-color,background-color] duration-200",
+        interactive ? "cursor-pointer" : "cursor-default",
         isFilterChip && !active && toneFilterIdleClass[tone!],
         isFilterChip && active && toneFilterActiveClass[tone!],
-        isFilterChip && !active && toneFilterHoverClass[tone!],
+        isFilterChip && !active && (interactive || decorativeHover) && toneFilterHoverClass[tone!],
         !isFilterChip && tone && isMinimal && "border border-border/60 bg-card shadow-sm min-h-[5.75rem] sm:min-h-[6rem]",
         !isFilterChip && tone && !isMinimal && !active && toneSurfaceClass[tone],
         !isFilterChip && interactive && tone && !isMinimal && !active && toneHoverClass[tone],
         !isFilterChip && interactive && "hover:shadow-md",
-        !interactive &&
-          !decorativeHover &&
-          !isMinimal &&
-          "motion-safe:hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-md duration-[12000ms] ease-[cubic-bezier(0.45,0,0.55,1)]",
-        isMinimal && !interactive && "hover:shadow-md",
+        /* Non-clickable tiles: default cursor, no lift — avoids looking actionable */
+        !interactive && !decorativeHover && !isMinimal && "hover:shadow-sm",
+        isMinimal && !interactive && "hover:shadow-sm",
         !tone && interactive && "hover:shadow-md dark:hover:shadow-md",
-        !tone && !interactive && "hover:shadow-md dark:hover:shadow-md",
+        !tone && !interactive && "hover:shadow-sm dark:hover:shadow-sm",
         isFeatured &&
           !tone &&
           "border-emerald-200/70 shadow-sm dark:border-emerald-900/60",
@@ -306,7 +305,7 @@ export function KPICard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      className="w-full cursor-pointer text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       aria-pressed={active}
     >
       {card}
