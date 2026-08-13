@@ -55,6 +55,14 @@ import {
   findVehicleByNormalizedReg,
   normalizeRegistrationNumber,
 } from "@/lib/vehicle-registration";
+import { normalizePhoneDigits } from "@/lib/phone";
+import {
+  appendExtraBrand,
+  appendExtraModel,
+  ensureCatalogBrand,
+  ensureCatalogModel,
+  isBrandNameTaken,
+} from "@/lib/vehicle-catalog-extras";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { PickupDropJobGroupCard } from "@/components/pickup-drop/pickup-drop-job-group-card";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
@@ -115,7 +123,7 @@ const dialogSurfaceClass =
 
 export default function PickupDropPage() {
   const { jobCards } = useJobCardStore();
-  const { requests, addRequest, assignDriver, advanceStatus } = usePickupDropStore();
+  const { requests, addRequest, updateRequest, assignDriver, advanceStatus } = usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
   const appointments = useAppointmentStore((s) => s.appointments);
@@ -142,6 +150,13 @@ export default function PickupDropPage() {
   const [newModelOpen, setNewModelOpen] = useState(false);
   const [newModelDraft, setNewModelDraft] = useState("");
 
+  const [editRequest, setEditRequest] = useState<PickupDropRequest | null>(null);
+  const [editAddress, setEditAddress] = useState("");
+  const [editScheduledLocal, setEditScheduledLocal] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editDriverId, setEditDriverId] = useState("unassigned");
+
   const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
   const allBrandsSorted = useMemo(
     () => [...new Set([...makeOptions, ...extraBrands])].sort((a, b) => a.localeCompare(b)),
@@ -159,7 +174,7 @@ export default function PickupDropPage() {
       toast.error("Enter the customer name.");
       return false;
     }
-    const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
+    const phoneDigits = normalizePhoneDigits(newCustomerPhone);
     if (!newCustomerPhone.trim() || phoneDigits.length !== 10) {
       toast.error("Enter a valid 10-digit mobile number.");
       return false;
@@ -195,6 +210,9 @@ export default function PickupDropPage() {
   };
 
   const handleDialogOpenChange = (open: boolean) => {
+    if (!open && (newBrandOpen || newModelOpen || addVehicleForExistingCustomerDialogOpen)) {
+      return;
+    }
     setCreateOpen(open);
     if (open) {
       setNewBranchId(selectedBranchId || scopedBranches[0]?.id || "");
@@ -226,6 +244,118 @@ export default function PickupDropPage() {
   const [reqType, setReqType] = useState<PickupDropType>("PICKUP");
   const [driverId, setDriverId] = useState<string>("unassigned");
   const [notes, setNotes] = useState("");
+
+  const brandForModelDialog = addVehicleForExistingCustomerDialogOpen
+    ? newVehicleMakeInput
+    : vehicleMake;
+
+  const commitNewBrand = (raw: string): boolean => {
+    const t = raw.trim();
+    if (!t) {
+      toast.error("Enter a brand name");
+      return false;
+    }
+    if (isBrandNameTaken(allBrandsSorted, t)) {
+      toast.message("Brand already in list");
+      return false;
+    }
+    const canonical = ensureCatalogBrand(t);
+    setExtraBrands((prev) => appendExtraBrand(prev, canonical));
+    if (addVehicleForExistingCustomerDialogOpen) {
+      setNewVehicleMakeInput(canonical);
+      setNewVehicleModelInput("");
+    } else {
+      setVehicleMake(canonical);
+      setVehicleModel("");
+    }
+    setNewBrandOpen(false);
+    setNewBrandDraft("");
+    toast.success("Brand added", { description: canonical });
+    return true;
+  };
+
+  const commitNewModel = (raw: string): boolean => {
+    const t = raw.trim();
+    if (!t) {
+      toast.error("Enter a model name");
+      return false;
+    }
+    const brandName = (
+      addVehicleForExistingCustomerDialogOpen ? newVehicleMakeInput : vehicleMake
+    ).trim();
+    if (!brandName) {
+      toast.error("Select a brand first");
+      return false;
+    }
+    const segment = addVehicleForExistingCustomerDialogOpen
+      ? newVehicleSegmentInput
+      : vehicleSegment;
+    ensureCatalogModel(brandName, t, segment);
+    setExtraModelsByBrand((prev) => appendExtraModel(prev, brandName, t));
+    if (addVehicleForExistingCustomerDialogOpen) {
+      setNewVehicleModelInput(t);
+      const seg = getModelSegment(brandName, t);
+      if (seg) setNewVehicleSegmentInput(seg);
+    } else {
+      setVehicleModel(t);
+      const seg = getModelSegment(brandName, t);
+      if (seg) setVehicleSegment(seg);
+    }
+    setNewModelOpen(false);
+    setNewModelDraft("");
+    toast.success("Model added", { description: t });
+    return true;
+  };
+
+  const openEditRequest = (r: PickupDropRequest) => {
+    setEditRequest(r);
+    setEditAddress(r.address);
+    setEditScheduledLocal(formatDatetimeLocalInput(new Date(r.scheduledTime)));
+    setEditNotes(r.notes ?? "");
+    setEditPhone(customerPhoneFromPickupRequest(r) ?? "");
+    setEditDriverId(r.driverId ?? "unassigned");
+  };
+
+  const handleSaveEditRequest = () => {
+    if (!editRequest) return;
+    const address = editAddress.trim();
+    if (!address) {
+      toast.error("Address is required");
+      return;
+    }
+    if (!editScheduledLocal.trim()) {
+      toast.error("Schedule a pickup/drop time");
+      return;
+    }
+    if (
+      editScheduledLocal !== formatDatetimeLocalInput(new Date(editRequest.scheduledTime)) &&
+      isDatetimeLocalInPast(editScheduledLocal)
+    ) {
+      toast.error("Scheduled time cannot be in the past");
+      return;
+    }
+    const scheduledTime = new Date(editScheduledLocal).toISOString();
+    const phoneDigits = normalizePhoneDigits(editPhone);
+    if (editPhone.trim() && phoneDigits.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number");
+      return;
+    }
+    const nextDriverId = editDriverId === "unassigned" ? undefined : editDriverId;
+    const nextDriverName =
+      nextDriverId
+        ? staff.find((s) => s.id === nextDriverId)?.name ?? editRequest.driverName
+        : undefined;
+    updateRequest(editRequest.id, {
+      address,
+      scheduledTime,
+      notes: editNotes.trim() || undefined,
+      customerPhone: phoneDigits.length === 10 ? phoneDigits : undefined,
+      driverId: nextDriverId,
+      driverName: nextDriverName,
+    });
+    toast.success("Request updated");
+    setEditRequest(null);
+  };
 
   const scopedJobCards = useMemo(
     () => filterByBranchId(jobCards, (jc) => jc.branchId, selectedBranchId),
@@ -273,7 +403,7 @@ export default function PickupDropPage() {
       return;
     }
     if (digits.length >= 10) {
-      const p10 = digits.slice(-10);
+      const p10 = normalizePhoneDigits(q);
       setNewCustomerPhone((prev) => (prev === p10 ? prev : p10));
     }
   }, [lookupQuery, hasExistingCustomer]);
@@ -693,6 +823,7 @@ export default function PickupDropPage() {
                 onAssignDriver={handleAssignDriver}
                 onAdvance={handleAdvanceStatus}
                 onWhatsApp={(req) => void handlePickupDropWhatsApp(req)}
+                onEdit={openEditRequest}
               />
             );
           })}
@@ -833,7 +964,7 @@ export default function PickupDropPage() {
                         <Input
                           id="pd-new-phone"
                           value={newCustomerPhone}
-                          onChange={(e) => setNewCustomerPhone(e.target.value.replace(/\D/g, "").slice(-10))}
+                          onChange={(e) => setNewCustomerPhone(normalizePhoneDigits(e.target.value))}
                           placeholder="Phone number"
                           maxLength={10}
                           className="h-9 border-input"
@@ -1211,7 +1342,10 @@ export default function PickupDropPage() {
       {/* Nested Add Vehicle dialog for existing customer */}
       <Dialog
         open={addVehicleForExistingCustomerDialogOpen}
-        onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && (newBrandOpen || newModelOpen)) return;
+          setAddVehicleForExistingCustomerDialogOpen(open);
+        }}
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -1357,18 +1491,7 @@ export default function PickupDropPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                const t = newBrandDraft.trim();
-                if (!t) return;
-                if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
-                  toast.message("Brand already in list");
-                  return;
-                }
-                setExtraBrands((prev) => [...prev, t]);
-                setVehicleMake(t);
-                setVehicleModel("");
-                setNewBrandOpen(false);
-                setNewBrandDraft("");
-                toast.success("Brand added", { description: t });
+                commitNewBrand(newBrandDraft);
               }
             }}
           />
@@ -1376,26 +1499,7 @@ export default function PickupDropPage() {
             <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const t = newBrandDraft.trim();
-                if (!t) {
-                  toast.error("Enter a brand name");
-                  return;
-                }
-                if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
-                  toast.message("Brand already in list");
-                  return;
-                }
-                setExtraBrands((prev) => [...prev, t]);
-                setVehicleMake(t);
-                setVehicleModel("");
-                setNewBrandOpen(false);
-                setNewBrandDraft("");
-                toast.success("Brand added", { description: t });
-              }}
-            >
+            <Button type="button" onClick={() => commitNewBrand(newBrandDraft)}>
               Add brand
             </Button>
           </div>
@@ -1408,7 +1512,11 @@ export default function PickupDropPage() {
           <DialogHeader>
             <DialogTitle>Add model</DialogTitle>
             <DialogDescription>
-              Add a model for <span className="font-medium text-foreground">{vehicleMake}</span> when it is not listed.
+              Add a model for{" "}
+              <span className="font-medium text-foreground">
+                {brandForModelDialog || "the selected brand"}
+              </span>{" "}
+              when it is not listed.
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -1418,18 +1526,7 @@ export default function PickupDropPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                const t = newModelDraft.trim();
-                if (!t || !vehicleMake.trim()) return;
-                setExtraModelsByBrand((prev) => ({
-                  ...prev,
-                  [vehicleMake]: [...(prev[vehicleMake] ?? []), t],
-                }));
-                setVehicleModel(t);
-                const seg = getModelSegment(vehicleMake, t);
-                if (seg) setVehicleSegment(seg);
-                setNewModelOpen(false);
-                setNewModelDraft("");
-                toast.success("Model added", { description: t });
+                commitNewModel(newModelDraft);
               }
             }}
           />
@@ -1437,30 +1534,90 @@ export default function PickupDropPage() {
             <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const t = newModelDraft.trim();
-                if (!t) {
-                  toast.error("Enter a model name");
-                  return;
-                }
-                if (!vehicleMake.trim()) return;
-                setExtraModelsByBrand((prev) => ({
-                  ...prev,
-                  [vehicleMake]: [...(prev[vehicleMake] ?? []), t],
-                }));
-                setVehicleModel(t);
-                const seg = getModelSegment(vehicleMake, t);
-                if (seg) setVehicleSegment(seg);
-                setNewModelOpen(false);
-                setNewModelDraft("");
-                toast.success("Model added", { description: t });
-              }}
-            >
+            <Button type="button" onClick={() => commitNewModel(newModelDraft)}>
               Add model
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!editRequest}
+        onOpenChange={(open) => {
+          if (!open) setEditRequest(null);
+        }}
+      >
+        <DialogContent className={cn("sm:max-w-lg", dialogSurfaceClass)}>
+          <DialogHeader>
+            <DialogTitle>Edit Pickup/Drop Request</DialogTitle>
+            <DialogDescription>
+              {editRequest
+                ? `${editRequest.type === "PICKUP" ? "Pickup" : "Drop-off"} · ${editRequest.id}`
+                : "Update request details"}
+            </DialogDescription>
+          </DialogHeader>
+          {editRequest ? (
+            <div className="grid gap-4 py-1">
+              <div className="space-y-1.5">
+                <Label htmlFor="pd-edit-address">
+                  {pickupDropAddressFieldLabel(editRequest.type)}
+                </Label>
+                <Textarea
+                  id="pd-edit-address"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pd-edit-when">Scheduled time</Label>
+                <Input
+                  id="pd-edit-when"
+                  type="datetime-local"
+                  value={editScheduledLocal}
+                  onChange={(e) => setEditScheduledLocal(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pd-edit-phone">Customer phone</Label>
+                <Input
+                  id="pd-edit-phone"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(normalizePhoneDigits(e.target.value))}
+                  placeholder="10-digit mobile"
+                  inputMode="numeric"
+                  maxLength={10}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Driver</Label>
+                <PickupDriverSelect
+                  branchId={editRequest.branchId}
+                  value={editDriverId}
+                  onValueChange={(id) => setEditDriverId(id)}
+                  branchScoped={!!selectedBranchId}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pd-edit-notes">Notes</Label>
+                <Textarea
+                  id="pd-edit-notes"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Optional notes"
+                />
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditRequest(null)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveEditRequest}>
+              Save changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, MapPin, Truck } from "lucide-react";
+import { Calendar, MapPin, Pencil, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
@@ -34,6 +34,7 @@ type LegRowProps = {
   onAssignDriver: (requestId: string, driverId: string, driverName?: string) => void;
   onAdvance: (request: PickupDropRequest) => void;
   onWhatsApp: (request: PickupDropRequest) => void;
+  onEdit: (request: PickupDropRequest) => void;
 };
 
 function LegRow({
@@ -44,6 +45,7 @@ function LegRow({
   onAssignDriver,
   onAdvance,
   onWhatsApp,
+  onEdit,
 }: LegRowProps) {
   const router = useRouter();
   const pickupLegComplete = isPickupLegComplete(leg, allRequests);
@@ -122,6 +124,16 @@ function LegRow({
             variant="outline"
             size="icon"
             className="h-8 w-8 shrink-0 bg-background"
+            title="Edit request"
+            onClick={() => onEdit(leg)}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 shrink-0 bg-background"
             disabled={!hasPhone}
             title={hasPhone ? "WhatsApp customer" : "No phone on file"}
             onClick={() => onWhatsApp(leg)}
@@ -142,6 +154,7 @@ export type PickupDropJobGroupCardProps = {
   onAssignDriver: (requestId: string, driverId: string, driverName?: string) => void;
   onAdvance: (request: PickupDropRequest) => void;
   onWhatsApp: (request: PickupDropRequest) => void;
+  onEdit: (request: PickupDropRequest) => void;
 };
 
 export function PickupDropJobGroupCard({
@@ -152,6 +165,7 @@ export function PickupDropJobGroupCard({
   onAssignDriver,
   onAdvance,
   onWhatsApp,
+  onEdit,
 }: PickupDropJobGroupCardProps) {
   const jobHref =
     group.jobCardId && !group.jobCardId.startsWith("new-")
@@ -172,6 +186,7 @@ export function PickupDropJobGroupCard({
             onAssignDriver={onAssignDriver}
             onAdvance={onAdvance}
             onWhatsApp={onWhatsApp}
+            onEdit={onEdit}
           />
         </CardContent>
       </Card>
@@ -243,6 +258,7 @@ export function PickupDropJobGroupCard({
             onAssignDriver={onAssignDriver}
             onAdvance={onAdvance}
             onWhatsApp={onWhatsApp}
+            onEdit={onEdit}
           />
         ) : null}
 
@@ -255,6 +271,7 @@ export function PickupDropJobGroupCard({
             onAssignDriver={onAssignDriver}
             onAdvance={onAdvance}
             onWhatsApp={onWhatsApp}
+            onEdit={onEdit}
           />
         ) : null}
       </CardContent>

@@ -38,6 +38,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
+import {
+  appendExtraBrand,
+  appendExtraModel,
+  ensureCatalogBrand,
+  ensureCatalogModel,
+  isBrandNameTaken,
+} from "@/lib/vehicle-catalog-extras";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -1730,16 +1737,17 @@ export default function QuotationsPage() {
                           e.preventDefault();
                           const t = newBrandDraft.trim();
                           if (!t) return;
-                          if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                          if (isBrandNameTaken(allBrandsSorted, t)) {
                             toast.message("Brand already in list");
                             return;
                           }
-                          setExtraBrands((prev) => [...prev, t]);
-                          setNewVehicleMakeInput(t);
+                          const canonical = ensureCatalogBrand(t);
+                          setExtraBrands((prev) => appendExtraBrand(prev, canonical));
+                          setNewVehicleMakeInput(canonical);
                           setNewVehicleModelInput("");
                           setNewBrandOpen(false);
                           setNewBrandDraft("");
-                          toast.success("Brand added", { description: t });
+                          toast.success("Brand added", { description: canonical });
                         }
                       }}
                     />
@@ -1755,16 +1763,17 @@ export default function QuotationsPage() {
                             toast.error("Enter a brand name");
                             return;
                           }
-                          if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                          if (isBrandNameTaken(allBrandsSorted, t)) {
                             toast.message("Brand already in list");
                             return;
                           }
-                          setExtraBrands((prev) => [...prev, t]);
-                          setNewVehicleMakeInput(t);
+                          const canonical = ensureCatalogBrand(t);
+                          setExtraBrands((prev) => appendExtraBrand(prev, canonical));
+                          setNewVehicleMakeInput(canonical);
                           setNewVehicleModelInput("");
                           setNewBrandOpen(false);
                           setNewBrandDraft("");
-                          toast.success("Brand added", { description: t });
+                          toast.success("Brand added", { description: canonical });
                         }}
                       >
                         Add brand
@@ -1794,10 +1803,10 @@ export default function QuotationsPage() {
                           e.preventDefault();
                           const t = newModelDraft.trim();
                           if (!t || !newVehicleMakeInput.trim()) return;
-                          setExtraModelsByBrand((prev) => ({
-                            ...prev,
-                            [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] ?? []), t],
-                          }));
+                          ensureCatalogModel(newVehicleMakeInput, t, newVehicleSegmentInput);
+                          setExtraModelsByBrand((prev) =>
+                            appendExtraModel(prev, newVehicleMakeInput, t)
+                          );
                           setNewVehicleModelInput(t);
                           const seg = getModelSegment(newVehicleMakeInput, t);
                           if (seg) setNewVehicleSegmentInput(seg);
@@ -1820,10 +1829,10 @@ export default function QuotationsPage() {
                             return;
                           }
                           if (!newVehicleMakeInput.trim()) return;
-                          setExtraModelsByBrand((prev) => ({
-                            ...prev,
-                            [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] ?? []), t],
-                          }));
+                          ensureCatalogModel(newVehicleMakeInput, t, newVehicleSegmentInput);
+                          setExtraModelsByBrand((prev) =>
+                            appendExtraModel(prev, newVehicleMakeInput, t)
+                          );
                           setNewVehicleModelInput(t);
                           const seg = getModelSegment(newVehicleMakeInput, t);
                           if (seg) setNewVehicleSegmentInput(seg);

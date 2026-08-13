@@ -51,6 +51,9 @@ Request → Route → Auth/Permission → Controller (Zod) → Service → Prism
 
 - New forms: prefer React Hook Form + Zod when validation is non-trivial.
 - Do not mass-migrate existing `useState` forms without a product reason.
+- Phone inputs / validation: `normalizePhoneDigits` from `lib/phone.ts` (not ad-hoc `.replace(/\D/g)`).
+- Brand/model “+ New” dialogs: `ensureCatalogBrand` / `ensureCatalogModel` (+ `appendExtraBrand` / `appendExtraModel`) from `lib/vehicle-catalog-extras.ts` so UI extras stay in sync with the settings catalog.
+- Zustand entity updates: prefer `updateX(id, updates: Partial<T>)` like appointments / job cards / quotations.
 
 ## PR checklist
 

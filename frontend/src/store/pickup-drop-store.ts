@@ -46,6 +46,8 @@ interface PickupDropStore {
   /** Hydrated by bootstrap — replaces prior browser-local persistence */
   setRequestsFromBootstrap: (requests: PickupDropRequest[]) => void;
   addRequest: (input: AddPickupDropInput) => PickupDropRequest;
+  /** Same Partial patch pattern as appointments / job cards / quotations. */
+  updateRequest: (id: string, updates: Partial<PickupDropRequest>) => void;
   updateStatus: (id: string, status: PickupDropStatus) => void;
   assignDriver: (id: string, driverId: string | undefined, driverName: string | undefined) => void;
   advanceStatus: (id: string) => PickupDropStatus | null;
@@ -85,6 +87,40 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
     set({ requests });
     pushPickupSnapshot(requests);
     return row;
+  },
+
+  updateRequest: (id, updates) => {
+    set((s) => {
+      const requests = s.requests.map((r) => {
+        if (r.id !== id) return r;
+        const next: PickupDropRequest = {
+          ...r,
+          ...updates,
+          id: r.id,
+          createdAt: r.createdAt,
+          updatedAt: new Date().toISOString(),
+        };
+        if ("address" in updates && updates.address !== undefined) {
+          next.address = updates.address.trim();
+        }
+        if ("notes" in updates) {
+          next.notes = updates.notes?.trim() || undefined;
+        }
+        if ("customerPhone" in updates) {
+          next.customerPhone = updates.customerPhone?.trim() || undefined;
+        }
+        if ("driverId" in updates) {
+          next.driverId = updates.driverId || undefined;
+          next.driverName = updates.driverName || undefined;
+          if (r.status === "PENDING" && next.driverId && !updates.status) {
+            next.status = "DRIVER_ASSIGNED";
+          }
+        }
+        return next;
+      });
+      pushPickupSnapshot(requests);
+      return { requests };
+    });
   },
 
   updateStatus: (id, status) => {
