@@ -49,7 +49,8 @@
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  /* Align with dark mode: brighter blue-500 reads stronger on white than blue-600. */
+  /* Align with dark mode: brighter blue-500 reads stronger on white than blue-600.
+   * Runtime company brand may override --primary / --ring / --sidebar-active* via BrandThemeApplier. */
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,11 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { resolveUploadsPublicUrl } from "@/lib/api-base";
-import { ApiError, apiPostForm } from "@/lib/api-client";
 import { useSettingsStore } from "@/store/settings-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
+import { BrandingThemePanel } from "@/components/settings/branding-theme-panel";
 import type { VehicleSegment } from "@/types";
 import {
   Building2,
@@ -50,10 +49,7 @@ import {
   Plus,
   Trash2,
   Car,
-  Upload,
 } from "lucide-react";
-
-const LOGO_MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 const DEFAULT_TERMS = `1. Vehicle will be kept in secure parking during service.
 2. Not responsible for valuables left in vehicle.
@@ -90,7 +86,6 @@ function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () =>
 
 export default function SettingsPage() {
   const settings = useSettingsStore();
-  const logoFileInputRef = useRef<HTMLInputElement>(null);
   const highEndStore = useHighEndServiceStore();
   const vehicleCatalog = useVehicleCatalogStore();
   const [newBrandName, setNewBrandName] = useState("");
@@ -98,8 +93,6 @@ export default function SettingsPage() {
   const [newModelSegment, setNewModelSegment] = useState<VehicleSegment>("HATCHBACK");
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState(settings.businessName);
-  const [businessLogo, setBusinessLogo] = useState(settings.businessLogo);
-  const [logoUploading, setLogoUploading] = useState(false);
   const [businessPhone, setBusinessPhone] = useState(settings.businessPhone);
   const [businessEmail, setBusinessEmail] = useState(settings.businessEmail);
   const [businessAddress, setBusinessAddress] = useState(settings.businessAddress);
@@ -181,7 +174,6 @@ export default function SettingsPage() {
       settings.setBusinessProfile({
         gstRegistrationStatus,
         businessName,
-        businessLogo,
         businessPhone,
         businessEmail,
         businessAddress,
@@ -208,34 +200,7 @@ export default function SettingsPage() {
     setTaxRates((prev) => prev.map((t) => (t.id === id ? { ...t, rate } : t)));
   };
 
-  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Choose an image file (JPEG, PNG, WebP, or GIF).");
-      return;
-    }
-    if (file.size > LOGO_MAX_FILE_BYTES) {
-      toast.error("Logo must be 5 MB or smaller.");
-      return;
-    }
-    const fd = new FormData();
-    fd.append("logo", file);
-    setLogoUploading(true);
-    try {
-      const data = await apiPostForm<{ url: string }>("/api/collections/appSettings/logo", fd);
-      setBusinessLogo(data.url);
-      toast.success("Logo uploaded", { description: "Click Save Changes to apply." });
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not upload logo.");
-    } finally {
-      setLogoUploading(false);
-    }
-  };
-
   const isGstRegistered = gstRegistrationStatus === "REGISTERED";
-  const businessLogoPreview = resolveUploadsPublicUrl(businessLogo);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -244,6 +209,7 @@ export default function SettingsPage() {
       <Tabs defaultValue="business" className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="business">Business</TabsTrigger>
+          <TabsTrigger value="branding">Branding & Theme</TabsTrigger>
           <TabsTrigger value="tax">Tax & Billing</TabsTrigger>
           <TabsTrigger value="rewards">Rewards</TabsTrigger>
           <TabsTrigger value="terms">Terms & Conditions</TabsTrigger>
@@ -255,6 +221,10 @@ export default function SettingsPage() {
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="general">General</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="branding" className="space-y-4">
+          <BrandingThemePanel />
+        </TabsContent>
 
         <TabsContent value="business">
           <Card>
@@ -271,33 +241,6 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label>Company Name</Label>
                       <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Company Logo</Label>
-                      <input
-                        ref={logoFileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="sr-only"
-                        aria-hidden
-                        tabIndex={-1}
-                        onChange={handleLogoFileChange}
-                      />
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={logoUploading}
-                          onClick={() => logoFileInputRef.current?.click()}
-                        >
-                          <Upload className="w-3.5 h-3.5 mr-1.5" />
-                          {logoUploading ? "Uploading..." : businessLogo ? "Replace Logo" : "Upload Logo"}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Upload an image file. This logo is shown in app branding.
-                      </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -338,25 +281,6 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-5">
-                    <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
-                      <p className="text-sm font-semibold">Logo Preview</p>
-                      <p className="text-xs text-muted-foreground mt-1">Displayed in sidebar and header branding.</p>
-                      <div className="mt-3">
-                        {businessLogoPreview ? (
-                          <div className="rounded-md border border-border p-3 w-fit bg-background">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={businessLogoPreview}
-                              alt="Company logo preview"
-                              className="h-20 w-20 rounded-md object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="h-20 w-20 rounded-md border border-dashed border-border bg-background" />
-                        )}
-                      </div>
-                    </div>
-
                     <div className="rounded-lg border border-border/70 p-4 space-y-4">
                       <h4 className="text-sm font-semibold text-muted-foreground">Bank & UPI Details (For Payment QR)</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

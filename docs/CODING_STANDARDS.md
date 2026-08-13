@@ -53,6 +53,7 @@ Request → Route → Auth/Permission → Controller (Zod) → Service → Prism
 - Do not mass-migrate existing `useState` forms without a product reason.
 - Phone inputs / validation: `normalizePhoneDigits` from `lib/phone.ts` (not ad-hoc `.replace(/\D/g)`).
 - Brand/model “+ New” dialogs: `ensureCatalogBrand` / `ensureCatalogModel` (+ `appendExtraBrand` / `appendExtraModel`) from `lib/vehicle-catalog-extras.ts` so UI extras stay in sync with the settings catalog.
+- Company branding: Settings → **Branding & Theme** (`branding-theme-panel`) for logo, login background, login hero copy (`loginHeroHeading` / `loginHeroDescription` / `loginHeroFeatures`), and `brandPrimary`. Persist on `appSettings`; apply primary via CSS vars (`lib/brand-color.ts`). Login loads `GET /api/public/branding` (safe fields only). Hero defaults: `lib/login-hero-content.ts`.
 - Zustand entity updates: prefer `updateX(id, updates: Partial<T>)` like appointments / job cards / quotations.
 - Recharts tooltips: spread `CHART_TOOLTIP_PROPS` from `lib/chart-tooltip.ts` (`cursor: false` + theme label/item colors).
 

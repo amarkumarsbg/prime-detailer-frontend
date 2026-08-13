@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/shared/theme-provider";
+import { BrandThemeApplier } from "@/components/shared/brand-theme-applier";
 import { AttendanceRealtimeSync } from "@/components/attendance/attendance-realtime-sync";
 import "./globals.css";
 
@@ -44,6 +45,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <ThemeProvider>
+          <BrandThemeApplier />
           <AttendanceRealtimeSync />
           {children}
           <Toaster position="top-right" richColors closeButton />

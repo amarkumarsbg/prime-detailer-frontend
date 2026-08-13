@@ -23,6 +23,7 @@ import { partyRouter } from "./routes/party.routes.js";
 
 import { prisma } from "./lib/prisma.js";
 import { getPublicInvoiceView } from "./services/public-invoice.service.js";
+import { getPublicBranding } from "./services/public-branding.service.js";
 
 const app = express();
 
@@ -68,6 +69,15 @@ app.get("/api/public/invoices/:id", async (req, res, next) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
     const data = await getPublicInvoiceView(id);
+    res.json({ data, error: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/public/branding", async (_req, res, next) => {
+  try {
+    const data = await getPublicBranding();
     res.json({ data, error: null });
   } catch (e) {
     next(e);

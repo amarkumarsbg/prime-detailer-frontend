@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,30 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Car,
-  Gauge,
-  Shield,
   Smartphone,
   Mail,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LoginHeroPanel } from "@/components/shared/login-hero-panel";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
+import { apiGet } from "@/lib/api-client";
+import { applyBrandCssVars, DEFAULT_BRAND_PRIMARY } from "@/lib/brand-color";
+import {
+  DEFAULT_LOGIN_HERO_DESCRIPTION,
+  DEFAULT_LOGIN_HERO_FEATURES,
+  DEFAULT_LOGIN_HERO_HEADING,
+  type LoginHeroFeature,
+} from "@/lib/login-hero-content";
+
+type PublicBranding = {
+  businessName: string;
+  businessLogo: string;
+  brandPrimary: string;
+  loginBackgroundImage: string;
+  loginHeroHeading: string;
+  loginHeroDescription: string;
+  loginHeroFeatures: LoginHeroFeature[];
+};
 
 export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "mobile">("email");
@@ -30,10 +47,38 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [branding, setBranding] = useState<PublicBranding | null>(null);
   const login = useAuthStore((s) => s.login);
   const sendLoginOtp = useAuthStore((s) => s.sendLoginOtp);
   const verifyLoginOtp = useAuthStore((s) => s.verifyLoginOtp);
   const verifyOtpLock = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiGet<PublicBranding>("/api/public/branding")
+      .then((data) => {
+        if (cancelled) return;
+        setBranding(data);
+        applyBrandCssVars(data.brandPrimary || DEFAULT_BRAND_PRIMARY);
+      })
+      .catch(() => {
+        /* keep default login branding if API is unreachable */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const businessName = branding?.businessName?.trim() || "Prime Detailers";
+  const logoUrl = resolveUploadsPublicUrl(branding?.businessLogo);
+  const loginBgUrl = resolveUploadsPublicUrl(branding?.loginBackgroundImage);
+  const heroHeading = branding?.loginHeroHeading?.trim() || DEFAULT_LOGIN_HERO_HEADING;
+  const heroDescription =
+    branding?.loginHeroDescription?.trim() || DEFAULT_LOGIN_HERO_DESCRIPTION;
+  const heroFeatures =
+    branding?.loginHeroFeatures !== undefined
+      ? branding.loginHeroFeatures
+      : DEFAULT_LOGIN_HERO_FEATURES;
 
   const runMobileOtpVerify = async (code?: string) => {
     const digits = (code ?? otp).replace(/\D/g, "");
@@ -106,105 +151,59 @@ export default function LoginPage() {
     }
   };
 
+  const BrandMark = ({
+    className,
+    iconClassName,
+  }: {
+    className?: string;
+    iconClassName?: string;
+  }) =>
+    logoUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={logoUrl} alt="" className={className ?? "h-10 w-10 rounded-xl object-cover"} />
+    ) : (
+      <div
+        className={
+          className ??
+          "flex items-center justify-center w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm"
+        }
+      >
+        <Wrench className={iconClassName ?? "w-5 h-5"} />
+      </div>
+    );
+
   return (
     <div className="min-h-screen flex">
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden bg-linear-to-br from-blue-600 via-indigo-600 to-violet-700">
-        {/* Animated background shapes */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-0 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl animate-pulse [animation-delay:1s]" />
-          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-violet-400/15 rounded-full blur-3xl animate-pulse [animation-delay:2s]" />
-        </div>
-
-        {/* Grid pattern overlay */}
-        <div className="absolute inset-0 opacity-[0.04] bg-grid-light" />
-
-        {/* Content */}
-        <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm">
-              <Wrench className="w-5 h-5" />
-            </div>
-            <span className="text-lg font-semibold tracking-tight">
-              Prime Detailers
-            </span>
-          </div>
-
-          <div className="space-y-8 max-w-lg">
-            <h2 className="text-4xl xl:text-5xl font-bold leading-tight tracking-tight">
-              Manage your business
-              <br />
-              <span className="text-blue-200">smarter, not harder.</span>
-            </h2>
-            <p className="text-blue-100/80 text-lg leading-relaxed">
-              The all-in-one platform to streamline operations, track services,
-              and grow your automotive business.
-            </p>
-
-            <div className="grid grid-cols-1 gap-4 pt-2">
-              {[
-                {
-                  icon: Car,
-                  title: "Vehicle Tracking",
-                  desc: "Complete service history at your fingertips",
-                },
-                {
-                  icon: Gauge,
-                  title: "Real-time Dashboard",
-                  desc: "Monitor KPIs and daily operations live",
-                },
-                {
-                  icon: Shield,
-                  title: "Secure & Reliable",
-                  desc: "Enterprise-grade data protection",
-                },
-              ].map((feature) => (
-                <div
-                  key={feature.title}
-                  className="flex items-start gap-4 p-4 rounded-2xl bg-white/[0.07] backdrop-blur-sm border border-white/10 transition-colors hover:bg-white/10"
-                >
-                  <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 shrink-0">
-                    <feature.icon className="w-5 h-5 text-blue-200" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{feature.title}</p>
-                    <p className="text-blue-200/70 text-sm mt-0.5">
-                      {feature.desc}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-blue-200/50 text-sm">
-            &copy; {new Date().getFullYear()} Prime Detailers. All rights reserved.
-          </p>
-        </div>
-      </div>
+      <LoginHeroPanel
+        className="hidden lg:flex lg:w-[55%] min-h-screen"
+        businessName={businessName}
+        logoUrl={logoUrl}
+        backgroundUrl={loginBgUrl}
+        heading={heroHeading}
+        description={heroDescription}
+        features={heroFeatures}
+      />
 
       {/* Right Panel - Login Form */}
-      <div className="flex-1 flex items-center justify-center bg-linear-to-br from-slate-50 via-white to-blue-50/50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-6 sm:p-8">
-        <div className="w-full max-w-[420px]">
+      <div className="flex-1 flex flex-col min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50/50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-6 sm:p-8">
+        <div className="flex-1 flex flex-col justify-center w-full max-w-[420px] mx-auto">
           {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-12 lg:hidden">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary shadow-lg shadow-primary/25">
-              <Wrench className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-lg font-semibold tracking-tight">
-              Prime Detailers
-            </span>
+          <div className="flex items-center gap-3 mb-10 lg:hidden">
+            <BrandMark
+              className={
+                logoUrl
+                  ? "h-10 w-10 rounded-xl object-cover shadow-lg"
+                  : "flex items-center justify-center w-10 h-10 rounded-xl bg-primary shadow-lg shadow-primary/25"
+              }
+              iconClassName="w-5 h-5 text-primary-foreground"
+            />
+            <span className="text-lg font-semibold tracking-tight">{businessName}</span>
           </div>
 
-          <div className="space-y-2 mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Welcome back
-            </h1>
-            <p className="text-muted-foreground">
-              Enter your credentials to access your dashboard
-            </p>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-8">
+            Welcome back
+          </h1>
 
           {loginMethod === "email" ? (
             <>
@@ -281,14 +280,12 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-              {/* Divider */}
               <div className="flex items-center gap-3 my-6">
                 <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                 <span className="text-xs text-muted-foreground uppercase tracking-wider">or</span>
                 <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
               </div>
 
-              {/* Login with Mobile */}
               <button
                 type="button"
                 onClick={() => { setLoginMethod("mobile"); setError(""); setOtp(""); setOtpSent(false); }}
@@ -388,14 +385,12 @@ export default function LoginPage() {
                 )}
               </form>
 
-              {/* Divider */}
               <div className="flex items-center gap-3 my-6">
                 <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                 <span className="text-xs text-muted-foreground uppercase tracking-wider">or</span>
                 <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
               </div>
 
-              {/* Back to Email */}
               <button
                 type="button"
                 onClick={() => { setLoginMethod("email"); setError(""); }}
@@ -406,17 +401,11 @@ export default function LoginPage() {
               </button>
             </>
           )}
-
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            Need access? Ask your <span className="font-medium text-foreground">Super Admin</span> or{" "}
-            <span className="font-medium text-foreground">Admin</span> to create your account in{" "}
-            <span className="font-medium text-foreground">Users Management</span>.
-          </p>
-
-          <p className="text-center text-xs text-muted-foreground/60 mt-6 lg:hidden">
-            Prime Detailers v1.0 &middot; Internal Use Only
-          </p>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground/70 mt-8 max-w-[420px] mx-auto">
+          Need access? Contact your admin.
+        </p>
       </div>
     </div>
   );

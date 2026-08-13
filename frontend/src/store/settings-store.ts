@@ -2,6 +2,12 @@
 
 import { create } from "zustand";
 import { putSingletonDocument } from "@/lib/collection-sync";
+import { DEFAULT_BRAND_PRIMARY, normalizeHex } from "@/lib/brand-color";
+import {
+  DEFAULT_LOGIN_HERO_FEATURES,
+  normalizeLoginHeroFeatures,
+  type LoginHeroFeature,
+} from "@/lib/login-hero-content";
 
 export interface SerializableAppSettings {
   gstRegistrationStatus: "REGISTERED" | "NOT_REGISTERED";
@@ -23,6 +29,18 @@ export interface SerializableAppSettings {
   referralRewardAmount: number;
   newCustomerDiscount: number;
   whatsappReminderEnabled: boolean;
+  /** Company-wide accent (#RRGGBB). Drives --primary / sidebar active. */
+  brandPrimary: string;
+  /** Login page left-panel background image URL (optional). */
+  loginBackgroundImage: string;
+  /** Login hero copy (empty heading/description → product defaults at display time). */
+  loginHeroHeading: string;
+  loginHeroDescription: string;
+  /**
+   * Feature highlights on the login hero.
+   * Empty array hides the block; bootstrap omit uses {@link DEFAULT_LOGIN_HERO_FEATURES}.
+   */
+  loginHeroFeatures: LoginHeroFeature[];
 }
 
 export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
@@ -45,6 +63,11 @@ export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
   referralRewardAmount: 500,
   newCustomerDiscount: 200,
   whatsappReminderEnabled: true,
+  brandPrimary: DEFAULT_BRAND_PRIMARY,
+  loginBackgroundImage: "",
+  loginHeroHeading: "",
+  loginHeroDescription: "",
+  loginHeroFeatures: [...DEFAULT_LOGIN_HERO_FEATURES],
 };
 
 function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings {
@@ -68,6 +91,11 @@ function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings 
     referralRewardAmount: s.referralRewardAmount,
     newCustomerDiscount: s.newCustomerDiscount,
     whatsappReminderEnabled: s.whatsappReminderEnabled,
+    brandPrimary: s.brandPrimary,
+    loginBackgroundImage: s.loginBackgroundImage,
+    loginHeroHeading: s.loginHeroHeading,
+    loginHeroDescription: s.loginHeroDescription,
+    loginHeroFeatures: s.loginHeroFeatures.slice(0, 3),
   };
 }
 
@@ -107,7 +135,9 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
     "bankBranch",
     "bankAccountNumber",
     "bankIfsc",
-    "bankUpi"
+    "bankUpi",
+    "loginHeroHeading",
+    "loginHeroDescription"
   );
   if (o.gstRegistrationStatus === "REGISTERED" || o.gstRegistrationStatus === "NOT_REGISTERED") {
     next.gstRegistrationStatus = o.gstRegistrationStatus;
@@ -118,6 +148,19 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
   if (nd !== undefined) next.newCustomerDiscount = nd;
   const wa = bool("whatsappReminderEnabled");
   if (wa !== undefined) next.whatsappReminderEnabled = wa;
+  const brandRaw = str("brandPrimary");
+  if (brandRaw !== undefined) {
+    next.brandPrimary = normalizeHex(brandRaw) ?? DEFAULT_BRAND_PRIMARY;
+  }
+  const loginBg = str("loginBackgroundImage");
+  if (loginBg !== undefined) next.loginBackgroundImage = loginBg;
+  if ("loginHeroFeatures" in o) {
+    if (o.loginHeroFeatures === null || o.loginHeroFeatures === undefined) {
+      /* leave unset so store defaults apply */
+    } else {
+      next.loginHeroFeatures = normalizeLoginHeroFeatures(o.loginHeroFeatures);
+    }
+  }
   return next;
 }
 
@@ -142,12 +185,17 @@ interface SettingsState extends SerializableAppSettings {
         | "bankAccountNumber"
         | "bankIfsc"
         | "bankUpi"
+        | "loginBackgroundImage"
+        | "loginHeroHeading"
+        | "loginHeroDescription"
+        | "loginHeroFeatures"
       >
     >
   ) => void;
   setReferralRewardAmount: (amount: number) => void;
   setNewCustomerDiscount: (amount: number) => void;
   setWhatsappReminderEnabled: (enabled: boolean) => void;
+  setBrandPrimary: (hex: string) => boolean;
   patchFromBootstrap: (patch: Partial<SerializableAppSettings>) => void;
 }
 
@@ -187,5 +235,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setWhatsappReminderEnabled: (whatsappReminderEnabled) => {
     set({ whatsappReminderEnabled });
     scheduleAppSettingsSync(get);
+  },
+
+  setBrandPrimary: (hex) => {
+    const normalized = normalizeHex(hex);
+    if (!normalized) return false;
+    set({ brandPrimary: normalized });
+    scheduleAppSettingsSync(get);
+    return true;
   },
 }));
