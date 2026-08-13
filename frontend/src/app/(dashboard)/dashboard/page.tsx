@@ -140,8 +140,8 @@ function getDashboardView(role: UserRole | undefined): DashboardView {
 const QUICK_ACTIONS = [
   {
     href: "/job-cards/new",
-    label: "New Job",
-    icon: ClipboardList,
+    label: "New Job Card",
+    icon: Plus,
     bgClass: "bg-blue-50/40 hover:bg-blue-50/70 border-blue-300 hover:border-blue-500 dark:bg-blue-950/20 dark:hover:bg-blue-950/30 dark:border-blue-800 dark:hover:border-blue-600 hover:shadow-blue-500/5",
     iconBgClass: "bg-blue-100/80 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
     textClass: "text-blue-950 dark:text-blue-100",
@@ -150,29 +150,29 @@ const QUICK_ACTIONS = [
   {
     href: "/bookings/walk-in",
     label: "New Booking",
-    icon: Calendar,
+    icon: CalendarCheck,
     bgClass: "bg-violet-50/40 hover:bg-violet-50/70 border-violet-300 hover:border-violet-500 dark:bg-violet-950/20 dark:hover:bg-violet-950/30 dark:border-violet-800 dark:hover:border-violet-600 hover:shadow-violet-500/5",
     iconBgClass: "bg-violet-100/80 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400",
     textClass: "text-violet-950 dark:text-violet-100",
     plusClass: "text-violet-500/80",
   },
   {
-    href: "/customers",
-    label: "New Customer",
-    icon: UserPlus,
-    bgClass: "bg-emerald-50/40 hover:bg-emerald-50/70 border-emerald-300 hover:border-emerald-500 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30 dark:border-emerald-800 dark:hover:border-emerald-600 hover:shadow-emerald-500/5",
-    iconBgClass: "bg-emerald-100/80 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400",
-    textClass: "text-emerald-950 dark:text-emerald-100",
-    plusClass: "text-emerald-500/80",
-  },
-  {
-    href: "/billing",
-    label: "Invoice",
-    icon: Receipt,
+    href: "/quotations?new=true",
+    label: "New Quotation",
+    icon: FileText,
     bgClass: "bg-amber-50/40 hover:bg-amber-50/70 border-amber-300 hover:border-amber-500 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 dark:border-amber-800 dark:hover:border-amber-600 hover:shadow-amber-500/5",
     iconBgClass: "bg-amber-100/80 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
     textClass: "text-amber-950 dark:text-amber-100",
     plusClass: "text-amber-500/80",
+  },
+  {
+    href: "/appointments?new=true",
+    label: "New Appointment",
+    icon: Calendar,
+    bgClass: "bg-emerald-50/40 hover:bg-emerald-50/70 border-emerald-300 hover:border-emerald-500 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30 dark:border-emerald-800 dark:hover:border-emerald-600 hover:shadow-emerald-500/5",
+    iconBgClass: "bg-emerald-100/80 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400",
+    textClass: "text-emerald-950 dark:text-emerald-100",
+    plusClass: "text-emerald-500/80",
   },
 ] as const;
 
@@ -701,8 +701,10 @@ export default function DashboardPage() {
                   <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${action.iconBgClass}`}>
                     <action.icon className="h-3.5 w-3.5" />
                   </div>
-                  <span className={`text-xs font-semibold sm:text-sm ${action.textClass}`}>{action.label}</span>
-                  <Plus className={`ml-auto h-3 w-3 ${action.plusClass}`} />
+                  <span className={`min-w-0 flex-1 text-xs font-semibold leading-tight sm:text-sm ${action.textClass}`}>
+                    {action.label}
+                  </span>
+                  <Plus className={`ml-auto h-3 w-3 shrink-0 ${action.plusClass}`} />
                 </CardContent>
               </Card>
             </Link>
