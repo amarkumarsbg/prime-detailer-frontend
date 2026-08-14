@@ -146,7 +146,7 @@ function SidebarContent({
               >
                 <h2
                   id={`nav-section-${navSectionSlug(group.label)}`}
-                  className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--sidebar-section-heading)]"
+                  className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sidebar-section-heading)]"
                 >
                   {group.label}
                 </h2>
