@@ -17,8 +17,6 @@ import {
   X,
   LogOut,
   ChevronDown,
-  PanelLeft,
-  PanelLeftClose,
 } from "lucide-react";
 
 function navSectionSlug(label: string): string {
@@ -271,33 +269,7 @@ export function Sidebar() {
             navOverflow="auto"
           />
         </div>
-
-        {/* Desktop: pin to sidebar viewport center (not nav scroll content). */}
-        {!collapsed ? (
-          <button
-            type="button"
-            onClick={() => setCollapsed(true)}
-            className="absolute top-1/2 right-0 z-50 flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Hide sidebar"
-            title="Hide sidebar"
-          >
-            <PanelLeftClose className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-        ) : null}
       </aside>
-
-      {/* Desktop: expand control stays on the left edge when sidebar is off-canvas. */}
-      {collapsed ? (
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="fixed left-0 top-1/2 z-40 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground md:flex"
-          aria-label="Show sidebar"
-          title="Show sidebar"
-        >
-          <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-      ) : null}
 
       {mobileOpen && (
         <div

@@ -35,15 +35,20 @@ import {
   User,
   Wrench,
   Building2,
+  PanelLeft,
+  PanelLeftClose,
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
+import { useSidebarStore } from "@/store/sidebar-store";
 
 export function Header() {
   const { user, currentBranch, logout, setBranch } = useAuthStore();
   const branchesFromStore = useBranchStore((s) => s.branches);
   const businessName = useSettingsStore((s) => s.businessName);
   const businessLogo = useSettingsStore((s) => s.businessLogo);
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const scopedNotifications = useScopedNotifications();
   const unreadCount = scopedNotifications.filter((n) => !n.read).length;
   const router = useRouter();
@@ -136,7 +141,20 @@ export function Header() {
         </div>
       </Link>
 
-      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-8 sm:max-md:pl-10 max-md:flex max-md:items-center max-md:justify-end max-md:translate-x-2 sm:max-md:translate-x-3 md:flex md:shrink-0 md:min-w-0 md:max-w-none md:translate-x-0">
+      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-8 sm:max-md:pl-10 max-md:flex max-md:items-center max-md:justify-end max-md:gap-1 max-md:translate-x-2 sm:max-md:translate-x-3 md:flex md:items-center md:gap-2 md:shrink-0 md:min-w-0 md:max-w-none md:translate-x-0">
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="hidden md:inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+        >
+          {sidebarCollapsed ? (
+            <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" strokeWidth={2.25} />
+          )}
+        </button>
         <Select
           value={currentBranch?.id ?? ALL_BRANCHES_BRANCH.id}
           onValueChange={(id) => {
