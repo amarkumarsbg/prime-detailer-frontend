@@ -9,7 +9,19 @@ export async function authenticateUser(email: string, password: string) {
   if (!user?.isActive) return null;
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return null;
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
   return user;
+}
+
+/** Record successful OTP (or other non-password) login. */
+export async function touchUserLastLogin(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { lastLoginAt: new Date() },
+  });
 }
 
 export function signAuthToken(user: {

@@ -3,7 +3,7 @@ import type { Branch, User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { authenticateUser, signAuthToken } from "../services/auth.service.js";
+import { authenticateUser, signAuthToken, touchUserLastLogin } from "../services/auth.service.js";
 import {
   consumeLoginOtpIfValid,
   findActiveUserByTenDigitPhone,
@@ -248,6 +248,7 @@ export async function verifyLoginOtp(req: Request, res: Response, next: NextFunc
       res.status(401).json({ data: null, error: { message: "Invalid or expired OTP" } });
       return;
     }
+    await touchUserLastLogin(user.id);
     const branch = await prisma.branch.findUnique({ where: { id: user.branchId } });
     res.json({ data: authSuccessResponse(user, branch), error: null });
   } catch (e) {
