@@ -191,7 +191,7 @@ function SidebarContent({
           <button
             type="button"
             onClick={scrollNavDown}
-            className="pointer-events-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-[var(--sidebar-scroll-hint-bg)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-[transform,filter] hover:brightness-110 active:scale-[0.98]"
+            className="pointer-events-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--sidebar-border)] bg-[var(--sidebar-scroll-hint-bg)] px-3 py-1.5 text-xs font-medium text-[var(--sidebar-accent-foreground)] shadow-sm transition-[transform,filter] hover:brightness-95 active:scale-[0.98]"
             aria-label="Scroll down for more navigation options"
           >
             Scroll for more options
@@ -222,10 +222,10 @@ export function Sidebar() {
     <Link
       href="/dashboard"
       onClick={onClick}
-      className="flex items-center gap-3 min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      className="flex items-center gap-3 min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       aria-label="Go to dashboard"
     >
-      <Avatar className="h-9 w-9 shrink-0 border border-white/20 bg-transparent">
+      <Avatar className="h-9 w-9 shrink-0 border border-[var(--sidebar-border)] bg-transparent">
         {companyLogoSrc ? (
           <AvatarImage
             src={companyLogoSrc}
@@ -255,12 +255,12 @@ export function Sidebar() {
     <>
       <aside
         className={cn(
-          "hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-transform duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border-r border-[var(--sidebar-border)]",
+          "hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-transform duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border border-[var(--sidebar-border)] shadow-sm",
           collapsed ? "-translate-x-full pointer-events-none" : "translate-x-0"
         )}
         aria-hidden={collapsed}
       >
-        <div className="flex items-center h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)] bg-white/[0.03]">
+        <div className="flex items-center h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)]">
           {brandHeader()}
         </div>
 
@@ -307,11 +307,11 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 h-[100dvh] max-h-screen min-h-0 w-[288px] flex flex-col transition-transform duration-300 md:hidden bg-[var(--sidebar)] text-sidebar-foreground border-r border-[var(--sidebar-border)]",
+          "fixed left-0 top-0 z-50 h-[100dvh] max-h-screen min-h-0 w-[288px] flex flex-col transition-transform duration-300 md:hidden bg-[var(--sidebar)] text-sidebar-foreground border border-[var(--sidebar-border)] shadow-sm",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--sidebar-border)] shrink-0 bg-white/[0.03]">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--sidebar-border)] shrink-0">
           {brandHeader(() => setMobileOpen(false))}
           <button
             type="button"
@@ -331,11 +331,11 @@ export function Sidebar() {
         </div>
 
         {user && (
-          <div className="shrink-0 border-t border-[var(--sidebar-border)] bg-white/[0.03] px-2.5 py-3 space-y-1">
+          <div className="shrink-0 border-t border-[var(--sidebar-border)] px-2.5 py-3 space-y-1">
             <button
               type="button"
               onClick={handleMobileLogout}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden>
                 <LogOut className="w-4 h-4" />
