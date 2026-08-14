@@ -163,17 +163,17 @@ function SidebarContent({
                         onNavClick?.();
                       }}
                       className={cn(
-                        "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium",
-                        "translate-x-0 transform-gpu transition-[color,background-color,transform] duration-300 ease-in-out",
+                        "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium origin-left",
+                        "translate-x-0 scale-100 transform-gpu transition-[color,background-color,transform,box-shadow] duration-200 ease-out",
                         isActive
                           ? "bg-[var(--sidebar-active)] text-[var(--sidebar-active-foreground)] shadow-sm"
-                          : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] motion-safe:hover:translate-x-1"
+                          : "text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] hover:shadow-sm motion-safe:hover:scale-[1.03] motion-safe:hover:translate-x-0.5"
                       )}
                     >
                       <item.icon
                         className={cn(
-                          "h-4 w-4 shrink-0 transition-transform duration-300 ease-in-out",
-                          isActive ? "opacity-100" : "opacity-90 motion-safe:group-hover:scale-110"
+                          "h-4 w-4 shrink-0 transition-transform duration-200 ease-out",
+                          isActive ? "opacity-100" : "opacity-90 motion-safe:group-hover:scale-125"
                         )}
                       />
                       <span>{item.label}</span>
@@ -255,18 +255,19 @@ export function Sidebar() {
     <>
       <aside
         className={cn(
-          "hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-transform duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border border-[var(--sidebar-border)] shadow-sm",
+          "hidden md:flex fixed left-0 top-0 z-40 h-[100dvh] max-h-screen w-[260px] flex-col transition-transform duration-300 min-h-0 bg-[var(--sidebar)] text-sidebar-foreground border border-t-0 border-[var(--sidebar-border)] shadow-sm",
           collapsed ? "-translate-x-full pointer-events-none" : "translate-x-0"
         )}
         aria-hidden={collapsed}
       >
-        <div className="flex items-center h-16 px-4 shrink-0 border-b border-[var(--sidebar-border)]">
+        <div className="flex items-center h-16 px-4 shrink-0 border-b border-border box-border">
           {brandHeader()}
         </div>
 
         <div className="relative flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-transparent">
           <SidebarContent
             className="flex-1 min-h-0"
+            onNavClick={() => setCollapsed(true)}
             navOverflow="auto"
           />
         </div>
@@ -311,7 +312,7 @@ export function Sidebar() {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--sidebar-border)] shrink-0">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-border shrink-0 box-border">
           {brandHeader(() => setMobileOpen(false))}
           <button
             type="button"
@@ -335,7 +336,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={handleMobileLogout}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors dark:text-rose-400 dark:hover:bg-rose-500/15 dark:hover:text-rose-300"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden>
                 <LogOut className="w-4 h-4" />
