@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { BRANCH_MUTATION_ROLES } from "../lib/rbac.js";
 import type { UserRole } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { listBranchesApi, upsertBranchApi, patchBranchApi, getBranchDeletionBlockers, deleteBranchApi } from "../services/branch-api.service.js";
 
 function forbidden(res: Response, message: string) {
@@ -56,7 +57,16 @@ export async function postBranch(req: Request, res: Response, next: NextFunction
       return;
     }
     const body = branchSchema.parse(req.body);
-    const branch = await upsertBranchApi(body);
+    const creator = req.auth
+      ? await prisma.user.findUnique({
+          where: { id: req.auth.id },
+          select: { organizationId: true },
+        })
+      : null;
+    const branch = await upsertBranchApi({
+      ...body,
+      organizationId: creator?.organizationId,
+    });
     res.status(201).json({ data: { branch }, error: null });
   } catch (e) {
     next(e);

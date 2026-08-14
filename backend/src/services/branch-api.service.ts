@@ -1,5 +1,6 @@
 import type { Branch } from "@prisma/client";
 import { SINGLETON_ENTITY_ID } from "../constants/json-collections.js";
+import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
 
 export type BranchDeletionBlocker = {
@@ -16,6 +17,33 @@ export type BranchDeletionBlocker = {
   count: number;
   message: string;
 };
+
+/** Prefer an existing tenant; required for Branch.create after multi-org schema. */
+async function resolveOrganizationIdForBranchCreate(
+  preferredOrganizationId?: string | null
+): Promise<string> {
+  if (preferredOrganizationId) {
+    const preferred = await prisma.organization.findUnique({
+      where: { id: preferredOrganizationId },
+      select: { id: true },
+    });
+    if (preferred) return preferred.id;
+  }
+
+  const fromBranch = await prisma.branch.findFirst({
+    select: { organizationId: true },
+    orderBy: { id: "asc" },
+  });
+  if (fromBranch) return fromBranch.organizationId;
+
+  const org = await prisma.organization.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (org) return org.id;
+
+  throw AppError.validation("No organization exists to attach this branch to.");
+}
 
 async function countJsonCollectionBranchRefs(collection: string, branchId: string): Promise<number> {
   const rows = await prisma.appJsonRow.findMany({
@@ -196,7 +224,10 @@ export async function upsertBranchApi(data: {
   email?: string | null;
   managerName?: string | null;
   managerPhone?: string | null;
+  /** Creator's org when available; otherwise resolved from existing tenant data. */
+  organizationId?: string | null;
 }) {
+  const organizationId = await resolveOrganizationIdForBranchCreate(data.organizationId);
   const row = await prisma.branch.upsert({
     where: { id: data.id },
     create: {
@@ -213,6 +244,7 @@ export async function upsertBranchApi(data: {
       email: data.email ?? null,
       managerName: data.managerName ?? null,
       managerPhone: data.managerPhone ?? null,
+      organizationId,
     },
     update: {
       name: data.name,
