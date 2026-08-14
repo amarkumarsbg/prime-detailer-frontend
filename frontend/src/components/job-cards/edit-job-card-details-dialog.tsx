@@ -20,7 +20,7 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useInvoiceStore } from "@/store/invoice-store";
-import { jobCardIsEditable, jobCardPricingEditable } from "@/lib/job-card-edit-policy";
+import { jobCardIsEditable, canEditJobCardPricing } from "@/lib/job-card-edit-policy";
 import { jobCardPartsSubtotal } from "@/components/job-cards/job-card-parts-picker";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency } from "@/lib/utils";
@@ -31,6 +31,7 @@ import {
 } from "@/components/services/searchable-service-select";
 import { ServiceCustomPriceControl } from "@/components/services/service-custom-price-control";
 import { withCatalogPrice, withCustomPrice } from "@/lib/service-line-price";
+import { useAuthStore } from "@/store/auth-store";
 import type { JobCard, ServiceCatalogItem, ServiceItem, VehicleSegment } from "@/types";
 
 function catalogPrice(item: ServiceCatalogItem, segment: VehicleSegment): number {
@@ -55,10 +56,13 @@ export function EditJobCardDetailsDialog({
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const highEndServices = useHighEndServiceStore((s) => s.services);
   const invoices = useInvoiceStore((s) => s.invoices);
+  const user = useAuthStore((s) => s.user);
   const hasInvoice = Boolean(
     jobCard && invoices.some((inv) => inv.jobCardId === jobCard.id)
   );
-  const pricingEditable = jobCard ? jobCardPricingEditable(jobCard, hasInvoice) : false;
+  const pricingEditable = jobCard
+    ? canEditJobCardPricing(user, jobCard, hasInvoice)
+    : false;
 
   const [reportedIssues, setReportedIssues] = useState("");
   const [expectedDelivery, setExpectedDelivery] = useState("");

@@ -5,6 +5,7 @@
 export const PERMISSION_KEYS = [
   "DASHBOARD",
   "JOB_CARDS",
+  "JOB_CARD_PRICING",
   "BOOKINGS",
   "PICKUP_DROP",
   "QUOTATIONS",

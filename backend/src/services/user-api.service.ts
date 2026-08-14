@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
-import type { User as PrismaUser } from "@prisma/client";
+import type { Prisma, User as PrismaUser } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { AppError } from "../lib/app-error.js";
 
 function pickChar(set: string): string {
   return set[randomInt(0, set.length)]!;
@@ -56,7 +57,10 @@ export function toApiUser(u: PrismaUser) {
 }
 
 export async function listUsersApi() {
-  const rows = await prisma.user.findMany({ orderBy: { id: "asc" } });
+  const rows = await prisma.user.findMany({
+    where: { role: { not: "PLATFORM_OWNER" } },
+    orderBy: { id: "asc" },
+  });
   return rows.map(toApiUser);
 }
 
@@ -80,33 +84,44 @@ export async function createUserApi(input: {
   createdById?: string | null;
   permissions?: string[];
 }): Promise<{ user: ReturnType<typeof toApiUser>; temporaryPassword?: string }> {
+  if (input.role === "PLATFORM_OWNER") {
+    throw AppError.validation("Cannot create PLATFORM_OWNER accounts via studio user management.");
+  }
+
+  const branch = await prisma.branch.findUnique({ where: { id: input.branchId } });
+  if (!branch) {
+    throw AppError.validation("Selected branch was not found.");
+  }
+
   const useExplicitPassword = input.password !== undefined && input.password.trim() !== "";
   const plainPassword = useExplicitPassword ? input.password!.trim() : generateTemporaryPassword();
   const passwordHash = await bcrypt.hash(plainPassword, 10);
   const now = new Date();
-  const row = await prisma.user.create({
-    data: {
-      id: input.id,
-      name: input.name,
-      email: input.email.toLowerCase(),
-      phone: input.phone,
-      role: input.role,
-      branchId: input.branchId,
-      passwordHash,
-      mustChangePassword: !useExplicitPassword,
-      passwordCreatedBy: input.createdById ?? null,
-      passwordUpdatedAt: now,
-      avatar: input.avatar ?? null,
-      isActive: input.isActive ?? true,
-      emailVerified: input.emailVerified ?? false,
-      attendancePin: input.attendancePin ?? null,
-      totalJobsCompleted: input.totalJobsCompleted ?? null,
-      totalIncentiveEarned: input.totalIncentiveEarned ?? null,
-      birthday: input.birthday ?? null,
-      anniversary: input.anniversary ?? null,
-      permissions: input.permissions ?? [],
-    },
-  });
+
+  const data: Prisma.UserUncheckedCreateInput = {
+    id: input.id,
+    name: input.name,
+    email: input.email.toLowerCase(),
+    phone: input.phone,
+    role: input.role,
+    branchId: input.branchId,
+    organizationId: branch.organizationId,
+    passwordHash,
+    mustChangePassword: !useExplicitPassword,
+    passwordCreatedBy: input.createdById ?? null,
+    passwordUpdatedAt: now,
+    avatar: input.avatar ?? null,
+    isActive: input.isActive ?? true,
+    emailVerified: input.emailVerified ?? false,
+    attendancePin: input.attendancePin ?? null,
+    totalJobsCompleted: input.totalJobsCompleted ?? null,
+    totalIncentiveEarned: input.totalIncentiveEarned ?? null,
+    birthday: input.birthday ?? null,
+    anniversary: input.anniversary ?? null,
+    permissions: input.permissions ?? [],
+  };
+
+  const row = await prisma.user.create({ data });
   return {
     user: toApiUser(row),
     ...(!useExplicitPassword ? { temporaryPassword: plainPassword } : {}),
@@ -133,8 +148,13 @@ export async function updateUserApi(
   }>
 ): Promise<ReturnType<typeof toApiUser> | null> {
   try {
-    const data = { ...patch };
+    const data: Prisma.UserUncheckedUpdateInput = { ...patch };
     if (patch.email !== undefined) data.email = patch.email.toLowerCase();
+    if (patch.branchId !== undefined) {
+      const branch = await prisma.branch.findUnique({ where: { id: patch.branchId } });
+      if (!branch) return null;
+      data.organizationId = branch.organizationId;
+    }
     const row = await prisma.user.update({ where: { id }, data });
     return toApiUser(row);
   } catch {

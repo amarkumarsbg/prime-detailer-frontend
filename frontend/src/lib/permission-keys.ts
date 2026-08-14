@@ -5,6 +5,7 @@
 export const PERMISSION_KEYS = [
   "DASHBOARD",
   "JOB_CARDS",
+  "JOB_CARD_PRICING",
   "BOOKINGS",
   "PICKUP_DROP",
   "QUOTATIONS",
@@ -43,6 +44,7 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 export const PERMISSION_KEY_LABELS: Record<PermissionKey, string> = {
   DASHBOARD: "Dashboard",
   JOB_CARDS: "Job Cards",
+  JOB_CARD_PRICING: "Job Card Pricing",
   BOOKINGS: "Bookings",
   PICKUP_DROP: "Pickup & Drop",
   QUOTATIONS: "Quotations",

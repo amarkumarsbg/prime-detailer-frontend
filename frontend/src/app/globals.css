@@ -43,6 +43,10 @@
 
 :root {
   color-scheme: light;
+  /* Visual viewport (mobile keyboard); updated by VisualViewportCssVars */
+  --vv-height: 100dvh;
+  --vv-keyboard-inset: 0px;
+  --vv-offset-top: 0px;
   --background: #ffffff;
   --foreground: #0f172a;
   --card: #ffffff;

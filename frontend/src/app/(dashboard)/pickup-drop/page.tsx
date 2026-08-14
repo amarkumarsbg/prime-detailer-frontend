@@ -11,6 +11,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -832,19 +834,29 @@ export default function PickupDropPage() {
       <Dialog open={createOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent
           className={cn(
-            "w-[calc(100vw-1.5rem)] max-w-3xl lg:max-w-4xl",
+            dialogMobileSheetContentClasses,
+            "max-h-[min(92dvh,100%)] sm:max-w-3xl lg:max-w-4xl",
+            // Compact handle ↔ title gap on mobile only (handle is the aria-hidden first child)
+            "max-sm:[&>div[aria-hidden]]:pb-1 max-sm:[&>div[aria-hidden]]:pt-2",
+            // Footer owns bottom inset — avoid double gap under action buttons
+            "max-sm:pb-0",
             dialogSurfaceClass
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <DialogHeader>
+          <DialogHeader
+            className={cn(
+              dialogMobileSheetHeaderClasses,
+              "max-sm:border-b-0 max-sm:pb-2 max-sm:pt-0"
+            )}
+          >
             <DialogTitle className="text-slate-900 dark:text-foreground">
               Create Pickup/Drop Request
             </DialogTitle>
           </DialogHeader>
 
           {/* Stepper Progress Indicator */}
-          <div className="space-y-2 border-b pb-4 mb-2">
+          <div className="shrink-0 space-y-2 border-b border-border/60 px-6 pb-4 max-sm:space-y-1.5 max-sm:pb-3 max-sm:pt-0">
             <div className="flex items-center gap-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-primary">
                 Step {currentStep === "customer" ? 1 : currentStep === "vehicle" ? 2 : 3} of 3 —{" "}
@@ -879,10 +891,10 @@ export default function PickupDropPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 py-2 max-h-[min(75vh,40rem)] overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-3 max-sm:pt-2 sm:py-4">
             {/* STEP 1: Customer Details */}
             {currentStep === "customer" && (
-              <div className="space-y-4">
+              <div className="space-y-4 pb-2">
                 <div className="space-y-2">
                   <Label htmlFor="pd-customer-lookup" className="text-sm font-medium">Search Existing Customer</Label>
                   <div className="relative">
@@ -998,28 +1010,12 @@ export default function PickupDropPage() {
                     </div>
                   )}
                 </div>
-
-                <div className="flex justify-end gap-2 pt-3 border-t">
-                  <Button variant="outline" type="button" onClick={() => setCreateOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (validateCustomerStep()) {
-                        setCurrentStep("vehicle");
-                      }
-                    }}
-                  >
-                    Next
-                  </Button>
-                </div>
               </div>
             )}
 
             {/* STEP 2: Vehicle Details */}
             {currentStep === "vehicle" && (
-              <div className="space-y-4">
+              <div className="space-y-4 pb-2">
                 {hasExistingCustomer ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -1205,32 +1201,12 @@ export default function PickupDropPage() {
                     </div>
                   </div>
                 )}
-
-                <div className="flex justify-between pt-3 border-t">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCurrentStep("customer")}
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (validateVehicleStep()) {
-                        setCurrentStep("details");
-                      }
-                    }}
-                  >
-                    Next
-                  </Button>
-                </div>
               </div>
             )}
 
             {/* STEP 3: Request details */}
             {currentStep === "details" && (
-              <div className="space-y-4">
+              <div className="space-y-4 pb-2">
                 <div className="grid gap-2">
                   <Label htmlFor="pd-existing-address">{addressFieldLabel} *</Label>
                   <Textarea
@@ -1323,22 +1299,70 @@ export default function PickupDropPage() {
                     placeholder="Add any notes…"
                   />
                 </div>
-
-                <div className="flex justify-between pt-3 border-t">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCurrentStep("vehicle")}
-                  >
-                    Back
-                  </Button>
-                  <Button onClick={handleCreate} disabled={!canSubmitCreate}>
-                    Create Request
-                  </Button>
-                </div>
               </div>
             )}
           </div>
+
+          <DialogFooter
+            className={cn(
+              "shrink-0 flex-row gap-2 border-t border-border/60 bg-background px-4 pt-3 sm:justify-end sm:px-6 sm:pb-4",
+              "pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4",
+              "[&_button]:h-10 [&_button]:min-h-10 [&_button]:flex-1 sm:[&_button]:flex-none"
+            )}
+          >
+            {currentStep === "customer" && (
+              <>
+                <Button variant="outline" type="button" onClick={() => setCreateOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (validateCustomerStep()) {
+                      setCurrentStep("vehicle");
+                    }
+                  }}
+                >
+                  Next
+                </Button>
+              </>
+            )}
+            {currentStep === "vehicle" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCurrentStep("customer")}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (validateVehicleStep()) {
+                      setCurrentStep("details");
+                    }
+                  }}
+                >
+                  Next
+                </Button>
+              </>
+            )}
+            {currentStep === "details" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCurrentStep("vehicle")}
+                >
+                  Back
+                </Button>
+                <Button type="button" onClick={handleCreate} disabled={!canSubmitCreate}>
+                  Create Request
+                </Button>
+              </>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

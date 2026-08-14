@@ -19,7 +19,7 @@ Follow these conventions when contributing. Prefer clarity and reuse over new ab
 | Zustand stores | `*-store.ts` |
 | Backend services | `*.service.ts` |
 | Controllers / routes | `*.controller.ts` / `*.routes.ts` |
-| Permission keys | `SCREAMING_SNAKE` — use `permission-keys` constants |
+| Permission keys | `SCREAMING_SNAKE` — use `permission-keys` constants. Module keys (`JOB_CARDS`) vs sub-capabilities (`JOB_CARD_PRICING` for job price fields; enforce FE + backend PUT). Assign on Staff detail. Existing DBs: `cd backend && npm run grant:job-card-pricing`. |
 | Pure helpers | camelCase functions in `lib/` |
 
 ## Frontend structure

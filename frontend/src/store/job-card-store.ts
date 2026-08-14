@@ -6,6 +6,10 @@ import type { JobCard } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
 import { syncPickupFromJobCard } from "@/lib/sync-pickup-from-job-card";
 import { jobCardUpdateAllowed } from "@/lib/job-card-edit-policy";
+import { evaluateJobCardPricingWrite } from "@/lib/job-card-pricing-rbac";
+import { userHasPermission } from "@/lib/rbac";
+import { useAuthStore } from "@/store/auth-store";
+import { useInvoiceStore } from "@/store/invoice-store";
 
 interface JobCardStore {
   jobCards: JobCard[];
@@ -33,6 +37,22 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
       return;
     }
     const next = { ...prev, ...updates };
+    const user = useAuthStore.getState().user;
+    const hasInvoice = useInvoiceStore.getState().invoices.some((inv) => inv.jobCardId === id);
+    const pricingDecision = evaluateJobCardPricingWrite({
+      hasPricingPermission: userHasPermission(user, "JOB_CARD_PRICING"),
+      prev,
+      next,
+      hasInvoice,
+    });
+    if (!pricingDecision.ok) {
+      toast.error(
+        pricingDecision.reason === "MISSING_PERMISSION"
+          ? "You do not have permission to change job card prices"
+          : pricingDecision.message
+      );
+      return;
+    }
     // Apply locally first so same-click flows (e.g. deliver + invoice) see the new status.
     set((state) => ({
       jobCards: state.jobCards.map((jc) => (jc.id === id ? next : jc)),

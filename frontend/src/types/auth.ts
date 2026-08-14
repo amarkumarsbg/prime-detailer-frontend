@@ -1,5 +1,6 @@
 /** Org-level super user: full access including branch CRUD. */
 export type UserRole =
+  | "PLATFORM_OWNER"
   | "SUPER_ADMIN"
   | "ADMIN"
   | "BRANCH_MANAGER"

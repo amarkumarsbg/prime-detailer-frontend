@@ -1,8 +1,18 @@
-import type { UserRole } from "@/types";
+import type { User, UserRole } from "@/types";
 
 /** Super admin: unrestricted navigation (all routes that use role gates). */
 export function isSuperAdmin(role: UserRole | undefined): boolean {
   return role === "SUPER_ADMIN";
+}
+
+/** Module / feature permission check. SUPER_ADMIN always passes. */
+export function userHasPermission(
+  user: Pick<User, "role" | "permissions"> | null | undefined,
+  permissionKey: string
+): boolean {
+  if (!user?.role) return false;
+  if (user.role === "SUPER_ADMIN") return true;
+  return Boolean(user.permissions?.includes(permissionKey));
 }
 
 /** Can create / edit / deactivate branches on the Locations page. */
@@ -76,6 +86,7 @@ export function canAccessNavItem(
 
 export function roleDisplayLabel(role: UserRole): string {
   const labels: Record<UserRole, string> = {
+    PLATFORM_OWNER: "Platform Owner",
     SUPER_ADMIN: "Super Admin",
     ADMIN: "Admin",
     BRANCH_MANAGER: "Branch Manager",

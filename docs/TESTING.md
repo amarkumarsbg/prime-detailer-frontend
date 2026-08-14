@@ -14,7 +14,7 @@ Runs frontend Vitest + backend security/check scripts.
 |---------|--------|
 | `npm run test:frontend` / `cd frontend && npm test` | All frontend Vitest suites |
 | `cd frontend && npm run test:unit` | `src/lib/**` unit tests only |
-| `npm run test:backend` / `cd backend && npm run test:security` | Collection permissions, permission keys, payload schemas, RBAC |
+| `npm run test:backend` / `cd backend && npm run test:security` | Collection permissions, permission keys, payload schemas, RBAC, job-card pricing guard |
 
 ## What to test (priorities)
 

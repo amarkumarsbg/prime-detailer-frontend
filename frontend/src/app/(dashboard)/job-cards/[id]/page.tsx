@@ -48,7 +48,7 @@ import { useJobTimer } from "@/hooks/use-job-timer";
 import {
   jobCardIsEditable,
   jobCardPartsEditable,
-  jobCardPricingEditable,
+  canEditJobCardPricing,
 } from "@/lib/job-card-edit-policy";
 import { computeServiceTimerSnapshot, getServiceTimerSummaryForJob, initialServiceTimerPatch } from "@/lib/job-timer";
 import { PageHeader } from "@/components/shared/page-header";
@@ -311,7 +311,7 @@ export default function JobCardDetailPage() {
       })
   );
   const canEditPricing = Boolean(
-    jobCard && jobCardPricingEditable({ status: currentStatus }, Boolean(invoiceForJob))
+    jobCard && canEditJobCardPricing(authUser, { status: currentStatus }, Boolean(invoiceForJob))
   );
 
   const persistHighEndCompletion = useCallback(

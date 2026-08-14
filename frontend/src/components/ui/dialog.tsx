@@ -23,11 +23,12 @@ export const dialogMobileSheetHeaderClasses =
 
 type DialogMobileVariant = "sheet" | "centered" | "fullscreen";
 
+/** Mobile bottom sheet chrome (keyboard bottom/max-h applied after consumer className). */
 const dialogMobileSheetClasses =
-  "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:left-0 max-sm:max-h-[min(92dvh,100%)] max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom))]";
+  "max-sm:fixed max-sm:inset-x-0 max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom))]";
 
 const dialogMobileFullscreenClasses =
-  "max-sm:fixed max-sm:inset-0 max-sm:left-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:pb-[env(safe-area-inset-bottom)]";
+  "max-sm:fixed max-sm:inset-x-0 max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:pb-[env(safe-area-inset-bottom)]";
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -96,7 +97,12 @@ const DialogContent = React.forwardRef<
               "sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]",
             ],
             "sm:rounded-lg",
-            className
+            className,
+            // After consumer className so keyboard-aware bottom/max-h win over plain max-h overrides on mobile
+            isSheet &&
+              "max-sm:bottom-[var(--vv-keyboard-inset,0px)] max-sm:max-h-[min(92dvh,var(--vv-height,100dvh))]",
+            mobileVariant === "fullscreen" &&
+              "max-sm:bottom-[var(--vv-keyboard-inset,0px)] max-sm:top-[var(--vv-offset-top,0px)] max-sm:h-[var(--vv-height,100dvh)] max-sm:max-h-[var(--vv-height,100dvh)]"
           )}
           {...props}
         >

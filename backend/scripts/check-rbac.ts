@@ -24,6 +24,7 @@ assert.equal(canAssignUserRole("ADMIN", "MECHANIC"), false);
 assert.ok(PAYROLL_ACCESS_ROLES.includes("MANAGER"));
 assert.ok(!PAYROLL_ACCESS_ROLES.includes("MECHANIC"));
 assert.equal(collectionPermissionMapIsComplete(), true);
-assert.equal(PERMISSION_KEYS.length, 32);
+assert.equal(PERMISSION_KEYS.length, 33);
+assert.ok(PERMISSION_KEYS.includes("JOB_CARD_PRICING"));
 
 console.log("OK: backend RBAC + permission map checks passed.");

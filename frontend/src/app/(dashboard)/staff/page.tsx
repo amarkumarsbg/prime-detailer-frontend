@@ -71,6 +71,12 @@ const ROLE_BADGE_MAP: Record<
   UserRole,
   { label: string; className: string; icon: React.ElementType }
 > = {
+  PLATFORM_OWNER: {
+    label: "Platform Owner",
+    className:
+      "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+    icon: Crown,
+  },
   SUPER_ADMIN: {
     label: "Super Admin",
     className:
@@ -108,6 +114,22 @@ const ROLE_BADGE_MAP: Record<
     icon: WrenchIcon,
   },
 };
+
+const FALLBACK_ROLE_BADGE = {
+  label: "Unknown role",
+  className: "bg-muted text-muted-foreground",
+  icon: Users,
+} as const;
+
+function roleBadgeFor(role: string | undefined | null) {
+  if (role && role in ROLE_BADGE_MAP) {
+    return ROLE_BADGE_MAP[role as UserRole];
+  }
+  return {
+    ...FALLBACK_ROLE_BADGE,
+    label: role?.trim() ? role : FALLBACK_ROLE_BADGE.label,
+  };
+}
 
 const ALL_ROLES_FILTER: (UserRole | "ALL")[] = [
   "ALL",
@@ -304,7 +326,7 @@ export default function StaffPage() {
         key: "role",
         label: "Role",
         render: (item: User) => {
-          const badge = ROLE_BADGE_MAP[item.role];
+          const badge = roleBadgeFor(item.role);
           const Icon = badge.icon;
           return (
             <span
@@ -788,7 +810,7 @@ export default function StaffPage() {
               }
               renderMobileCard={(item) => {
                 const u = item as User;
-                const badge = ROLE_BADGE_MAP[u.role];
+                const badge = roleBadgeFor(u.role);
                 const Icon = badge.icon;
                 const branch = branches.find((b) => b.id === u.branchId);
                 return (

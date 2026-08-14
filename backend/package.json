@@ -17,7 +17,9 @@
     "test:permission-keys": "tsx scripts/check-permission-keys.ts",
     "test:collection-payloads": "tsx scripts/check-collection-payloads.ts",
     "test:rbac": "tsx scripts/check-rbac.ts",
-    "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac",
+    "test:job-card-pricing": "tsx scripts/check-job-card-pricing-guard.ts",
+    "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac && npm run test:job-card-pricing",
+    "grant:job-card-pricing": "tsx scripts/grant-job-card-pricing.ts",
     "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
     "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },

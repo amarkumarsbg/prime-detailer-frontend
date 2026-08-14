@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  canEditJobCardPricing,
   jobCardIsEditable,
   jobCardPartsEditable,
   jobCardPricingEditable,
   jobCardUpdateAllowed,
 } from "@/lib/job-card-edit-policy";
+import {
+  evaluateJobCardPricingWrite,
+  jobCardHasPricingDelta,
+} from "@/lib/job-card-pricing-rbac";
 import { quotationIsEditable, quotationUpdateAllowed } from "@/lib/quotation-edit-policy";
-import type { JobCard, Quotation } from "@/types";
+import { userHasPermission } from "@/lib/rbac";
+import type { JobCard, Quotation, User } from "@/types";
 
 describe("jobCard edit policy", () => {
   it("locks delivered and cancelled jobs", () => {
@@ -31,6 +37,107 @@ describe("jobCard edit policy", () => {
     const prev = { status: "DELIVERED" } as JobCard;
     expect(jobCardUpdateAllowed(prev, { status: "DELIVERED", updatedAt: "x" })).toBe(true);
     expect(jobCardUpdateAllowed(prev, { notes: "nope" })).toBe(false);
+  });
+});
+
+describe("JOB_CARD_PRICING permission", () => {
+  const staff: User = {
+    id: "u1",
+    email: "a@b.c",
+    name: "A",
+    phone: "",
+    role: "MECHANIC",
+    branchId: "b1",
+    isActive: true,
+    permissions: ["JOB_CARDS"],
+  };
+
+  const priced: User = {
+    ...staff,
+    permissions: ["JOB_CARDS", "JOB_CARD_PRICING"],
+  };
+
+  const admin: User = {
+    ...staff,
+    role: "SUPER_ADMIN",
+    permissions: [],
+  };
+
+  it("userHasPermission: SUPER_ADMIN bypass; staff needs key", () => {
+    expect(userHasPermission(admin, "JOB_CARD_PRICING")).toBe(true);
+    expect(userHasPermission(staff, "JOB_CARD_PRICING")).toBe(false);
+    expect(userHasPermission(priced, "JOB_CARD_PRICING")).toBe(true);
+  });
+
+  it("canEditJobCardPricing requires permission and status/invoice lock", () => {
+    expect(canEditJobCardPricing(staff, { status: "AWAITING_SERVICE" }, false)).toBe(false);
+    expect(canEditJobCardPricing(priced, { status: "AWAITING_SERVICE" }, false)).toBe(true);
+    expect(canEditJobCardPricing(priced, { status: "DELIVERED" }, false)).toBe(false);
+    expect(canEditJobCardPricing(priced, { status: "AWAITING_SERVICE" }, true)).toBe(false);
+    expect(canEditJobCardPricing(admin, { status: "AWAITING_SERVICE" }, false)).toBe(true);
+  });
+
+  it("does not treat estimatedAmount as a pricing delta", () => {
+    const prev = {
+      status: "AWAITING_SERVICE",
+      services: [
+        {
+          id: "s1",
+          jobCardId: "j1",
+          serviceCatalogId: "c1",
+          name: "Wash",
+          price: 500,
+          isCompleted: false,
+          priceSource: "CATALOG" as const,
+        },
+      ],
+      estimatedAmount: 500,
+    } as JobCard;
+    const next = { ...prev, estimatedAmount: 9999 };
+    expect(jobCardHasPricingDelta(prev, next)).toBe(false);
+  });
+
+  it("detects custom price change and evaluates permission", () => {
+    const prev = {
+      status: "AWAITING_SERVICE",
+      services: [
+        {
+          id: "s1",
+          jobCardId: "j1",
+          serviceCatalogId: "c1",
+          name: "Wash",
+          price: 500,
+          isCompleted: false,
+          priceSource: "CATALOG" as const,
+        },
+      ],
+    } as JobCard;
+    const next = {
+      ...prev,
+      services: [
+        {
+          ...prev.services[0]!,
+          price: 700,
+          isCustomPrice: true,
+          priceSource: "CUSTOM" as const,
+        },
+      ],
+    };
+    expect(jobCardHasPricingDelta(prev, next)).toBe(true);
+    const denied = evaluateJobCardPricingWrite({
+      hasPricingPermission: false,
+      prev,
+      next,
+      hasInvoice: false,
+    });
+    expect(denied.ok).toBe(false);
+    const allowed = evaluateJobCardPricingWrite({
+      hasPricingPermission: true,
+      prev,
+      next,
+      hasInvoice: false,
+    });
+    expect(allowed.ok).toBe(true);
   });
 });
 

@@ -8,7 +8,12 @@ import {
 } from "../constants/json-collections.js";
 import { PAYROLL_ACCESS_ROLES } from "../lib/rbac.js";
 import {
+  evaluateJobCardPricingWrite,
+  type JobCardLike,
+} from "../lib/job-card-pricing-guard.js";
+import {
   listCollectionItems,
+  getCollectionItem,
   upsertCollectionItem,
   deleteCollectionItem,
   replaceCollectionArray,
@@ -49,6 +54,48 @@ function entityParam(req: Request): string {
   return Array.isArray(raw) ? raw[0]! : raw!;
 }
 
+function actorHasJobCardPricing(req: Request): boolean {
+  if (!req.auth) return false;
+  if (req.auth.role === "SUPER_ADMIN") return true;
+  return Boolean(req.auth.permissions?.includes("JOB_CARD_PRICING"));
+}
+
+async function invoiceExistsForJobCard(jobCardId: string): Promise<boolean> {
+  const invoices = await listCollectionItems("invoices");
+  return invoices.some((raw) => {
+    if (!raw || typeof raw !== "object") return false;
+    return (raw as { jobCardId?: string }).jobCardId === jobCardId;
+  });
+}
+
+/**
+ * Reject job-card writes that change protected pricing without JOB_CARD_PRICING
+ * (or when status/invoice locks apply). Creates (no previous row) skip comparison.
+ */
+async function assertJobCardPricingOrForbid(
+  req: Request,
+  res: Response,
+  prev: unknown | null,
+  next: unknown
+): Promise<boolean> {
+  if (!prev || typeof prev !== "object") return true;
+  if (!next || typeof next !== "object") return true;
+  const prevJc = prev as JobCardLike & { id?: string };
+  const nextJc = next as JobCardLike & { id?: string };
+  const jobId =
+    typeof nextJc.id === "string" ? nextJc.id : typeof prevJc.id === "string" ? prevJc.id : "";
+  const hasInvoice = jobId ? await invoiceExistsForJobCard(jobId) : false;
+  const decision = evaluateJobCardPricingWrite({
+    hasPricingPermission: actorHasJobCardPricing(req),
+    prev: prevJc,
+    next: nextJc,
+    hasInvoice,
+  });
+  if (decision.ok) return true;
+  forbidden(res, decision.message);
+  return false;
+}
+
 export async function getCollection(req: Request, res: Response, next: NextFunction) {
   try {
     const collection = collectionParam(req);
@@ -78,6 +125,24 @@ export async function postSnapshot(req: Request, res: Response, next: NextFuncti
     if (!assertPayrollAccess(res, collection, req.auth?.role)) return;
     const body = snapshotSchema.parse(req.body);
     const items = parseCollectionSnapshotItems(collection, body.items);
+
+    if (collection === "jobCards") {
+      const existing = await listCollectionItems("jobCards");
+      const prevById = new Map<string, unknown>();
+      for (const row of existing) {
+        if (row && typeof row === "object" && typeof (row as { id?: string }).id === "string") {
+          prevById.set((row as { id: string }).id, row);
+        }
+      }
+      for (const item of items) {
+        if (!item || typeof item !== "object") continue;
+        const id = (item as { id?: string }).id;
+        if (typeof id !== "string" || !id) continue;
+        const prev = prevById.get(id) ?? null;
+        if (!(await assertJobCardPricingOrForbid(req, res, prev, item))) return;
+      }
+    }
+
     await replaceCollectionArray(collection, items);
     res.json({ data: { ok: true }, error: null });
   } catch (e) {
@@ -106,6 +171,12 @@ export async function putCollectionItem(req: Request, res: Response, next: NextF
     if (!assertPayrollAccess(res, collection, req.auth?.role)) return;
     const payload = parseCollectionPayload(collection, req.body);
     assertPayloadEntityIdMatch(collection, entityId, payload);
+
+    if (collection === "jobCards") {
+      const prev = await getCollectionItem(collection, entityId);
+      if (!(await assertJobCardPricingOrForbid(req, res, prev, payload))) return;
+    }
+
     await upsertCollectionItem(collection, entityId, payload);
     res.json({ data: { ok: true }, error: null });
   } catch (e) {
