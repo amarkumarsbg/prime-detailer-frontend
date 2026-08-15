@@ -47,6 +47,7 @@ import {
   Tag,
   Download,
   MoreHorizontal,
+  Pencil,
   Receipt,
   SlidersHorizontal,
   Trash2,
@@ -139,6 +140,7 @@ function ExpensesPageContent() {
   const { selectedBranchId, showBranchPicker } = useBranchScope();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [dateFilter, setDateFilter] = useState<ExpenseDateFilter>({
     kind: "preset",
     preset: "this_month",
@@ -328,9 +330,18 @@ function ExpensesPageContent() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
+                onClick={() => {
+                  setEditingExpense(item);
+                  setDialogOpen(true);
+                }}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() => {
-                  removeExpense(item.id);
+                  void removeExpense(item.id);
                   toast.success("Expense removed.");
                 }}
               >
@@ -353,7 +364,14 @@ function ExpensesPageContent() {
         hideDescriptionOnMobile
         inlineActionsOnMobile
         actions={
-          <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setDialogOpen(true)}>
+          <Button
+            size="sm"
+            className="shrink-0 whitespace-nowrap"
+            onClick={() => {
+              setEditingExpense(null);
+              setDialogOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4 mr-1.5" />
             Add Expense
           </Button>
@@ -526,7 +544,22 @@ function ExpensesPageContent() {
                   {categoryLabel(e.category)}
                   {e.vendorName ? ` · ${e.vendorName}` : ""}
                 </p>
-                <p className="mt-2 text-base font-bold tabular-nums">{formatCurrency(e.amount)}</p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-base font-bold tabular-nums">{formatCurrency(e.amount)}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 shrink-0"
+                    onClick={() => {
+                      setEditingExpense(e);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </div>
               </>
             );
           }}
@@ -537,7 +570,14 @@ function ExpensesPageContent() {
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Adjust filters or add a new expense.
               </p>
-              <Button size="sm" className="mt-3" onClick={() => setDialogOpen(true)}>
+              <Button
+                size="sm"
+                className="mt-3"
+                onClick={() => {
+                  setEditingExpense(null);
+                  setDialogOpen(true);
+                }}
+              >
                 <Plus className="mr-1.5 h-4 w-4" />
                 Add Expense
               </Button>
@@ -697,7 +737,14 @@ function ExpensesPageContent() {
         </div>
       </MobileFilterSheet>
 
-      <AddExpenseDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <AddExpenseDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setEditingExpense(null);
+        }}
+        expense={editingExpense}
+      />
     </div>
   );
 }

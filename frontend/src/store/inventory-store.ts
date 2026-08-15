@@ -22,6 +22,7 @@ interface InventoryStore {
   updatePart: (partId: string, patch: Partial<Part>) => void;
   removePart: (partId: string) => Promise<void>;
   addPurchase: (input: Omit<ProductPurchase, "id">) => void;
+  renamePurchaseVendor: (fromName: string, toName: string) => void;
   recordStockAdjustment: (input: {
     partId: string;
     direction: "IN" | "OUT";
@@ -202,6 +203,21 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         stockMovements: [movement, ...state.stockMovements],
       };
     });
+    persistInventorySnapshot(get);
+  },
+
+  renamePurchaseVendor: (fromName, toName) => {
+    const from = fromName.trim();
+    const to = toName.trim();
+    if (!from || !to || from === to) return;
+    set((state) => ({
+      productPurchases: state.productPurchases.map((p) =>
+        p.vendorName.trim() === from ? { ...p, vendorName: to } : p
+      ),
+      stockMovements: state.stockMovements.map((m) =>
+        m.vendor?.trim() === from ? { ...m, vendor: to } : m
+      ),
+    }));
     persistInventorySnapshot(get);
   },
 

@@ -39,6 +39,11 @@ interface ExpenseStore {
   addCustomCategory: (label: string, description?: string) => Promise<void>;
   addVendorSuggestion: (name: string) => Promise<void>;
   addVendorDirectoryEntry: (input: AddVendorDirectoryInput) => Promise<ExpenseVendorProfile | null>;
+  updateVendorDirectoryEntry: (
+    id: string,
+    updates: Partial<Omit<ExpenseVendorProfile, "id">>
+  ) => Promise<ExpenseVendorProfile | null>;
+  removeVendorDirectoryEntry: (id: string) => Promise<boolean>;
 }
 
 async function persistExpenseState(get: () => ExpenseStore): Promise<void> {
@@ -111,6 +116,75 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
     }));
     await persistExpenseState(get);
     return entry;
+  },
+
+  updateVendorDirectoryEntry: async (id, updates) => {
+    const prev = get().vendorDirectory.find((v) => v.id === id);
+    if (!prev) return null;
+    const nextName = updates.name !== undefined ? updates.name.trim() : prev.name;
+    if (!nextName) return null;
+
+    const entry: ExpenseVendorProfile = {
+      ...prev,
+      name: nextName,
+      contactPerson:
+        updates.contactPerson !== undefined
+          ? updates.contactPerson.trim() || undefined
+          : prev.contactPerson,
+      email: updates.email !== undefined ? updates.email.trim() || undefined : prev.email,
+      phone: updates.phone !== undefined ? updates.phone.trim() || undefined : prev.phone,
+      paymentTerms:
+        updates.paymentTerms !== undefined
+          ? updates.paymentTerms.trim() || undefined
+          : prev.paymentTerms,
+      address:
+        updates.address !== undefined ? updates.address.trim() || undefined : prev.address,
+      gstNumber:
+        updates.gstNumber !== undefined
+          ? updates.gstNumber.trim() || undefined
+          : prev.gstNumber,
+      panNumber:
+        updates.panNumber !== undefined
+          ? updates.panNumber.trim() || undefined
+          : prev.panNumber,
+      notes: updates.notes !== undefined ? updates.notes.trim() || undefined : prev.notes,
+    };
+
+    const renamed = prev.name !== nextName;
+    set((s) => {
+      let vendorSuggestions = s.vendorSuggestions;
+      if (renamed) {
+        vendorSuggestions = [
+          ...s.vendorSuggestions.filter((n) => n !== prev.name && n !== nextName),
+          nextName,
+        ];
+      } else if (!vendorSuggestions.includes(nextName)) {
+        vendorSuggestions = [...vendorSuggestions, nextName];
+      }
+      const expenses = renamed
+        ? s.expenses.map((e) =>
+            e.vendorName === prev.name ? { ...e, vendorName: nextName } : e
+          )
+        : s.expenses;
+      return {
+        vendorDirectory: s.vendorDirectory.map((v) => (v.id === id ? entry : v)),
+        vendorSuggestions,
+        expenses,
+      };
+    });
+    await persistExpenseState(get);
+    return entry;
+  },
+
+  removeVendorDirectoryEntry: async (id) => {
+    const prev = get().vendorDirectory.find((v) => v.id === id);
+    if (!prev) return false;
+    set((s) => ({
+      vendorDirectory: s.vendorDirectory.filter((v) => v.id !== id),
+      vendorSuggestions: s.vendorSuggestions.filter((n) => n !== prev.name),
+    }));
+    await persistExpenseState(get);
+    return true;
   },
 
   removeExpense: async (id) => {

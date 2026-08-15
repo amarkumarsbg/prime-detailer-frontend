@@ -40,11 +40,12 @@ import {
   Pencil,
   Phone,
   Plus,
-  PowerOff,
   Trash2,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function BranchesPage() {
   const userRole = useAuthStore((s) => s.user?.role);
@@ -107,6 +108,22 @@ export default function BranchesPage() {
     }
     return m;
   }, [staff]);
+
+  const requestSetActive = (b: Branch, nextActive: boolean) => {
+    if (!canEdit) return;
+    if (!nextActive) {
+      setDeactivateTarget(b);
+      return;
+    }
+    void (async () => {
+      try {
+        await updateBranch(b.id, { isActive: true });
+        toast.success("Site activated");
+      } catch {
+        toast.error("Could not activate. Is the API running?");
+      }
+    })();
+  };
 
   const applyForm = async (values: BranchFormValues, id?: string) => {
     const payload = {
@@ -199,24 +216,43 @@ export default function BranchesPage() {
     {
       key: "isActive",
       label: "Status",
-      render: (b: Branch) => (
-        <Badge
-          className={cn(
-            "font-normal",
-            b.isActive
-              ? "bg-teal-100 text-teal-900 hover:bg-teal-100 dark:bg-teal-900/40 dark:text-teal-100"
-              : "text-muted-foreground"
-          )}
-          variant={b.isActive ? "secondary" : "outline"}
-        >
-          {b.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
+      render: (b: Branch) =>
+        canEdit ? (
+          <div className="flex items-center gap-2">
+            <Switch
+              id={`branch-active-${b.id}`}
+              checked={b.isActive}
+              onCheckedChange={(checked) => requestSetActive(b, checked)}
+              aria-label={b.isActive ? "Active — tap to deactivate" : "Inactive — tap to activate"}
+            />
+            <Label
+              htmlFor={`branch-active-${b.id}`}
+              className={cn(
+                "text-xs font-medium cursor-pointer",
+                b.isActive ? "text-teal-700 dark:text-teal-300" : "text-muted-foreground"
+              )}
+            >
+              {b.isActive ? "Active" : "Inactive"}
+            </Label>
+          </div>
+        ) : (
+          <Badge
+            className={cn(
+              "font-normal",
+              b.isActive
+                ? "bg-teal-100 text-teal-900 hover:bg-teal-100 dark:bg-teal-900/40 dark:text-teal-100"
+                : "text-muted-foreground"
+            )}
+            variant={b.isActive ? "secondary" : "outline"}
+          >
+            {b.isActive ? "Active" : "Inactive"}
+          </Badge>
+        ),
     },
     {
       key: "actions",
       label: "Actions",
-      className: "text-right w-[168px]",
+      className: "text-right w-[140px]",
       render: (b: Branch) => {
         const deletable = canDeleteBranch(b.id, deletionContext);
         return (
@@ -247,19 +283,6 @@ export default function BranchesPage() {
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
-                {b.isActive && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    aria-label="Deactivate"
-                    title="Mark inactive"
-                    onClick={() => setDeactivateTarget(b)}
-                  >
-                    <PowerOff className="h-4 w-4" />
-                  </Button>
-                )}
                 <Button
                   type="button"
                   variant="ghost"
@@ -353,17 +376,39 @@ export default function BranchesPage() {
               <>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium leading-snug">{b.name}</p>
-                  <Badge
-                    className={cn(
-                      "shrink-0 font-normal",
-                      b.isActive
-                        ? "bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-100"
-                        : "text-muted-foreground"
-                    )}
-                    variant={b.isActive ? "secondary" : "outline"}
-                  >
-                    {b.isActive ? "Active" : "Inactive"}
-                  </Badge>
+                  {canEdit ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Label
+                        htmlFor={`branch-active-mobile-${b.id}`}
+                        className={cn(
+                          "text-xs font-medium",
+                          b.isActive ? "text-teal-700 dark:text-teal-300" : "text-muted-foreground"
+                        )}
+                      >
+                        {b.isActive ? "Active" : "Inactive"}
+                      </Label>
+                      <Switch
+                        id={`branch-active-mobile-${b.id}`}
+                        checked={b.isActive}
+                        onCheckedChange={(checked) => requestSetActive(b, checked)}
+                        aria-label={
+                          b.isActive ? "Active — tap to deactivate" : "Inactive — tap to activate"
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <Badge
+                      className={cn(
+                        "shrink-0 font-normal",
+                        b.isActive
+                          ? "bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-100"
+                          : "text-muted-foreground"
+                      )}
+                      variant={b.isActive ? "secondary" : "outline"}
+                    >
+                      {b.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  )}
                 </div>
                 <p className="mt-1 font-mono text-xs text-muted-foreground">{b.code ?? b.id}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -375,6 +420,34 @@ export default function BranchesPage() {
                     {staffCountByBranch.get(b.id) ?? 0} staff
                   </span>
                 </div>
+                {canEdit ? (
+                  <div className="mt-3 flex gap-2 border-t border-border/60 pt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 flex-1"
+                      onClick={() => {
+                        setEditing(b);
+                        setFormMode("edit");
+                        setFormOpen(true);
+                      }}
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => setViewing(b)}
+                    >
+                      <Eye className="mr-1.5 h-3.5 w-3.5" />
+                      View
+                    </Button>
+                  </div>
+                ) : null}
               </>
             );
           }}
@@ -440,9 +513,9 @@ export default function BranchesPage() {
             <DialogTitle>Deactivate site?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {deactivateTarget?.name} will be marked inactive. Staff assignments are unchanged; you can
-            re-enable later by editing the site, or delete it permanently once it has no employees or
-            work history.
+            {deactivateTarget?.name} will be marked inactive and hidden from branch pickers. Staff
+            assignments are unchanged. You can turn the Active switch back on anytime, or delete the
+            site permanently once it has no employees or work history.
           </p>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setDeactivateTarget(null)}>

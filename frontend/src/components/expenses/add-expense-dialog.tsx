@@ -27,7 +27,7 @@ import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
 import { resolveSessionBranchId } from "@/lib/all-branches";
 import { useBranchScope } from "@/lib/branch-scope";
-import type { ExpenseCategory, ExpensePaymentMethod, ExpensePaymentStatus } from "@/types";
+import type { Expense, ExpenseCategory, ExpensePaymentMethod, ExpensePaymentStatus } from "@/types";
 import { toast } from "sonner";
 
 const BASE_CATEGORIES: ExpenseCategory[] = [
@@ -64,10 +64,14 @@ function paymentStatusLabel(s: ExpensePaymentStatus): string {
 type AddExpenseDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When set, dialog edits this expense instead of creating a new one. */
+  expense?: Expense | null;
 };
 
-export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) {
+export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpenseDialogProps) {
+  const isEdit = Boolean(expense);
   const addExpense = useExpenseStore((s) => s.addExpense);
+  const updateExpense = useExpenseStore((s) => s.updateExpense);
   const customCategories = useExpenseStore((s) => s.customCategories);
   const addCustomCategory = useExpenseStore((s) => s.addCustomCategory);
   const vendorSuggestions = useExpenseStore((s) => s.vendorSuggestions);
@@ -126,6 +130,24 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
   useEffect(() => {
     if (!open) return;
     queueMicrotask(() => {
+      if (expense) {
+        setTitle(expense.title);
+        setAmount(String(expense.amount));
+        setDateStr(expense.date.slice(0, 10));
+        setCategoryInput(expense.category);
+        setVendorInput(expense.vendorName ?? "");
+        setBranchId(expense.branchId);
+        setPaymentStatus(expense.paymentStatus);
+        setPaymentMethod(expense.paymentMethod);
+        setDescription(expense.description ?? "");
+        setAmountPaid(
+          expense.amountPaid != null && expense.amountPaid > 0
+            ? String(expense.amountPaid)
+            : ""
+        );
+        setReceiptName(expense.receipt ?? "");
+        return;
+      }
       const resolved = resolveSessionBranchId(currentBranch, user?.branchId);
       setBranchId(resolved);
       setTitle("");
@@ -139,7 +161,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       setAmountPaid("");
       setReceiptName("");
     });
-  }, [open, currentBranch, user?.branchId]);
+  }, [open, expense, currentBranch, user?.branchId]);
 
   const handleAddCategory = () => {
     const t = newCategoryName.trim();
@@ -216,10 +238,34 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       paid = ap;
     }
 
+    if (expense) {
+      void updateExpense(expense.id, {
+        title: title.trim(),
+        category: cat,
+        description: description.trim() || undefined,
+        amount: n,
+        amountPaid: paymentStatus === "PARTIAL" ? paid : undefined,
+        date: dateStr,
+        vendorName: vendorInput.trim() || undefined,
+        paymentStatus,
+        paymentMethod,
+        receipt: receiptName || undefined,
+        branchId,
+      }).then((ok) => {
+        if (!ok) {
+          toast.error("Could not update expense.");
+          return;
+        }
+        toast.success("Expense updated.");
+        onOpenChange(false);
+      });
+      return;
+    }
+
     const createdBy = user?.id ?? "usr-001";
     const createdByName = user?.name ?? "User";
 
-    addExpense({
+    void addExpense({
       title: title.trim(),
       category: cat,
       description: description.trim() || undefined,
@@ -233,9 +279,10 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
       createdBy,
       createdByName,
       branchId,
+    }).then(() => {
+      toast.success("Expense saved.");
+      onOpenChange(false);
     });
-    toast.success("Expense saved.");
-    onOpenChange(false);
   };
 
   const onReceiptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,7 +314,9 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
           showClose
         >
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
-            <DialogTitle className="text-lg font-semibold sm:text-xl">Add Expense</DialogTitle>
+            <DialogTitle className="text-lg font-semibold sm:text-xl">
+              {isEdit ? "Edit Expense" : "Add Expense"}
+            </DialogTitle>
           </DialogHeader>
 
           <form
@@ -500,8 +549,8 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
                 Cancel
               </Button>
               <Button type="submit" size="sm">
-                <span className="sm:hidden">Save</span>
-                <span className="hidden sm:inline">Save Expense</span>
+                <span className="sm:hidden">{isEdit ? "Update" : "Save"}</span>
+                <span className="hidden sm:inline">{isEdit ? "Update Expense" : "Save Expense"}</span>
               </Button>
             </DialogFooter>
           </form>
