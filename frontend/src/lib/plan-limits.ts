@@ -21,7 +21,7 @@ export function isAtOrOverBranchLimit(
 ): boolean {
   if (!entitlement) return true;
   const max = entitlement.subscription.effectiveMaxBranches;
-  if (isUnlimitedBranches(max)) return false;
+  if (max === null || max === undefined) return false;
   return entitlement.usage.branchesUsed >= max;
 }
 
