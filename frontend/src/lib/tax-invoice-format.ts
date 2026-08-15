@@ -293,7 +293,7 @@ export function buildTaxInvoicePrintHtml(
         <td class="desc">
           <div style="font-weight:600; color:#171717;">${escapeHtml(li.description)}</div>
         </td>
-        <td class="c">${hsn}</td>
+        ${isGstRegistered ? `<td class="c">${escapeHtml(hsn)}</td>` : ""}
         <td class="r">${formatCurrency(lineRateDisplay(li))}</td>
         <td class="r">${discCell}</td>
         <td class="r">${formatCurrency(li.total)}</td>
@@ -312,7 +312,7 @@ export function buildTaxInvoicePrintHtml(
           .join("")
       : "";
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${isGstRegistered ? "Tax Invoice" : "Invoice"} ${escapeHtml(invoice.invoiceNumber)}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${isGstRegistered ? "Tax Invoice" : "Invoice"} ${escapeHtml(invoice.invoiceNumber)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -323,6 +323,22 @@ export function buildTaxInvoicePrintHtml(
 body { font-family: 'Outfit', system-ui, sans-serif; font-size: 10.5px; color: #171717; background: #fafafa; line-height: 1.4; padding: 20px 0; }
 .wrap { max-width: 800px; margin: 0 auto; padding: 24px; border: 1.5px solid #3b82f6; background: #ffffff; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border-radius: 8px; }
 .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
+.brand-row { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  min-height: 56px;
+  max-width: 56px;
+  max-height: 56px;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: 2px solid #3b82f6;
+  display: block;
+  overflow: hidden;
+}
+.brand-text { min-width: 0; }
 .metadata-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 16px 0; padding: 10px 12px; border-top: 1.5px solid #3b82f6; border-bottom: 1.5px solid #3b82f6; background: #eff6ff; border-radius: 2px; }
 .metadata-item div:first-child { color: #737373; font-weight: 500; text-transform: uppercase; font-size: 8px; margin-bottom: 2px; letter-spacing: 0.5px; }
 .metadata-item div:last-child { font-weight: 700; color: #171717; font-size: 10px; }
@@ -357,10 +373,34 @@ table.inv .b { font-weight: 700; color: #171717; }
 .ref-title { font-size: 8px; font-weight: 700; letter-spacing: 0.06em; color: #3b82f6; margin-bottom: 4px; text-transform: uppercase; }
 .ref-code { font-size: 16px; font-weight: 700; font-family: monospace; letter-spacing: 0.08em; color: #171717; margin-bottom: 4px; }
 .ref-note { font-size: 8.5px; color: #525252; line-height: 1.4; max-width: 550px; margin: 0 auto; }
+@media (max-width: 640px) {
+  body { padding: 8px 0; font-size: 10px; }
+  .wrap { padding: 14px 12px; border-radius: 6px; margin: 0 4px; }
+  .top { flex-direction: column; gap: 10px; }
+  .brand-row { gap: 10px; align-items: flex-start; }
+  .brand-logo {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 44px;
+    max-height: 44px;
+  }
+  .brand-name { font-size: 16px !important; }
+  .brand-sub { font-size: 9px !important; }
+  .invoice-title-block { align-items: flex-start !important; height: auto !important; text-align: left !important; }
+  .invoice-title-block .doc-title { font-size: 14px !important; }
+  .metadata-bar { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bill-booking-row { flex-direction: column !important; gap: 12px !important; }
+  .footer-grid { grid-template-columns: 1fr; }
+  table.inv { font-size: 9px; }
+  table.inv th, table.inv td { padding: 6px 4px; }
+}
 @media print {
   body { background: #ffffff; padding: 0 !important; font-size: 8.5px !important; line-height: 1.25 !important; }
   .wrap { box-shadow: none; border: 1.2px solid #3b82f6 !important; padding: 12px 16px !important; }
   .top { margin-bottom: 6px !important; }
+  .brand-logo { width: 48px !important; height: 48px !important; min-width: 48px !important; min-height: 48px !important; }
   .metadata-bar { margin: 8px 0 !important; padding: 6px 8px !important; gap: 4px !important; }
   .metadata-item div:first-child { font-size: 7px !important; margin-bottom: 1px !important; }
   .metadata-item div:last-child { font-size: 8.5px !important; }
@@ -390,8 +430,8 @@ table.inv .b { font-weight: 700; color: #171717; }
 </style></head><body>
 <div class="wrap">
   <div class="top">
-    <div style="display: flex; align-items: center; gap: 16px;">
-      <svg width="64" height="64" viewBox="0 0 100 100" style="border-radius: 12px; border: 2px solid #3b82f6; shrink-0; display: block;">
+    <div class="brand-row">
+      <svg class="brand-logo" width="56" height="56" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <!-- Background rect element so color is printed even when print background graphics settings is unchecked -->
         <rect x="0" y="0" width="100" height="100" fill="#1e3a8a"/>
         <circle cx="50" cy="50" r="44" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="3 3"/>
@@ -404,7 +444,7 @@ table.inv .b { font-weight: 700; color: #171717; }
         <path d="M 8 56 L 92 56" stroke="#3b82f6" stroke-width="1" opacity="0.6"/>
         <text x="50" y="82" fill="#3b82f6" font-size="8.5" font-family="'Outfit', sans-serif" font-weight="800" text-anchor="middle" letter-spacing="1.5">PRIME</text>
       </svg>
-      <div>
+      <div class="brand-text">
         <div class="brand-name" style="font-size: 22px; font-weight: 700; color: #1e3a8a; letter-spacing: -0.5px;">${escapeHtml(business.businessName)}</div>
         <div class="brand-sub" style="font-size: 10px; font-weight: 500; color: #3b82f6; letter-spacing: 0.5px; margin-top: 1px;">${escapeHtml(business.businessTagline)}</div>
         <div style="display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 9px; color: #525252; margin-top: 6px; font-weight: 500;">
@@ -414,8 +454,8 @@ table.inv .b { font-weight: 700; color: #171717; }
         </div>
       </div>
     </div>
-    <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; height: 64px;">
-      <div style="font-size: 20px; font-weight: 700; color: #1e3a8a; letter-spacing: 1.5px; text-transform: uppercase;">${isGstRegistered ? "TAX INVOICE" : "INVOICE"}</div>
+    <div class="invoice-title-block" style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; height: 56px;">
+      <div class="doc-title" style="font-size: 20px; font-weight: 700; color: #1e3a8a; letter-spacing: 1.5px; text-transform: uppercase;">${isGstRegistered ? "TAX INVOICE" : "INVOICE"}</div>
       <div style="font-size: 8.5px; font-weight: 600; color: #3b82f6; border: 1px solid #3b82f6; padding: 3px 6px; border-radius: 3px; background: #eff6ff; text-transform: uppercase; letter-spacing: 0.5px;">Original for Recipient</div>
     </div>
   </div>
@@ -443,7 +483,7 @@ table.inv .b { font-weight: 700; color: #171717; }
     </div>
   </div>
 
-  <div style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 12px;">
+  <div class="bill-booking-row" style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 12px;">
     <div class="bill-to" style="flex: 1.25;">
       <h3>Bill To</h3>
       <div style="font-size: 13px; font-weight: 700; color: #0b1329; margin-bottom: 4px;">${escapeHtml(customerName)}</div>
@@ -475,7 +515,7 @@ table.inv .b { font-weight: 700; color: #171717; }
       <tr>
         <th style="width:28px">#</th>
         <th class="desc">Service / Description</th>
-        <th style="width:52px">HSN/SAC</th>
+        ${isGstRegistered ? `<th style="width:52px">HSN/SAC</th>` : ""}
         <th style="width:72px">Rate (Rs.)</th>
         <th style="width:64px">Discount</th>
         <th style="width:72px">Price</th>

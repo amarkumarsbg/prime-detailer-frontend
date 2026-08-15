@@ -1552,22 +1552,6 @@ ${businessNameVal}`;
                     </Button>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>From inventory / catalog</Label>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <InvoicePartPickSelect
-                        parts={inventoryParts}
-                        onPick={(part) => applyPartToEditLine(li.id, part)}
-                      />
-                      <InvoiceServicePickSelect
-                        services={serviceCatalog}
-                        onPick={(svc) => applyServiceToEditLine(li.id, svc)}
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Selecting a part or service fills description and rate. You can still edit them below.
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
                     <Label htmlFor={`edit-desc-${li.id}`}>Description</Label>
                     <Input
                       id={`edit-desc-${li.id}`}
@@ -1627,6 +1611,22 @@ ${businessNameVal}`;
                         {formatCurrency(li.total)}
                       </p>
                     </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>From inventory / catalog</Label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <InvoicePartPickSelect
+                        parts={inventoryParts}
+                        onPick={(part) => applyPartToEditLine(li.id, part)}
+                      />
+                      <InvoiceServicePickSelect
+                        services={serviceCatalog}
+                        onPick={(svc) => applyServiceToEditLine(li.id, svc)}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Selecting a part or service fills description and rate. You can still edit them.
+                    </p>
                   </div>
                 </div>
               ))}
