@@ -42,6 +42,7 @@ import {
   JOB_CARD_STATUS_LABELS,
 } from "@/components/job-cards/job-card-workflow-chrome";
 import { JobCardHeaderCard } from "@/components/job-cards/job-card-header-card";
+import { JobCardWhatsAppNotifyDialog } from "@/components/job-cards/job-card-whatsapp-notify-dialog";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { JobCardNotesPanel } from "@/components/job-cards/job-card-notes-panel";
 import { JobCardServiceChecklist } from "@/components/job-cards/job-card-service-checklist";
@@ -90,7 +91,6 @@ import { useMembershipStore } from "@/store/membership-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
-import { useNotificationStore } from "@/store/notification-store";
 import { JobCardPartsPicker,
   buildJobCardPartItems,
   jobCardPartsSubtotal,
@@ -105,12 +105,6 @@ import {
 import { ApiError } from "@/lib/api-client";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
-import { buildJobCardCustomerWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
-import {
-  sendCustomerWhatsApp,
-  openWhatsAppComposer,
-  isWhatsAppNotConfiguredError,
-} from "@/lib/whatsapp-send";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import {
   notifyHighEndAdvanceRecordedWhatsApp,
@@ -289,6 +283,7 @@ export default function JobCardDetailPage() {
   const [multiCamStreamPromise, setMultiCamStreamPromise] = useState<Promise<MediaStream> | null>(
     null
   );
+  const [whatsAppNotifyOpen, setWhatsAppNotifyOpen] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
   const [qualityCheckRequiredOpen, setQualityCheckRequiredOpen] = useState(false);
   const [quickAssignMechanicId, setQuickAssignMechanicId] = useState("");
@@ -1293,40 +1288,6 @@ export default function JobCardDetailPage() {
     });
   };
 
-  const handleWhatsAppNotify = async () => {
-    if (!jobCard) return;
-    const message = buildJobCardCustomerWhatsAppMessage(jobCard);
-    const phone = jobCard.customerPhone;
-    const pushStaffNotification = (channel: "api" | "composer") => {
-      useNotificationStore.getState().addNotification({
-        type: "whatsapp_sent",
-        title: channel === "api" ? "WhatsApp sent to customer" : "WhatsApp composer opened",
-        message:
-          channel === "api"
-            ? `${jobCard.jobNumber} — message sent to ${phone}.`
-            : `${jobCard.jobNumber} — finish sending in WhatsApp (${phone}); API sender not configured.`,
-        href: `/job-cards/${jobCard.id}`,
-        branchId: jobCard.branchId,
-      });
-    };
-    try {
-      await sendCustomerWhatsApp(phone, message);
-      toast.success("WhatsApp sent", { description: `Delivered to ${phone}` });
-      pushStaffNotification("api");
-    } catch (e) {
-      if (isWhatsAppNotConfiguredError(e)) {
-        openWhatsAppComposer(phone, message);
-        toast.info("WhatsApp opened", {
-          description: "Server WhatsApp is not configured — complete the message in the WhatsApp app.",
-        });
-        pushStaffNotification("composer");
-        return;
-      }
-      const desc = e instanceof ApiError ? e.message : "Could not send WhatsApp";
-      toast.error("WhatsApp failed", { description: desc });
-    }
-  };
-
   const handleGenerateInvoice = async () => {
     if (!jobCard) return;
 
@@ -1504,7 +1465,7 @@ export default function JobCardDetailPage() {
         currentStatus={currentStatus}
         createdAt={jobCard.createdAt}
         customerName={jobCard.customerName}
-        onNotifyCustomer={() => void handleWhatsAppNotify()}
+        onNotifyCustomer={() => setWhatsAppNotifyOpen(true)}
         notifyDisabled={!jobCard.customerPhone?.trim()}
         notifyDisabledTitle="Customer phone number is required"
       />
@@ -1637,7 +1598,7 @@ export default function JobCardDetailPage() {
                       size="icon"
                       className="h-8 w-8"
                       type="button"
-                      onClick={() => void handleWhatsAppNotify()}
+                      onClick={() => setWhatsAppNotifyOpen(true)}
                       disabled={!jobCard.customerPhone?.trim()}
                       title={
                         jobCard.customerPhone?.trim()
@@ -3270,6 +3231,13 @@ export default function JobCardDetailPage() {
         onComplete={async (files) => {
           await appendInspectionPhotosFromFiles(files, multiCamType);
         }}
+      />
+      <JobCardWhatsAppNotifyDialog
+        open={whatsAppNotifyOpen}
+        onOpenChange={setWhatsAppNotifyOpen}
+        jobCard={jobCard}
+        businessName={businessName}
+        invoiceNumber={invoiceForJob?.invoiceNumber}
       />
     </div>
   );
