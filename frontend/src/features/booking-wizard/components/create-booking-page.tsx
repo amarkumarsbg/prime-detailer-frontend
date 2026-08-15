@@ -9,6 +9,11 @@ import {
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
+import {
+  MultiPhotoCameraCapture,
+  canUseLiveCameraPreview,
+  requestCameraStream,
+} from "@/components/job-cards/multi-photo-camera-capture";
 import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { getNextBookingId } from "@/lib/appointment-ids";
 import {
@@ -446,7 +451,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInPhotoError, setCheckInPhotoError] = useState(false);
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const checkInFileRef = useRef<HTMLInputElement>(null);
-  const checkInCameraRef = useRef<HTMLInputElement>(null);
+  const [checkInMultiCamOpen, setCheckInMultiCamOpen] = useState(false);
+  const [checkInMultiCamStreamPromise, setCheckInMultiCamStreamPromise] =
+    useState<Promise<MediaStream> | null>(null);
   const checkInJobIdRef = useRef<string | null>(null);
   const isSubmittingJobRef = useRef(false);
 
@@ -1846,10 +1853,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
   };
 
-  const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files?.length) return;
-    for (const file of Array.from(files)) {
+  const appendCheckInFiles = (files: FileList | File[] | null) => {
+    const list = !files ? [] : Array.isArray(files) ? files : Array.from(files);
+    if (!list.length) return;
+    for (const file of list) {
       if (!file.type.startsWith("image/")) {
         toast.error("Choose image files only.");
         continue;
@@ -1872,7 +1879,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
     setCheckInPhotoError(false);
     if (checkInFileRef.current) checkInFileRef.current.value = "";
-    if (checkInCameraRef.current) checkInCameraRef.current.value = "";
+  };
+
+  const handleCheckInFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    appendCheckInFiles(e.target.files);
   };
 
   const removeCheckInPhoto = (photoId: string) => {
@@ -5206,14 +5216,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   Add at least one photo of the vehicle. You can upload multiple images.
                 </p>
                 <input
-                  ref={checkInCameraRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="sr-only"
-                  onChange={(e) => handleCheckInFiles(e)}
-                />
-                <input
                   ref={checkInFileRef}
                   type="file"
                   accept="image/*"
@@ -5245,9 +5247,22 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button type="button" size="sm" onClick={() => checkInCameraRef.current?.click()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (canUseLiveCameraPreview()) {
+                        const promise = requestCameraStream();
+                        void promise.catch(() => undefined);
+                        setCheckInMultiCamStreamPromise(promise);
+                      } else {
+                        setCheckInMultiCamStreamPromise(null);
+                      }
+                      setCheckInMultiCamOpen(true);
+                    }}
+                  >
                     <Camera className="w-4 h-4 mr-2" />
-                    Take Photo
+                    Take Photos
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => checkInFileRef.current?.click()}>
                     <Upload className="w-4 h-4 mr-2" />
@@ -5295,6 +5310,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           </DialogContent>
         </Dialog>
       )}
+
+      <MultiPhotoCameraCapture
+        open={checkInMultiCamOpen}
+        onOpenChange={(open) => {
+          setCheckInMultiCamOpen(open);
+          if (!open) setCheckInMultiCamStreamPromise(null);
+        }}
+        streamPromise={checkInMultiCamStreamPromise}
+        title="Take Before Photos"
+        onComplete={(files) => {
+          appendCheckInFiles(files);
+        }}
+      />
 
       <CustomerCreditCheckDialog
         open={customerCreditDialogOpen && isJobCard}

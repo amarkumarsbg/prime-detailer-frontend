@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, User } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +14,10 @@ export interface JobCardHeaderCardProps {
   currentStatus: JobCardStatus;
   createdAt: string;
   customerName: string;
+  /** When set, shows a full-width Notify Customer (WhatsApp) action under the header meta. */
+  onNotifyCustomer?: () => void;
+  notifyDisabled?: boolean;
+  notifyDisabledTitle?: string;
 }
 
 export function JobCardHeaderCard({
@@ -20,6 +25,9 @@ export function JobCardHeaderCard({
   currentStatus,
   createdAt,
   customerName,
+  onNotifyCustomer,
+  notifyDisabled = false,
+  notifyDisabledTitle,
 }: JobCardHeaderCardProps) {
   return (
     <Card className="overflow-hidden border-border/80 shadow-sm">
@@ -55,6 +63,19 @@ export function JobCardHeaderCard({
             <span className="font-medium text-foreground truncate">{customerName}</span>
           </div>
         </div>
+        {onNotifyCustomer ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 h-11 w-full gap-2 border-border/80 bg-muted/30 font-medium text-foreground hover:bg-muted/50"
+            onClick={onNotifyCustomer}
+            disabled={notifyDisabled}
+            title={notifyDisabled ? notifyDisabledTitle : "Notify customer on WhatsApp"}
+          >
+            <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
+            Notify Customer
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );

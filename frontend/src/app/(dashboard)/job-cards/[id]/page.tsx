@@ -42,6 +42,7 @@ import {
   JOB_CARD_STATUS_LABELS,
 } from "@/components/job-cards/job-card-workflow-chrome";
 import { JobCardHeaderCard } from "@/components/job-cards/job-card-header-card";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { JobCardNotesPanel } from "@/components/job-cards/job-card-notes-panel";
 import { JobCardServiceChecklist } from "@/components/job-cards/job-card-service-checklist";
 import { useJobTimer } from "@/hooks/use-job-timer";
@@ -90,13 +91,17 @@ import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useNotificationStore } from "@/store/notification-store";
-import {
-  JobCardPartsPicker,
+import { JobCardPartsPicker,
   buildJobCardPartItems,
   jobCardPartsSubtotal,
   selectedLinesFromJobParts,
   type SelectedPartLine,
 } from "@/components/job-cards/job-card-parts-picker";
+import {
+  MultiPhotoCameraCapture,
+  canUseLiveCameraPreview,
+  requestCameraStream,
+} from "@/components/job-cards/multi-photo-camera-capture";
 import { ApiError } from "@/lib/api-client";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
@@ -277,10 +282,13 @@ export default function JobCardDetailPage() {
   const [showQuickAssignDialog, setShowQuickAssignDialog] = useState(false);
   const [beforePhotoRequiredOpen, setBeforePhotoRequiredOpen] = useState(false);
   const beforePhotoModalInputRef = useRef<HTMLInputElement>(null);
-  const beforePhotoModalCameraRef = useRef<HTMLInputElement>(null);
   const [afterPhotoRequiredOpen, setAfterPhotoRequiredOpen] = useState(false);
   const afterPhotoModalInputRef = useRef<HTMLInputElement>(null);
-  const afterPhotoModalCameraRef = useRef<HTMLInputElement>(null);
+  const [multiCamOpen, setMultiCamOpen] = useState(false);
+  const [multiCamType, setMultiCamType] = useState<"BEFORE" | "AFTER">("BEFORE");
+  const [multiCamStreamPromise, setMultiCamStreamPromise] = useState<Promise<MediaStream> | null>(
+    null
+  );
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
   const [qualityCheckRequiredOpen, setQualityCheckRequiredOpen] = useState(false);
   const [quickAssignMechanicId, setQuickAssignMechanicId] = useState("");
@@ -578,7 +586,19 @@ export default function JobCardDetailPage() {
     return "BEFORE";
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const photoTabCameraInputRef = useRef<HTMLInputElement>(null);
+
+  const openMultiCam = useCallback((type: "BEFORE" | "AFTER") => {
+    setMultiCamType(type);
+    // Live preview only on HTTPS; on HTTP LAN we use native capture (no getUserMedia throw).
+    if (canUseLiveCameraPreview()) {
+      const promise = requestCameraStream();
+      void promise.catch(() => undefined);
+      setMultiCamStreamPromise(promise);
+    } else {
+      setMultiCamStreamPromise(null);
+    }
+    setMultiCamOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!jobCard || jobCard.id !== id) return;
@@ -643,8 +663,9 @@ export default function JobCardDetailPage() {
   }, [photoTab, canCompare]);
 
   const appendInspectionPhotosFromFiles = useCallback(
-    async (files: FileList | null, type: "BEFORE" | "AFTER"): Promise<boolean> => {
-      if (!files || files.length === 0) return false;
+    async (files: FileList | File[] | null, type: "BEFORE" | "AFTER"): Promise<boolean> => {
+      const fileList = !files ? [] : Array.isArray(files) ? files : Array.from(files);
+      if (fileList.length === 0) return false;
       if (!jobCard) return false;
       if (type === "BEFORE" && !canUploadBefore) {
         toast.error("Before photos can only be uploaded during inspection / in service");
@@ -661,7 +682,7 @@ export default function JobCardDetailPage() {
       const added: InspectionPhoto[] = [];
 
       try {
-        for (const file of Array.from(files)) {
+        for (const file of fileList) {
           const photoId = `ph-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
           const url = await uploadJobInspectionPhoto(jobCard.id, type, file, photoId);
           const rawCaption = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
@@ -692,7 +713,7 @@ export default function JobCardDetailPage() {
         return false;
       }
 
-      toast.success(`${files.length} photo${files.length > 1 ? "s" : ""} saved`);
+      toast.success(`${fileList.length} photo${fileList.length > 1 ? "s" : ""} saved`);
       return true;
     },
     [jobCard, updateJobCard, canUploadBefore, canUploadAfter]
@@ -705,15 +726,6 @@ export default function JobCardDetailPage() {
     }
     await appendInspectionPhotosFromFiles(e.target.files, photoTab);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handlePhotoTabCameraFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (photoTab === "COMPARE") {
-      if (photoTabCameraInputRef.current) photoTabCameraInputRef.current.value = "";
-      return;
-    }
-    await appendInspectionPhotosFromFiles(e.target.files, photoTab);
-    if (photoTabCameraInputRef.current) photoTabCameraInputRef.current.value = "";
   };
 
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
@@ -1492,6 +1504,9 @@ export default function JobCardDetailPage() {
         currentStatus={currentStatus}
         createdAt={jobCard.createdAt}
         customerName={jobCard.customerName}
+        onNotifyCustomer={() => void handleWhatsAppNotify()}
+        notifyDisabled={!jobCard.customerPhone?.trim()}
+        notifyDisabledTitle="Customer phone number is required"
       />
 
       <Tabs value={detailTab} onValueChange={setDetailTab} className="space-y-0">
@@ -1622,10 +1637,15 @@ export default function JobCardDetailPage() {
                       size="icon"
                       className="h-8 w-8"
                       type="button"
-                      onClick={handleWhatsAppNotify}
-                      title="WhatsApp customer"
+                      onClick={() => void handleWhatsAppNotify()}
+                      disabled={!jobCard.customerPhone?.trim()}
+                      title={
+                        jobCard.customerPhone?.trim()
+                          ? "Notify customer on WhatsApp"
+                          : "Customer phone number is required"
+                      }
                     >
-                      <MessageCircle className="h-4 w-4" />
+                      <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Open customer">
                       <Link href={`/customers/${jobCard.customerId}`}>
@@ -2390,16 +2410,7 @@ export default function JobCardDetailPage() {
             <CompareView photos={displayPhotos} />
           ) : (
             <>
-              {/* Inputs live outside the grid so sr-only positioning does not fight grid layout */}
-              <input
-                id="job-card-photo-tab-camera"
-                ref={photoTabCameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                onChange={handlePhotoTabCameraFiles}
-              />
+              {/* Gallery upload input; camera uses in-app multi-capture sheet */}
               <input
                 id="job-card-photo-tab-upload"
                 ref={fileInputRef}
@@ -2441,14 +2452,17 @@ export default function JobCardDetailPage() {
                   (photoTab === "AFTER" && canUploadAfter)) && (
                     <div className="col-span-full sm:col-span-2 lg:col-span-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto w-full">
-                        <label
-                          htmlFor="job-card-photo-tab-camera"
+                        <button
+                          type="button"
+                          onClick={() => openMultiCam(photoTab === "AFTER" ? "AFTER" : "BEFORE")}
                           className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[180px] sm:min-h-[220px] hover:border-primary/50 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-primary cursor-pointer"
                         >
                           <Camera className="w-7 h-7 mb-2" />
-                          <span className="text-sm font-medium">Take photo</span>
-                          <span className="text-xs mt-1 text-center px-2">Opens camera on your phone</span>
-                        </label>
+                          <span className="text-sm font-medium">Take photos</span>
+                          <span className="text-xs mt-1 text-center px-2">
+                            Capture multiple shots in one session
+                          </span>
+                        </button>
                         <label
                           htmlFor="job-card-photo-tab-upload"
                           className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[180px] sm:min-h-[220px] hover:border-primary/50 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-primary cursor-pointer"
@@ -2693,7 +2707,6 @@ export default function JobCardDetailPage() {
           setBeforePhotoRequiredOpen(open);
           if (!open) {
             if (beforePhotoModalInputRef.current) beforePhotoModalInputRef.current.value = "";
-            if (beforePhotoModalCameraRef.current) beforePhotoModalCameraRef.current.value = "";
           }
         }}
       >
@@ -2713,25 +2726,17 @@ export default function JobCardDetailPage() {
             <div className="grid grid-cols-2 gap-2">
               {canUploadBefore ? (
                 <>
-                  <input
-                    id="before-modal-camera"
-                    ref={beforePhotoModalCameraRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="sr-only"
-                    onChange={async (e) => {
-                      await appendInspectionPhotosFromFiles(e.target.files, "BEFORE");
-                      if (beforePhotoModalCameraRef.current) beforePhotoModalCameraRef.current.value = "";
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBeforePhotoRequiredOpen(false);
+                      openMultiCam("BEFORE");
                     }}
-                  />
-                  <label
-                    htmlFor="before-modal-camera"
                     className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
                   >
                     <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photo</span>
-                  </label>
+                    <span className="text-xs font-medium text-center">Take photos</span>
+                  </button>
                   <input
                     id="before-modal-upload"
                     ref={beforePhotoModalInputRef}
@@ -2756,7 +2761,7 @@ export default function JobCardDetailPage() {
                 <>
                   <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
                     <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photo</span>
+                    <span className="text-xs font-medium text-center">Take photos</span>
                   </div>
                   <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
                     <Upload className="w-7 h-7 mb-2" />
@@ -2826,7 +2831,6 @@ export default function JobCardDetailPage() {
           setAfterPhotoRequiredOpen(open);
           if (!open) {
             if (afterPhotoModalInputRef.current) afterPhotoModalInputRef.current.value = "";
-            if (afterPhotoModalCameraRef.current) afterPhotoModalCameraRef.current.value = "";
           }
         }}
       >
@@ -2842,25 +2846,17 @@ export default function JobCardDetailPage() {
             <div className="grid grid-cols-2 gap-2">
               {canUploadAfter ? (
                 <>
-                  <input
-                    id="after-modal-camera"
-                    ref={afterPhotoModalCameraRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="sr-only"
-                    onChange={async (e) => {
-                      await appendInspectionPhotosFromFiles(e.target.files, "AFTER");
-                      if (afterPhotoModalCameraRef.current) afterPhotoModalCameraRef.current.value = "";
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAfterPhotoRequiredOpen(false);
+                      openMultiCam("AFTER");
                     }}
-                  />
-                  <label
-                    htmlFor="after-modal-camera"
                     className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
                   >
                     <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photo</span>
-                  </label>
+                    <span className="text-xs font-medium text-center">Take photos</span>
+                  </button>
                   <input
                     id="after-modal-upload"
                     ref={afterPhotoModalInputRef}
@@ -2885,7 +2881,7 @@ export default function JobCardDetailPage() {
                 <>
                   <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
                     <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photo</span>
+                    <span className="text-xs font-medium text-center">Take photos</span>
                   </div>
                   <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
                     <Upload className="w-7 h-7 mb-2" />
@@ -3261,6 +3257,18 @@ export default function JobCardDetailPage() {
         onSaved={(next) => {
           setServiceItems(next.services);
           setNotes(next.notes ?? "");
+        }}
+      />
+      <MultiPhotoCameraCapture
+        open={multiCamOpen}
+        onOpenChange={(open) => {
+          setMultiCamOpen(open);
+          if (!open) setMultiCamStreamPromise(null);
+        }}
+        streamPromise={multiCamStreamPromise}
+        title={multiCamType === "AFTER" ? "Take After Photos" : "Take Before Photos"}
+        onComplete={async (files) => {
+          await appendInspectionPhotosFromFiles(files, multiCamType);
         }}
       />
     </div>
