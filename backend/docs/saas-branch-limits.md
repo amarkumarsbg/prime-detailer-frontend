@@ -1,34 +1,58 @@
-# SaaS branch limits — support runbook
+# SaaS branch limits & platform owner — support runbook
 
-## Who can change commercial limits
+## Two logins (do not mix)
 
-- **Platform owner** (`PLATFORM_OWNER` role): sign in and open `/saas-admin/organizations`.
-- **Automation**: `PATCH /api/platform/organizations/:orgId/subscription` with header `X-Platform-Admin-Key: $PLATFORM_ADMIN_API_KEY`.
-- Studio `SUPER_ADMIN` / `ADMIN` **cannot** raise branch limits (Settings → Plan & billing is read-only).
+| Role | Who | Access |
+|------|-----|--------|
+| `PLATFORM_OWNER` | **You** (software vendor) | `/saas-admin/*` — all customers, plans, branch limits, notes |
+| `SUPER_ADMIN` | Customer studio owner | Normal app only — their organization |
 
-## Seeded platform owner (local)
+Customers must never receive the platform login.
 
-Defaults (override with env):
+## Ensure your platform login (production)
 
-- Email: `platform@prime.local`
-- Password: `ChangeMe!PlatformOwner1`
+Env on the API service (Render → Environment):
 
-Env keys: `PLATFORM_OWNER_EMAIL`, `PLATFORM_OWNER_PASSWORD`, `PLATFORM_ADMIN_API_KEY`.
+```
+PLATFORM_OWNER_EMAIL=you@yourcompany.com
+PLATFORM_OWNER_PASSWORD=use-a-strong-secret
+# optional:
+# PLATFORM_OWNER_NAME=Platform Owner
+# PLATFORM_OWNER_PHONE=+919876543210
+# PLATFORM_ADMIN_API_KEY=long-random-key-for-CLI
+```
+
+Then in **Render Shell** (API service):
+
+```bash
+cd backend   # or the folder that contains package.json
+npm run saas:ensure-platform-owner
+```
+
+This upserts only the platform user. It does **not** re-seed or wipe customer data.
+
+Local defaults (if env unset): `platform@prime.local` / `ChangeMe!PlatformOwner1`.
 
 ## Raise a studio’s branch limit
 
-1. Customer hits “Branch limit reached” → Contact Us.
-2. Sign in as platform owner → **Organizations** → open the studio.
-3. Set `maxBranchesOverride` (e.g. `3`) and/or change plan code → **Save**.
-4. Ask the studio user to refresh Locations / Settings (or re-login). Entitlement comes from bootstrap / `GET /api/organization/subscription`.
+1. Customer hits “Branch limit reached” → Contact support.
+2. Sign in as platform owner → `/saas-admin/organizations` → open the studio.
+3. Set `maxBranchesOverride` (e.g. `2`) and/or change plan → **Save**.
+4. Ask the studio to refresh Locations / re-login.
 
-## CLI (optional)
+## Automation CLI (optional)
 
 ```bash
 cd backend
 PLATFORM_ADMIN_API_KEY=… npx tsx scripts/saas-set-branch-limit.ts --org org-default --max 3
 ```
 
+## Force one branch (testing only)
+
+```bash
+CONFIRM=YES npm run saas:force-one-branch -- --keep br-main
+```
+
 ## Demo seed note
 
-Seed sets **Starter `maxBranches = 1`** and keeps only the primary seed location (`br-main` / Delhi). Extra locations in `seed-data.json` are remapped onto that branch so the demo matches a real Starter plan.
+`npm run db:seed` sets Starter `maxBranches = 1`, keeps primary branch, and creates platform owner from env. Prefer `saas:ensure-platform-owner` on production instead of full seed.

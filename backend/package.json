@@ -22,6 +22,8 @@
     "grant:job-card-pricing": "tsx scripts/grant-job-card-pricing.ts",
     "test:plan-catalog": "tsx --test scripts/plan-catalog.test.ts",
     "saas:set-branch-limit": "tsx scripts/saas-set-branch-limit.ts",
+    "saas:ensure-platform-owner": "tsx scripts/ensure-platform-owner.ts",
+    "saas:force-one-branch": "tsx scripts/saas-force-one-branch.ts",
     "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
     "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },
