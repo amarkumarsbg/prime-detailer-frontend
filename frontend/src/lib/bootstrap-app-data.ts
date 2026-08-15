@@ -1,5 +1,6 @@
 import { apiGet } from "./api-client";
 import { reconcileCurrentBranch } from "./branch-selection";
+import { normalizePartUnits } from "@/lib/inventory/multi-unit";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   ActivityLog,
@@ -161,7 +162,7 @@ export async function bootstrapAppData(): Promise<void> {
   useWalletStore.setState({ transactions: (c.walletTransactions as WalletTransaction[]) ?? [] });
   useServiceCatalogStore.setState({ catalog: (c.serviceCatalog as ServiceCatalogItem[]) ?? [] });
   useInventoryStore.setState({
-    parts: (c.parts as Part[]) ?? [],
+    parts: ((c.parts as Part[]) ?? []).map(normalizePartUnits),
     stockMovements: (c.stockMovements as StockMovement[]) ?? [],
     productPurchases: (c.productPurchases as ProductPurchase[]) ?? [],
   });

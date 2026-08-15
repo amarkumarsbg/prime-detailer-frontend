@@ -16,6 +16,59 @@ export function hasDualUnitPart(part: Part): boolean {
   return !unitsMatch(sec, pri);
 }
 
+const PACK_UNIT_RE = /^(box|pack|carton|case)$/i;
+const COUNT_UNIT_RE = /^(pcs|pc|piece|pieces|ea|each|unit|units)$/i;
+
+function titleUnit(raw: string): string {
+  const t = raw.trim();
+  if (!t) return t;
+  if (COUNT_UNIT_RE.test(t)) return "PCS";
+  if (/^box$/i.test(t)) return "Box";
+  if (/^pack$/i.test(t)) return "Pack";
+  if (/^carton$/i.test(t)) return "Carton";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/**
+ * Repair inverted dual-unit seed/legacy rows where primary was PCS and secondary was Box
+ * (model is 1 primary pack = N secondary count units).
+ */
+export function normalizePartUnits(part: Part): Part {
+  if (part.stockQuantityMl != null) {
+    return {
+      ...part,
+      primaryUnit: "Litre",
+      secondaryUnit: "ML",
+      conversionFactor: 1000,
+    };
+  }
+
+  const pri = part.primaryUnit?.trim() ?? "";
+  const sec = part.secondaryUnit?.trim() ?? "";
+  const cf = part.conversionFactor;
+  if (
+    Number.isFinite(cf) &&
+    cf > 1 &&
+    COUNT_UNIT_RE.test(pri) &&
+    PACK_UNIT_RE.test(sec)
+  ) {
+    const secondaryStock = part.stockQuantitySecondary ?? part.quantity;
+    return initializeDualUnitStock({
+      ...part,
+      primaryUnit: titleUnit(sec),
+      secondaryUnit: "PCS",
+      conversionFactor: cf,
+      stockQuantitySecondary: secondaryStock,
+      quantity: Math.floor(secondaryStock / cf),
+    });
+  }
+
+  if (hasDualUnitPart(part) && part.stockQuantitySecondary == null) {
+    return initializeDualUnitStock(part);
+  }
+  return part;
+}
+
 export function getSelectableUnits(part: Part): string[] {
   if (isMlTrackedPart(part)) {
     return [part.primaryUnit || "Litre", part.secondaryUnit || "ML"];

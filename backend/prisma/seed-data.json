@@ -520,7 +520,7 @@
         "incentivePercent": 10,
         "incentiveAmount": 2772,
         "termsAndConditions": "Standard workshop T&C apply.",
-        "notes": "Party demo — HI TECH",
+        "notes": "Party demo \u2014 HI TECH",
         "createdBy": "usr-admin",
         "createdAt": "2025-07-13T09:00:00.000Z",
         "updatedAt": "2025-07-16T11:00:00.000Z"
@@ -1622,7 +1622,7 @@
       {
         "id": "srv-a06",
         "name": "Clay bar treatment",
-        "description": "Seed add-on 6 — paint decontamination clay bar pass.",
+        "description": "Seed add-on 6 \u2014 paint decontamination clay bar pass.",
         "defaultPrice": 749,
         "segmentPricing": {
           "HATCHBACK": 749,
@@ -1650,24 +1650,25 @@
         "name": "Microfiber pack",
         "sku": "SKU-SEED-101",
         "category": "Detailing",
-        "quantity": 25,
-        "primaryUnit": "pcs",
-        "secondaryUnit": "box",
+        "quantity": 2,
+        "primaryUnit": "Box",
+        "secondaryUnit": "PCS",
         "conversionFactor": 12,
         "unitPrice": 175,
         "reorderLevel": 5,
         "supplier": "Supplier 1",
-        "lastRestocked": "2026-04-15"
+        "lastRestocked": "2026-04-15",
+        "stockQuantitySecondary": 25
       },
       {
         "id": "part-002",
         "name": "Engine oil 5W30",
         "sku": "SKU-SEED-102",
         "category": "Lubricants",
-        "quantity": 30,
-        "primaryUnit": "pcs",
-        "secondaryUnit": "box",
-        "conversionFactor": 12,
+        "quantity": 48,
+        "primaryUnit": "Litre",
+        "secondaryUnit": "ML",
+        "conversionFactor": 1000,
         "unitPrice": 200,
         "reorderLevel": 5,
         "supplier": "Supplier 2",
@@ -1680,42 +1681,45 @@
         "name": "Cabin filter",
         "sku": "SKU-SEED-103",
         "category": "Filters",
-        "quantity": 35,
-        "primaryUnit": "pcs",
-        "secondaryUnit": "box",
+        "quantity": 2,
+        "primaryUnit": "Box",
+        "secondaryUnit": "PCS",
         "conversionFactor": 12,
         "unitPrice": 225,
         "reorderLevel": 5,
         "supplier": "Supplier 3",
-        "lastRestocked": "2026-04-13"
+        "lastRestocked": "2026-04-13",
+        "stockQuantitySecondary": 35
       },
       {
         "id": "part-004",
         "name": "Polish compound",
         "sku": "SKU-SEED-104",
         "category": "Body",
-        "quantity": 40,
-        "primaryUnit": "pcs",
-        "secondaryUnit": "box",
+        "quantity": 3,
+        "primaryUnit": "Box",
+        "secondaryUnit": "PCS",
         "conversionFactor": 12,
         "unitPrice": 250,
         "reorderLevel": 5,
         "supplier": "Supplier 4",
-        "lastRestocked": "2026-04-12"
+        "lastRestocked": "2026-04-12",
+        "stockQuantitySecondary": 40
       },
       {
         "id": "part-005",
         "name": "Wiring harness",
         "sku": "SKU-SEED-105",
         "category": "Electrical",
-        "quantity": 45,
-        "primaryUnit": "pcs",
-        "secondaryUnit": "box",
+        "quantity": 3,
+        "primaryUnit": "Box",
+        "secondaryUnit": "PCS",
         "conversionFactor": 12,
         "unitPrice": 275,
         "reorderLevel": 5,
         "supplier": "Supplier 5",
-        "lastRestocked": "2026-04-11"
+        "lastRestocked": "2026-04-11",
+        "stockQuantitySecondary": 45
       }
     ],
     "stockMovements": [
@@ -1939,7 +1943,7 @@
       {
         "id": "notif-001",
         "type": "job_created",
-        "title": "Delhi — new job card",
+        "title": "Delhi \u2014 new job card",
         "message": "JC-2026-101 received at Delhi.",
         "read": false,
         "href": "/job-cards/jc-001",
@@ -1949,7 +1953,7 @@
       {
         "id": "notif-002",
         "type": "job_status",
-        "title": "Noida — status update",
+        "title": "Noida \u2014 status update",
         "message": "JC-2026-102 moved to in progress at Noida.",
         "read": false,
         "href": "/job-cards/jc-002",
@@ -1959,7 +1963,7 @@
       {
         "id": "notif-003",
         "type": "payment_received",
-        "title": "Delhi — payment received",
+        "title": "Delhi \u2014 payment received",
         "message": "INV-2026-301 paid in full (Delhi).",
         "read": false,
         "href": "/billing/inv-001",
@@ -1969,7 +1973,7 @@
       {
         "id": "notif-004",
         "type": "reminder",
-        "title": "Noida — service reminder",
+        "title": "Noida \u2014 service reminder",
         "message": "Follow-up due for a Noida customer vehicle.",
         "read": false,
         "branchId": "br-002",
@@ -1978,7 +1982,7 @@
       {
         "id": "notif-005",
         "type": "customer_new",
-        "title": "Delhi — new customer",
+        "title": "Delhi \u2014 new customer",
         "message": "Walk-in registered at Delhi branch.",
         "read": true,
         "branchId": "br-main",
@@ -2608,8 +2612,7 @@
           "updatedAt": "2026-04-08T10:00:00.000Z"
         }
       ],
-      "salaryAdvanceRecoveries": [
-      ]
+      "salaryAdvanceRecoveries": []
     },
     "membership": {
       "packages": [

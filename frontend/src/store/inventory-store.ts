@@ -8,6 +8,7 @@ import {
   formatAvailableStock,
   getCanonicalStockSecondary,
   initializeDualUnitStock,
+  normalizePartUnits,
 } from "@/lib/inventory/multi-unit";
 import { isMlTrackedPart, litresToMl } from "@/lib/inventory-units";
 import { deleteCollectionDocument, postCollectionSnapshot } from "@/lib/collection-sync";
@@ -18,6 +19,7 @@ interface InventoryStore {
   stockMovements: StockMovement[];
   productPurchases: ProductPurchase[];
   addPart: (part: Part) => void;
+  updatePart: (partId: string, patch: Partial<Part>) => void;
   removePart: (partId: string) => Promise<void>;
   addPurchase: (input: Omit<ProductPurchase, "id">) => void;
   recordStockAdjustment: (input: {
@@ -122,7 +124,17 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
 
   addPart: (part) => {
     set((state) => ({
-      parts: [initializeDualUnitStock(part), ...state.parts],
+      parts: [normalizePartUnits(initializeDualUnitStock(part)), ...state.parts],
+    }));
+    persistInventorySnapshot(get);
+  },
+
+  updatePart: (partId, patch) => {
+    set((state) => ({
+      parts: state.parts.map((p) => {
+        if (p.id !== partId) return p;
+        return normalizePartUnits(initializeDualUnitStock({ ...p, ...patch, id: partId }));
+      }),
     }));
     persistInventorySnapshot(get);
   },

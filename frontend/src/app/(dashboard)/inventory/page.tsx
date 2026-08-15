@@ -14,6 +14,7 @@ import {
   getStockStatus,
   isMlTrackedPart,
   litresToMl,
+  mlToLitres,
   partStockValueInr,
   stockStatusShortLabel,
 } from "@/lib/inventory-units";
@@ -46,6 +47,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import type { Part, PartCategory } from "@/types";
 
@@ -101,6 +103,7 @@ export default function InventoryPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const parts = useInventoryStore((s) => s.parts);
   const addPart = useInventoryStore((s) => s.addPart);
+  const updatePart = useInventoryStore((s) => s.updatePart);
   const removePart = useInventoryStore((s) => s.removePart);
 
   const [stockTableFilter, setStockTableFilter] = useState<StockTableFilter>("all");
@@ -133,7 +136,43 @@ export default function InventoryPage() {
     setAddPartSecondaryUnit("");
     setAddPartConversionRate("1");
     setAddPartSecondaryPrice("");
+    setEditingPartId(null);
   };
+
+  const openEditPart = useCallback((part: Part) => {
+    setEditingPartId(part.id);
+    setAddPartName(part.name);
+    setAddPartBrand(part.brand ?? "");
+    setAddPartSku(part.sku);
+    setAddPartCategory(part.category);
+    setAddPartUnit(part.primaryUnit || "Piece");
+    setAddPartBarcode(part.barcode ?? "");
+    setAddPartSupplier(part.supplier === "—" ? "" : part.supplier);
+    setAddPartPrice(String(part.unitPrice ?? ""));
+    setAddPartSecondaryPrice(
+      part.unitPriceSecondary != null ? String(part.unitPriceSecondary) : ""
+    );
+    if (isMlTrackedPart(part)) {
+      setAddPartUnit("Litre");
+      setAddPartSecondaryUnit("ML");
+      setAddPartConversionRate("1000");
+      setAddPartQty(String(mlToLitres(part.stockQuantityMl ?? 0)));
+      setAddPartReorder(
+        part.reorderLevelMl != null ? String(mlToLitres(part.reorderLevelMl)) : ""
+      );
+    } else {
+      const sec = part.secondaryUnit?.trim() ?? "";
+      const dual =
+        !!sec &&
+        sec.toLowerCase() !== (part.primaryUnit || "").toLowerCase() &&
+        part.conversionFactor > 1;
+      setAddPartSecondaryUnit(dual ? sec : "");
+      setAddPartConversionRate(dual ? String(part.conversionFactor) : "1");
+      setAddPartQty(String(part.quantity ?? 0));
+      setAddPartReorder(String(part.reorderLevel ?? ""));
+    }
+    setAddDialogOpen(true);
+  }, []);
 
   const partsForTable = useMemo(() => {
     let list = parts;
@@ -153,6 +192,7 @@ export default function InventoryPage() {
   const recordStockAdjustment = useInventoryStore((s) => s.recordStockAdjustment);
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editingPartId, setEditingPartId] = useState<string | null>(null);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
 
@@ -323,25 +363,40 @@ export default function InventoryPage() {
     {
       key: "actions",
       label: "",
-      className: "w-12 text-right",
+      className: "w-[5.5rem] text-right",
       render: (item: Part) => (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-          aria-label={`Delete ${item.name}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            openDeletePart(item);
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="inline-flex items-center justify-end gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label={`Edit ${item.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEditPart(item);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            aria-label={`Delete ${item.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              openDeletePart(item);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ],
-    [openDeletePart]
+    [openDeletePart, openEditPart]
   );
 
   const recentMovements = [...stockMovements].sort(
@@ -426,12 +481,14 @@ export default function InventoryPage() {
       return;
     }
     const now = new Date().toISOString();
-    const id = `prt-${Date.now().toString(36)}`;
+    const existing = editingPartId ? parts.find((p) => p.id === editingPartId) : null;
+    const id = existing?.id ?? `prt-${Date.now().toString(36)}`;
 
+    let next: Part;
     if (addPartUnit === "Litre") {
       const reorderLitres =
         Number.isNaN(reorderInput) || reorderInput < 0 ? 0 : reorderInput;
-      addPart({
+      next = {
         id,
         name,
         brand,
@@ -444,10 +501,11 @@ export default function InventoryPage() {
         unitPrice: price,
         reorderLevel: 0,
         supplier,
+        barcode: addPartBarcode.trim() || undefined,
         stockQuantityMl: litresToMl(qtyInput),
         reorderLevelMl: litresToMl(reorderLitres),
-        lastRestocked: now,
-      });
+        lastRestocked: existing?.lastRestocked ?? now,
+      };
     } else {
       const qty = Math.round(qtyInput);
       const reorder =
@@ -476,7 +534,7 @@ export default function InventoryPage() {
           : conversionFactor > 1
             ? price / conversionFactor
             : undefined;
-      addPart({
+      next = {
         id,
         name,
         brand,
@@ -492,11 +550,17 @@ export default function InventoryPage() {
         stockQuantitySecondary: conversionFactor > 1 ? qty * conversionFactor : undefined,
         reorderLevel: reorder,
         supplier,
-        lastRestocked: now,
-      });
+        lastRestocked: existing?.lastRestocked ?? now,
+      };
     }
 
-    toast.success("Catalog item created");
+    if (existing) {
+      updatePart(existing.id, next);
+      toast.success("Catalog item updated");
+    } else {
+      addPart(next);
+      toast.success("Catalog item created");
+    }
     setAddDialogOpen(false);
     resetAddPartForm();
   };
@@ -648,7 +712,12 @@ export default function InventoryPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button>
+                <Button
+                  onClick={() => {
+                    setEditingPartId(null);
+                    resetAddPartForm();
+                  }}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   New item
                 </Button>
@@ -658,9 +727,11 @@ export default function InventoryPage() {
                 onOpenAutoFocus={(e) => e.preventDefault()}
               >
                 <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
-                  <DialogTitle>New catalog item</DialogTitle>
+                  <DialogTitle>{editingPartId ? "Edit catalog item" : "New catalog item"}</DialogTitle>
                   <DialogDescription>
-                    Choose Piece, Set, Kg, etc., or Litre for fluids — the table shows the same unit you pick.
+                    {editingPartId
+                      ? "Update units, conversion, pricing, and on-hand quantity. Primary = pack unit; secondary = count unit (e.g. 1 Box = 12 PCS)."
+                      : "Choose Piece, Set, Kg, etc., or Litre for fluids. For packs, set secondary unit + conversion (e.g. 1 Box = 12 PCS)."}
                   </DialogDescription>
                 </DialogHeader>
                 <form
@@ -779,7 +850,13 @@ export default function InventoryPage() {
                     )}
                     <div className="space-y-2">
                       <Label htmlFor="add-part-qty">
-                        {addPartUnit === "Litre" ? "Initial stock (litres)" : "Initial quantity"}
+                        {addPartUnit === "Litre"
+                          ? editingPartId
+                            ? "On-hand stock (litres)"
+                            : "Initial stock (litres)"
+                          : editingPartId
+                            ? `On-hand quantity (${addPartUnit})`
+                            : "Initial quantity"}
                       </Label>
                       <Input
                         id="add-part-qty"
@@ -857,7 +934,7 @@ export default function InventoryPage() {
                     >
                       Cancel
                     </Button>
-                    <Button type="submit">Create item</Button>
+                    <Button type="submit">{editingPartId ? "Save changes" : "Create item"}</Button>
                   </div>
                 </form>
               </DialogContent>
@@ -1007,16 +1084,27 @@ export default function InventoryPage() {
                   </div>
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
                     <span className="text-sm tabular-nums font-medium">{formatCurrency(item.unitPrice)}</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                      onClick={() => openDeletePart(item)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                      Delete
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditPart(item)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={() => openDeletePart(item)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
