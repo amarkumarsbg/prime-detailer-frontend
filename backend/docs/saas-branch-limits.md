@@ -9,29 +9,34 @@
 
 Customers must never receive the platform login.
 
-## Ensure your platform login (production)
+## Ensure your platform login (no Shell needed on Render free)
 
-Env on the API service (Render → Environment):
+1. In Render → API → **Environment**, set:
 
 ```
-PLATFORM_OWNER_EMAIL=you@yourcompany.com
-PLATFORM_OWNER_PASSWORD=use-a-strong-secret
-# optional:
-# PLATFORM_OWNER_NAME=Platform Owner
-# PLATFORM_OWNER_PHONE=+919876543210
-# PLATFORM_ADMIN_API_KEY=long-random-key-for-CLI
+PLATFORM_OWNER_EMAIL=platform@prime.local
+PLATFORM_OWNER_PASSWORD=ChangeMe!PlatformOwner1
 ```
 
-Then in **Render Shell** (API service):
+(Use your real email/password for production later.)
+
+2. **Redeploy** the API (Manual Deploy → Deploy latest commit that includes boot ensure).
+
+3. Check logs for: `[saas] PLATFORM_OWNER created: …` or `updated`
+
+4. Login on Vercel with that email/password → `/saas-admin/organizations`
+
+### Alternative without waiting for deploy
+
+From your laptop (copy `DATABASE_URL` from Render Environment):
 
 ```bash
-cd backend   # or the folder that contains package.json
-npm run saas:ensure-platform-owner
+cd backend
+DATABASE_URL="postgresql://…from-render…" npm run saas:ensure-platform-owner
 ```
 
-This upserts only the platform user. It does **not** re-seed or wipe customer data.
-
-Local defaults (if env unset): `platform@prime.local` / `ChangeMe!PlatformOwner1`.
+Disable boot ensure: `PLATFORM_OWNER_ENSURE_ON_BOOT=false`  
+Stop resetting password each boot: `PLATFORM_OWNER_SYNC_PASSWORD=false`
 
 ## Raise a studio’s branch limit
 

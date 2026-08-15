@@ -104,7 +104,16 @@ app.use("/api/platform", platformRouter);
 
 app.use(errorHandler);
 
+import { ensurePlatformOwner } from "./services/ensure-platform-owner.service.js";
+
 const isProduction = process.env.NODE_ENV === "production";
+
+function shouldEnsurePlatformOwnerOnBoot(): boolean {
+  const raw = process.env.PLATFORM_OWNER_ENSURE_ON_BOOT?.trim().toLowerCase();
+  if (raw === "false" || raw === "0" || raw === "no") return false;
+  /** Default on so free-tier Render (no Shell) can create vendor login from env alone. */
+  return true;
+}
 
 app.listen(env.PORT, () => {
   if (isProduction) {
@@ -114,25 +123,40 @@ app.listen(env.PORT, () => {
         "[email] RESEND_API_KEY is not set — forgot-password will return 503 until email is configured."
       );
     }
-    return;
+  } else {
+    console.log(`API listening on http://localhost:${env.PORT}`);
+    if (isTwilioSmsEnabled()) {
+      const sid = env.TWILIO_ACCOUNT_SID ?? "";
+      const viaApiKey = Boolean(env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET);
+      console.log(
+        `[twilio] SMS enabled (auth: ${viaApiKey ? "API key" : "Auth Token"}, Account SID …${sid.slice(-6)})`
+      );
+    }
+    if (isTwilioWhatsAppEnabled()) {
+      const wa = env.TWILIO_WHATSAPP_FROM ?? "";
+      console.log(`[twilio] WhatsApp outbound enabled (sender …${wa.slice(-8)})`);
+    }
+    if (isPasswordResetEmailConfigured()) {
+      console.log("[email] Password reset via Resend is enabled (RESEND_API_KEY set).");
+    } else {
+      console.log(
+        "[email] RESEND_API_KEY not set — forgot-password prints reset links in this terminal (dev only)."
+      );
+    }
   }
-  console.log(`API listening on http://localhost:${env.PORT}`);
-  if (isTwilioSmsEnabled()) {
-    const sid = env.TWILIO_ACCOUNT_SID ?? "";
-    const viaApiKey = Boolean(env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET);
-    console.log(
-      `[twilio] SMS enabled (auth: ${viaApiKey ? "API key" : "Auth Token"}, Account SID …${sid.slice(-6)})`
-    );
-  }
-  if (isTwilioWhatsAppEnabled()) {
-    const wa = env.TWILIO_WHATSAPP_FROM ?? "";
-    console.log(`[twilio] WhatsApp outbound enabled (sender …${wa.slice(-8)})`);
-  }
-  if (isPasswordResetEmailConfigured()) {
-    console.log("[email] Password reset via Resend is enabled (RESEND_API_KEY set).");
-  } else if (!isProduction) {
-    console.log(
-      "[email] RESEND_API_KEY not set — forgot-password prints reset links in this terminal (dev only)."
-    );
+
+  if (shouldEnsurePlatformOwnerOnBoot()) {
+    const syncPassword =
+      process.env.PLATFORM_OWNER_SYNC_PASSWORD?.trim().toLowerCase() !== "false";
+    void ensurePlatformOwner({ syncPassword })
+      .then((r) => {
+        console.info(`[saas] PLATFORM_OWNER ${r.action}: ${r.email}`);
+      })
+      .catch((err) => {
+        console.warn(
+          "[saas] Could not ensure PLATFORM_OWNER (org/branch/schema may be missing):",
+          err instanceof Error ? err.message : err
+        );
+      });
   }
 });
