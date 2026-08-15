@@ -87,10 +87,23 @@ export async function postUser(req: Request, res: Response, next: NextFunction) 
       forbidden(res, "Only Super Admin can assign user roles.");
       return;
     }
+    let organizationId = req.auth.organizationId;
+    if (!organizationId) {
+      const actor = await prisma.user.findUnique({
+        where: { id: req.auth.id },
+        select: { organizationId: true },
+      });
+      organizationId = actor?.organizationId;
+    }
+    if (!organizationId) {
+      forbidden(res, "Organization not found on user");
+      return;
+    }
     // Set default permissions to all keys if not specified
     const created = await createUserApi({
       ...body,
       role: body.role as UserRole,
+      organizationId,
       createdById: req.auth.id,
     });
 

@@ -9,6 +9,8 @@ import { sortCollectionPayloads } from "../lib/sort-collection-payloads.js";
 import { listBranchesApi } from "./branch-api.service.js";
 import { listUsersApi } from "./user-api.service.js";
 import { listVehiclesApi } from "./vehicle-api.service.js";
+import { getEntitlementForOrg } from "./organization-subscription.service.js";
+import type { AuthUser } from "../middleware/auth.js";
 
 const BOOTSTRAP_COLLECTION_NAMES = [
   ...ARRAY_JSON_COLLECTIONS,
@@ -42,8 +44,17 @@ function buildCollectionsFromRows(rows: AppJsonRowLite[]): Record<string, unknow
   return collections;
 }
 
-export async function getBootstrapPayload() {
-  const [customers, branches, users, vehicles, appRows] = await Promise.all([
+export async function getBootstrapPayload(auth?: AuthUser) {
+  let organizationId = auth?.organizationId;
+  if (!organizationId && auth?.id) {
+    const row = await prisma.user.findUnique({
+      where: { id: auth.id },
+      select: { organizationId: true },
+    });
+    organizationId = row?.organizationId;
+  }
+
+  const [customers, branches, users, vehicles, appRows, entitlement] = await Promise.all([
     prisma.customer.findMany({ orderBy: { createdAt: "desc" } }),
     listBranchesApi(),
     listUsersApi(),
@@ -51,6 +62,7 @@ export async function getBootstrapPayload() {
     prisma.appJsonRow.findMany({
       where: { collection: { in: BOOTSTRAP_COLLECTION_NAMES } },
     }),
+    organizationId ? getEntitlementForOrg(organizationId) : Promise.resolve(null),
   ]);
 
   const collections = buildCollectionsFromRows(appRows);
@@ -61,5 +73,6 @@ export async function getBootstrapPayload() {
     users,
     vehicles,
     collections,
+    entitlement,
   };
 }

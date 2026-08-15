@@ -41,6 +41,7 @@ export function toApiUser(u: PrismaUser) {
     phone: u.phone,
     role: u.role,
     branchId: u.branchId,
+    organizationId: u.organizationId,
     avatar: u.avatar ?? undefined,
     isActive: u.isActive,
     emailVerified: u.emailVerified || undefined,
@@ -71,6 +72,7 @@ export async function createUserApi(input: {
   phone: string;
   role: PrismaUser["role"];
   branchId: string;
+  organizationId: string;
   password?: string;
   avatar?: string | null;
   isActive?: boolean;

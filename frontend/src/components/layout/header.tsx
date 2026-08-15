@@ -89,9 +89,17 @@ export function Header() {
     return active.filter((b) => b.id === user.branchId);
   }, [branchesFromStore, user, canSelectOrgWide]);
 
+  /** “All branches” only makes sense when there are 2+ locations to aggregate. */
+  const showAllBranchesOption = canSelectOrgWide && selectableBranches.length > 1;
+
   useEffect(() => {
     if (!user) return;
-    if (canSelectOrgWide) return;
+    if (canSelectOrgWide) {
+      if (selectableBranches.length === 1 && isAllBranchesScope(currentBranch)) {
+        setBranch(selectableBranches[0]!);
+      }
+      return;
+    }
     const mine =
       selectableBranches.find((b) => b.id === user.branchId) ?? selectableBranches[0];
     if (!mine) return;
@@ -103,6 +111,13 @@ export function Header() {
       setBranch(mine);
     }
   }, [user, canSelectOrgWide, currentBranch, selectableBranches, setBranch]);
+
+  /** Dropdown only when the user can switch between 2+ locations. */
+  const showBranchDropdown = selectableBranches.length > 1;
+  const singleBranchLabel =
+    currentBranch && !isAllBranchesScope(currentBranch)
+      ? currentBranch.name
+      : selectableBranches[0]?.name ?? "Branch";
 
   if (!user) return null;
 
@@ -152,36 +167,50 @@ export function Header() {
             <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
           </button>
         ) : null}
-        <Select
-          value={currentBranch?.id ?? ALL_BRANCHES_BRANCH.id}
-          onValueChange={(id) => {
-            if (id === ALL_BRANCHES_BRANCH.id) {
-              setBranch(ALL_BRANCHES_BRANCH);
-              return;
+        {showBranchDropdown ? (
+          <Select
+            value={
+              currentBranch?.id ??
+              (showAllBranchesOption
+                ? ALL_BRANCHES_BRANCH.id
+                : selectableBranches[0]?.id)
             }
-            const next = selectableBranches.find((b) => b.id === id);
-            if (next) setBranch(next);
-          }}
-          disabled={!canSelectOrgWide && selectableBranches.length === 0}
-        >
-          <SelectTrigger
-            title={currentBranch?.name}
-            className="h-9 min-h-9 w-full max-w-full max-md:w-auto max-md:max-w-[min(100%,12rem)] md:w-max md:max-w-[min(100vw-5rem,17.5rem)] justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm ring-offset-background max-md:rounded-lg max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:ring-0 max-md:hover:bg-accent/80 max-md:focus:ring-0 max-md:focus-visible:ring-0 max-md:focus-visible:ring-offset-0 md:border md:border-border md:bg-muted/50 md:shadow-sm md:hover:bg-muted/50 [&>span]:min-w-0 max-sm:[&>span]:max-w-[5.5rem] max-md:[&>span]:truncate md:[&>span]:line-clamp-none md:[&>span]:break-words md:[&>span]:whitespace-normal"
+            onValueChange={(id) => {
+              if (id === ALL_BRANCHES_BRANCH.id) {
+                if (showAllBranchesOption) setBranch(ALL_BRANCHES_BRANCH);
+                return;
+              }
+              const next = selectableBranches.find((b) => b.id === id);
+              if (next) setBranch(next);
+            }}
           >
-            <Building2 className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
-            <SelectValue placeholder="Branch" />
-          </SelectTrigger>
-          <SelectContent align="start" className="max-h-[min(24rem,70vh)] min-w-[var(--radix-select-trigger-width)]">
-            {canSelectOrgWide && (
-              <SelectItem value={ALL_BRANCHES_BRANCH.id}>{ALL_BRANCHES_BRANCH.name}</SelectItem>
-            )}
-            {selectableBranches.map((b) => (
-              <SelectItem key={b.id} value={b.id}>
-                {b.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <SelectTrigger
+              title={currentBranch?.name}
+              className="h-9 min-h-9 w-full max-w-full max-md:w-auto max-md:max-w-[min(100%,12rem)] md:w-max md:max-w-[min(100vw-5rem,17.5rem)] justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm ring-offset-background max-md:rounded-lg max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:ring-0 max-md:hover:bg-accent/80 max-md:focus:ring-0 max-md:focus-visible:ring-0 max-md:focus-visible:ring-offset-0 md:border md:border-border md:bg-muted/50 md:shadow-sm md:hover:bg-muted/50 [&>span]:min-w-0 max-sm:[&>span]:max-w-[5.5rem] max-md:[&>span]:truncate md:[&>span]:line-clamp-none md:[&>span]:break-words md:[&>span]:whitespace-normal"
+            >
+              <Building2 className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
+              <SelectValue placeholder="Branch" />
+            </SelectTrigger>
+            <SelectContent align="start" className="max-h-[min(24rem,70vh)] min-w-[var(--radix-select-trigger-width)]">
+              {showAllBranchesOption && (
+                <SelectItem value={ALL_BRANCHES_BRANCH.id}>{ALL_BRANCHES_BRANCH.name}</SelectItem>
+              )}
+              {selectableBranches.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div
+            title={singleBranchLabel}
+            className="flex h-9 min-h-9 w-full max-w-full max-md:w-auto max-md:max-w-[min(100%,12rem)] md:w-max md:max-w-[min(100vw-5rem,17.5rem)] items-center justify-start gap-1.5 sm:gap-2 px-2 sm:px-2.5 md:px-3 text-left text-sm max-md:rounded-lg md:rounded-md md:border md:border-border md:bg-muted/50 md:shadow-sm"
+          >
+            <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className="min-w-0 truncate font-medium">{singleBranchLabel}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-0.5 sm:gap-1 shrink-0 max-md:[grid-area:hdr_tools] max-md:self-center md:ml-auto">

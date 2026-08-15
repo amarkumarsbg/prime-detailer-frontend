@@ -5,6 +5,10 @@ export function isSuperAdmin(role: UserRole | undefined): boolean {
   return role === "SUPER_ADMIN";
 }
 
+export function isPlatformOwner(role: UserRole | undefined): boolean {
+  return role === "PLATFORM_OWNER";
+}
+
 /** Module / feature permission check. SUPER_ADMIN always passes. */
 export function userHasPermission(
   user: Pick<User, "role" | "permissions"> | null | undefined,
@@ -54,6 +58,7 @@ export function getAssignableStaffRoles(actor: UserRole | undefined): UserRole[]
 /**
  * Sidebar / command menu: SUPER_ADMIN passes all checks; BRANCH_MANAGER matches MANAGER entries.
  * Non-Super Admin users must also satisfy custom permission checks if a permissionKey is specified.
+ * PLATFORM_OWNER is not a studio operator — deny studio nav.
  */
 export function canAccessNavItem(
   allowed: UserRole[] | undefined,
@@ -62,6 +67,7 @@ export function canAccessNavItem(
   userPermissions?: string[]
 ): boolean {
   if (!userRole) return false;
+  if (userRole === "PLATFORM_OWNER") return false;
   if (userRole === "SUPER_ADMIN") return true;
 
   // 1. Role-based check

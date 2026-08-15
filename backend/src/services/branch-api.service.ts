@@ -2,6 +2,7 @@ import type { Branch } from "@prisma/client";
 import { SINGLETON_ENTITY_ID } from "../constants/json-collections.js";
 import { AppError } from "../lib/app-error.js";
 import { prisma } from "../lib/prisma.js";
+import { assertCanCreateBranch } from "./organization-subscription.service.js";
 
 export type BranchDeletionBlocker = {
   kind:
@@ -228,6 +229,11 @@ export async function upsertBranchApi(data: {
   organizationId?: string | null;
 }) {
   const organizationId = await resolveOrganizationIdForBranchCreate(data.organizationId);
+  const existing = await prisma.branch.findUnique({ where: { id: data.id } });
+  if (!existing) {
+    await assertCanCreateBranch(organizationId);
+  }
+
   const row = await prisma.branch.upsert({
     where: { id: data.id },
     create: {

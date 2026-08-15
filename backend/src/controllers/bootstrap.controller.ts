@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { getBootstrapPayload } from "../services/bootstrap.service.js";
 
-export async function getBootstrap(_req: Request, res: Response, next: NextFunction) {
+export async function getBootstrap(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await getBootstrapPayload();
+    const data = await getBootstrapPayload(req.auth);
     res.json({ data, error: null });
   } catch (e) {
     next(e);

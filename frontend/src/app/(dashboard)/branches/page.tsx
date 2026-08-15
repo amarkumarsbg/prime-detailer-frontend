@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useBranchStore } from "@/store/branch-store";
+import { useOrganizationStore } from "@/store/organization-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useExpenseStore } from "@/store/expense-store";
@@ -33,6 +34,15 @@ import {
   BranchFormDialog,
   type BranchFormValues,
 } from "@/components/branches/branch-form-dialog";
+import { BranchLimitReachedDialog } from "@/components/branches/branch-limit-reached-dialog";
+import { ApiError } from "@/lib/api-client";
+import {
+  branchLimitLabel,
+  isAtOrOverBranchLimit,
+  resolveContactUsUrl,
+  resolveSupportPhone,
+} from "@/lib/plan-limits";
+import { PlanCtaTextButton } from "@/components/billing/plan-cta-link";
 import {
   Building2,
   Eye,
@@ -55,6 +65,9 @@ export default function BranchesPage() {
   const updateBranch = useBranchStore((s) => s.updateBranch);
   const deactivateBranch = useBranchStore((s) => s.deactivateBranch);
   const deleteBranch = useBranchStore((s) => s.deleteBranch);
+  const entitlement = useOrganizationStore((s) => s.entitlement);
+  const refreshEntitlement = useOrganizationStore((s) => s.refreshEntitlement);
+  const atLimit = isAtOrOverBranchLimit(entitlement);
   const staff = useStaffStore((s) => s.staff);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const expenses = useExpenseStore((s) => s.expenses);
@@ -70,6 +83,17 @@ export default function BranchesPage() {
   const [viewing, setViewing] = useState<Branch | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Branch | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
+
+  const openAddLocation = () => {
+    if (atLimit) {
+      setLimitDialogOpen(true);
+      return;
+    }
+    setEditing(null);
+    setFormMode("add");
+    setFormOpen(true);
+  };
 
   const deletionContext = useMemo(
     () => ({
@@ -144,11 +168,21 @@ export default function BranchesPage() {
         await updateBranch(id, payload);
         toast.success("Location updated");
       } else {
+        if (atLimit) {
+          setLimitDialogOpen(true);
+          return;
+        }
         await addBranch(payload);
         toast.success("Location created");
+        await refreshEntitlement();
       }
-    } catch {
-      toast.error("Could not save location. Is the API running?");
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "BRANCH_LIMIT_REACHED") {
+        await refreshEntitlement();
+        setLimitDialogOpen(true);
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : "Could not save location. Is the API running?");
     }
   };
 
@@ -318,21 +352,38 @@ export default function BranchesPage() {
         description="Directory of sites, contacts, and operating status"
         actions={
           canEdit ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setEditing(null);
-                setFormMode("add");
-                setFormOpen(true);
-              }}
-            >
+            <Button type="button" size="sm" onClick={openAddLocation}>
               <Plus className="h-4 w-4" />
               Add site
             </Button>
           ) : undefined
         }
       />
+
+      {canEdit && atLimit && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <p className="font-medium">
+            {entitlement &&
+            entitlement.usage.branchesUsed >
+              (entitlement.subscription.effectiveMaxBranches ?? Infinity)
+              ? "Over plan limit—contact us or remove locations."
+              : "Branch limit reached on your current plan."}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {entitlement?.subscription.planName ?? "Plan"} ·{" "}
+            {entitlement?.usage.branchesUsed ?? branches.length} /{" "}
+            {branchLimitLabel(entitlement?.subscription.effectiveMaxBranches)} branches.{" "}
+            <PlanCtaTextButton
+              href={resolveContactUsUrl(entitlement)}
+              phone={resolveSupportPhone(entitlement)}
+              dialogTitle="Contact support"
+            >
+              Contact support
+            </PlanCtaTextButton>
+            .
+          </p>
+        </div>
+      )}
 
       {!canEdit && (
         <p className="text-sm text-muted-foreground">
@@ -353,23 +404,7 @@ export default function BranchesPage() {
         <DataTable
           data={branches}
           columns={columns}
-          searchPlaceholder="Search by name, code, city, or phone…"
-          searchMatch={(b, q) => {
-            const hay = [
-              b.name,
-              b.code,
-              b.city,
-              b.state,
-              b.pincode,
-              b.phone,
-              b.address,
-              b.email,
-            ]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase();
-            return hay.includes(q);
-          }}
+          hideSearch
           renderMobileCard={(item) => {
             const b = item as Branch;
             return (
@@ -593,6 +628,7 @@ export default function BranchesPage() {
                     await deleteBranch(deleteTarget.id);
                     toast.success("Site deleted permanently");
                     setDeleteTarget(null);
+                    await refreshEntitlement();
                   } catch (e) {
                     const msg =
                       e instanceof Error ? e.message : "Could not delete. Is the API running?";
@@ -606,6 +642,12 @@ export default function BranchesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <BranchLimitReachedDialog
+        open={limitDialogOpen}
+        onOpenChange={setLimitDialogOpen}
+        entitlement={entitlement}
+      />
     </div>
   );
 }

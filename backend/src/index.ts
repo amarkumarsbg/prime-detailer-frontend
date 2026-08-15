@@ -20,6 +20,8 @@ import { jobCardUploadRouter } from "./routes/job-card-upload.routes.js";
 import { publicAttendanceRouter } from "./routes/public-attendance.routes.js";
 import { attendanceRouter } from "./routes/attendance.routes.js";
 import { partyRouter } from "./routes/party.routes.js";
+import { organizationRouter } from "./routes/organization.routes.js";
+import { platformRouter } from "./routes/platform.routes.js";
 
 import { prisma } from "./lib/prisma.js";
 import { getPublicInvoiceView } from "./services/public-invoice.service.js";
@@ -97,6 +99,8 @@ app.use("/api/messaging", messagingRouter);
 app.use("/api/public/attendance", publicAttendanceRouter);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/parties", partyRouter);
+app.use("/api/organization", organizationRouter);
+app.use("/api/platform", platformRouter);
 
 app.use(errorHandler);
 

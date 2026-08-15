@@ -20,11 +20,13 @@
     "test:job-card-pricing": "tsx scripts/check-job-card-pricing-guard.ts",
     "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac && npm run test:job-card-pricing",
     "grant:job-card-pricing": "tsx scripts/grant-job-card-pricing.ts",
+    "test:plan-catalog": "tsx --test scripts/plan-catalog.test.ts",
+    "saas:set-branch-limit": "tsx scripts/saas-set-branch-limit.ts",
     "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
     "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
