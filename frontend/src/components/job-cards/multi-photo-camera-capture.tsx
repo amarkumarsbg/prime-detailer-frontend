@@ -359,35 +359,22 @@ export function MultiPhotoCameraCapture({
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
               <Camera className="h-8 w-8 text-white/90" />
             </div>
-            <div className="space-y-2 max-w-sm">
-              <p className="text-sm font-medium text-white">
-                {nativeMode && !error
-                  ? "Tap the shutter to open your phone camera"
-                  : "Live preview unavailable"}
-              </p>
-              <p className="text-xs text-white/65 leading-relaxed">
-                {error && nativeMode
-                  ? error
-                  : "You’re on HTTP (e.g. a LAN IP). Browsers only allow live camera preview on HTTPS. The shutter still opens the device camera."}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {canUseLiveCameraPreview() ? (
-                <Button type="button" variant="secondary" size="sm" onClick={() => void startCamera(null)}>
-                  Retry live preview
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-white/30 bg-transparent text-white hover:bg-white/10"
-                onClick={() => galleryRef.current?.click()}
-              >
-                <ImagePlus className="mr-1.5 h-4 w-4" />
-                Pick from gallery
+            <p className="text-sm font-medium text-white">Tap the shutter to take a photo</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-white/30 bg-transparent text-white hover:bg-white/10"
+              onClick={() => galleryRef.current?.click()}
+            >
+              <ImagePlus className="mr-1.5 h-4 w-4" />
+              Gallery
+            </Button>
+            {canUseLiveCameraPreview() && error ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => void startCamera(null)}>
+                Retry
               </Button>
-            </div>
+            ) : null}
           </div>
         ) : starting ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm text-white/80">
