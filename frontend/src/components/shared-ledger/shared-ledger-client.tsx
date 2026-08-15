@@ -29,6 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReportPeriodSelect } from "@/components/reports/report-period-select";
+import { dateInPreset } from "@/lib/reports/report-period-presets";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,18 +110,17 @@ const EXP_PAYMENT_METHODS: { value: ExpensePaymentMethod; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
-const RANGE_DAYS: Record<string, number | null> = {
-  "30": 30,
-  "90": 90,
-  "365": 365,
-  all: null,
-};
+const LEDGER_PERIOD_OPTIONS = [
+  { value: "custom", label: "Custom date (from-to)" },
+  { value: "last30", label: "Last 30 days" },
+  { value: "last90", label: "Last 90 days" },
+  { value: "last365", label: "Last 365 days" },
+  { value: "all", label: "All time" },
+] as const;
 
-function inRange(isoDate: string, days: number | null): boolean {
-  if (days == null) return true;
-  const t = new Date(isoDate).getTime();
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  return t >= cutoff;
+function inLedgerPeriod(isoDate: string, period: string): boolean {
+  if (period === "all") return true;
+  return dateInPreset(isoDate, period);
 }
 
 export function SharedLedgerClient() {
@@ -137,7 +138,7 @@ export function SharedLedgerClient() {
 
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<string>("365");
+  const [dateRange, setDateRange] = useState<string>("last365");
 
   const [invoicePayOpen, setInvoicePayOpen] = useState(false);
   const [invoicePayTarget, setInvoicePayTarget] = useState<Invoice | null>(null);
@@ -332,14 +333,12 @@ export function SharedLedgerClient() {
 
   const selected = parties.find((p) => p.id === selectedId) ?? filteredParties[0] ?? null;
 
-  const days = RANGE_DAYS[dateRange] ?? null;
-
   const transactions = useMemo((): LedgerTx[] => {
     if (!selected) return [];
     if (selected.kind === "customer") {
       const cid = selected.id.slice(2);
       return invoices
-        .filter((i) => i.customerId === cid && inRange(i.createdAt, days))
+        .filter((i) => i.customerId === cid && inLedgerPeriod(i.createdAt, dateRange))
         .map((i) => {
           const out = invoiceOutstanding(i);
           const paid = invoicePaidTotal(i);
@@ -365,7 +364,7 @@ export function SharedLedgerClient() {
     }
     const vname = selected.id.slice(2);
     return expenses
-      .filter((e) => e.vendorName?.trim() === vname && inRange(e.date, days))
+      .filter((e) => e.vendorName?.trim() === vname && inLedgerPeriod(e.date, dateRange))
       .map((e) => {
         const out = expenseOutstanding(e);
         const status =
@@ -383,7 +382,7 @@ export function SharedLedgerClient() {
         };
       })
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [selected, invoices, expenses, days]);
+  }, [selected, invoices, expenses, dateRange]);
 
   useEffect(() => {
     if (selectedId != null && filteredParties.some((p) => p.id === selectedId)) return;
@@ -534,17 +533,11 @@ export function SharedLedgerClient() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted-foreground">Period</span>
-                        <Select value={dateRange} onValueChange={setDateRange}>
-                          <SelectTrigger className="h-9 w-[180px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="30">Last 30 days</SelectItem>
-                            <SelectItem value="90">Last 90 days</SelectItem>
-                            <SelectItem value="365">Last 365 days</SelectItem>
-                            <SelectItem value="all">All time</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <ReportPeriodSelect
+                          value={dateRange}
+                          onChange={setDateRange}
+                          options={LEDGER_PERIOD_OPTIONS}
+                        />
                       </div>
                       <Button
                         type="button"

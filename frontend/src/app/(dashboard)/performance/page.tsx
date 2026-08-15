@@ -12,14 +12,11 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  PERFORMANCE_PERIOD_OPTIONS,
+  ReportPeriodSelect,
+} from "@/components/reports/report-period-select";
 import { cn, formatCurrency, getInitials } from "@/lib/utils";
 import { CHART_TOOLTIP_PROPS } from "@/lib/chart-tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -616,25 +613,11 @@ export default function PerformancePage() {
               <Calendar className="size-3" />
               Period
             </span>
-            <Select
+            <ReportPeriodSelect
               value={period}
-              onValueChange={(v) => setPeriod(v as PerformancePeriod)}
-            >
-              <SelectTrigger className="w-[168px] h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="this_month">
-                  {performancePeriodLabel("this_month")}
-                </SelectItem>
-                <SelectItem value="last_month">
-                  {performancePeriodLabel("last_month")}
-                </SelectItem>
-                <SelectItem value="last_30d">
-                  {performancePeriodLabel("last_30d")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              onChange={setPeriod}
+              options={PERFORMANCE_PERIOD_OPTIONS}
+            />
           </div>
           <Button type="button" className="h-9" onClick={handleRewardCalc}>
             <Calculator className="size-4 mr-2" />

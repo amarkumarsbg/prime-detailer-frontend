@@ -19,16 +19,22 @@ import {
 } from "@/lib/reports/report-period-presets";
 import { cn } from "@/lib/utils";
 
+export type ReportPeriodOption = { value: string; label: string };
+
 type ReportPeriodSelectProps = {
   value: string;
   onChange: (period: string) => void;
   className?: string;
+  /** When set, replaces the default timeline presets (must include `{ value: "custom", ... }`). */
+  options?: readonly ReportPeriodOption[];
 };
 
 const CALENDAR_OPEN_DELAY_MS = 150;
-const CUSTOM_RANGE_LABEL = "Custom Date Range";
+const CUSTOM_RANGE_LABEL = "Custom date (from-to)";
+const CUSTOM_OPTION_LABEL = "Custom date (from-to)";
 
-export const REPORT_TIMELINE_OPTIONS = [
+export const REPORT_TIMELINE_OPTIONS: readonly ReportPeriodOption[] = [
+  { value: "custom", label: CUSTOM_OPTION_LABEL },
   { value: "today", label: "Today" },
   { value: "yesterday", label: "Yesterday" },
   { value: "week", label: "Weekly" },
@@ -36,10 +42,28 @@ export const REPORT_TIMELINE_OPTIONS = [
   { value: "quarter", label: "Quarterly" },
   { value: "fy", label: "Current Fiscal year" },
   { value: "prevFy", label: "Last fiscal year" },
-  { value: "custom", label: "Custom date selection (from-to)" },
-] as const;
+];
 
-export function ReportPeriodSelect({ value, onChange, className }: ReportPeriodSelectProps) {
+export const ANALYTICS_PERIOD_OPTIONS: readonly ReportPeriodOption[] = [
+  { value: "custom", label: CUSTOM_OPTION_LABEL },
+  { value: "last7", label: "Last 7 Days" },
+  { value: "last30", label: "Last 30 Days" },
+  { value: "last90", label: "Last 90 Days" },
+];
+
+export const PERFORMANCE_PERIOD_OPTIONS: readonly ReportPeriodOption[] = [
+  { value: "custom", label: CUSTOM_OPTION_LABEL },
+  { value: "this_month", label: "This month" },
+  { value: "last_month", label: "Last month" },
+  { value: "last_30d", label: "Last 30 days" },
+];
+
+export function ReportPeriodSelect({
+  value,
+  onChange,
+  className,
+  options = REPORT_TIMELINE_OPTIONS,
+}: ReportPeriodSelectProps) {
   const parsed = parseCustomPeriod(value);
   const selectValue = parsed ? "custom" : value;
   const hasAppliedCustom = Boolean(parsed);
@@ -141,7 +165,7 @@ export function ReportPeriodSelect({ value, onChange, className }: ReportPeriodS
     ? CUSTOM_RANGE_LABEL
     : hasAppliedCustom
       ? formatPeriodLabel(value)
-      : REPORT_TIMELINE_OPTIONS.find((o) => o.value === value)?.label ?? "Select timeline";
+      : options.find((o) => o.value === value)?.label ?? formatPeriodLabel(value);
 
   const triggerWidth = calendarOpen
     ? "w-full min-w-0 max-w-full sm:w-[240px]"
@@ -179,7 +203,7 @@ export function ReportPeriodSelect({ value, onChange, className }: ReportPeriodS
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {REPORT_TIMELINE_OPTIONS.map((o) => (
+            {options.map((o) => (
               <SelectItem
                 key={o.value}
                 value={o.value}

@@ -10,8 +10,11 @@ export function rangeStartDays(days: number): Date {
   return d;
 }
 
-export function inRange(iso: string, start: Date): boolean {
-  return new Date(iso) >= start;
+export function inRange(iso: string, start: Date, end?: Date): boolean {
+  const d = new Date(iso).getTime();
+  if (d < start.getTime()) return false;
+  if (end != null && d > end.getTime()) return false;
+  return true;
 }
 
 export function sumInvoicePayments(inv: Invoice): number {
@@ -28,14 +31,18 @@ export function revenueBetween(invoices: Invoice[], from: Date, to: Date): numbe
   return s;
 }
 
-export function revenueByDay(invoices: Invoice[], start: Date): { date: string; label: string; amount: number }[] {
+export function revenueByDay(
+  invoices: Invoice[],
+  start: Date,
+  end?: Date
+): { date: string; label: string; amount: number }[] {
   const map = new Map<string, number>();
   for (const inv of invoices) {
     if (inv.status === "DRAFT") continue;
     const paid = sumInvoicePayments(inv);
     if (paid <= 0) continue;
+    if (!inRange(inv.createdAt, start, end)) continue;
     const d = new Date(inv.createdAt);
-    if (d < start) continue;
     const key = d.toISOString().slice(0, 10);
     map.set(key, (map.get(key) ?? 0) + paid);
   }
@@ -47,11 +54,15 @@ export function revenueByDay(invoices: Invoice[], start: Date): { date: string; 
   }));
 }
 
-export function bookingsTrend(jobCards: JobCard[], start: Date): { date: string; label: string; count: number }[] {
+export function bookingsTrend(
+  jobCards: JobCard[],
+  start: Date,
+  end?: Date
+): { date: string; label: string; count: number }[] {
   const map = new Map<string, number>();
   for (const jc of jobCards) {
+    if (!inRange(jc.createdAt, start, end)) continue;
     const d = new Date(jc.createdAt);
-    if (d < start) continue;
     const key = d.toISOString().slice(0, 10);
     map.set(key, (map.get(key) ?? 0) + 1);
   }
@@ -73,10 +84,15 @@ const STATUS_DISPLAY: Partial<Record<JobCardStatus, string>> = {
   CANCELLED: "Cancelled",
 };
 
-export function bookingStatusDistribution(jobCards: JobCard[], start: Date, limit = 4) {
+export function bookingStatusDistribution(
+  jobCards: JobCard[],
+  start: Date,
+  limit = 4,
+  end?: Date
+) {
   const counts = new Map<string, number>();
   for (const jc of jobCards) {
-    if (new Date(jc.createdAt) < start) continue;
+    if (!inRange(jc.createdAt, start, end)) continue;
     const label = STATUS_DISPLAY[jc.status] ?? jc.status;
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
@@ -91,10 +107,15 @@ export function bookingStatusDistribution(jobCards: JobCard[], start: Date, limi
   return { rows: rows.slice(0, limit), totalStatuses: counts.size, totalJobs: total };
 }
 
-export function topServicesByRevenue(jobCards: JobCard[], start: Date, limit = 4) {
+export function topServicesByRevenue(
+  jobCards: JobCard[],
+  start: Date,
+  limit = 4,
+  end?: Date
+) {
   const map = new Map<string, { bookings: number; revenue: number }>();
   for (const jc of jobCards) {
-    if (new Date(jc.createdAt) < start) continue;
+    if (!inRange(jc.createdAt, start, end)) continue;
     for (const s of jc.services) {
       const cur = map.get(s.name) ?? { bookings: 0, revenue: 0 };
       cur.bookings += 1;
@@ -108,11 +129,15 @@ export function topServicesByRevenue(jobCards: JobCard[], start: Date, limit = 4
     .slice(0, limit);
 }
 
-export function revenueByServiceFromInvoices(invoices: Invoice[], start: Date) {
+export function revenueByServiceFromInvoices(
+  invoices: Invoice[],
+  start: Date,
+  end?: Date
+) {
   const map = new Map<string, { bookings: number; revenue: number }>();
   for (const inv of invoices) {
     if (inv.status === "DRAFT") continue;
-    if (new Date(inv.createdAt) < start) continue;
+    if (!inRange(inv.createdAt, start, end)) continue;
     for (const line of inv.lineItems) {
       if (line.type !== "SERVICE") continue;
       const name = line.description.split("\n")[0].slice(0, 80);
@@ -132,11 +157,15 @@ export function revenueByServiceFromInvoices(invoices: Invoice[], start: Date) {
   return rows;
 }
 
-export function paymentMethodDistribution(invoices: Invoice[], start: Date) {
+export function paymentMethodDistribution(
+  invoices: Invoice[],
+  start: Date,
+  end?: Date
+) {
   const map = new Map<PaymentMethod, number>();
   let total = 0;
   for (const inv of invoices) {
-    if (new Date(inv.createdAt) < start) continue;
+    if (!inRange(inv.createdAt, start, end)) continue;
     for (const p of inv.payments) {
       map.set(p.method, (map.get(p.method) ?? 0) + p.amount);
       total += p.amount;
@@ -147,7 +176,7 @@ export function paymentMethodDistribution(invoices: Invoice[], start: Date) {
       const amt = map.get(method) ?? 0;
       const pct = total > 0 ? (amt / total) * 100 : 0;
       const count = invoices.reduce((n, inv) => {
-        if (new Date(inv.createdAt) < start) return n;
+        if (!inRange(inv.createdAt, start, end)) return n;
         return n + inv.payments.filter((x) => x.method === method).length;
       }, 0);
       return { method, amount: amt, pct, count };
@@ -156,10 +185,14 @@ export function paymentMethodDistribution(invoices: Invoice[], start: Date) {
   return { rows, total };
 }
 
-export function peakBookingHours(jobCards: JobCard[], start: Date): { hour: number; label: string; count: number }[] {
+export function peakBookingHours(
+  jobCards: JobCard[],
+  start: Date,
+  end?: Date
+): { hour: number; label: string; count: number }[] {
   const buckets = new Array(24).fill(0);
   for (const jc of jobCards) {
-    if (new Date(jc.createdAt) < start) continue;
+    if (!inRange(jc.createdAt, start, end)) continue;
     const h = new Date(jc.createdAt).getHours();
     buckets[h] += 1;
   }
@@ -170,11 +203,16 @@ export function peakBookingHours(jobCards: JobCard[], start: Date): { hour: numb
   }));
 }
 
-export function partsAnalytics(invoices: Invoice[], parts: Part[], start: Date) {
+export function partsAnalytics(
+  invoices: Invoice[],
+  parts: Part[],
+  start: Date,
+  end?: Date
+) {
   let partsRevenue = 0;
   let partsCost = 0;
   for (const inv of invoices) {
-    if (new Date(inv.createdAt) < start) continue;
+    if (!inRange(inv.createdAt, start, end)) continue;
     for (const line of inv.lineItems) {
       if (line.type === "PARTS") {
         partsRevenue += line.total;
@@ -186,7 +224,7 @@ export function partsAnalytics(invoices: Invoice[], parts: Part[], start: Date) 
   const lowStock = parts.filter((p) => p.quantity <= p.reorderLevel).length;
   const margin = partsRevenue > 0 ? ((partsRevenue - partsCost) / partsRevenue) * 100 : 0;
   const partsUsed = invoices.reduce((n, inv) => {
-    if (new Date(inv.createdAt) < start) return n;
+    if (!inRange(inv.createdAt, start, end)) return n;
     return (
       n +
       inv.lineItems.filter((l) => l.type === "PARTS").reduce((s, l) => s + l.quantity, 0)
@@ -216,10 +254,15 @@ export function partsByCategory(parts: Part[]) {
     .sort((a, b) => b.value - a.value);
 }
 
-export function mostUsedPartsFromInvoices(invoices: Invoice[], start: Date, limit = 5) {
+export function mostUsedPartsFromInvoices(
+  invoices: Invoice[],
+  start: Date,
+  limit = 5,
+  end?: Date
+) {
   const map = new Map<string, { units: number; times: number; cost: number }>();
   for (const inv of invoices) {
-    if (new Date(inv.createdAt) < start) continue;
+    if (!inRange(inv.createdAt, start, end)) continue;
     for (const line of inv.lineItems) {
       if (line.type !== "PARTS") continue;
       const name = line.description.slice(0, 60);
@@ -240,12 +283,17 @@ export function mostUsedPartsFromInvoices(invoices: Invoice[], start: Date, limi
     .slice(0, limit);
 }
 
-export function customerMetrics(customers: Customer[], jobCards: JobCard[], start: Date) {
+export function customerMetrics(
+  customers: Customer[],
+  jobCards: JobCard[],
+  start: Date,
+  end?: Date
+) {
   const total = customers.length;
-  const newWeek = customers.filter((c) => new Date(c.createdAt) >= start).length;
+  const newWeek = customers.filter((c) => inRange(c.createdAt, start, end)).length;
   const activeCustomerIds = new Set<string>();
   for (const jc of jobCards) {
-    if (new Date(jc.createdAt) >= start) activeCustomerIds.add(jc.customerId);
+    if (inRange(jc.createdAt, start, end)) activeCustomerIds.add(jc.customerId);
   }
   const withMultipleJobs = new Set<string>();
   const jobCountByCustomer = new Map<string, number>();

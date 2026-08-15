@@ -17,12 +17,11 @@ function slugFile(prefix: string): string {
   return `${prefix}-${d}.pdf`;
 }
 
-function filterJobsByDays(jobCards: JobCard[], days: number): JobCard[] {
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  const start = new Date();
-  start.setDate(start.getDate() - days);
-  start.setHours(0, 0, 0, 0);
+function filterJobsByBounds(
+  jobCards: JobCard[],
+  start: Date,
+  end: Date
+): JobCard[] {
   return jobCards.filter((jc) => {
     const t = new Date(jc.createdAt).getTime();
     return t >= start.getTime() && t <= end.getTime();
@@ -40,14 +39,25 @@ function jobStatusLabel(status: JobCard["status"]): string {
 
 export function downloadRevenuePerformancePdf(opts: {
   businessName: string;
-  days: number;
+  days?: number;
+  rangeStart?: Date;
+  rangeEnd?: Date;
   jobCards: JobCard[];
 }): void {
-  const { businessName, days, jobCards } = opts;
-  const inRange = filterJobsByDays(jobCards, days);
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - days);
+  const { businessName, jobCards } = opts;
+  const end = new Date(opts.rangeEnd ?? new Date());
+  end.setHours(23, 59, 59, 999);
+  const start = opts.rangeStart
+    ? new Date(opts.rangeStart)
+    : (() => {
+        const s = new Date();
+        s.setDate(s.getDate() - (opts.days ?? 30));
+        s.setHours(0, 0, 0, 0);
+        return s;
+      })();
+  if (opts.rangeStart) start.setHours(0, 0, 0, 0);
+
+  const inRange = filterJobsByBounds(jobCards, start, end);
 
   let body: string[][];
   let totalRevenue: number;

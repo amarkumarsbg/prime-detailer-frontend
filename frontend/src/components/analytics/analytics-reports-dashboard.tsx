@@ -33,15 +33,12 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { KPICard } from "@/components/shared/kpi-card";
 import { StaggerGrid } from "@/components/motion/stagger-grid";
+import {
+  ANALYTICS_PERIOD_OPTIONS,
+  ReportPeriodSelect,
+} from "@/components/reports/report-period-select";
 import { formatCurrency, cn } from "@/lib/utils";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -52,7 +49,6 @@ import { filterInvoicesByBranch, useBranchScope } from "@/lib/branch-scope";
 import { getStockStatus } from "@/lib/inventory-units";
 import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
 import {
-  rangeStartDays,
   revenueByDay,
   bookingsTrend,
   bookingStatusDistribution,
@@ -65,8 +61,8 @@ import {
   mostUsedPartsFromInvoices,
   customerMetrics,
   revenueBetween,
-  type DateRangeKey,
 } from "@/lib/analytics/compute-metrics";
+import { getPeriodBounds } from "@/lib/reports/report-period-presets";
 import Link from "next/link";
 import { CHART_TOOLTIP_PROPS } from "@/lib/chart-tooltip";
 
@@ -95,7 +91,7 @@ function MotionCard({
 }
 
 export function AnalyticsReportsDashboard() {
-  const [range, setRange] = useState<DateRangeKey>("7d");
+  const [period, setPeriod] = useState("last7");
   const invoices = useInvoiceStore((s) => s.invoices);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const customers = useCustomerStore((s) => s.customers);
@@ -104,8 +100,7 @@ export function AnalyticsReportsDashboard() {
   const branches = useBranchStore((s) => s.branches);
   const averageRating = useDashboardStatsStore((s) => s.stats?.averageRating ?? 0);
 
-  const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
-  const start = useMemo(() => rangeStartDays(days), [days]);
+  const { start, end } = useMemo(() => getPeriodBounds(period), [period]);
 
   const scopedJobs = useMemo(
     () =>
@@ -123,15 +118,18 @@ export function AnalyticsReportsDashboard() {
   const scopeLabel = viewingLabel;
 
   const metrics = useMemo(() => {
-    const revDaily = revenueByDay(scopedInvoices, start);
+    const revDaily = revenueByDay(scopedInvoices, start, end);
     const totalRev = revDaily.reduce((s, d) => s + d.amount, 0);
-    const prevStart = new Date(start);
-    prevStart.setDate(prevStart.getDate() - days);
-    const prevRev = revenueBetween(scopedInvoices, prevStart, start);
+    const periodMs = Math.max(end.getTime() - start.getTime(), 24 * 60 * 60 * 1000);
+    const prevEnd = new Date(start.getTime());
+    const prevStart = new Date(prevEnd.getTime() - periodMs);
+    const prevRev = revenueBetween(scopedInvoices, prevStart, prevEnd);
     const trendPct =
       prevRev > 0 ? ((totalRev - prevRev) / prevRev) * 100 : totalRev > 0 ? 100 : 0;
 
-    const jobsInRange = scopedJobs.filter((j) => new Date(j.createdAt) >= start);
+    const jobsInRange = scopedJobs.filter(
+      (j) => new Date(j.createdAt) >= start && new Date(j.createdAt) <= end
+    );
     const completed = jobsInRange.filter((j) => j.status === "DELIVERED").length;
     const bookings = jobsInRange.length;
 
@@ -146,16 +144,16 @@ export function AnalyticsReportsDashboard() {
     const nonzeroDays = revDaily.filter((x) => x.amount > 0).length;
     const avgPeriod = nonzeroDays > 0 ? totalRev / nonzeroDays : 0;
 
-    const statusDist = bookingStatusDistribution(scopedJobs, start, 6);
-    const topSvc = topServicesByRevenue(scopedJobs, start, 4);
-    const svcTable = revenueByServiceFromInvoices(scopedInvoices, start);
-    const payDist = paymentMethodDistribution(scopedInvoices, start);
-    const hours = peakBookingHours(scopedJobs, start);
-    const trendBook = bookingsTrend(scopedJobs, start);
-    const partsM = partsAnalytics(scopedInvoices, parts, start);
+    const statusDist = bookingStatusDistribution(scopedJobs, start, 6, end);
+    const topSvc = topServicesByRevenue(scopedJobs, start, 4, end);
+    const svcTable = revenueByServiceFromInvoices(scopedInvoices, start, end);
+    const payDist = paymentMethodDistribution(scopedInvoices, start, end);
+    const hours = peakBookingHours(scopedJobs, start, end);
+    const trendBook = bookingsTrend(scopedJobs, start, end);
+    const partsM = partsAnalytics(scopedInvoices, parts, start, end);
     const catRows = partsByCategory(parts);
-    const mostUsed = mostUsedPartsFromInvoices(scopedInvoices, start, 5);
-    const cust = customerMetrics(customers, scopedJobs, start);
+    const mostUsed = mostUsedPartsFromInvoices(scopedInvoices, start, 5, end);
+    const cust = customerMetrics(customers, scopedJobs, start, end);
     const lowStockParts = parts.filter((p) => getStockStatus(p).label === "Low Stock");
 
     const busiestHour = hours.reduce((b, h) => (h.count > b.count ? h : b), hours[0]);
@@ -181,7 +179,7 @@ export function AnalyticsReportsDashboard() {
       lowStockParts,
       busiestHour,
     };
-  }, [scopedInvoices, scopedJobs, customers, parts, start, days]);
+  }, [scopedInvoices, scopedJobs, customers, parts, start, end]);
 
   const scrollTop = useCallback(() => {
     document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -198,16 +196,11 @@ export function AnalyticsReportsDashboard() {
         description={`Branch: ${scopeLabel}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={range} onValueChange={(v) => setRange(v as DateRangeKey)}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">Last 90 Days</SelectItem>
-              </SelectContent>
-            </Select>
+            <ReportPeriodSelect
+              value={period}
+              onChange={setPeriod}
+              options={ANALYTICS_PERIOD_OPTIONS}
+            />
             <Button size="sm" onClick={onExport}>
               <Download className="mr-2 h-4 w-4" />
               Export Report

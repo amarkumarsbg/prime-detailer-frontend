@@ -18,6 +18,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  dialogMobileSheetContentClasses,
+  dialogMobileSheetHeaderClasses,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
@@ -49,6 +59,7 @@ import {
   Plus,
   Trash2,
   Car,
+  Pencil,
 } from "lucide-react";
 
 const DEFAULT_TERMS = `1. Vehicle will be kept in secure parking during service.
@@ -145,28 +156,97 @@ export default function SettingsPage() {
   const [newHesName, setNewHesName] = useState("");
   const [newHesTotalYears, setNewHesTotalYears] = useState("5");
   const [newHesIntervalMonths, setNewHesIntervalMonths] = useState("6");
-  const [newHesEstimate, setNewHesEstimate] = useState("0");
+  const [newHesEstimate, setNewHesEstimate] = useState("");
+  const [addHesOpen, setAddHesOpen] = useState(false);
+  const [editingHesId, setEditingHesId] = useState<string | null>(null);
+  const [editHesName, setEditHesName] = useState("");
+  const [editHesEstimate, setEditHesEstimate] = useState("0");
+  const [editHesIntervalMonths, setEditHesIntervalMonths] = useState("6");
+  const [editHesTotalYears, setEditHesTotalYears] = useState("5");
+
+  const buildReminderIntervals = (intervalMonths: number, totalYears: number): number[] => {
+    const intervals: number[] = [];
+    for (let m = intervalMonths; m <= totalYears * 12; m += intervalMonths) {
+      intervals.push(m);
+    }
+    return intervals;
+  };
+
+  /** Infer step from existing schedule (defaults to first interval or 6). */
+  const inferredIntervalMonths = (intervals: number[]): number => {
+    if (intervals.length === 0) return 6;
+    if (intervals.length === 1) return intervals[0]!;
+    const step = intervals[1]! - intervals[0]!;
+    return step > 0 ? step : intervals[0]!;
+  };
+
+  const formatIntervalLabel = (months: number) => {
+    if (months === 3) return "Every 3 months";
+    if (months === 6) return "Every 6 months";
+    if (months === 12) return "Every 1 year";
+    return `Every ${months} months`;
+  };
+
+  const startEditHighEndService = (svc: (typeof highEndStore.services)[number]) => {
+    setEditingHesId(svc.id);
+    setEditHesName(svc.name);
+    setEditHesEstimate(String(svc.estimateAmountInr ?? 0));
+    setEditHesIntervalMonths(String(inferredIntervalMonths(svc.reminderIntervals)));
+    setEditHesTotalYears(String(svc.totalYears));
+  };
+
+  const cancelEditHighEndService = () => {
+    setEditingHesId(null);
+  };
+
+  const saveEditHighEndService = () => {
+    if (!editingHesId) return;
+    const name = editHesName.trim();
+    if (!name) {
+      toast.error("Enter service name");
+      return;
+    }
+    const totalYears = parseInt(editHesTotalYears, 10) || 5;
+    const intervalMonths = parseInt(editHesIntervalMonths, 10) || 6;
+    const estimateAmountInr = Math.max(0, parseInt(editHesEstimate, 10) || 0);
+    highEndStore.updateService(editingHesId, {
+      name,
+      estimateAmountInr,
+      totalYears,
+      reminderIntervals: buildReminderIntervals(intervalMonths, totalYears),
+    });
+    setEditingHesId(null);
+    toast.success(`"${name}" saved`);
+  };
+
+  const resetAddHighEndForm = () => {
+    setNewHesName("");
+    setNewHesTotalYears("5");
+    setNewHesIntervalMonths("6");
+    setNewHesEstimate("");
+  };
+
+  const openAddHighEndService = () => {
+    resetAddHighEndForm();
+    setAddHesOpen(true);
+  };
 
   const handleAddHighEndService = () => {
     if (!newHesName.trim()) { toast.error("Enter service name"); return; }
     const totalYears = parseInt(newHesTotalYears, 10) || 5;
     const intervalMonths = parseInt(newHesIntervalMonths, 10) || 6;
-    const intervals: number[] = [];
-    for (let m = intervalMonths; m <= totalYears * 12; m += intervalMonths) {
-      intervals.push(m);
-    }
+    const intervals = buildReminderIntervals(intervalMonths, totalYears);
     const estimateAmountInr = Math.max(0, parseInt(newHesEstimate, 10) || 0);
+    const name = newHesName.trim();
     highEndStore.addService({
-      name: newHesName.trim(),
+      name,
       reminderIntervals: intervals,
       totalYears,
       estimateAmountInr,
     });
-    setNewHesName("");
-    setNewHesTotalYears("5");
-    setNewHesIntervalMonths("6");
-    setNewHesEstimate("0");
-    toast.success(`"${newHesName.trim()}" added as high-end service`);
+    resetAddHighEndForm();
+    setAddHesOpen(false);
+    toast.success(`"${name}" added as high-end service`);
   };
 
   const handleSave = (section: string) => {
@@ -856,99 +936,254 @@ export default function SettingsPage() {
 
         <TabsContent value="high-end" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                High-End Services
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage premium programs: each can have an estimated amount (excl. GST) added on the job card when
-                selected, plus maintenance reminders after delivery.
-              </p>
+            <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  High-End Services
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Manage premium programs: each can have an estimated amount (excl. GST) added on the job card when
+                  selected, plus maintenance reminders after delivery.
+                </p>
+              </div>
+              <Button
+                type="button"
+                className="shrink-0 w-full sm:w-auto"
+                onClick={openAddHighEndService}
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                Add new service
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Existing high-end services */}
+            <CardContent className="space-y-3">
               <div className="space-y-3">
-                {highEndStore.services.map((svc) => (
-                  <div key={svc.id} className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                      <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 gap-y-1">
-                        <p className="font-medium">{svc.name}</p>
-                        <span className="text-[10px] text-muted-foreground">Est. (₹ excl. GST)</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          className="h-8 w-24 text-xs"
-                          value={String(svc.estimateAmountInr ?? 0)}
-                          onChange={(e) => {
-                            const v = Math.max(0, parseInt(e.target.value, 10) || 0);
-                            highEndStore.updateService(svc.id, { estimateAmountInr: v });
-                          }}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Reminders for {svc.totalYears} year{svc.totalYears !== 1 ? "s" : ""}
-                      </p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {svc.reminderIntervals.map((m) => (
-                          <span key={m} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary">
-                            {m >= 12 ? `${m / 12}yr` : `${m}mo`}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive shrink-0"
-                      onClick={() => {
-                        highEndStore.removeService(svc.id);
-                        toast.success(`"${svc.name}" removed`);
-                      }}
+                {highEndStore.services.map((svc) => {
+                  const intervalMonths = inferredIntervalMonths(svc.reminderIntervals);
+                  const isEditing = editingHesId === svc.id;
+                  const draftIntervals = isEditing
+                    ? buildReminderIntervals(
+                        parseInt(editHesIntervalMonths, 10) || 6,
+                        parseInt(editHesTotalYears, 10) || 5
+                      )
+                    : svc.reminderIntervals;
+
+                  return (
+                    <div
+                      key={svc.id}
+                      className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 mt-1">
+                        <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-3">
+                        {isEditing ? (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                              <Label className="text-xs">Service name</Label>
+                              <Input
+                                value={editHesName}
+                                onChange={(e) => setEditHesName(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Est. amount (₹ excl. GST)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={editHesEstimate}
+                                onChange={(e) => setEditHesEstimate(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Reminder interval</Label>
+                              <Select
+                                value={editHesIntervalMonths}
+                                onValueChange={setEditHesIntervalMonths}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="3">Every 3 months</SelectItem>
+                                  <SelectItem value="6">Every 6 months</SelectItem>
+                                  <SelectItem value="12">Every 1 year</SelectItem>
+                                  {![3, 6, 12].includes(Number(editHesIntervalMonths)) && (
+                                    <SelectItem value={editHesIntervalMonths}>
+                                      {formatIntervalLabel(Number(editHesIntervalMonths))} (current)
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Total duration</Label>
+                              <Select
+                                value={editHesTotalYears}
+                                onValueChange={setEditHesTotalYears}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">1 year</SelectItem>
+                                  <SelectItem value="2">2 years</SelectItem>
+                                  <SelectItem value="3">3 years</SelectItem>
+                                  <SelectItem value="5">5 years</SelectItem>
+                                  {![1, 2, 3, 5].includes(Number(editHesTotalYears)) && (
+                                    <SelectItem value={editHesTotalYears}>
+                                      {editHesTotalYears} years (current)
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                              <p className="font-medium">{svc.name}</p>
+                              <p className="text-sm text-muted-foreground tabular-nums">
+                                ₹{(svc.estimateAmountInr ?? 0).toLocaleString("en-IN")} excl. GST
+                              </p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {formatIntervalLabel(intervalMonths)} · {svc.totalYears} year
+                              {svc.totalYears !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {draftIntervals.map((m) => (
+                            <span
+                              key={m}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary"
+                            >
+                              {m >= 12 && m % 12 === 0 ? `${m / 12}yr` : `${m}mo`}
+                            </span>
+                          ))}
+                        </div>
+                        {isEditing && (
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" onClick={saveEditHighEndService}>
+                              <Save className="w-3.5 h-3.5 mr-1.5" />
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={cancelEditHighEndService}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {!isEditing && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground"
+                            onClick={() => startEditHighEndService(svc)}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          disabled={isEditing}
+                          onClick={() => {
+                            if (editingHesId === svc.id) setEditingHesId(null);
+                            highEndStore.removeService(svc.id);
+                            toast.success(`"${svc.name}" removed`);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
                 {highEndStore.services.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     <p className="text-sm">No high-end services configured</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={openAddHighEndService}
+                    >
+                      <Plus className="w-4 h-4 mr-1.5" />
+                      Add new service
+                    </Button>
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
 
-              <Separator />
+          <Dialog
+            open={addHesOpen}
+            onOpenChange={(open) => {
+              setAddHesOpen(open);
+              if (!open) resetAddHighEndForm();
+            }}
+          >
+            <DialogContent
+              className={cn(dialogMobileSheetContentClasses, "max-h-[min(90dvh,640px)] sm:max-w-md")}
+            >
+              <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pr-12")}>
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                    <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </span>
+                  Add high-end service
+                </DialogTitle>
+                <DialogDescription>
+                  Set the estimate and reminder schedule used on job cards.
+                </DialogDescription>
+              </DialogHeader>
 
-              {/* Add new */}
-              <div className="space-y-4">
-                <p className="text-sm font-medium">Add New High-End Service</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Service Name *</Label>
-                    <Input
-                      placeholder="e.g. PPF Coating, Ceramic"
-                      value={newHesName}
-                      onChange={(e) => setNewHesName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Est. amount (₹ excl. GST)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={newHesEstimate}
-                      onChange={(e) => setNewHesEstimate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Reminder Interval (months)</Label>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="hes-name">Service name</Label>
+                  <Input
+                    id="hes-name"
+                    placeholder="e.g. PPF Coating, Ceramic"
+                    value={newHesName}
+                    onChange={(e) => setNewHesName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hes-estimate">Estimated amount (₹ excl. GST)</Label>
+                  <Input
+                    id="hes-estimate"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    placeholder="e.g. 45000"
+                    value={newHesEstimate}
+                    onChange={(e) => setNewHesEstimate(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Reminder interval</Label>
                     <Select value={newHesIntervalMonths} onValueChange={setNewHesIntervalMonths}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="3">Every 3 months</SelectItem>
                         <SelectItem value="6">Every 6 months</SelectItem>
@@ -956,10 +1191,12 @@ export default function SettingsPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Total Duration (years)</Label>
+                  <div className="space-y-2">
+                    <Label>Total duration</Label>
                     <Select value={newHesTotalYears} onValueChange={setNewHesTotalYears}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="1">1 year</SelectItem>
                         <SelectItem value="2">2 years</SelectItem>
@@ -969,13 +1206,31 @@ export default function SettingsPage() {
                     </Select>
                   </div>
                 </div>
-                <Button onClick={handleAddHighEndService}>
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Add Service
-                </Button>
               </div>
-            </CardContent>
-          </Card>
+
+              <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    setAddHesOpen(false);
+                    resetAddHighEndForm();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={handleAddHighEndService}
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Add service
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="general" className="space-y-4">

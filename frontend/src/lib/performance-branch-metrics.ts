@@ -1,32 +1,18 @@
 import type { Branch, JobCard } from "@/types";
+import {
+  formatPeriodLabel,
+  getPeriodBounds,
+  parseCustomPeriod,
+} from "@/lib/reports/report-period-presets";
 
-export type PerformancePeriod = "this_month" | "last_month" | "last_30d";
+/** Preset keys or `custom:YYYY-MM-DD:YYYY-MM-DD`. */
+export type PerformancePeriod = string;
 
 export function getPerformanceRange(
   period: PerformancePeriod,
   now = new Date()
 ): { start: Date; end: Date } {
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
-
-  if (period === "last_30d") {
-    const start = new Date(now);
-    start.setDate(start.getDate() - 29);
-    start.setHours(0, 0, 0, 0);
-    return { start, end };
-  }
-
-  if (period === "this_month") {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    start.setHours(0, 0, 0, 0);
-    return { start, end };
-  }
-
-  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  start.setHours(0, 0, 0, 0);
-  const last = new Date(now.getFullYear(), now.getMonth(), 0);
-  last.setHours(23, 59, 59, 999);
-  return { start, end: last };
+  return getPeriodBounds(period, now);
 }
 
 function inRange(iso: string, start: Date, end: Date): boolean {
@@ -152,6 +138,7 @@ export function aggregateBranchPerformance(
 }
 
 export function performancePeriodLabel(period: PerformancePeriod): string {
+  if (parseCustomPeriod(period)) return formatPeriodLabel(period);
   switch (period) {
     case "this_month":
       return "This month";
@@ -160,6 +147,6 @@ export function performancePeriodLabel(period: PerformancePeriod): string {
     case "last_30d":
       return "Last 30 days";
     default:
-      return period;
+      return formatPeriodLabel(period);
   }
 }

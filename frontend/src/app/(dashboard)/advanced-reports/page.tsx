@@ -28,12 +28,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  ReportPeriodSelect,
+  type ReportPeriodOption,
+} from "@/components/reports/report-period-select";
 import { cn } from "@/lib/utils";
 import {
   downloadCustomerLifetimeAnalysisPdf,
   downloadRevenuePerformancePdf,
   downloadSimpleTablePdf,
 } from "@/lib/advanced-report-pdf";
+import { formatPeriodLabel, getPeriodBounds } from "@/lib/reports/report-period-presets";
 import { useAdvancedReportSchedulesStore } from "@/store/advanced-report-schedules-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useScopedInvoices, useScopedJobCards } from "@/hooks/use-scoped-data";
@@ -55,6 +60,21 @@ import {
 import { toast } from "sonner";
 
 type MainView = "generate" | "schedules";
+
+const ADVANCED_REV_PERIOD_OPTIONS: readonly ReportPeriodOption[] = [
+  { value: "custom", label: "Custom date (from-to)" },
+  { value: "last7", label: "Last 7 days" },
+  { value: "last30", label: "Last 30 days" },
+  { value: "last90", label: "Last 90 days" },
+  { value: "last365", label: "Last 12 months" },
+];
+
+const EXEC_PERIOD_OPTIONS: readonly ReportPeriodOption[] = [
+  { value: "custom", label: "Custom date (from-to)" },
+  { value: "week", label: "Weekly summary" },
+  { value: "month", label: "Monthly summary" },
+  { value: "quarter", label: "Quarterly summary" },
+];
 
 function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
   return (
@@ -113,10 +133,10 @@ export default function AdvancedReportsPage() {
   const [scheduleFrequency, setScheduleFrequency] = useState<string>(FREQUENCIES[1]);
   const [scheduleActive, setScheduleActive] = useState(true);
 
-  const [revRange, setRevRange] = useState("30");
+  const [revPeriod, setRevPeriod] = useState("last30");
   const [customerActiveOnly, setCustomerActiveOnly] = useState(true);
   const [leadStatus, setLeadStatus] = useState("all");
-  const [execPeriod, setExecPeriod] = useState("monthly");
+  const [execPeriod, setExecPeriod] = useState("month");
 
   const resetScheduleForm = () => {
     setScheduleName("");
@@ -143,8 +163,6 @@ export default function AdvancedReportsPage() {
     setMainView("schedules");
   };
 
-  const daysFromRange = () => parseInt(revRange, 10) || 30;
-
   function formatInrCompact(n: number): string {
     if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
     if (n >= 1000) return `₹${(n / 1000).toFixed(1)}k`;
@@ -154,9 +172,11 @@ export default function AdvancedReportsPage() {
   const handleGenerateReport = (kind: "revenue" | "customer" | "lead" | "executive") => {
     try {
       if (kind === "revenue") {
+        const { start, end } = getPeriodBounds(revPeriod);
         downloadRevenuePerformancePdf({
           businessName,
-          days: daysFromRange(),
+          rangeStart: start,
+          rangeEnd: end,
           jobCards,
         });
         toast.success("PDF downloaded", {
@@ -206,12 +226,7 @@ export default function AdvancedReportsPage() {
       downloadSimpleTablePdf({
         businessName,
         title: "Executive summary",
-        periodNote:
-          execPeriod === "weekly"
-            ? "Period: weekly snapshot"
-            : execPeriod === "quarterly"
-              ? "Period: quarterly snapshot"
-              : "Period: monthly snapshot",
+        periodNote: `Period: ${formatPeriodLabel(execPeriod)}`,
         columns: ["Metric", "Value"],
         rows: [
           ["Total job cards (all time)", String(jobCards.length)],
@@ -297,17 +312,11 @@ export default function AdvancedReportsPage() {
                   <Calendar className="size-3.5" />
                   Range
                 </Label>
-                <Select value={revRange} onValueChange={setRevRange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7">Last 7 days</SelectItem>
-                    <SelectItem value="30">Last 30 days</SelectItem>
-                    <SelectItem value="90">Last 90 days</SelectItem>
-                    <SelectItem value="365">Last 12 months</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ReportPeriodSelect
+                  value={revPeriod}
+                  onChange={setRevPeriod}
+                  options={ADVANCED_REV_PERIOD_OPTIONS}
+                />
               </div>
               <Button
                 className="w-full"
@@ -418,16 +427,11 @@ export default function AdvancedReportsPage() {
                   <Calendar className="size-3.5" />
                   Period
                 </Label>
-                <Select value={execPeriod} onValueChange={setExecPeriod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="weekly">Weekly summary</SelectItem>
-                    <SelectItem value="monthly">Monthly summary</SelectItem>
-                    <SelectItem value="quarterly">Quarterly summary</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ReportPeriodSelect
+                  value={execPeriod}
+                  onChange={setExecPeriod}
+                  options={EXEC_PERIOD_OPTIONS}
+                />
               </div>
               <Button
                 className="w-full"

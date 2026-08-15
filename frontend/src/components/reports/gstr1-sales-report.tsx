@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ReportPeriodSelect } from "@/components/reports/report-period-select";
 import { buildGstr1InvoiceRows } from "@/lib/reports/gst-invoice-aggregates";
 import { dateInPreset } from "@/lib/reports/report-period-presets";
 import { useScopedInvoices } from "@/hooks/use-scoped-data";
@@ -24,7 +25,6 @@ import type { Gstr1InvoiceDummyRow } from "@/lib/reports/gstr1-dummy-data";
 import { formatInrFull } from "@/lib/utils";
 import {
   ArrowLeft,
-  CalendarDays,
   ChevronDown,
   FileJson,
   Mail,
@@ -35,10 +35,13 @@ import { toast } from "sonner";
 
 const FAV_KEY = "prime-detailer-gstr1-favourite";
 
-function mapGstr1Period(preset: string): string {
-  if (preset === "fq") return "quarter";
-  return preset;
-}
+const GSTR1_PERIOD_OPTIONS = [
+  { value: "custom", label: "Custom date (from-to)" },
+  { value: "last7", label: "Last 7 Days" },
+  { value: "last30", label: "Last 30 Days" },
+  { value: "quarter", label: "This Quarter" },
+  { value: "fy", label: "This Financial Year" },
+] as const;
 
 function fmtInvoiceDate(iso: string) {
   try {
@@ -68,9 +71,7 @@ export function Gstr1SalesReport() {
   const [viewMode, setViewMode] = useState("invoice");
 
   const rows = useMemo(() => {
-    const filtered = invoices.filter((inv) =>
-      dateInPreset(inv.createdAt, mapGstr1Period(dateRange))
-    );
+    const filtered = invoices.filter((inv) => dateInPreset(inv.createdAt, dateRange));
     return buildGstr1InvoiceRows(filtered);
   }, [invoices, dateRange]);
 
@@ -277,18 +278,11 @@ export function Gstr1SalesReport() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="h-9 w-[160px] border-sky-200/80 bg-sky-50/50 dark:border-sky-800 dark:bg-sky-950/30">
-              <CalendarDays className="mr-2 h-4 w-4 opacity-70" />
-              <SelectValue placeholder="Period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="last7">Last 7 Days</SelectItem>
-              <SelectItem value="last30">Last 30 Days</SelectItem>
-              <SelectItem value="fq">This Quarter</SelectItem>
-              <SelectItem value="fy">This Financial Year</SelectItem>
-            </SelectContent>
-          </Select>
+          <ReportPeriodSelect
+            value={dateRange}
+            onChange={setDateRange}
+            options={GSTR1_PERIOD_OPTIONS}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
