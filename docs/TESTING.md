@@ -37,9 +37,14 @@ npm run test:collection-permissions
 npm run test:permission-keys
 npm run test:collection-payloads   # needs DB with seed data
 npm run test:rbac
+npm run test:data-scope
+npm run test:bootstrap-thin
+npm run test:list-scope
 ```
 
 `test:collection-payloads` requires Postgres + seeded rows.
+
+Bootstrap is **thin** (branches + branding + entitlement). Domain data loads via permission-scoped collection/entity APIs; `test:bootstrap-thin` and `test:data-scope` guard that contract.
 
 ## Future E2E (not wired yet)
 

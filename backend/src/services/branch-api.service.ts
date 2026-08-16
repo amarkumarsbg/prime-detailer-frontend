@@ -206,8 +206,11 @@ export function toApiBranch(b: Branch) {
   };
 }
 
-export async function listBranchesApi() {
-  const rows = await prisma.branch.findMany({ orderBy: { id: "asc" } });
+export async function listBranchesApi(organizationId?: string | null) {
+  const rows = await prisma.branch.findMany({
+    where: organizationId ? { organizationId } : undefined,
+    orderBy: { id: "asc" },
+  });
   return rows.map(toApiBranch);
 }
 

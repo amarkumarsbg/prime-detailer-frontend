@@ -1,7 +1,6 @@
 import type { Customer, Invoice, JobCard } from "@/types";
 import type { Party } from "@/types/party";
 import { loadPartyOverrides, savePartyOverride } from "@/lib/party/party-persistence";
-import type { BootstrapPayload } from "@/lib/bootstrap-app-data";
 
 /** MyBillBook-style demo party — HI TECH CAR SPA & DETAILING (₹ 217 balance). */
 export const HI_TECH_CUSTOMER_ID = "cust-hitech";
@@ -10,6 +9,7 @@ export const HI_TECH_INVOICE_ID = "inv-hitech-demo";
 export const HI_TECH_JOB_ID = "jc-hitech-001";
 
 const DEMO_FLAG_KEY = "party-hitech-demo:v1";
+
 
 export const HI_TECH_CUSTOMER: Customer = {
   id: HI_TECH_CUSTOMER_ID,
@@ -140,29 +140,6 @@ const HI_TECH_PARTY_PROFILE: Partial<Party> = {
   creditLimit: 500000,
 };
 
-function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
-  const i = list.findIndex((x) => x.id === item.id);
-  if (i >= 0) {
-    const next = [...list];
-    next[i] = item;
-    return next;
-  }
-  return [item, ...list];
-}
-
-/** Merge demo customer, job card, and invoice into bootstrap payload (idempotent). */
-export function mergeHitechPartyDemoBootstrap(data: BootstrapPayload): BootstrapPayload {
-  const customers = upsertById(data.customers, HI_TECH_CUSTOMER);
-  const c = { ...data.collections };
-  const jobCards = upsertById((c.jobCards as JobCard[]) ?? [], HI_TECH_JOB_CARD);
-  const invoices = upsertById((c.invoices as Invoice[]) ?? [], HI_TECH_INVOICE);
-  return {
-    ...data,
-    customers,
-    collections: { ...c, jobCards, invoices },
-  };
-}
-
 /** One-time localStorage profile patch for the HI TECH party (browser only). */
 export function ensureHitechPartyProfile(): void {
   if (typeof window === "undefined") return;
@@ -182,3 +159,4 @@ export function ensureHitechPartyProfile(): void {
     /* ignore */
   }
 }
+

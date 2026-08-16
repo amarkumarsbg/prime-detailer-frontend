@@ -25,6 +25,7 @@ import {
   parseCollectionSnapshotItems,
 } from "../validations/collection-payloads.js";
 import { ApiErrorCode } from "../lib/app-error.js";
+import { intersectQueryBranchId, resolveBranchScope } from "../lib/data-scope.js";
 
 function forbidden(res: Response, message: string) {
   res.status(403).json({
@@ -104,7 +105,19 @@ export async function getCollection(req: Request, res: Response, next: NextFunct
       return;
     }
     if (!assertPayrollAccess(res, collection, req.auth?.role)) return;
-    const items = await listCollectionItems(collection);
+
+    let allowedBranchIds: string[] | null | undefined = undefined;
+    if (req.auth) {
+      const scope = await resolveBranchScope(req.auth);
+      if (!scope) {
+        res.json({ data: { items: [] }, error: null });
+        return;
+      }
+      const q = typeof req.query.branchId === "string" ? req.query.branchId : undefined;
+      allowedBranchIds = intersectQueryBranchId(scope, q);
+    }
+
+    const items = await listCollectionItems(collection, allowedBranchIds);
     res.json({ data: { items }, error: null });
   } catch (e) {
     next(e);

@@ -9,6 +9,7 @@ import {
   deleteCustomer,
   adjustWallet,
 } from "../services/customer.service.js";
+import { resolveBranchScope } from "../lib/data-scope.js";
 
 const trimmed = (v: unknown) => (typeof v === "string" ? v.trim() : v);
 
@@ -49,8 +50,17 @@ const walletSchema = z.object({
   reason: z.string().min(1).default("Manual Adjustment"),
 });
 
-export async function getCustomers(_req: Request, res: Response, next: NextFunction) {
+export async function getCustomers(req: Request, res: Response, next: NextFunction) {
   try {
+    // Customer rows lack organizationId; return full list for permitted callers.
+    // Branch isolation for operational data is enforced on collections (job cards, etc.).
+    if (req.auth) {
+      const scope = await resolveBranchScope(req.auth);
+      if (!scope) {
+        res.json({ data: { customers: [] }, error: null });
+        return;
+      }
+    }
     const customers = await listCustomers();
     res.json({ data: { customers }, error: null });
   } catch (e) {

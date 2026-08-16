@@ -1,8 +1,11 @@
 "use client";
 
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
+import { useDomainDataReady } from "@/components/layout/domain-data-sync";
 
-/** True after `/api/bootstrap` has populated all entity stores. */
+/** True after shell bootstrap + current route domain pack have settled. */
 export function useDashboardStoresReady(): boolean {
-  return useAppBootstrapStore((s) => s.ready);
+  const shellReady = useAppBootstrapStore((s) => s.ready);
+  const domainReady = useDomainDataReady();
+  return shellReady && domainReady;
 }

@@ -6,19 +6,28 @@ import {
   SINGLETON_ENTITY_ID,
 } from "../constants/json-collections.js";
 import { handleInvoiceWalletSync } from "./wallet-sync.service.js";
+import { applyCollectionBranchScope } from "../lib/data-scope.js";
 
-export async function listCollectionItems(collection: string): Promise<unknown[]> {
+export async function listCollectionItems(
+  collection: string,
+  allowedBranchIds?: string[] | null
+): Promise<unknown[]> {
+  let items: unknown[];
   if (isSingletonCollection(collection)) {
     const row = await prisma.appJsonRow.findUnique({
       where: { collection_entityId: { collection, entityId: SINGLETON_ENTITY_ID } },
     });
-    return row ? [row.payload] : [];
+    items = row ? [row.payload] : [];
+  } else {
+    const rows = await prisma.appJsonRow.findMany({
+      where: { collection },
+    });
+    const payloads = rows.map((r) => r.payload);
+    items = sortCollectionPayloads(collection, payloads);
   }
-  const rows = await prisma.appJsonRow.findMany({
-    where: { collection },
-  });
-  const payloads = rows.map((r) => r.payload);
-  return sortCollectionPayloads(collection, payloads);
+
+  if (allowedBranchIds === undefined) return items;
+  return applyCollectionBranchScope(collection, items, allowedBranchIds);
 }
 
 export async function getCollectionItem(collection: string, entityId: string): Promise<unknown | null> {

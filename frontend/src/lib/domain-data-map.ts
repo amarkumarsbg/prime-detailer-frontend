@@ -1,0 +1,186 @@
+/**
+ * Route prefix → domain resources to load into Zustand.
+ * Keep packs coarse so pages keep working without per-page rewrites.
+ */
+
+export type DomainResource =
+  | "customers"
+  | "vehicles"
+  | "staff"
+  | "staffDirectory"
+  | "jobCards"
+  | "invoices"
+  | "quotations"
+  | "appointments"
+  | "expenses"
+  | "activityLogs"
+  | "communications"
+  | "serviceReminders"
+  | "walletTransactions"
+  | "serviceCatalog"
+  | "parts"
+  | "stockMovements"
+  | "productPurchases"
+  | "followUps"
+  | "serviceCategories"
+  | "notifications"
+  | "pickupDropRequests"
+  | "dashboardStats"
+  | "expenseMeta"
+  | "cashBank"
+  | "payroll"
+  | "membership"
+  | "appSettings"
+  | "referralProgram"
+  | "balanceSheetManual"
+  | "highEndServices"
+  | "reportSchedules"
+  | "vehicleCatalog";
+
+const DASHBOARD_CORE: DomainResource[] = [
+  "jobCards",
+  "invoices",
+  "expenses",
+  "appointments",
+  "serviceReminders",
+  "customers",
+  "parts",
+  "stockMovements",
+  "dashboardStats",
+  "notifications",
+  "staffDirectory",
+];
+
+const OPS_CORE: DomainResource[] = [
+  "jobCards",
+  "customers",
+  "vehicles",
+  "staffDirectory",
+  "serviceCatalog",
+  "serviceCategories",
+  "appointments",
+  "invoices",
+  "membership",
+  "notifications",
+];
+
+/** Longest-prefix wins. */
+const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
+  { prefix: "/payroll", resources: ["payroll", "staff", "staffDirectory"] },
+  { prefix: "/cash-bank", resources: ["cashBank", "invoices", "expenses"] },
+  { prefix: "/staff", resources: ["staff", "customers", "jobCards"] },
+  { prefix: "/attendance", resources: ["staffDirectory", "staff"] },
+  { prefix: "/settings", resources: ["appSettings", "vehicleCatalog"] },
+  {
+    prefix: "/shared-ledger",
+    resources: ["balanceSheetManual", "invoices", "expenses", "cashBank"],
+  },
+  {
+    prefix: "/accounting",
+    resources: [
+      "invoices",
+      "expenses",
+      "cashBank",
+      "jobCards",
+      "customers",
+      "balanceSheetManual",
+      "productPurchases",
+    ],
+  },
+  {
+    prefix: "/reports",
+    resources: [
+      "invoices",
+      "expenses",
+      "jobCards",
+      "customers",
+      "parts",
+      "productPurchases",
+      "cashBank",
+      "balanceSheetManual",
+      "staffDirectory",
+    ],
+  },
+  {
+    prefix: "/advanced-reports",
+    resources: ["reportSchedules", "customers", "invoices", "expenses", "jobCards", "appSettings"],
+  },
+  { prefix: "/messages", resources: ["communications", "customers"] },
+  { prefix: "/activity", resources: ["activityLogs", "jobCards", "invoices", "expenses"] },
+  { prefix: "/membership", resources: ["membership", "customers", "serviceCatalog"] },
+  { prefix: "/referrals", resources: ["referralProgram", "walletTransactions", "customers"] },
+  { prefix: "/reminders", resources: ["serviceReminders", "notifications", "appSettings"] },
+  { prefix: "/follow-ups", resources: ["followUps", "jobCards", "notifications"] },
+  {
+    prefix: "/inventory",
+    resources: ["parts", "stockMovements", "productPurchases", "serviceCatalog"],
+  },
+  {
+    prefix: "/services",
+    resources: ["serviceCatalog", "serviceCategories", "highEndServices", "parts"],
+  },
+  { prefix: "/expenses", resources: ["expenses", "expenseMeta"] },
+  { prefix: "/vendors", resources: ["expenses", "expenseMeta", "productPurchases", "parts"] },
+  {
+    prefix: "/billing",
+    resources: ["invoices", "jobCards", "customers", "appSettings", "notifications"],
+  },
+  {
+    prefix: "/quotations",
+    resources: [...OPS_CORE, "quotations", "vehicleCatalog", "appSettings"],
+  },
+  { prefix: "/appointments", resources: [...OPS_CORE, "vehicleCatalog", "appSettings"] },
+  { prefix: "/bookings", resources: [...OPS_CORE, "vehicleCatalog"] },
+  { prefix: "/booking", resources: [...OPS_CORE, "vehicleCatalog", "pickupDropRequests"] },
+  {
+    prefix: "/pickup-drop",
+    resources: [...OPS_CORE, "pickupDropRequests", "vehicleCatalog"],
+  },
+  {
+    prefix: "/job-cards",
+    resources: [...OPS_CORE, "parts", "stockMovements", "serviceReminders"],
+  },
+  {
+    prefix: "/customers",
+    resources: [
+      "customers",
+      "vehicles",
+      "walletTransactions",
+      "jobCards",
+      "invoices",
+      "communications",
+      "membership",
+      "serviceCatalog",
+      "vehicleCatalog",
+      "notifications",
+    ],
+  },
+  {
+    prefix: "/vehicles",
+    resources: ["vehicles", "customers", "serviceReminders", "jobCards", "vehicleCatalog"],
+  },
+  {
+    prefix: "/branches",
+    resources: ["staffDirectory", "jobCards", "expenses", "pickupDropRequests", "payroll"],
+  },
+  { prefix: "/mechanics", resources: ["staffDirectory", "jobCards"] },
+  { prefix: "/performance", resources: ["staffDirectory", "jobCards"] },
+  {
+    prefix: "/notifications",
+    resources: ["notifications", "jobCards", "invoices", "expenses", "pickupDropRequests"],
+  },
+  { prefix: "/parties", resources: ["customers", "invoices", "expenses"] },
+  { prefix: "/dashboard", resources: DASHBOARD_CORE },
+];
+
+export function resourcesForPath(pathname: string): DomainResource[] {
+  const path = pathname.split("?")[0] || "/";
+  const matched = ROUTE_PACKS.filter(
+    (p) => path === p.prefix || path.startsWith(`${p.prefix}/`)
+  );
+  if (matched.length === 0) {
+    return [...DASHBOARD_CORE];
+  }
+  matched.sort((a, b) => b.prefix.length - a.prefix.length);
+  return [...new Set(matched[0]!.resources)];
+}

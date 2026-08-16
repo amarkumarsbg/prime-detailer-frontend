@@ -25,8 +25,17 @@ export function toApiCustomer(row: CustomerRow) {
   };
 }
 
-export async function listCustomers() {
-  const rows = await prisma.customer.findMany({ orderBy: { createdAt: "desc" } });
+export async function listCustomers(opts?: { customerIds?: Set<string> | null }) {
+  if (opts?.customerIds && opts.customerIds.size === 0) {
+    return [];
+  }
+  const rows = await prisma.customer.findMany({
+    where:
+      opts?.customerIds && opts.customerIds.size > 0
+        ? { id: { in: [...opts.customerIds] } }
+        : undefined,
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map(toApiCustomer);
 }
 

@@ -18,9 +18,13 @@
     "test:collection-payloads": "tsx scripts/check-collection-payloads.ts",
     "test:rbac": "tsx scripts/check-rbac.ts",
     "test:job-card-pricing": "tsx scripts/check-job-card-pricing-guard.ts",
-    "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac && npm run test:job-card-pricing",
+    "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac && npm run test:job-card-pricing && npm run test:data-scope && npm run test:bootstrap-thin && npm run test:list-scope",
     "grant:job-card-pricing": "tsx scripts/grant-job-card-pricing.ts",
     "test:plan-catalog": "tsx --test scripts/plan-catalog.test.ts",
+    "test:data-scope": "tsx --test scripts/data-scope.test.ts",
+    "test:bootstrap-thin": "tsx scripts/check-bootstrap-thin.ts",
+    "test:list-scope": "tsx scripts/check-list-scope.ts",
+    "test:security": "npm run test:collection-permissions && npm run test:permission-keys && npm run test:collection-payloads && npm run test:rbac && npm run test:job-card-pricing && npm run test:data-scope && npm run test:bootstrap-thin && npm run test:list-scope",
     "saas:set-branch-limit": "tsx scripts/saas-set-branch-limit.ts",
     "saas:ensure-platform-owner": "tsx scripts/ensure-platform-owner.ts",
     "saas:force-one-branch": "tsx scripts/saas-force-one-branch.ts",
@@ -47,12 +51,14 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "prisma": "^6.19.0",
+    "swagger-ui-express": "^5.0.1",
     "twilio": "^5.13.1",
     "typescript": "^5.9.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/multer": "^2.1.0",
+    "@types/swagger-ui-express": "^4.1.8",
     "tsx": "^4.20.5"
   }
 }

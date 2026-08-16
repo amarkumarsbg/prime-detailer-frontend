@@ -10,6 +10,7 @@ import { Header } from "@/components/layout/header";
 import { ScrollToTopButton } from "@/components/layout/scroll-to-top-button";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { AppDataSync } from "@/components/layout/app-data-sync";
+import { DomainDataSync } from "@/components/layout/domain-data-sync";
 import { Button } from "@/components/ui/button";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import { canAccessNavItem } from "@/lib/rbac";
@@ -172,6 +173,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           ) : null}
           <AppDataSync />
+          <DomainDataSync />
           {children}
         </main>
         <ScrollToTopButton scrollContainerRef={mainScrollRef} />

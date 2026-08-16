@@ -9,6 +9,7 @@ import {
   createVehiclesBulk,
 } from "../services/vehicle-api.service.js";
 import { FuelType, VehicleSegment } from "@prisma/client";
+import { resolveBranchScope } from "../lib/data-scope.js";
 
 function paramId(req: Request): string {
   const raw = req.params.id;
@@ -63,8 +64,17 @@ const bulkSchema = z.object({
   vehicles: z.array(bulkItemSchema).min(1).max(5000),
 });
 
-export async function getVehicles(_req: Request, res: Response, next: NextFunction) {
+export async function getVehicles(req: Request, res: Response, next: NextFunction) {
   try {
+    // Vehicle rows lack organizationId; return full list for permitted callers.
+    // Branch isolation is enforced on collections that reference vehicles.
+    if (req.auth) {
+      const scope = await resolveBranchScope(req.auth);
+      if (!scope) {
+        res.json({ data: { vehicles: [] }, error: null });
+        return;
+      }
+    }
     const vehicles = await listVehiclesApi();
     res.json({ data: { vehicles }, error: null });
   } catch (e) {

@@ -70,3 +70,28 @@ export function requirePermission(permission: string) {
     res.status(403).json({ data: null, error: { message: `Forbidden: Missing permission ${permission}` } });
   };
 }
+
+/** Pass if the user holds any of the listed permissions (SUPER_ADMIN bypasses). */
+export function requireAnyPermission(permissions: string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    if (req.auth.role === "SUPER_ADMIN") {
+      next();
+      return;
+    }
+    const held = req.auth.permissions ?? [];
+    if (permissions.some((p) => held.includes(p))) {
+      next();
+      return;
+    }
+    res.status(403).json({
+      data: null,
+      error: {
+        message: `Forbidden: Missing one of permissions ${permissions.join(", ")}`,
+      },
+    });
+  };
+}

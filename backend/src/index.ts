@@ -22,6 +22,7 @@ import { attendanceRouter } from "./routes/attendance.routes.js";
 import { partyRouter } from "./routes/party.routes.js";
 import { organizationRouter } from "./routes/organization.routes.js";
 import { platformRouter } from "./routes/platform.routes.js";
+import { isSwaggerEnabled, registerSwagger } from "./docs/register-swagger.js";
 
 import { prisma } from "./lib/prisma.js";
 import { getPublicInvoiceView } from "./services/public-invoice.service.js";
@@ -50,15 +51,41 @@ app.get("/", (_req, res) => {
     name: "Prime Detailers API",
     hint: "Use the Next.js app in your browser (usually port 3000), not this URL alone.",
     frontend: env.FRONTEND_ORIGIN,
-    endpoints: { health: "/health", healthDb: "/health/db", api: "/api" },
+    endpoints: {
+      health: "/health",
+      healthApi: "/api/health",
+      healthDb: "/health/db",
+      healthDbApi: "/api/health/db",
+      api: "/api",
+      ...(isSwaggerEnabled()
+        ? { docs: "/api/docs", openapi: "/api/docs/openapi.json" }
+        : {}),
+    },
   });
 });
+
+/** OpenAPI / Swagger UI — disabled in production unless SWAGGER_ENABLED=true */
+registerSwagger(app);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
 app.get("/health/db", async (_req, res, next) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, database: "up" });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Aliases under /api for clients that expect the API prefix. */
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+app.get("/api/health/db", async (_req, res, next) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ ok: true, database: "up" });

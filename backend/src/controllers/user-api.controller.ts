@@ -12,8 +12,14 @@ import {
   isPasswordResetEmailConfigured,
 } from "../services/password-reset-email.service.js";
 import { sendUserCredentialsEmail } from "../services/onboarding-credentials-email.service.js";
-import { listUsersApi, createUserApi, updateUserApi } from "../services/user-api.service.js";
+import {
+  listUsersApi,
+  listStaffDirectoryApi,
+  createUserApi,
+  updateUserApi,
+} from "../services/user-api.service.js";
 import { prisma } from "../lib/prisma.js";
+import { resolveBranchScope } from "../lib/data-scope.js";
 
 function paramId(req: Request): string {
   const raw = req.params.id;
@@ -69,7 +75,37 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
       forbidden(res, "You do not have access to user management.");
       return;
     }
-    const users = await listUsersApi();
+    const scope = await resolveBranchScope(req.auth);
+    if (!scope) {
+      res.json({ data: { users: [] }, error: null });
+      return;
+    }
+    const users = await listUsersApi({
+      organizationId: scope.organizationId,
+      branchIds: scope.allowedBranchIds,
+    });
+    res.json({ data: { users }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+/** Sanitized staff list for operational UIs (no pins / permissions). */
+export async function getStaffDirectory(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.auth) {
+      forbidden(res, "Unauthorized");
+      return;
+    }
+    const scope = await resolveBranchScope(req.auth);
+    if (!scope) {
+      res.json({ data: { users: [] }, error: null });
+      return;
+    }
+    const users = await listStaffDirectoryApi({
+      organizationId: scope.organizationId,
+      branchIds: scope.allowedBranchIds,
+    });
     res.json({ data: { users }, error: null });
   } catch (e) {
     next(e);

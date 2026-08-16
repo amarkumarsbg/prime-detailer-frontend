@@ -23,8 +23,17 @@ function registrationDuplicateKey(reg: string): string {
   return reg.trim().toUpperCase().replace(/[\s-]/g, "");
 }
 
-export async function listVehiclesApi() {
-  const rows = await prisma.vehicle.findMany({ orderBy: { id: "asc" } });
+export async function listVehiclesApi(opts?: { vehicleIds?: Set<string> | null }) {
+  if (opts?.vehicleIds && opts.vehicleIds.size === 0) {
+    return [];
+  }
+  const rows = await prisma.vehicle.findMany({
+    where:
+      opts?.vehicleIds && opts.vehicleIds.size > 0
+        ? { id: { in: [...opts.vehicleIds] } }
+        : undefined,
+    orderBy: { id: "asc" },
+  });
   return rows.map(toApiVehicle);
 }
 

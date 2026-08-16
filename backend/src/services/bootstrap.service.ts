@@ -1,50 +1,20 @@
 import { prisma } from "../lib/prisma.js";
-import { toApiCustomer } from "./customer.service.js";
-import {
-  ARRAY_JSON_COLLECTIONS,
-  SINGLETON_COLLECTIONS,
-  SINGLETON_ENTITY_ID,
-} from "../constants/json-collections.js";
-import { sortCollectionPayloads } from "../lib/sort-collection-payloads.js";
+import { SINGLETON_ENTITY_ID } from "../constants/json-collections.js";
 import { listBranchesApi } from "./branch-api.service.js";
-import { listUsersApi } from "./user-api.service.js";
-import { listVehiclesApi } from "./vehicle-api.service.js";
 import { getEntitlementForOrg } from "./organization-subscription.service.js";
+import {
+  extractBranding,
+  type BrandingPayload,
+} from "../lib/data-scope.js";
 import type { AuthUser } from "../middleware/auth.js";
 
-const BOOTSTRAP_COLLECTION_NAMES = [
-  ...ARRAY_JSON_COLLECTIONS,
-  ...SINGLETON_COLLECTIONS,
-] as string[];
+export type ThinBootstrapPayload = {
+  branches: Awaited<ReturnType<typeof listBranchesApi>>;
+  branding: BrandingPayload;
+  entitlement: Awaited<ReturnType<typeof getEntitlementForOrg>> | null;
+};
 
-type AppJsonRowLite = { collection: string; entityId: string; payload: unknown };
-
-function buildCollectionsFromRows(rows: AppJsonRowLite[]): Record<string, unknown> {
-  const byCollection = new Map<string, AppJsonRowLite[]>();
-  for (const row of rows) {
-    const list = byCollection.get(row.collection) ?? [];
-    list.push(row);
-    byCollection.set(row.collection, list);
-  }
-
-  const collections: Record<string, unknown> = {};
-
-  for (const name of ARRAY_JSON_COLLECTIONS) {
-    const list = byCollection.get(name) ?? [];
-    const payloads = list.map((r) => r.payload);
-    collections[name] = sortCollectionPayloads(name, payloads);
-  }
-
-  for (const name of SINGLETON_COLLECTIONS) {
-    const list = byCollection.get(name) ?? [];
-    const row = list.find((r) => r.entityId === SINGLETON_ENTITY_ID);
-    collections[name] = row?.payload ?? null;
-  }
-
-  return collections;
-}
-
-export async function getBootstrapPayload(auth?: AuthUser) {
+async function resolveOrganizationId(auth?: AuthUser): Promise<string | undefined> {
   let organizationId = auth?.organizationId;
   if (!organizationId && auth?.id) {
     const row = await prisma.user.findUnique({
@@ -53,26 +23,35 @@ export async function getBootstrapPayload(auth?: AuthUser) {
     });
     organizationId = row?.organizationId;
   }
+  return organizationId;
+}
 
-  const [customers, branches, users, vehicles, appRows, entitlement] = await Promise.all([
-    prisma.customer.findMany({ orderBy: { createdAt: "desc" } }),
-    listBranchesApi(),
-    listUsersApi(),
-    listVehiclesApi(),
-    prisma.appJsonRow.findMany({
-      where: { collection: { in: BOOTSTRAP_COLLECTION_NAMES } },
-    }),
+async function loadBranding(): Promise<BrandingPayload> {
+  const row = await prisma.appJsonRow.findUnique({
+    where: {
+      collection_entityId: { collection: "appSettings", entityId: SINGLETON_ENTITY_ID },
+    },
+    select: { payload: true },
+  });
+  return extractBranding(row?.payload ?? null);
+}
+
+/**
+ * Shell-only bootstrap: org branches, public branding, entitlement.
+ * Domain collections/entities are loaded via permission-scoped APIs.
+ */
+export async function getBootstrapPayload(auth?: AuthUser): Promise<ThinBootstrapPayload> {
+  const organizationId = await resolveOrganizationId(auth);
+
+  const [branches, branding, entitlement] = await Promise.all([
+    listBranchesApi(organizationId),
+    loadBranding(),
     organizationId ? getEntitlementForOrg(organizationId) : Promise.resolve(null),
   ]);
 
-  const collections = buildCollectionsFromRows(appRows);
-
   return {
-    customers: customers.map(toApiCustomer),
     branches,
-    users,
-    vehicles,
-    collections,
+    branding,
     entitlement,
   };
 }

@@ -1,23 +1,19 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 
-/** How often to pull `/api/bootstrap` while the tab is visible (balances freshness vs load). */
+/** How often to pull thin `/api/bootstrap` while the tab is visible. */
 const POLL_INTERVAL_MS = 45_000;
-/** Debounce refresh after route changes within the dashboard shell. */
-const ROUTE_DEBOUNCE_MS = 400;
 
 /**
- * Keeps Zustand entity stores aligned with the API: visibility resume, periodic polling,
- * navigation between dashboard routes, and browser reconnect.
+ * Keeps shell stores (branches, branding, entitlement) fresh.
+ * Domain collections are loaded by DomainDataSync per route.
  */
 export function AppDataSync() {
-  const pathname = usePathname();
   const ready = useAppBootstrapStore((s) => s.ready);
   const refresh = useAppBootstrapStore((s) => s.refresh);
-  const skipNextRouteRefresh = useRef(true);
+  const started = useRef(false);
 
   useEffect(() => {
     const onVisible = () => {
@@ -36,22 +32,15 @@ export function AppDataSync() {
 
   useEffect(() => {
     if (!ready) return;
+    if (!started.current) {
+      started.current = true;
+    }
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void refresh();
     }, POLL_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [ready, refresh]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (skipNextRouteRefresh.current) {
-      skipNextRouteRefresh.current = false;
-      return;
-    }
-    const t = window.setTimeout(() => void refresh(), ROUTE_DEBOUNCE_MS);
-    return () => window.clearTimeout(t);
-  }, [pathname, ready, refresh]);
 
   return null;
 }

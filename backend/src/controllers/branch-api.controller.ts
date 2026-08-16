@@ -41,9 +41,17 @@ const branchSchema = z.object({
   managerPhone: optionalTenDigitPhone,
 });
 
-export async function getBranches(_req: Request, res: Response, next: NextFunction) {
+export async function getBranches(req: Request, res: Response, next: NextFunction) {
   try {
-    const branches = await listBranchesApi();
+    let organizationId = req.auth?.organizationId;
+    if (!organizationId && req.auth?.id) {
+      const row = await prisma.user.findUnique({
+        where: { id: req.auth.id },
+        select: { organizationId: true },
+      });
+      organizationId = row?.organizationId;
+    }
+    const branches = await listBranchesApi(organizationId);
     res.json({ data: { branches }, error: null });
   } catch (e) {
     next(e);
