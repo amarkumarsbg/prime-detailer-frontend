@@ -177,6 +177,20 @@ export function jobHasPickupIntent(job: JobCard, requests: PickupDropRequest[]):
   return /pickup requested/i.test(job.reportedIssues ?? "");
 }
 
+function jobNotesBlob(job: JobCard): string {
+  return `${job.notes ?? ""}\n${job.reportedIssues ?? ""}`;
+}
+
+/** Explicit decline from booking wizard — do not auto-create a return trip. */
+export function jobDeclinesDropOff(job: JobCard): boolean {
+  return /drop-off required:\s*no/i.test(jobNotesBlob(job));
+}
+
+export function jobHasDropIntent(job: JobCard, requests: PickupDropRequest[]): boolean {
+  if (requests.some((r) => r.jobCardId === job.id && r.type === "DROP")) return true;
+  return /drop-off required:\s*yes/i.test(jobNotesBlob(job));
+}
+
 export function buildDropRequestInput(
   job: JobCard,
   pickupRequest: PickupDropRequest | undefined

@@ -38,6 +38,7 @@ import {
 import { TimerControlsBufferCard } from "@/components/job-cards/timer-controls-buffer-card";
 import { ServiceTimerDeliverySummary } from "@/components/job-cards/service-timer-delivery-summary";
 import { EditJobCardDetailsDialog } from "@/components/job-cards/edit-job-card-details-dialog";
+import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import {
   JobCardWorkflowChrome,
   JOB_CARD_STATUS_LABELS,
@@ -291,6 +292,7 @@ export default function JobCardDetailPage() {
   const [whatsAppNotifyOpen, setWhatsAppNotifyOpen] = useState(false);
   const [deliverVehicleOpen, setDeliverVehicleOpen] = useState(false);
   const [deliverVehicleSubmitting, setDeliverVehicleSubmitting] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
   const [qualityCheckRequiredOpen, setQualityCheckRequiredOpen] = useState(false);
   const [quickAssignMechanicId, setQuickAssignMechanicId] = useState("");
@@ -1467,6 +1469,7 @@ export default function JobCardDetailPage() {
         onCancel={handleCancel}
         onAssignMechanic={() => setShowQuickAssignDialog(true)}
         onDeliverVehicle={() => setDeliverVehicleOpen(true)}
+        onRecordPayment={() => setRecordPaymentOpen(true)}
       />
 
       {jobCard.serviceTimerStartedAt &&
@@ -1577,11 +1580,9 @@ export default function JobCardDetailPage() {
             </TabsList>
             <div className="flex flex-wrap items-center gap-2 shrink-0 px-1 pb-2 xl:pb-0 xl:border-l border-border/60 xl:pl-4">
               {invoiceForJob ? (
-                <Button size="sm" asChild>
-                  <Link href={`/billing/${invoiceForJob.id}`}>
-                    <IndianRupee className="w-4 h-4 mr-1.5" />
-                    Record payment
-                  </Link>
+                <Button size="sm" type="button" onClick={() => setRecordPaymentOpen(true)}>
+                  <IndianRupee className="w-4 h-4 mr-1.5" />
+                  Record payment
                 </Button>
               ) : currentStatus === "DELIVERED" || currentStatus === "READY" ? (
                 <Button size="sm" type="button" onClick={handleGenerateInvoice}>
@@ -3214,11 +3215,14 @@ export default function JobCardDetailPage() {
                   <Truck className="w-4 h-4 mr-2" />
                   Deliver Vehicle
                 </Button>
-                <Button type="button" variant="secondary" className="w-full" asChild>
-                  <Link href={`/billing/${invoiceForJob.id}`}>
-                    <IndianRupee className="w-4 h-4 mr-2" />
-                    Record Payment
-                  </Link>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => setRecordPaymentOpen(true)}
+                >
+                  <IndianRupee className="w-4 h-4 mr-2" />
+                  Record Payment
                 </Button>
               </div>
             ) : currentStatus === "DELIVERED" || currentStatus === "READY" ? (
@@ -3259,6 +3263,11 @@ export default function JobCardDetailPage() {
         jobNumber={jobCard.jobNumber}
         submitting={deliverVehicleSubmitting}
         onConfirm={handleDeliverVehicle}
+      />
+      <RecordPaymentDialog
+        open={recordPaymentOpen}
+        onOpenChange={setRecordPaymentOpen}
+        invoiceId={invoiceForJob?.id ?? null}
       />
       <EditJobCardDetailsDialog
         jobCard={jobCard}

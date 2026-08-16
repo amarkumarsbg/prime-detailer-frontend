@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,6 @@ import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useAuthStore } from "@/store/auth-store";
-import { useWalletStore } from "@/store/wallet-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore } from "@/store/membership-store";
@@ -65,7 +65,6 @@ import {
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
 import { isResendNotConfiguredError } from "@/lib/invoice-email-send";
-import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import {
   paymentDisplayNumber,
   paymentInDetailPath,
@@ -274,7 +273,6 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const currentReturnPath = returnQuery ? `${pathname}?${returnQuery}` : pathname;
 
   const invoices = useInvoiceStore((s) => s.invoices);
-  const recordInvoicePayment = useInvoiceStore((s) => s.recordPayment);
   const updateInvoice = useInvoiceStore((s) => s.updateInvoice);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const user = useAuthStore((s) => s.user);
@@ -373,12 +371,6 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const [editLines, setEditLines] = useState<InvoiceLineItem[]>([]);
   const [editNotes, setEditNotes] = useState("");
   const [editSaving, setEditSaving] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [referenceNumber, setReferenceNumber] = useState("");
-  const [useWallet, setUseWallet] = useState(false);
-  const [addExtraToWallet, setAddExtraToWallet] = useState(false);
-  const [dialogRemainingBalance, setDialogRemainingBalance] = useState(0);
 
   // Local edit states for discounts
   const [flatDiscountType, setFlatDiscountType] = useState<"percentage" | "fixed">("fixed");
@@ -910,112 +902,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   };
 
   const openRecordDialog = () => {
-    setDialogRemainingBalance(remainingBalance);
-    setPaymentAmount(remainingBalance > 0 ? String(remainingBalance) : "");
-    setPaymentMethod("CASH");
-    setReferenceNumber("");
-    setUseWallet(false);
-    setAddExtraToWallet(false);
     setRecordDialogOpen(true);
-  };
-
-  const handleRecordPayment = async () => {
-    const amount = Number(paymentAmount);
-    if (!invoice || isNaN(amount) || amount <= 0) return;
-
-    const paidAt = new Date().toISOString();
-    const totalPaidBefore = payments.reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0);
-
-    const walletAmountUsed = useWallet
-      ? Math.min(invoiceCustomer?.walletBalance || 0, dialogRemainingBalance)
-      : 0;
-
-    const extraAmount = amount > (dialogRemainingBalance - walletAmountUsed)
-      ? Math.round((amount - (dialogRemainingBalance - walletAmountUsed)) * 100) / 100
-      : 0;
-
-    const remainingAfter = Math.max(0, dialogRemainingBalance - walletAmountUsed - amount);
-
-    const performedBy = user?.id?.toLowerCase() ?? "usr-001";
-    const result = await recordInvoicePayment(
-      invoice.id,
-      {
-        invoiceId: invoice.id,
-        amount,
-        method: paymentMethod,
-        referenceNumber: referenceNumber || undefined,
-        paidAt,
-        addExtraToWallet: addExtraToWallet && extraAmount > 0,
-        extraAmount: addExtraToWallet && extraAmount > 0 ? extraAmount : undefined,
-      },
-      { performedBy },
-      walletAmountUsed
-    );
-    if (result.inventoryError) {
-      toast.error("Could not update inventory", {
-        description: result.inventoryError,
-      });
-    } else {
-      toast.success("Payment recorded");
-
-      try {
-        await useCustomerStore.getState().fetchCustomers();
-        await useWalletStore.getState().fetchTransactions();
-      } catch (e) {
-        console.error("Failed to reload customer/wallet state:", e);
-      }
-
-      const totalPaidAfter = totalPaidBefore + amount + walletAmountUsed;
-      const latestInvoice = useInvoiceStore.getState().invoices.find(i => i.id === invoice.id) || invoice;
-      const isFullyPaidNow = totalPaidAfter >= latestInvoice.grandTotal - 0.01;
-      if (isFullyPaidNow) {
-        const buyer = useCustomerStore.getState().customers.find(c => c.id === latestInvoice.customerId) || invoiceCustomer;
-        if (buyer) {
-          const pointsRedeemed = latestInvoice.rewardDiscount || 0;
-          const discountAmt = latestInvoice.discountAmount || 0;
-          const refDiscount = latestInvoice.referralDiscount || 0;
-          const taxable = Math.max(0, latestInvoice.subtotal - discountAmt - pointsRedeemed - refDiscount);
-          const pointsEarned = Math.floor(taxable / 100);
-          const nextPoints = Math.max(0, buyer.rewardPoints - pointsRedeemed + pointsEarned);
-
-          await useCustomerStore.getState().updateCustomer(buyer.id, {
-            rewardPoints: nextPoints,
-            totalVisits: (buyer.totalVisits || 0) + 1,
-          });
-
-          toast.success(`Loyalty points updated: ${buyer.name} earned ${pointsEarned} points and redeemed ${pointsRedeemed} points.`);
-        }
-
-        if (latestInvoice.referralAdvocateId) {
-          const advocate = useCustomerStore.getState().customers.find(c => c.id === latestInvoice.referralAdvocateId);
-          if (advocate) {
-            const nextAdvocatePoints = (advocate.rewardPoints || 0) + referralRewardAmount;
-            await useCustomerStore.getState().updateCustomer(advocate.id, {
-              rewardPoints: nextAdvocatePoints,
-            });
-            toast.success(`Referrer credited: ${advocate.name} received ${referralRewardAmount} referral reward points.`);
-          }
-        }
-      }
-
-      pushActivityLog({
-        action: "PAYMENT_RECEIVED",
-        entityType: "INVOICE",
-        entityId: invoice.id,
-        entityLabel: invoice.invoiceNumber,
-        details: `${formatCurrency(amount)} received on ${invoice.invoiceNumber}`,
-      });
-      void notifyCustomerPaymentRecordedWhatsApp({
-        invoice: latestInvoice,
-        amount,
-        method: paymentMethod,
-        referenceNumber: referenceNumber || undefined,
-        paidAt,
-        remainingBalanceAfter: remainingAfter,
-        businessName,
-      });
-    }
-    setRecordDialogOpen(false);
   };
 
   const handlePrint = () => {
@@ -1742,156 +1629,11 @@ ${businessNameVal}`;
         </DialogContent>
       </Dialog>
 
-      <Dialog open={recordDialogOpen} onOpenChange={setRecordDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {invoiceCustomer && invoiceCustomer.walletBalance > 0 && (
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                    Wallet Balance: ₹{invoiceCustomer.walletBalance}
-                  </span>
-                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useWallet}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setUseWallet(checked);
-                        const walletUse = checked
-                          ? Math.min(invoiceCustomer.walletBalance, dialogRemainingBalance)
-                          : 0;
-                        setPaymentAmount(String(Math.max(0, Math.round((dialogRemainingBalance - walletUse) * 100) / 100)));
-                      }}
-                      className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                    />
-                    Use Wallet Balance
-                  </label>
-                </div>
-                {useWallet && (
-                  <div className="text-xs space-y-1 pt-1 border-t border-emerald-500/10 font-mono text-muted-foreground">
-                    <div className="flex justify-between">
-                      <span>Invoice Remaining:</span>
-                      <span>₹{dialogRemainingBalance}</span>
-                    </div>
-                    <div className="flex justify-between text-rose-500">
-                      <span>Wallet Used:</span>
-                      <span>-₹{Math.min(invoiceCustomer.walletBalance, dialogRemainingBalance)}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-foreground">
-                      <span>Amount to Pay:</span>
-                      <span>₹{Math.max(0, Math.round((dialogRemainingBalance - Math.min(invoiceCustomer.walletBalance, dialogRemainingBalance)) * 100) / 100)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount (₹)</Label>
-              <Input
-                id="amount"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Enter amount"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-              />
-            </div>
-
-            {(() => {
-              const walletUse = useWallet
-                ? Math.min(invoiceCustomer?.walletBalance || 0, dialogRemainingBalance)
-                : 0;
-              const inputAmt = Number(paymentAmount) || 0;
-              const targetBalance = dialogRemainingBalance - walletUse;
-              const extra = inputAmt > targetBalance ? Math.round((inputAmt - targetBalance) * 100) / 100 : 0;
-              
-              if (extra > 0) {
-                return (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
-                    <div className="text-xs space-y-1 font-mono text-muted-foreground">
-                      <div className="flex justify-between">
-                        <span>Invoice Amount:</span>
-                        <span>₹{targetBalance}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Amount Received:</span>
-                        <span>₹{inputAmt}</span>
-                      </div>
-                      <div className="flex justify-between font-bold text-amber-600">
-                        <span>Extra Amount:</span>
-                        <span>₹{extra}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 border-t border-amber-500/10 pt-2">
-                      <input
-                        id="add-to-wallet-chk"
-                        type="checkbox"
-                        checked={addExtraToWallet}
-                        onChange={(e) => setAddExtraToWallet(e.target.checked)}
-                        className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-                      />
-                      <Label htmlFor="add-to-wallet-chk" className="text-xs font-semibold cursor-pointer select-none">
-                        Add ₹{extra} to customer wallet?
-                      </Label>
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            <div className="space-y-2">
-              <Label>Payment Method</Label>
-              <Select
-                value={paymentMethod}
-                onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reference">Reference Number (optional)</Label>
-              <Input
-                id="reference"
-                placeholder="UPI ref, TXN ID, etc."
-                value={referenceNumber}
-                onChange={(e) => setReferenceNumber(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRecordDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleRecordPayment()}
-              disabled={
-                !paymentAmount ||
-                isNaN(Number(paymentAmount)) ||
-                Number(paymentAmount) <= 0
-              }
-            >
-              Record Payment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RecordPaymentDialog
+        open={recordDialogOpen}
+        onOpenChange={setRecordDialogOpen}
+        invoiceId={invoice?.id ?? null}
+      />
     </div>
   );
 }

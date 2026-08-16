@@ -43,6 +43,8 @@ export interface JobCardWorkflowChromeProps {
   onCancel: () => void;
   onAssignMechanic: () => void;
   onDeliverVehicle?: () => void;
+  /** Opens shared Record Payment modal for the job invoice. */
+  onRecordPayment?: () => void;
 }
 
 export function JobCardWorkflowChrome({
@@ -59,6 +61,7 @@ export function JobCardWorkflowChrome({
   onCancel,
   onAssignMechanic,
   onDeliverVehicle,
+  onRecordPayment,
 }: JobCardWorkflowChromeProps) {
   const readyForDeliveryActions =
     currentStatus === "READY" && Boolean(invoiceForJob) && Boolean(onDeliverVehicle);
@@ -186,11 +189,15 @@ export function JobCardWorkflowChrome({
                       <Truck className="mr-2 h-4 w-4" />
                       Deliver Vehicle
                     </Button>
-                    <Button type="button" variant="secondary" className="w-full" asChild>
-                      <Link href={`/billing/${invoiceForJob!.id}`}>
-                        <IndianRupee className="mr-2 h-4 w-4" />
-                        Record Payment
-                      </Link>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={onRecordPayment}
+                      disabled={!onRecordPayment}
+                    >
+                      <IndianRupee className="mr-2 h-4 w-4" />
+                      Record Payment
                     </Button>
                   </div>
                   <Button
@@ -225,11 +232,15 @@ export function JobCardWorkflowChrome({
                     {invoiceForJob ? "View invoice" : "Generate Invoice"}
                   </Button>
                   {currentStatus === "DELIVERED" && invoiceForJob ? (
-                    <Button type="button" variant="secondary" className="w-full sm:w-auto" asChild>
-                      <Link href={`/billing/${invoiceForJob.id}`}>
-                        <IndianRupee className="mr-2 h-4 w-4" />
-                        Record Payment
-                      </Link>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      onClick={onRecordPayment}
+                      disabled={!onRecordPayment}
+                    >
+                      <IndianRupee className="mr-2 h-4 w-4" />
+                      Record Payment
                     </Button>
                   ) : null}
                 </div>
