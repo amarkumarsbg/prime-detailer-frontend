@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, FileText, User } from "lucide-react";
+import { ArrowLeft, Check, FileText, IndianRupee, Truck, User } from "lucide-react";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +42,7 @@ export interface JobCardWorkflowChromeProps {
   onUpdateStatus: () => void;
   onCancel: () => void;
   onAssignMechanic: () => void;
+  onDeliverVehicle?: () => void;
 }
 
 export function JobCardWorkflowChrome({
@@ -57,7 +58,11 @@ export function JobCardWorkflowChrome({
   onUpdateStatus,
   onCancel,
   onAssignMechanic,
+  onDeliverVehicle,
 }: JobCardWorkflowChromeProps) {
+  const readyForDeliveryActions =
+    currentStatus === "READY" && Boolean(invoiceForJob) && Boolean(onDeliverVehicle);
+
   return (
     <div className="min-w-0 max-w-full overflow-x-hidden space-y-3 sm:space-y-4">
       <div className="sticky top-0 z-30 -mt-4 border-b border-border/80 bg-background/98 py-2.5 backdrop-blur-sm sm:mt-0">
@@ -96,14 +101,18 @@ export function JobCardWorkflowChrome({
                     isCurrent = currentStatus === "READY" && !invoiceForJob;
                   } else if (step.id === "DELIVERED") {
                     isCompleted = currentStatus === "DELIVERED";
-                    isCurrent = currentStatus === "DELIVERED";
+                    isCurrent =
+                      currentStatus === "READY" && Boolean(invoiceForJob)
+                        ? true
+                        : currentStatus === "DELIVERED";
                   } else {
                     const idx = step.statusIndex;
                     isCompleted =
                       idx < currentStatusIndex ||
                       (currentStatus === "READY" && idx === 4) ||
                       currentStatus === "DELIVERED";
-                    isCurrent = idx === currentStatusIndex && !(currentStatus === "READY" && idx === 4);
+                    isCurrent =
+                      idx === currentStatusIndex && !(currentStatus === "READY" && idx === 4);
                   }
 
                   const stepNumber = step.id === "DELIVERED" ? 6 : index + 1;
@@ -167,28 +176,69 @@ export function JobCardWorkflowChrome({
               </div>
             </div>
             <div className="mt-3 space-y-2 sm:mt-4">
-              {currentStatus === "DELIVERED" || currentStatus === "READY" ? (
+              {readyForDeliveryActions ? (
+                <div className="hidden flex-col gap-3 sm:flex">
+                  <p className="text-sm text-muted-foreground">
+                    Invoice is ready — record payment and/or deliver the vehicle.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:max-w-lg">
+                    <Button type="button" className="w-full" onClick={onDeliverVehicle}>
+                      <Truck className="mr-2 h-4 w-4" />
+                      Deliver Vehicle
+                    </Button>
+                    <Button type="button" variant="secondary" className="w-full" asChild>
+                      <Link href={`/billing/${invoiceForJob!.id}`}>
+                        <IndianRupee className="mr-2 h-4 w-4" />
+                        Record Payment
+                      </Link>
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-fit"
+                    onClick={onGenerateInvoice}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    View invoice
+                  </Button>
+                </div>
+              ) : currentStatus === "DELIVERED" || currentStatus === "READY" ? (
                 <div className="hidden flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
                   <p className="text-sm text-muted-foreground">
                     {currentStatus === "DELIVERED"
-                      ? "This job is delivered — you can create the tax invoice or open it if it already exists."
-                      : "This job is ready — generate the invoice to mark it as delivered."}
+                      ? "This job is delivered — open the tax invoice or record payment."
+                      : "This job is ready — generate the invoice first, then deliver the vehicle."}
                   </p>
                   <Button
                     type="button"
                     className="w-full shrink-0 sm:w-auto"
                     onClick={onGenerateInvoice}
-                    title="Creates the invoice if needed and opens billing to print or record payment."
+                    title={
+                      invoiceForJob
+                        ? "Opens billing to print or record payment."
+                        : "Creates the invoice without marking delivered."
+                    }
                   >
                     <FileText className="w-4 h-4 mr-2" />
                     {invoiceForJob ? "View invoice" : "Generate Invoice"}
                   </Button>
+                  {currentStatus === "DELIVERED" && invoiceForJob ? (
+                    <Button type="button" variant="secondary" className="w-full sm:w-auto" asChild>
+                      <Link href={`/billing/${invoiceForJob.id}`}>
+                        <IndianRupee className="mr-2 h-4 w-4" />
+                        Record Payment
+                      </Link>
+                    </Button>
+                  ) : null}
                 </div>
               ) : (
                 <>
                   {advanceBlockedByMechanic && (
                     <p className="text-sm text-amber-600 dark:text-amber-500">
-                      Assign a mechanic before moving to In Service — use the button below or the summary header.
+                      Assign a mechanic before moving to In Service — use the button below or the
+                      summary header.
                     </p>
                   )}
                   <div className="hidden flex-col gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">

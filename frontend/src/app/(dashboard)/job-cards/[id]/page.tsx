@@ -33,6 +33,7 @@ import {
   Package,
   Plus,
   Pencil,
+  Truck,
 } from "lucide-react";
 import { TimerControlsBufferCard } from "@/components/job-cards/timer-controls-buffer-card";
 import { ServiceTimerDeliverySummary } from "@/components/job-cards/service-timer-delivery-summary";
@@ -46,6 +47,10 @@ import { JobCardWhatsAppNotifyDialog } from "@/components/job-cards/job-card-wha
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { JobCardNotesPanel } from "@/components/job-cards/job-card-notes-panel";
 import { JobCardServiceChecklist } from "@/components/job-cards/job-card-service-checklist";
+import {
+  DeliverVehicleDialog,
+  type DeliverVehicleResult,
+} from "@/components/job-cards/deliver-vehicle-dialog";
 import { useJobTimer } from "@/hooks/use-job-timer";
 import {
   jobCardIsEditable,
@@ -284,6 +289,8 @@ export default function JobCardDetailPage() {
     null
   );
   const [whatsAppNotifyOpen, setWhatsAppNotifyOpen] = useState(false);
+  const [deliverVehicleOpen, setDeliverVehicleOpen] = useState(false);
+  const [deliverVehicleSubmitting, setDeliverVehicleSubmitting] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
   const [qualityCheckRequiredOpen, setQualityCheckRequiredOpen] = useState(false);
   const [quickAssignMechanicId, setQuickAssignMechanicId] = useState("");
@@ -1291,84 +1298,20 @@ export default function JobCardDetailPage() {
   const handleGenerateInvoice = async () => {
     if (!jobCard) return;
 
-    let jobForInvoice: JobCard = jobCard;
-
-    if (currentStatus === "READY" || jobCard.status === "READY") {
-      const nowIso = new Date().toISOString();
-      const patch: Partial<JobCard> = {
-        status: "DELIVERED",
-        updatedAt: nowIso,
-        actualDelivery: nowIso,
-      };
-
-      if (jobCard.serviceTimerStartedAt) {
-        const snap = computeServiceTimerSnapshot(jobCard, nowIso);
-        if (snap) {
-          patch.serviceTimerDeliverySnapshot = snap;
-          patch.totalPausedMs = snap.totalPauseMs;
-          patch.timerIsPaused = false;
-          patch.timerPausedAt = undefined;
-        }
-      }
-
-      if (jobCard.highEndServiceIds && jobCard.highEndServiceIds.length > 0) {
-        jobCard.highEndServiceIds.forEach((hesId) => {
-          const config = highEndServiceConfigs.find((c) => c.id === hesId);
-          if (config) {
-            const first =
-              jobCard.highEndFirstFollowUpMonthsByServiceId?.[hesId] ??
-              config.reminderIntervals[0] ??
-              0;
-            const intervals = buildHighEndReminderMonthIntervals(config.reminderIntervals, first);
-            generateHighEndReminders({
-              jobCardId: jobCard.id,
-              serviceName: config.name,
-              serviceDate: nowIso,
-              customerId: jobCard.customerId,
-              customerName: jobCard.customerName,
-              customerPhone: jobCard.customerPhone,
-              vehicleId: jobCard.vehicleId,
-              vehicleRegNumber: jobCard.vehicleRegNumber,
-              vehicleMakeModel: jobCard.vehicleMakeModel,
-              intervalMonths: intervals,
-            });
-          }
-        });
-        toast.success("Maintenance reminders created", {
-          description: `Auto-generated reminders for ${jobCard.highEndServiceIds.length} high-end service(s)`,
-        });
-      }
-
-      try {
-        await updateJobCard(jobCard.id, patch);
-      } catch (e) {
-        toast.error("Could not mark job as delivered", {
-          description: e instanceof Error ? e.message : "Please try again",
-        });
-        return;
-      }
-
-      setCurrentStatus("DELIVERED");
-      jobForInvoice = { ...jobCard, ...patch };
-
-      notifyJobDeliveredWhatsApp(jobForInvoice, businessName);
-
-      pushActivityLog({
-        action: "STATUS_CHANGED",
-        entityType: "JOB_CARD",
-        entityId: jobCard.id,
-        entityLabel: jobCard.jobNumber,
-        details: `${jobCard.jobNumber} marked delivered`,
-      });
-    } else if (currentStatus === "DELIVERED" && jobCard.status !== "DELIVERED") {
-      // UI already shows delivered while store sync is catching up
-      jobForInvoice = { ...jobCard, status: "DELIVERED" };
+    if (currentStatus !== "READY" && currentStatus !== "DELIVERED") {
+      toast.error("Mark the job ready before generating an invoice");
+      return;
     }
+
+    const jobForInvoice: JobCard =
+      currentStatus === "READY" && jobCard.status !== "READY"
+        ? { ...jobCard, status: "READY" }
+        : jobCard;
 
     const result = createOrGetInvoiceForJob(jobCard.id, jobForInvoice);
     if (!result.ok) {
       if (result.code === "NOT_DELIVERED") {
-        toast.error("Deliver the job before generating an invoice");
+        toast.error("Mark the job ready before generating an invoice");
       } else if (result.code === "NO_SERVICES") {
         toast.error("Add services on the job card before invoicing");
       } else {
@@ -1382,6 +1325,91 @@ export default function JobCardDetailPage() {
       if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
     }
     router.push(`/billing/${result.invoiceId}`);
+  };
+
+  const handleDeliverVehicle = async (result: DeliverVehicleResult) => {
+    if (!jobCard || currentStatus === "DELIVERED" || currentStatus === "CANCELLED") return;
+    if (!invoiceForJob) {
+      toast.error("Generate the invoice before delivering the vehicle");
+      return;
+    }
+
+    setDeliverVehicleSubmitting(true);
+    const nowIso = new Date().toISOString();
+    const patch: Partial<JobCard> = {
+      status: "DELIVERED",
+      updatedAt: nowIso,
+      actualDelivery: nowIso,
+      deliveryNotes: result.deliveryNotes || undefined,
+      deliveryChecklist: result.deliveryChecklist,
+    };
+
+    if (jobCard.serviceTimerStartedAt) {
+      const snap = computeServiceTimerSnapshot(jobCard, nowIso);
+      if (snap) {
+        patch.serviceTimerDeliverySnapshot = snap;
+        patch.totalPausedMs = snap.totalPauseMs;
+        patch.timerIsPaused = false;
+        patch.timerPausedAt = undefined;
+      }
+    }
+
+    if (jobCard.highEndServiceIds && jobCard.highEndServiceIds.length > 0) {
+      jobCard.highEndServiceIds.forEach((hesId) => {
+        const config = highEndServiceConfigs.find((c) => c.id === hesId);
+        if (config) {
+          const first =
+            jobCard.highEndFirstFollowUpMonthsByServiceId?.[hesId] ??
+            config.reminderIntervals[0] ??
+            0;
+          const intervals = buildHighEndReminderMonthIntervals(config.reminderIntervals, first);
+          generateHighEndReminders({
+            jobCardId: jobCard.id,
+            serviceName: config.name,
+            serviceDate: nowIso,
+            customerId: jobCard.customerId,
+            customerName: jobCard.customerName,
+            customerPhone: jobCard.customerPhone,
+            vehicleId: jobCard.vehicleId,
+            vehicleRegNumber: jobCard.vehicleRegNumber,
+            vehicleMakeModel: jobCard.vehicleMakeModel,
+            intervalMonths: intervals,
+          });
+        }
+      });
+      toast.success("Maintenance reminders created", {
+        description: `Auto-generated reminders for ${jobCard.highEndServiceIds.length} high-end service(s)`,
+      });
+    }
+
+    try {
+      await updateJobCard(jobCard.id, patch);
+    } catch (e) {
+      toast.error("Could not mark job as delivered", {
+        description: e instanceof Error ? e.message : "Please try again",
+      });
+      setDeliverVehicleSubmitting(false);
+      return;
+    }
+
+    const deliveredJob = { ...jobCard, ...patch };
+    setCurrentStatus("DELIVERED");
+    setDeliverVehicleOpen(false);
+    setDeliverVehicleSubmitting(false);
+
+    notifyJobDeliveredWhatsApp(deliveredJob, businessName);
+
+    pushActivityLog({
+      action: "STATUS_CHANGED",
+      entityType: "JOB_CARD",
+      entityId: jobCard.id,
+      entityLabel: jobCard.jobNumber,
+      details: `${jobCard.jobNumber} marked delivered`,
+    });
+
+    toast.success("Vehicle delivered", {
+      description: `${jobCard.jobNumber} is now delivered.`,
+    });
   };
 
   if (!jobCard) {
@@ -1438,6 +1466,7 @@ export default function JobCardDetailPage() {
         onUpdateStatus={handleUpdateStatus}
         onCancel={handleCancel}
         onAssignMechanic={() => setShowQuickAssignDialog(true)}
+        onDeliverVehicle={() => setDeliverVehicleOpen(true)}
       />
 
       {jobCard.serviceTimerStartedAt &&
@@ -3179,7 +3208,20 @@ export default function JobCardDetailPage() {
       {showMobileActionBar ? (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] border-t border-border bg-background/95 px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm">
           <div className="mx-auto flex max-w-lg flex-col gap-2">
-            {currentStatus === "DELIVERED" || currentStatus === "READY" ? (
+            {currentStatus === "READY" && invoiceForJob ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" className="w-full" onClick={() => setDeliverVehicleOpen(true)}>
+                  <Truck className="w-4 h-4 mr-2" />
+                  Deliver Vehicle
+                </Button>
+                <Button type="button" variant="secondary" className="w-full" asChild>
+                  <Link href={`/billing/${invoiceForJob.id}`}>
+                    <IndianRupee className="w-4 h-4 mr-2" />
+                    Record Payment
+                  </Link>
+                </Button>
+              </div>
+            ) : currentStatus === "DELIVERED" || currentStatus === "READY" ? (
               <Button type="button" className="w-full" onClick={handleGenerateInvoice}>
                 <FileText className="w-4 h-4 mr-2" />
                 {invoiceForJob ? "View invoice" : "Generate Invoice"}
@@ -3211,6 +3253,13 @@ export default function JobCardDetailPage() {
           </div>
         </div>
       ) : null}
+      <DeliverVehicleDialog
+        open={deliverVehicleOpen}
+        onOpenChange={setDeliverVehicleOpen}
+        jobNumber={jobCard.jobNumber}
+        submitting={deliverVehicleSubmitting}
+        onConfirm={handleDeliverVehicle}
+      />
       <EditJobCardDetailsDialog
         jobCard={jobCard}
         open={editDetailsOpen}

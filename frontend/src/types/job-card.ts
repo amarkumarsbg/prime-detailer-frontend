@@ -152,6 +152,14 @@ export interface JobCard {
   bufferAdjustments?: TimerAdjustment[];
   /** Set when status becomes DELIVERED; read-only summary for the service timer */
   serviceTimerDeliverySnapshot?: ServiceTimerDeliverySnapshot;
+  /** Optional notes captured in the Deliver Vehicle checklist dialog */
+  deliveryNotes?: string;
+  /** Checklist completion when marking delivered */
+  deliveryChecklist?: {
+    customerSatisfaction: boolean;
+    keysDelivered: boolean;
+    finalWalkthrough: boolean;
+  };
   createdBy: string;
   createdAt: string;
   updatedAt: string;

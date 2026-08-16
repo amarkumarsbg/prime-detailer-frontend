@@ -4014,6 +4014,20 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 </details>
               </div>
 
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant={selectedMainIds.length > 0 ? "default" : "secondary"}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold tabular-nums",
+                    selectedMainIds.length > 0 &&
+                      "bg-sky-600 text-white hover:bg-sky-600 dark:bg-sky-600"
+                  )}
+                >
+                  {selectedMainIds.length}{" "}
+                  {selectedMainIds.length === 1 ? "service" : "services"} selected
+                </Badge>
+              </div>
+
               <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium">Select Service(s)</p>

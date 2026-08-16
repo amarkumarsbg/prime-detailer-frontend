@@ -58,7 +58,7 @@ function BillingFromJobCardEffect() {
         toast.error("Job card not found");
         router.replace("/billing");
       } else if (result.code === "NOT_DELIVERED") {
-        toast.error("Deliver the job before generating an invoice");
+        toast.error("Mark the job ready before generating an invoice");
         router.replace(`/job-cards/${jobCardId}`);
       } else {
         toast.error("Add services on the job card before invoicing");

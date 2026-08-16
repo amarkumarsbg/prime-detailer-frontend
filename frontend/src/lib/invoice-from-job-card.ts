@@ -257,9 +257,9 @@ function jobHasInvoiceableLines(job: JobCard): boolean {
 }
 
 /**
- * Returns an existing invoice for the job or creates one from a delivered job card.
+ * Returns an existing invoice for the job or creates one from a ready/delivered job card.
  * Used by Billing (?jobCardId=) and job card “Generate Invoice”.
- * Pass `jobOverride` when the store may not have the delivered status yet (same-click deliver + invoice).
+ * Invoice can be created at READY; delivery is a separate step with checklist.
  */
 export function createOrGetInvoiceForJob(
   jobCardId: string,
@@ -279,7 +279,9 @@ export function createOrGetInvoiceForJob(
     };
   }
 
-  if (jc.status !== "DELIVERED") return { ok: false, code: "NOT_DELIVERED" };
+  if (jc.status !== "DELIVERED" && jc.status !== "READY") {
+    return { ok: false, code: "NOT_DELIVERED" };
+  }
   if (!jobHasInvoiceableLines(jc)) return { ok: false, code: "NO_SERVICES" };
 
   const invoiceId = `inv-${Date.now().toString(36)}`;
