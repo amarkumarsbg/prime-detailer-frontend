@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImageIcon, Plus, Save, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CompanyBrandColorCard } from "@/components/settings/company-brand-color-card";
+import { ImageCropDialog } from "@/components/settings/image-crop-dialog";
 import { LoginHeroPanel } from "@/components/shared/login-hero-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,6 +62,7 @@ export function BrandingThemePanel() {
   const bgInputRef = useRef<HTMLInputElement>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [bgUploading, setBgUploading] = useState(false);
+  const [logoCropSrc, setLogoCropSrc] = useState<string | null>(null);
 
   const [draftHeading, setDraftHeading] = useState(savedHeading);
   const [draftDescription, setDraftDescription] = useState(savedDescription);
@@ -73,6 +75,12 @@ export function BrandingThemePanel() {
     setDraftDescription(savedDescription);
     setDraftFeatures(cloneFeatures(savedFeatures));
   }, [savedHeading, savedDescription, savedFeatures]);
+
+  useEffect(() => {
+    return () => {
+      if (logoCropSrc?.startsWith("blob:")) URL.revokeObjectURL(logoCropSrc);
+    };
+  }, [logoCropSrc]);
 
   const logoPreview = resolveUploadsPublicUrl(businessLogo);
   const bgPreview = resolveUploadsPublicUrl(loginBackgroundImage);
@@ -88,7 +96,14 @@ export function BrandingThemePanel() {
     draftDescription !== savedDescription ||
     JSON.stringify(draftFeatures) !== JSON.stringify(savedFeatures);
 
-  const onLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const closeLogoCrop = () => {
+    setLogoCropSrc((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+  };
+
+  const onLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -97,11 +112,19 @@ export function BrandingThemePanel() {
       toast.error(err);
       return;
     }
+    setLogoCropSrc((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  };
+
+  const uploadCroppedLogo = async (file: File) => {
     setLogoUploading(true);
     try {
       const url = await uploadBrandingImage(file);
       setBusinessProfile({ businessLogo: url });
       toast.success("Company logo updated");
+      closeLogoCrop();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not upload logo.");
     } finally {
@@ -170,6 +193,17 @@ export function BrandingThemePanel() {
 
   return (
     <div className="space-y-4">
+      <ImageCropDialog
+        open={Boolean(logoCropSrc)}
+        imageSrc={logoCropSrc}
+        title="Adjust company logo"
+        description="Drag to move and zoom to choose which part of the image to keep. Crop is square for sidebar and header."
+        aspect={1}
+        confirmLabel={logoUploading ? "Uploading…" : "Save logo"}
+        onCancel={closeLogoCrop}
+        onConfirm={uploadCroppedLogo}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -178,7 +212,7 @@ export function BrandingThemePanel() {
           </CardTitle>
           <p className="text-sm text-muted-foreground pt-1">
             Shown in the sidebar, header, and login screen. Upload JPEG, PNG, WebP, or GIF (max 5
-            MB).
+            MB). You can crop and adjust after selecting a file.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -198,7 +232,7 @@ export function BrandingThemePanel() {
                 <img
                   src={logoPreview}
                   alt="Company logo preview"
-                  className="h-20 w-20 rounded-md object-cover"
+                  className="h-20 w-20 rounded-md object-contain bg-muted/40"
                 />
               </div>
             ) : (
