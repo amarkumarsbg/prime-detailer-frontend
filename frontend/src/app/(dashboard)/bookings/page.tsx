@@ -145,9 +145,10 @@ export default function BookingsPage() {
       appointments
         .filter((a) => resolveAppointmentKind(a) === "BOOKING")
         .sort((a, b) => {
-          const da = `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`);
+          // Newest scheduled slots first so today's / upcoming bookings aren't buried.
+          const da = `${b.date}T${b.time || "00:00"}`.localeCompare(`${a.date}T${a.time || "00:00"}`);
           if (da !== 0) return da;
-          return a.bookingId.localeCompare(b.bookingId);
+          return b.bookingId.localeCompare(a.bookingId);
         }),
     [appointments]
   );
