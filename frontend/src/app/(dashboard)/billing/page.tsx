@@ -10,6 +10,7 @@ import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { SharedLedgerClient } from "@/components/shared-ledger/shared-ledger-client";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { notifyInvoiceCreatedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { useInvoiceStore } from "@/store/invoice-store";
@@ -22,9 +23,25 @@ import {
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isPendingPaymentInvoice } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice, InvoiceStatus } from "@/types";
-import { IndianRupee, TrendingUp, FileText, Receipt } from "lucide-react";
+import { BookMarked, Eye, IndianRupee, TrendingUp, FileText, Receipt } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
+import { invoiceOutstanding } from "@/lib/party/ledger-math";
+import {
+  buildInvoiceReadyWhatsAppMessage,
+  buildPaymentPendingReminderWhatsAppMessage,
+  isWhatsAppNonClickableShareUrl,
+  publicInvoiceShareUrl,
+} from "@/lib/whatsapp-customer-messages";
+import {
+  isWhatsAppNotConfiguredError,
+  openWhatsAppComposer,
+  sendCustomerWhatsApp,
+} from "@/lib/whatsapp-send";
+import { pushActivityLog } from "@/lib/activity-log-helper";
+import { useNotificationStore } from "@/store/notification-store";
 
 const STATUS_TABS: { value: "all" | InvoiceStatus; label: string; shortLabel?: string }[] = [
   { value: "all", label: "All" },
@@ -79,13 +96,18 @@ function BillingFromJobCardEffect() {
   return null;
 }
 
+type BillingView = "invoices" | "ledger";
+
 export default function BillingPage() {
   const router = useRouter();
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
+  const [billingView, setBillingView] = useState<BillingView>("invoices");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [ledgerFocusCustomerId, setLedgerFocusCustomerId] = useState<string | null>(null);
   const invoices = useInvoiceStore((s) => s.invoices);
   const jobCards = useJobCardStore((s) => s.jobCards);
+  const businessName = useSettingsStore((s) => s.businessName);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
 
   const branchScopedInvoices = useMemo(
@@ -129,10 +151,13 @@ export default function BillingPage() {
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         jobNumber: inv.jobNumber,
+        customerId: inv.customerId,
         customerName: inv.customerName,
+        customerPhone: inv.customerPhone,
         vehicleRegNumber: inv.vehicleRegNumber,
         servicesSummary,
         grandTotal: inv.grandTotal,
+        outstanding: invoiceOutstanding(inv),
         status: inv.status,
         paymentMethod: inv.payments[0]?.method ?? null,
         walletAmountUsed: inv.walletAmountUsed,
@@ -141,6 +166,96 @@ export default function BillingPage() {
     }) as Record<string, unknown>[];
 
   const allTableData = useMemo(() => toTableRows(invoicesForView), [invoicesForView]);
+
+  const openCustomerLedger = (customerId: string) => {
+    setLedgerFocusCustomerId(customerId);
+    setBillingView("ledger");
+  };
+
+  const shareInvoiceLedgerWhatsApp = async (invoiceId: string, phoneHint?: string) => {
+    const inv = invoices.find((i) => i.id === invoiceId);
+    if (!inv) {
+      toast.error("Invoice not found");
+      return;
+    }
+    const phone = (phoneHint || inv.customerPhone || "").trim();
+    if (!phone) {
+      toast.error("No customer phone on file for this ledger");
+      return;
+    }
+
+    const pendingAmount = invoiceOutstanding(inv);
+    const viewUrl = publicInvoiceShareUrl(inv.id);
+    const composerMessage = buildPaymentPendingReminderWhatsAppMessage({
+      pendingAmount,
+      statementUrl: viewUrl,
+      businessName,
+    });
+    const deliveryMessage = buildInvoiceReadyWhatsAppMessage(inv, {
+      businessName,
+      remainingBalance: pendingAmount,
+      viewUrl,
+    });
+
+    const branchId = jobCards.find((j) => j.id === inv.jobCardId)?.branchId;
+    const warnLocalLink = isWhatsAppNonClickableShareUrl(viewUrl);
+
+    try {
+      await sendCustomerWhatsApp(phone, deliveryMessage);
+      toast.success("Payment reminder sent via WhatsApp", { description: phone });
+      if (warnLocalLink) {
+        toast.warning("Link may not be tappable in WhatsApp", {
+          description:
+            "WhatsApp does not open localhost links. Set NEXT_PUBLIC_APP_URL to your public https domain.",
+        });
+      }
+      useNotificationStore.getState().addNotification({
+        type: "whatsapp_sent",
+        title: "Ledger reminder shared via WhatsApp",
+        message: `${inv.invoiceNumber} → ${phone}`,
+        href: `/billing/invoices/${inv.id}`,
+        branchId,
+      });
+      pushActivityLog({
+        action: "WHATSAPP_SENT",
+        entityType: "INVOICE",
+        entityId: inv.id,
+        entityLabel: inv.invoiceNumber,
+        details: `Payment reminder for ${inv.customerName} via WhatsApp`,
+      });
+    } catch (err) {
+      if (isWhatsAppNotConfiguredError(err)) {
+        openWhatsAppComposer(phone, composerMessage);
+        toast.info("WhatsApp opened", {
+          description: warnLocalLink
+            ? "Review and send. Note: localhost links are not clickable in WhatsApp."
+            : "Review the payment reminder and send it from WhatsApp.",
+        });
+        if (warnLocalLink) {
+          toast.warning("Link may not be tappable in WhatsApp", {
+            description:
+              "Set NEXT_PUBLIC_APP_URL to a public https URL (e.g. your deployed app) so the invoice link works.",
+          });
+        }
+        useNotificationStore.getState().addNotification({
+          type: "whatsapp_sent",
+          title: "Ledger — WhatsApp composer",
+          message: `${inv.invoiceNumber} → ${phone}`,
+          href: `/billing/invoices/${inv.id}`,
+          branchId,
+        });
+        pushActivityLog({
+          action: "WHATSAPP_SENT",
+          entityType: "INVOICE",
+          entityId: inv.id,
+          entityLabel: inv.invoiceNumber,
+          details: `Payment reminder for ${inv.customerName} via WhatsApp`,
+        });
+        return;
+      }
+      toast.error("Could not share ledger via WhatsApp");
+    }
+  };
 
   const kpis = useMemo(() => {
     const paidInvoices = branchScopedInvoices.filter((i) => i.status === "PAID");
@@ -168,6 +283,16 @@ export default function BillingPage() {
   }, [branchScopedInvoices]);
 
   const columns = [
+    {
+      key: "createdAt",
+      label: "Date",
+      sortable: true,
+      render: (item: Record<string, unknown>) => (
+        <span className="text-muted-foreground whitespace-nowrap">
+          {formatDate(item.createdAt as string)}
+        </span>
+      ),
+    },
     {
       key: "invoiceNumber",
       label: "Invoice Number",
@@ -244,14 +369,43 @@ export default function BillingPage() {
       },
     },
     {
-      key: "createdAt",
-      label: "Date",
-      sortable: true,
-      render: (item: Record<string, unknown>) => (
-        <span className="text-muted-foreground">
-          {formatDate(item.createdAt as string)}
-        </span>
-      ),
+      key: "ledger",
+      label: "Ledger",
+      render: (item: Record<string, unknown>) => {
+        const customerId = String(item.customerId ?? "");
+        const invoiceId = String(item.id ?? "");
+        const phone = String(item.customerPhone ?? "").trim();
+        return (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5"
+              onClick={() => {
+                if (customerId) openCustomerLedger(customerId);
+              }}
+            >
+              <Eye className="h-3.5 w-3.5 shrink-0" />
+              View
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5 text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54]"
+              disabled={!phone}
+              title={phone ? "Share payment reminder via WhatsApp" : "No phone on file"}
+              onClick={() => {
+                if (invoiceId) void shareInvoiceLedgerWhatsApp(invoiceId, phone);
+              }}
+            >
+              <WhatsAppIcon className="h-3.5 w-3.5" />
+              Share
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -266,148 +420,228 @@ export default function BillingPage() {
       </Suspense>
       <PageHeader
         title="Billing & Invoices"
-        description={`View and manage invoices for ${viewingLabel}.`}
+        description={
+          billingView === "ledger"
+            ? `Customer ledger for ${viewingLabel} — balances from invoices.`
+            : `View and manage invoices for ${viewingLabel}.`
+        }
         hideDescriptionOnMobile
       />
 
-      {activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT && (
-        <FilterBanner
-          message="⚠ Showing pending payments — awaiting collection"
-          onDismiss={() => setActiveFilter(null)}
-        />
-      )}
+      <Tabs
+        value={billingView}
+        onValueChange={(v) => setBillingView(v as BillingView)}
+        className="space-y-4 sm:space-y-6"
+      >
+        <TabsList className="h-auto w-full justify-start gap-0 rounded-none border-b border-border bg-transparent p-0">
+          {(
+            [
+              ["invoices", "Invoices", FileText],
+              ["ledger", "Ledger", BookMarked],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className={cn(
+                "rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium shadow-none gap-1.5",
+                "data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground",
+                "data-[state=active]:shadow-none"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0 opacity-70" />
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
-        <KPICard
-          size="compact"
-          title="Total Revenue"
-          value={formatCurrency(kpis.totalRevenue)}
-          icon={IndianRupee}
-          tone="emerald"
-          titleClassName="text-[11px] leading-tight sm:text-xs"
-          valueClassName="text-lg sm:text-xl tabular-nums"
-        />
-        <KPICard
-          size="compact"
-          title="Outstanding"
-          value={formatCurrency(kpis.outstanding)}
-          icon={TrendingUp}
-          tone="rose"
-          titleClassName="text-[11px] leading-tight sm:text-xs"
-          valueClassName="text-lg sm:text-xl tabular-nums"
-        />
-        <KPICard
-          size="compact"
-          title="Invoices This Month"
-          value={kpis.thisMonth}
-          icon={FileText}
-          tone="blue"
-          titleClassName="text-[11px] leading-tight sm:text-xs"
-          valueClassName="text-lg sm:text-xl tabular-nums"
-        />
-        <KPICard
-          size="compact"
-          title="Avg Invoice"
-          value={formatCurrency(kpis.avgValue)}
-          icon={Receipt}
-          tone="violet"
-          titleClassName="text-[11px] leading-tight sm:text-xs"
-          valueClassName="text-lg sm:text-xl tabular-nums"
-        />
-      </div>
+        <TabsContent value="invoices" className="mt-0 space-y-4 sm:space-y-6 focus-visible:outline-none">
+          {activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT && (
+            <FilterBanner
+              message="⚠ Showing pending payments — awaiting collection"
+              onDismiss={() => setActiveFilter(null)}
+            />
+          )}
 
-      <Card className="border-border/80 shadow-sm overflow-hidden">
-        <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 pb-3 pt-4 sm:px-6 sm:pb-4">
-          <CardTitle className="text-base font-semibold">Invoices</CardTitle>
-          <p className="hidden text-sm text-muted-foreground md:block">
-            Open an invoice to record payments, print, or share via WhatsApp.
-          </p>
-        </CardHeader>
-        <CardContent className="px-3 pt-4 sm:px-6 sm:pt-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
-            <TabsList className="inline-flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 bg-muted/50 p-1 sm:w-full sm:flex-wrap">
-              {STATUS_TABS.map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="h-8 shrink-0 px-2.5 text-xs data-[state=active]:shadow-sm sm:h-9 sm:px-3 sm:text-sm"
-                >
-                  <span className="sm:hidden">{tab.shortLabel ?? tab.label}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>{" "}
-                  <span className="font-normal text-muted-foreground tabular-nums">
-                    ({tabCounts[tab.value] ?? 0})
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            </div>
-            {STATUS_TABS.map((tab) => (
-              <TabsContent key={tab.value} value={tab.value} className="mt-4 focus-visible:outline-none sm:mt-6">
-                <DataTable
-                  data={
-                    tab.value === "all"
-                      ? allTableData
-                      : toTableRows(invoicesForView.filter((inv) => inv.status === tab.value))
-                  }
-                  columns={columns}
-                  defaultSortKey="createdAt"
-                  defaultSortDir="desc"
-                  searchPlaceholder="Search invoice, customer, vehicle…"
-                  searchKeys={[
-                    "invoiceNumber",
-                    "customerName",
-                    "vehicleRegNumber",
-                    "jobNumber",
-                    "servicesSummary",
-                  ]}
-                  pageSize={10}
-                  onRowClick={handleRowClick}
-                  renderMobileCard={(item) => {
-                    const paymentLabel = item.paymentMethod
-                      ? getPaymentMethodLabel(String(item.paymentMethod))
-                      : null;
-                    return (
-                      <>
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="truncate font-mono text-xs font-bold text-primary">
-                            {String(item.invoiceNumber)}
-                          </span>
-                          <InvoiceStatusBadge
-                            status={item.status as InvoiceStatus}
-                            className="h-5 shrink-0 px-1.5 text-[10px]"
-                          />
-                        </div>
-                        <p className="mt-1 truncate text-sm font-medium leading-tight">
-                          {String(item.customerName)}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          <span className="font-mono">{String(item.vehicleRegNumber)}</span>
-                          <span aria-hidden> · </span>
-                          <span className="font-mono">{String(item.jobNumber)}</span>
-                        </p>
-                        <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                          <p className="text-base font-bold tabular-nums leading-none">
-                            {formatCurrency(item.grandTotal as number)}
-                          </p>
-                          <p className="shrink-0 text-[10px] text-muted-foreground">
-                            {formatDate(String(item.createdAt))}
-                          </p>
-                        </div>
-                        <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
-                          {String(item.servicesSummary)}
-                          {paymentLabel ? ` · ${paymentLabel}` : ""}
-                        </p>
-                      </>
-                    );
-                  }}
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <KPICard
+              size="compact"
+              title="Total Revenue"
+              value={formatCurrency(kpis.totalRevenue)}
+              icon={IndianRupee}
+              tone="emerald"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl tabular-nums"
+            />
+            <KPICard
+              size="compact"
+              title="Outstanding"
+              value={formatCurrency(kpis.outstanding)}
+              icon={TrendingUp}
+              tone="rose"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl tabular-nums"
+            />
+            <KPICard
+              size="compact"
+              title="Invoices This Month"
+              value={kpis.thisMonth}
+              icon={FileText}
+              tone="blue"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl tabular-nums"
+            />
+            <KPICard
+              size="compact"
+              title="Avg Invoice"
+              value={formatCurrency(kpis.avgValue)}
+              icon={Receipt}
+              tone="violet"
+              titleClassName="text-[11px] leading-tight sm:text-xs"
+              valueClassName="text-lg sm:text-xl tabular-nums"
+            />
+          </div>
 
+          <Card className="border-border/80 shadow-sm overflow-hidden">
+            <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 pb-3 pt-4 sm:px-6 sm:pb-4">
+              <CardTitle className="text-base font-semibold">Invoices</CardTitle>
+              <p className="hidden text-sm text-muted-foreground md:block">
+                Open an invoice to record payments, print, or share via WhatsApp.
+              </p>
+            </CardHeader>
+            <CardContent className="px-3 pt-4 sm:px-6 sm:pt-6">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+                  <TabsList className="inline-flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 bg-muted/50 p-1 sm:w-full sm:flex-wrap">
+                    {STATUS_TABS.map((tab) => (
+                      <TabsTrigger
+                        key={tab.value}
+                        value={tab.value}
+                        className="h-8 shrink-0 px-2.5 text-xs data-[state=active]:shadow-sm sm:h-9 sm:px-3 sm:text-sm"
+                      >
+                        <span className="sm:hidden">{tab.shortLabel ?? tab.label}</span>
+                        <span className="hidden sm:inline">{tab.label}</span>{" "}
+                        <span className="font-normal text-muted-foreground tabular-nums">
+                          ({tabCounts[tab.value] ?? 0})
+                        </span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
+                {STATUS_TABS.map((tab) => (
+                  <TabsContent
+                    key={tab.value}
+                    value={tab.value}
+                    className="mt-4 focus-visible:outline-none sm:mt-6"
+                  >
+                    <DataTable
+                      data={
+                        tab.value === "all"
+                          ? allTableData
+                          : toTableRows(invoicesForView.filter((inv) => inv.status === tab.value))
+                      }
+                      columns={columns}
+                      defaultSortKey="createdAt"
+                      defaultSortDir="desc"
+                      searchPlaceholder="Search invoice, customer, vehicle…"
+                      searchKeys={[
+                        "invoiceNumber",
+                        "customerName",
+                        "vehicleRegNumber",
+                        "jobNumber",
+                        "servicesSummary",
+                      ]}
+                      pageSize={10}
+                      onRowClick={handleRowClick}
+                      renderMobileCard={(item) => {
+                        const paymentLabel = item.paymentMethod
+                          ? getPaymentMethodLabel(String(item.paymentMethod))
+                          : null;
+                        const customerId = String(item.customerId ?? "");
+                        const invoiceId = String(item.id ?? "");
+                        const phone = String(item.customerPhone ?? "").trim();
+                        return (
+                          <>
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                                {formatDate(String(item.createdAt))}
+                              </span>
+                              <InvoiceStatusBadge
+                                status={item.status as InvoiceStatus}
+                                className="h-5 shrink-0 px-1.5 text-[10px]"
+                              />
+                            </div>
+                            <span className="mt-1 block truncate font-mono text-xs font-bold text-primary">
+                              {String(item.invoiceNumber)}
+                            </span>
+                            <p className="mt-1 truncate text-sm font-medium leading-tight">
+                              {String(item.customerName)}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              <span className="font-mono">{String(item.vehicleRegNumber)}</span>
+                              <span aria-hidden> · </span>
+                              <span className="font-mono">{String(item.jobNumber)}</span>
+                            </p>
+                            <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                              <p className="text-base font-bold tabular-nums leading-none">
+                                {formatCurrency(item.grandTotal as number)}
+                              </p>
+                            </div>
+                            <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                              {String(item.servicesSummary)}
+                              {paymentLabel ? ` · ${paymentLabel}` : ""}
+                            </p>
+                            <div
+                              className="mt-2 flex items-center gap-1.5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 flex-1 gap-1 px-2 text-[11px]"
+                                onClick={() => {
+                                  if (customerId) openCustomerLedger(customerId);
+                                }}
+                              >
+                                <Eye className="h-3 w-3" />
+                                View ledger
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 flex-1 gap-1 px-2 text-[11px] text-[#128C7E]"
+                                disabled={!phone}
+                                onClick={() => {
+                                  if (invoiceId) {
+                                    void shareInvoiceLedgerWhatsApp(invoiceId, phone);
+                                  }
+                                }}
+                              >
+                                <WhatsAppIcon className="h-3 w-3" />
+                                Share
+                              </Button>
+                            </div>
+                          </>
+                        );
+                      }}
+                    />
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ledger" className="mt-0 focus-visible:outline-none">
+          <SharedLedgerClient
+            embedded
+            partyKinds="customer"
+            focusPartyId={ledgerFocusCustomerId}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

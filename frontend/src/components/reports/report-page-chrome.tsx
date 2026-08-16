@@ -13,6 +13,7 @@ import {
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,11 +100,7 @@ export function ReportPageChrome({
   const toggleFavourite = () => {
     const next = !favourite;
     setFavourite(next);
-    try {
-      localStorage.setItem(favouriteStorageKey, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
+    writeFavouriteFlag(favouriteStorageKey, next);
   };
 
   const printPdf = () => {

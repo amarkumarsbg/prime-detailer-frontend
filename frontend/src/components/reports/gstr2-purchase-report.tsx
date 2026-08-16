@@ -46,6 +46,7 @@ import {
   Star,
 } from "lucide-react";
 import { toast } from "sonner";
+import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
 
 const FAV_KEY = "prime-detailer-gstr2-favourite";
 
@@ -202,11 +203,7 @@ export function Gstr2PurchaseReport() {
   const toggleFavourite = () => {
     const next = !favourite;
     setFavourite(next);
-    try {
-      localStorage.setItem(FAV_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
+    writeFavouriteFlag(FAV_KEY, next);
   };
 
   const filteredPurchase = useMemo(() => {

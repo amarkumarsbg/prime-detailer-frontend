@@ -228,7 +228,7 @@ export function buildTaxInvoicePrintHtml(
   }
   const gstPct = Math.round(displayTaxRate * 100);
   const bookingRef = jobCard?.jobNumber ?? invoice.jobNumber;
-  const bookingWhen = jobCard
+  const bookingWhen = jobCard?.createdAt
     ? formatDateTime(jobCard.createdAt)
     : formatDateTime(invoice.createdAt);
   const expectedDel = jobCard?.expectedDelivery

@@ -30,6 +30,7 @@ import {
   Crown,
   BookMarked,
   QrCode,
+  IndianRupee,
 } from "lucide-react";
 
 export type NavItemDef = {
@@ -66,7 +67,35 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
   {
     label: "Finance",
     items: [
-      { label: "Invoices", href: "/billing", icon: Receipt, permissionKey: "BILLING" },
+      {
+        label: "Accounting",
+        href: "/accounting",
+        icon: IndianRupee,
+        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
+        permissionKey: "REPORTS",
+      },
+      {
+        label: "Expenses",
+        href: "/expenses",
+        icon: Banknote,
+        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
+        permissionKey: "EXPENSES",
+      },
+      {
+        label: "Vendors",
+        href: "/vendors",
+        icon: Store,
+        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
+        permissionKey: "VENDORS",
+      },
+      { label: "Billing", href: "/billing", icon: Receipt, permissionKey: "BILLING" },
+      {
+        label: "Inventory Hub",
+        href: "/inventory",
+        icon: Package,
+        roles: ["ADMIN", "MANAGER"],
+        permissionKey: "INVENTORY",
+      },
       {
         label: "Reports",
         href: "/reports",
@@ -94,20 +123,6 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
         icon: BookMarked,
         roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
         permissionKey: "SHARED_LEDGER",
-      },
-      {
-        label: "Expenses",
-        href: "/expenses",
-        icon: Banknote,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
-        permissionKey: "EXPENSES",
-      },
-      {
-        label: "Vendors",
-        href: "/vendors",
-        icon: Store,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
-        permissionKey: "VENDORS",
       },
     ],
   },

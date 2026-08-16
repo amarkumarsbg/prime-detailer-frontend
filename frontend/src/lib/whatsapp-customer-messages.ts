@@ -198,6 +198,144 @@ export function buildInvoiceWhatsAppMessage(
   ].join("\n");
 }
 
+function formatWhatsAppInr(amount: number): string {
+  const n = Math.round(amount * 100) / 100;
+  return `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function formatWhatsAppInrDecimal(amount: number): string {
+  return `₹${(Math.round(amount * 100) / 100).toFixed(1)}`;
+}
+
+function invoiceStatusShareLabel(status: Invoice["status"]): string {
+  switch (status) {
+    case "PARTIALLY_PAID":
+      return "Partially Paid";
+    case "PAID":
+      return "Paid";
+    case "ISSUED":
+      return "Issued";
+    case "DRAFT":
+      return "Draft";
+    default:
+      return status;
+  }
+}
+
+function publicAppBaseUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "http://localhost:3000";
+}
+
+/** True when WhatsApp will usually not auto-link the URL (local / private hosts). */
+export function isWhatsAppNonClickableShareUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".local") ||
+      /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
+    );
+  } catch {
+    return true;
+  }
+}
+
+export function publicInvoiceShareUrl(invoiceId: string): string {
+  return `${publicAppBaseUrl()}/public-invoice/${encodeURIComponent(invoiceId)}`;
+}
+
+/**
+ * Payment reminder — opens in WhatsApp composer (MyBillBook-style pending dues).
+ */
+export function buildPaymentPendingReminderWhatsAppMessage(opts: {
+  pendingAmount: number;
+  statementUrl: string;
+  businessName: string;
+}): string {
+  return [
+    `Hi sir/ma'am,`,
+    `Your payment of ${formatWhatsAppInr(opts.pendingAmount)} is pending.`,
+    ``,
+    `You can view the ledger statement by clicking on link below:`,
+    opts.statementUrl,
+    `Please clear the payment as soon as possible.`,
+    ``,
+    `Thank you,`,
+    opts.businessName,
+  ].join("\n");
+}
+
+/**
+ * Invoice-ready notice — richer body for API / in-chat delivery (MyBillBook-style).
+ */
+export function buildInvoiceReadyWhatsAppMessage(
+  invoice: Invoice,
+  opts: { businessName: string; remainingBalance: number; viewUrl: string }
+): string {
+  const first = invoice.customerName.trim().split(/\s+/)[0] ?? invoice.customerName;
+  const invoiceDate = format(parseISO(invoice.createdAt), "dd.MM.yyyy");
+  return [
+    `Hey ${first} ,`,
+    ``,
+    `Thank you for your business`,
+    `Your Sales Invoice is ready! Check the details below`,
+    ``,
+    `*Due Amount*`,
+    `*${formatWhatsAppInr(opts.remainingBalance)}*`,
+    `Status: ${invoiceStatusShareLabel(invoice.status)}`,
+    `Invoice Date : ${invoiceDate}`,
+    ``,
+    `Sales Invoice No: ${invoice.invoiceNumber}`,
+    `Invoice Amount: ${formatWhatsAppInrDecimal(invoice.grandTotal)}`,
+    `Balance Due: ${formatWhatsAppInrDecimal(opts.remainingBalance)}`,
+    ``,
+    `Click the link below to view your invoice:`,
+    opts.viewUrl,
+    ``,
+    `Happy to serve you`,
+    `${opts.businessName}.`,
+  ].join("\n");
+}
+
+/** @deprecated Prefer buildPaymentPendingReminderWhatsAppMessage / buildInvoiceReadyWhatsAppMessage */
+export function buildCustomerLedgerWhatsAppMessage(
+  customer: { name: string; phone?: string },
+  customerInvoices: Invoice[],
+  opts: { businessName: string; statementUrl?: string }
+): string {
+  const open = customerInvoices
+    .filter((inv) => inv.status !== "DRAFT")
+    .map((inv) => ({
+      inv,
+      due: Math.max(
+        0,
+        Math.round(
+          (inv.grandTotal -
+            inv.payments.reduce((s, p) => s + p.amount, 0) -
+            (inv.walletAmountUsed || 0)) *
+            100
+        ) / 100
+      ),
+    }))
+    .filter((r) => r.due > 0.01);
+
+  const totalDue = open.reduce((s, r) => s + r.due, 0);
+  const newest = open.sort((a, b) => b.inv.createdAt.localeCompare(a.inv.createdAt))[0];
+  const statementUrl =
+    opts.statementUrl ||
+    (newest ? publicInvoiceShareUrl(newest.inv.id) : publicAppBaseUrl());
+
+  return buildPaymentPendingReminderWhatsAppMessage({
+    pendingAmount: totalDue,
+    statementUrl,
+    businessName: opts.businessName,
+  });
+}
+
 const PAYMENT_METHOD_CUSTOMER_LABEL: Record<PaymentMethod, string> = {
   CASH: "Cash",
   UPI: "UPI",

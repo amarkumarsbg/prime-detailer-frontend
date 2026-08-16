@@ -16,6 +16,7 @@ import {
   Trash2,
   Pencil,
   Plus,
+  Percent,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -380,6 +381,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const [dialogRemainingBalance, setDialogRemainingBalance] = useState(0);
 
   // Local edit states for discounts
+  const [flatDiscountType, setFlatDiscountType] = useState<"percentage" | "fixed">("fixed");
   const [flatDiscountStr, setFlatDiscountStr] = useState(() => invoice ? String(invoice.discountAmount || "") : "");
   const [pointsRedeemStr, setPointsRedeemStr] = useState(() => {
     if (!invoice) return "";
@@ -399,10 +401,17 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   useEffect(() => {
     if (invoice && typeof window !== "undefined") {
       const draftFlat = sessionStorage.getItem(`draft-flat-${invoice.id}`);
+      const draftFlatType = sessionStorage.getItem(`draft-flat-type-${invoice.id}`);
       const draftReward = sessionStorage.getItem(`draft-reward-${invoice.id}`);
       const draftCode = sessionStorage.getItem(`draft-code-${invoice.id}`);
       const draftAdvocate = sessionStorage.getItem(`draft-advocate-${invoice.id}`);
       const draftRefDiscount = sessionStorage.getItem(`draft-refdiscount-${invoice.id}`);
+
+      if (draftFlatType === "percentage" || draftFlatType === "fixed") {
+        setFlatDiscountType(draftFlatType);
+      } else {
+        setFlatDiscountType("fixed");
+      }
 
       // Exclusivity Priority: 1. Reward draft / Referral draft, 2. Flat draft / DB values
       const hasRewardDraft = draftReward !== null && Number(draftReward) > 0;
@@ -465,6 +474,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     if (!invoice) return;
     if (typeof window !== "undefined") {
       sessionStorage.setItem(`draft-flat-${invoice.id}`, val);
+      sessionStorage.setItem(`draft-flat-type-${invoice.id}`, flatDiscountType);
       if (Number(val) > 0) {
         setPointsRedeemStr("");
         sessionStorage.setItem(`draft-reward-${invoice.id}`, "");
@@ -479,6 +489,13 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
         sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
         sessionStorage.removeItem(`draft-refdiscount-${invoice.id}`);
       }
+    }
+  };
+
+  const handleFlatDiscountTypeChange = (type: "percentage" | "fixed") => {
+    setFlatDiscountType(type);
+    if (invoice && typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-flat-type-${invoice.id}`, type);
     }
   };
 
@@ -497,7 +514,16 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
 
   const subtotal = invoice ? invoice.subtotal : 0;
-  const flatDiscount = Number(flatDiscountStr) || 0;
+  const flatDiscountInput = Number(flatDiscountStr) || 0;
+  const flatDiscount =
+    flatDiscountInput <= 0
+      ? 0
+      : flatDiscountType === "percentage"
+        ? Math.min(
+            subtotal,
+            Math.round(subtotal * (Math.min(100, flatDiscountInput) / 100) * 100) / 100
+          )
+        : Math.min(subtotal, flatDiscountInput);
   const pointsRedeem = Number(pointsRedeemStr) || 0;
   const referralDiscount = referralDiscountApplied;
 
@@ -540,7 +566,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     if (!invoice) return;
     
     if (flatDiscount > 0) {
-      setReferralErrorMsg("Cannot apply referral code while flat discount is active.");
+      setReferralErrorMsg("Cannot apply referral code while direct discount is active.");
       return;
     }
 
@@ -613,6 +639,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
       if (typeof window !== "undefined") {
         sessionStorage.removeItem(`draft-flat-${invoice.id}`);
+        sessionStorage.removeItem(`draft-flat-type-${invoice.id}`);
         sessionStorage.removeItem(`draft-reward-${invoice.id}`);
         sessionStorage.removeItem(`draft-code-${invoice.id}`);
         sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
@@ -1299,22 +1326,67 @@ ${businessNameVal}`;
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4 text-sm">
-                {/* Flat Discount Input */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="flat-discount" className="font-medium text-foreground">
-                    Flat Discount (₹)
-                  </Label>
-                  <Input
-                    id="flat-discount"
-                    type="number"
-                    min="0"
-                    placeholder="Enter flat discount"
-                    value={flatDiscountStr}
-                    disabled={isFlatDisabled}
-                    onChange={(e) => handleFlatDiscountChange(e.target.value)}
-                  />
+                {/* Direct Discount — % or fixed ₹ */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Percent className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <Label className="font-medium text-foreground">Direct Discount</Label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isFlatDisabled}
+                      className={cn(
+                        "h-9 flex-1 gap-1 rounded-md text-xs transition-all",
+                        flatDiscountType === "percentage"
+                          ? "border-amber-300 bg-amber-50 font-semibold text-amber-700 hover:bg-amber-100/80 hover:text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      )}
+                      onClick={() => handleFlatDiscountTypeChange("percentage")}
+                    >
+                      % Percentage
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isFlatDisabled}
+                      className={cn(
+                        "h-9 flex-1 gap-1 rounded-md text-xs transition-all",
+                        flatDiscountType === "fixed"
+                          ? "border-amber-300 bg-amber-50 font-semibold text-amber-700 hover:bg-amber-100/80 hover:text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      )}
+                      onClick={() => handleFlatDiscountTypeChange("fixed")}
+                    >
+                      ₹ Fixed Amount
+                    </Button>
+                  </div>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                      {flatDiscountType === "percentage" ? "%" : "₹"}
+                    </span>
+                    <Input
+                      id="flat-discount"
+                      type="number"
+                      min={0}
+                      max={flatDiscountType === "percentage" ? 100 : undefined}
+                      placeholder={flatDiscountType === "percentage" ? "e.g. 10" : "e.g. 500"}
+                      value={flatDiscountStr}
+                      disabled={isFlatDisabled}
+                      onChange={(e) => handleFlatDiscountChange(e.target.value)}
+                      className="pl-8 tabular-nums"
+                    />
+                  </div>
+                  {flatDiscountType === "percentage" && flatDiscount > 0 && !isFlatDisabled && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Equals {formatCurrency(flatDiscount)} off subtotal
+                    </p>
+                  )}
                   {isFlatDisabled && (
-                    <p className="text-[11px] text-amber-600">Disabled because reward points or referral discount is active.</p>
+                    <p className="text-[11px] text-amber-600">
+                      Disabled because reward points or referral discount is active.
+                    </p>
                   )}
                 </div>
 
@@ -1342,7 +1414,7 @@ ${businessNameVal}`;
                     className="[appearance:textfield]"
                   />
                   {isPointsDisabled && (
-                    <p className="text-[11px] text-amber-600">Disabled because flat discount is applied.</p>
+                    <p className="text-[11px] text-amber-600">Disabled because direct discount is applied.</p>
                   )}
                   {pointsErrorMsg ? (
                     <p className="text-[11px] text-destructive">{pointsErrorMsg}</p>
@@ -1386,7 +1458,7 @@ ${businessNameVal}`;
                     )}
                   </div>
                   {isReferralDisabled && (
-                    <p className="text-[11px] text-amber-600">Disabled because flat discount is active.</p>
+                    <p className="text-[11px] text-amber-600">Disabled because direct discount is active.</p>
                   )}
                   {referralVerifiedMsg && (
                     <p className="text-[11px] text-emerald-600 font-medium">{referralVerifiedMsg}</p>
@@ -1407,7 +1479,12 @@ ${businessNameVal}`;
                   </div>
                   {activeFlatDiscount > 0 && (
                     <div className="flex justify-between text-amber-600 font-medium">
-                      <span>Flat Discount</span>
+                      <span>
+                        Direct Discount
+                        {flatDiscountType === "percentage" && flatDiscountInput > 0
+                          ? ` (${Math.min(100, flatDiscountInput)}%)`
+                          : ""}
+                      </span>
                       <span className="font-mono">-{formatCurrency(activeFlatDiscount)}</span>
                     </div>
                   )}

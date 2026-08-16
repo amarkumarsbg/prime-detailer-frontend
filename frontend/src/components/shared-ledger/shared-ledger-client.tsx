@@ -123,7 +123,22 @@ function inLedgerPeriod(isoDate: string, period: string): boolean {
   return dateInPreset(isoDate, period);
 }
 
-export function SharedLedgerClient() {
+type SharedLedgerClientProps = {
+  /** Hide the page title block (e.g. when embedded under Billing). */
+  embedded?: boolean;
+  /** Limit parties shown; default shows customers and suppliers. */
+  partyKinds?: "all" | "customer" | "supplier";
+  /**
+   * Select this party when set. Pass customer id (`abc`) or ledger id (`c:abc` / `v:Name`).
+   */
+  focusPartyId?: string | null;
+};
+
+export function SharedLedgerClient({
+  embedded = false,
+  partyKinds = "all",
+  focusPartyId = null,
+}: SharedLedgerClientProps) {
   const router = useRouter();
   const customers = useCustomerStore((s) => s.customers);
   const invoices = useScopedInvoices();
@@ -275,29 +290,34 @@ export function SharedLedgerClient() {
   };
 
   const parties = useMemo((): LedgerParty[] => {
-    const customerParties: LedgerParty[] = customers.map((c) => {
-      const custInv = invoices.filter((i) => i.customerId === c.id);
-      const bal = custInv.reduce((s, i) => s + invoiceOutstanding(i), 0);
-      return {
-        id: `c:${c.id}`,
-        kind: "customer",
-        name: c.name,
-        subtitle: `Customer · ${custInv.length} invoice(s)`,
-        balance: bal,
-        flow: bal > 0.01 ? "in" : bal < -0.01 ? "out" : "zero",
-      };
-    });
+    const customerParties: LedgerParty[] =
+      partyKinds === "supplier"
+        ? []
+        : customers.map((c) => {
+            const custInv = invoices.filter((i) => i.customerId === c.id);
+            const bal = custInv.reduce((s, i) => s + invoiceOutstanding(i), 0);
+            return {
+              id: `c:${c.id}`,
+              kind: "customer" as const,
+              name: c.name,
+              subtitle: `Customer · ${custInv.length} invoice(s)`,
+              balance: bal,
+              flow: (bal > 0.01 ? "in" : bal < -0.01 ? "out" : "zero") as LedgerParty["flow"],
+            };
+          });
 
     const vendorNames = new Set<string>();
-    for (const e of expenses) {
-      const v = e.vendorName?.trim();
-      if (v) vendorNames.add(v);
-    }
-    for (const v of vendorDirectory) {
-      if (v.name?.trim()) vendorNames.add(v.name.trim());
-    }
-    for (const v of vendorSuggestions) {
-      if (v?.trim()) vendorNames.add(v.trim());
+    if (partyKinds !== "customer") {
+      for (const e of expenses) {
+        const v = e.vendorName?.trim();
+        if (v) vendorNames.add(v);
+      }
+      for (const v of vendorDirectory) {
+        if (v.name?.trim()) vendorNames.add(v.name.trim());
+      }
+      for (const v of vendorSuggestions) {
+        if (v?.trim()) vendorNames.add(v.trim());
+      }
     }
 
     const supplierParties: LedgerParty[] = Array.from(vendorNames)
@@ -307,18 +327,25 @@ export function SharedLedgerClient() {
         const bal = venExp.reduce((s, e) => s + expenseOutstanding(e), 0);
         return {
           id: `v:${name}`,
-          kind: "supplier",
+          kind: "supplier" as const,
           name,
           subtitle: `Supplier · ${venExp.length} bill(s)`,
           balance: bal,
-          flow: bal > 0.01 ? "out" : "zero",
+          flow: (bal > 0.01 ? "out" : "zero") as LedgerParty["flow"],
         };
       });
 
     return [...customerParties, ...supplierParties].sort((a, b) =>
       a.name.localeCompare(b.name)
     );
-  }, [customers, invoices, expenses, vendorDirectory, vendorSuggestions]);
+  }, [
+    customers,
+    invoices,
+    expenses,
+    vendorDirectory,
+    vendorSuggestions,
+    partyKinds,
+  ]);
 
   const filteredParties = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -385,30 +412,51 @@ export function SharedLedgerClient() {
   }, [selected, invoices, expenses, dateRange]);
 
   useEffect(() => {
+    if (!focusPartyId) return;
+    const id =
+      focusPartyId.startsWith("c:") || focusPartyId.startsWith("v:")
+        ? focusPartyId
+        : `c:${focusPartyId}`;
+    queueMicrotask(() => setSelectedId(id));
+  }, [focusPartyId]);
+
+  useEffect(() => {
     if (selectedId != null && filteredParties.some((p) => p.id === selectedId)) return;
+    if (focusPartyId) {
+      const id =
+        focusPartyId.startsWith("c:") || focusPartyId.startsWith("v:")
+          ? focusPartyId
+          : `c:${focusPartyId}`;
+      if (filteredParties.some((p) => p.id === id)) {
+        queueMicrotask(() => setSelectedId(id));
+        return;
+      }
+    }
     const first = filteredParties[0];
     queueMicrotask(() => {
       if (first) setSelectedId(first.id);
       else setSelectedId(null);
     });
-  }, [filteredParties, selectedId]);
+  }, [filteredParties, selectedId, focusPartyId]);
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4">
-      <div className="flex flex-col gap-4 border-b border-border/80 pb-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm">
-            <BookMarked className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Shared Ledger</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Receivables and payables for {viewingLabel} — wired to branch-scoped invoices and
-              expenses.
-            </p>
+    <div className={cn("space-y-4", !embedded && "mx-auto max-w-[1600px]")}>
+      {!embedded ? (
+        <div className="flex flex-col gap-4 border-b border-border/80 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm">
+              <BookMarked className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Shared Ledger</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Receivables and payables for {viewingLabel} — wired to branch-scoped invoices and
+                expenses.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="flex min-h-[min(70vh,720px)] flex-col gap-4 lg:flex-row lg:gap-0 lg:rounded-xl lg:border lg:border-border/80 lg:bg-card lg:shadow-sm lg:overflow-hidden">
         {/* Party list */}

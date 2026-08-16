@@ -33,6 +33,7 @@ const PUBLIC_JOB_CARD_KEYS = [
   "vehicleMakeModel",
   "vehicleRegNumber",
   "vehicleSegment",
+  "createdAt",
   "expectedDelivery",
   "actualDelivery",
   "status",

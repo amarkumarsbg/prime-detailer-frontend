@@ -29,6 +29,7 @@ import {
   FileBarChart,
   Gift,
   Building2,
+  IndianRupee,
 } from "lucide-react";
 
 interface CommandMenuProps {
@@ -54,6 +55,13 @@ const NAV_PAGES: NavPageItem[] = [
   { name: "Services", href: "/services", icon: Wrench, permissionKey: "SERVICES" },
   { name: "Inventory", href: "/inventory", icon: Package, permissionKey: "INVENTORY" },
   { name: "Billing", href: "/billing", icon: Receipt, permissionKey: "BILLING" },
+  {
+    name: "Accounting",
+    href: "/accounting",
+    icon: IndianRupee,
+    roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER", "RECEPTIONIST"],
+    permissionKey: "REPORTS",
+  },
   { name: "Appointments", href: "/appointments", icon: Calendar, permissionKey: "APPOINTMENTS" },
   { name: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"], permissionKey: "ATTENDANCE" },
   {

@@ -35,6 +35,7 @@ import {
   Star,
 } from "lucide-react";
 import { toast } from "sonner";
+import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
 
 const FAV_KEY = "prime-detailer-sales-staff-favourite";
 
@@ -146,11 +147,7 @@ export function SalesSummaryStaffReport() {
   const toggleFavourite = () => {
     const next = !favourite;
     setFavourite(next);
-    try {
-      localStorage.setItem(FAV_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
+    writeFavouriteFlag(FAV_KEY, next);
   };
 
   const staffOptions = useMemo(() => {

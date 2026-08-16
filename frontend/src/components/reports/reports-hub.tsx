@@ -10,6 +10,13 @@ import {
   reportHubFilterScrollClass,
 } from "@/lib/reports/report-mobile-ui";
 import {
+  isReportFavourited,
+  REPORT_FAVOURITE_EVENT,
+  seedDefaultReportFavourites,
+  setReportFavourited,
+} from "@/lib/reports/report-favourites";
+import { useBalanceSheetLedgerStore } from "@/store/balance-sheet-ledger-store";
+import {
   ChevronDown,
   ChevronUp,
   FileText,
@@ -48,27 +55,8 @@ const FILTER_PILLS: { id: FilterId; label: string }[] = [
   { id: "summary", label: "Summary" },
 ];
 
-const SECTIONS: SectionDef[] = [
-  {
-    id: "favourite",
-    title: "Favourite",
-    icon: Sparkles,
-    items: [
-      { label: "Balance Sheet", href: "/reports/finance/balance-sheet", filters: ["summary"] },
-      { label: "GSTR-1 (Sales)", href: "/reports/gst/gstr-1-sales", filters: ["invoice", "summary"] },
-      {
-        label: "Profit And Loss Report",
-        href: "/reports/finance/profit-loss",
-        filters: ["summary", "category"],
-      },
-      {
-        label: "Sales Summary - Staff wise",
-        href: "/reports/sales-summary-staff",
-        filters: ["summary", "party", "invoice"],
-      },
-      { label: "Analytics dashboard", href: "/reports/analytics", filters: ["summary"] },
-    ],
-  },
+/** All catalogue reports (Favourite is built dynamically). */
+const CATALOG_SECTIONS: SectionDef[] = [
   {
     id: "gst",
     title: "GST",
@@ -105,7 +93,11 @@ const SECTIONS: SectionDef[] = [
     collapseAt: 4,
     items: [
       { label: "Audit Trail", href: "/activity", filters: ["summary"] },
-      { label: "Bill Wise Profit", href: "/reports/transaction/bill-wise-profit", filters: ["invoice"] },
+      {
+        label: "Bill Wise Profit",
+        href: "/reports/transaction/bill-wise-profit",
+        filters: ["invoice"],
+      },
       {
         label: "Cash and Bank Report (All Payments)",
         href: "/reports/transaction/cash-bank",
@@ -122,7 +114,11 @@ const SECTIONS: SectionDef[] = [
         href: "/reports/transaction/expense-transaction",
         filters: ["category", "payment"],
       },
-      { label: "Purchase Summary", href: "/reports/transaction/purchase-summary", filters: ["summary"] },
+      {
+        label: "Purchase Summary",
+        href: "/reports/transaction/purchase-summary",
+        filters: ["summary"],
+      },
     ],
   },
   {
@@ -179,6 +175,41 @@ const SECTIONS: SectionDef[] = [
   },
 ];
 
+const ALL_REPORTS: ReportDef[] = (() => {
+  const map = new Map<string, ReportDef>();
+  for (const sec of CATALOG_SECTIONS) {
+    for (const item of sec.items) {
+      if (!map.has(item.href)) map.set(item.href, item);
+    }
+  }
+  map.set("/reports/finance/balance-sheet", {
+    label: "Balance Sheet",
+    href: "/reports/finance/balance-sheet",
+    filters: ["summary"],
+  });
+  map.set("/reports/gst/gstr-1-sales", {
+    label: "GSTR-1 (Sales)",
+    href: "/reports/gst/gstr-1-sales",
+    filters: ["invoice", "summary"],
+  });
+  map.set("/reports/finance/profit-loss", {
+    label: "Profit And Loss Report",
+    href: "/reports/finance/profit-loss",
+    filters: ["summary", "category"],
+  });
+  map.set("/reports/sales-summary-staff", {
+    label: "Sales Summary - Staff wise",
+    href: "/reports/sales-summary-staff",
+    filters: ["summary", "party", "invoice"],
+  });
+  map.set("/reports/analytics", {
+    label: "Analytics dashboard",
+    href: "/reports/analytics",
+    filters: ["summary"],
+  });
+  return [...map.values()];
+})();
+
 function matchesSearch(label: string, q: string): boolean {
   if (!q.trim()) return true;
   return label.toLowerCase().includes(q.trim().toLowerCase());
@@ -202,7 +233,27 @@ export function ReportsHub() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterId>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [favTick, setFavTick] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const balanceSheetFavourite = useBalanceSheetLedgerStore((s) => s.favourite);
+  const setBalanceSheetFavourite = useBalanceSheetLedgerStore((s) => s.setFavourite);
+
+  useEffect(() => {
+    seedDefaultReportFavourites(setBalanceSheetFavourite);
+  }, [setBalanceSheetFavourite]);
+
+  useEffect(() => {
+    const refresh = () => setFavTick((t) => t + 1);
+    queueMicrotask(refresh);
+    window.addEventListener(REPORT_FAVOURITE_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener(REPORT_FAVOURITE_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -215,18 +266,54 @@ export function ReportsHub() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const favouriteItems = useMemo(() => {
+    void favTick;
+    return ALL_REPORTS.filter((r) =>
+      isReportFavourited(r.href, balanceSheetFavourite)
+    ).filter(
+      (it) => matchesSearch(it.label, query) && matchesFilter(it, activeFilter, "favourite")
+    );
+  }, [favTick, balanceSheetFavourite, query, activeFilter]);
+
   const visibleSections = useMemo(() => {
-    return SECTIONS.map((sec) => {
+    const favouriteSection: SectionDef & { items: ReportDef[] } = {
+      id: "favourite",
+      title: "Favourite",
+      icon: Sparkles,
+      items: favouriteItems,
+    };
+
+    const rest = CATALOG_SECTIONS.map((sec) => {
       const items = sec.items.filter(
         (it) => matchesSearch(it.label, query) && matchesFilter(it, activeFilter, sec.id)
       );
       return { ...sec, items };
     }).filter((sec) => sec.items.length > 0);
-  }, [query, activeFilter]);
+
+    const sections: (SectionDef & { items: ReportDef[] })[] = [];
+    if (favouriteItems.length > 0) {
+      sections.push(favouriteSection);
+    } else if (!query.trim() && !activeFilter) {
+      sections.push({ ...favouriteSection, items: [] });
+    }
+    sections.push(...rest);
+    return sections;
+  }, [favouriteItems, query, activeFilter]);
 
   const toggleSection = useCallback((id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
+
+  const unfavourite = useCallback(
+    (href: string) => {
+      setReportFavourited(href, false, {
+        setBalanceSheetFavourite,
+      });
+      setFavTick((t) => t + 1);
+      toast.message("Removed from favourites");
+    },
+    [setBalanceSheetFavourite]
+  );
 
   const renderSectionCard = (sec: SectionDef & { items: ReportDef[] }) => {
     const Icon = sec.icon;
@@ -245,19 +332,39 @@ export function ReportsHub() {
           <span className="font-semibold text-foreground max-md:text-sm">{sec.title}</span>
         </div>
         <ul className="flex flex-1 flex-col gap-0 px-2 py-2 max-md:px-1.5">
-          {shown.map((item) => (
-            <li key={item.label}>
-              <Link
-                href={item.href}
-                className="flex min-h-[44px] items-center justify-between gap-2 rounded-md px-2 py-2 text-sm text-foreground/90 transition-colors hover:bg-muted active:bg-muted/80 max-md:px-3 max-md:py-3 max-md:text-[15px]"
-              >
-                <span className="leading-snug">{item.label}</span>
-                {sec.id === "favourite" && (
-                  <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500" aria-hidden />
-                )}
-              </Link>
+          {sec.id === "favourite" && shown.length === 0 ? (
+            <li className="px-3 py-8 text-center text-sm text-muted-foreground">
+              No favourite reports. Star a report to add it here.
             </li>
-          ))}
+          ) : (
+            shown.map((item) => (
+              <li key={item.href}>
+                <div className="flex min-h-[44px] items-center gap-1 rounded-md px-2 py-1 text-sm text-foreground/90 transition-colors hover:bg-muted max-md:px-2 max-md:py-2">
+                  <Link
+                    href={item.href}
+                    className="min-w-0 flex-1 px-1 py-2 leading-snug max-md:text-[15px]"
+                  >
+                    {item.label}
+                  </Link>
+                  {sec.id === "favourite" ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                      aria-label={`Remove ${item.label} from favourites`}
+                      title="Remove from favourites"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        unfavourite(item.href);
+                      }}
+                    >
+                      <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))
+          )}
         </ul>
         {isCollapsible && (
           <div className="mt-auto border-t border-border px-3 py-2 max-md:py-2.5">
@@ -357,9 +464,13 @@ export function ReportsHub() {
 
       <div className="pointer-events-none fixed bottom-6 right-6 hidden items-center gap-2 text-sm text-muted-foreground md:flex">
         <span>Find Report</span>
-        <kbd className="rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs">Ctrl</kbd>
+        <kbd className="rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+          Ctrl
+        </kbd>
         <span className="text-xs">+</span>
-        <kbd className="rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs">F</kbd>
+        <kbd className="rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+          F
+        </kbd>
       </div>
     </div>
   );

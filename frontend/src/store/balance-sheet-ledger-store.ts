@@ -145,6 +145,17 @@ export const useBalanceSheetLedgerStore = create<BalanceSheetLedgerStore>((set, 
       favourite: get().favourite,
       lastUpdatedAt: get().lastUpdatedAt,
     });
+    try {
+      localStorage.setItem(
+        "prime-detailer-balance-sheet-favourite",
+        favourite ? "1" : "0"
+      );
+    } catch {
+      /* ignore */
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("prime-report-favourite"));
+    }
   },
 
   sumFor: (category) => {

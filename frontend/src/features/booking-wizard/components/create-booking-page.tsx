@@ -4759,6 +4759,21 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               </p>
             </CardHeader>
             <CardContent className="space-y-3 min-w-0 pt-0">
+              {isJobCard && (
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5">
+                  <Label htmlFor="odometerReading" className="text-xs font-medium shrink-0">
+                    Odometer (optional)
+                  </Label>
+                  <Input
+                    id="odometerReading"
+                    type="number"
+                    placeholder="e.g. 25000"
+                    value={odometerReading}
+                    onChange={(e) => setOdometerReading(e.target.value)}
+                    className="h-8 max-w-full sm:max-w-[10rem] text-sm"
+                  />
+                </div>
+              )}
               {mechanics.length === 0 ? (
                 <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border/80 bg-muted/30 px-3 py-4 text-center">
                   No mechanics found. Add staff with role Mechanic in Settings.
@@ -4777,7 +4792,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   {filteredMechanics.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-3">No mechanics match your search.</p>
                   ) : (
-                <div className="space-y-2 md:max-h-[min(65vh,640px)] md:overflow-y-auto md:overscroll-y-contain md:rounded-lg md:border md:border-border/40 md:bg-muted/10 md:py-2 md:pl-1 md:pr-2 md:[-webkit-overflow-scrolling:touch]">
+                <div className="max-h-[min(52dvh,420px)] space-y-2 overflow-y-auto overscroll-y-contain rounded-lg border border-border/40 bg-muted/10 py-2 pl-1 pr-2 [-webkit-overflow-scrolling:touch] md:max-h-[min(58dvh,560px)] lg:max-h-[min(62dvh,640px)]">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 min-w-0">
                     {filteredMechanics.map((m) => {
                       const selected = mechanicId === m.id;
@@ -4857,21 +4872,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 </div>
                   )}
                 </>
-              )}
-              {isJobCard && (
-                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5">
-                  <Label htmlFor="odometerReading" className="text-xs font-medium shrink-0">
-                    Odometer (optional)
-                  </Label>
-                  <Input
-                    id="odometerReading"
-                    type="number"
-                    placeholder="e.g. 25000"
-                    value={odometerReading}
-                    onChange={(e) => setOdometerReading(e.target.value)}
-                    className="h-8 max-w-full sm:max-w-[10rem] text-sm"
-                  />
-                </div>
               )}
             </CardContent>
           </Card>

@@ -6,7 +6,7 @@ import { useSettingsStore } from "@/store/settings-store";
 import { useScopedNotifications } from "@/hooks/use-scoped-data";
 import { ALL_BRANCHES_BRANCH, isAllBranchesScope } from "@/lib/all-branches";
 import { canOrgWideRole } from "@/lib/branch-selection";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { getInitials } from "@/lib/utils";
@@ -51,10 +51,18 @@ export function Header() {
   const scopedNotifications = useScopedNotifications();
   const unreadCount = scopedNotifications.filter((n) => !n.read).length;
   const router = useRouter();
+  const pathname = usePathname();
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const pageHeading = useMemo(() => {
+    if (pathname === "/accounting" || pathname.startsWith("/accounting/")) {
+      return { title: "Accounting", subtitle: "Manage your operations" };
+    }
+    return null;
+  }, [pathname]);
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
@@ -155,18 +163,29 @@ export function Header() {
         </div>
       </Link>
 
-      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-8 sm:max-md:pl-10 max-md:flex max-md:items-center max-md:justify-end max-md:gap-1 max-md:translate-x-2 sm:max-md:translate-x-3 md:flex md:items-center md:gap-2 md:shrink-0 md:min-w-0 md:max-w-none md:translate-x-0">
-        {sidebarCollapsed ? (
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed(false)}
-            className="hidden md:inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Show sidebar"
-            title="Show sidebar"
-          >
-            <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
-          </button>
-        ) : null}
+      {/* Desktop: show sidebar when collapsed — keep on the left */}
+      {sidebarCollapsed ? (
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(false)}
+          className="hidden md:inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="Show sidebar"
+          title="Show sidebar"
+        >
+          <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
+        </button>
+      ) : null}
+
+      {pageHeading ? (
+        <div className="hidden md:flex min-w-0 flex-1 flex-col justify-center leading-tight">
+          <h1 className="truncate text-lg font-bold tracking-tight text-foreground">
+            {pageHeading.title}
+          </h1>
+          <p className="truncate text-xs text-muted-foreground">{pageHeading.subtitle}</p>
+        </div>
+      ) : null}
+
+      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-8 sm:max-md:pl-10 max-md:flex max-md:items-center max-md:justify-end max-md:gap-1 max-md:translate-x-2 sm:max-md:translate-x-3 md:flex md:items-center md:gap-2 md:shrink-0 md:min-w-0 md:max-w-none md:translate-x-0 md:ml-auto">
         {showBranchDropdown ? (
           <Select
             value={
@@ -213,7 +232,7 @@ export function Header() {
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-0.5 sm:gap-1 shrink-0 max-md:[grid-area:hdr_tools] max-md:self-center md:ml-auto">
+      <div className="flex items-center justify-end gap-0.5 sm:gap-1 shrink-0 max-md:[grid-area:hdr_tools] max-md:self-center">
         {mounted && (
           <button
             type="button"
