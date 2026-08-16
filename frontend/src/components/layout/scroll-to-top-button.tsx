@@ -14,9 +14,6 @@ const STICKY_ACTION_BAR_PATHS = new Set(["/referrals"]);
 
 const JOB_CARD_DETAIL_RE = /^\/job-cards\/[^/]+$/;
 
-/** List pages where the scroll button sits on the left to avoid obscuring row actions. */
-const SCROLL_BUTTON_LEFT_PREFIXES = ["/billing", "/parties", "/payroll", "/job-cards"];
-
 export function ScrollToTopButton({
   scrollContainerRef,
 }: {
@@ -26,9 +23,6 @@ export function ScrollToTopButton({
   const [visible, setVisible] = useState(false);
   const isJobCardDetail = JOB_CARD_DETAIL_RE.test(pathname);
   const hasStickyActionBar = STICKY_ACTION_BAR_PATHS.has(pathname) || isJobCardDetail;
-  const useLeftPosition = SCROLL_BUTTON_LEFT_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-  );
   const showAfterPx = isJobCardDetail ? SHOW_AFTER_JOB_DETAIL_PX : SHOW_AFTER_PX;
 
   useEffect(() => {
@@ -52,8 +46,8 @@ export function ScrollToTopButton({
       size="icon"
       className={cn(
         "fixed z-40 hidden rounded-full shadow-md transition-opacity duration-200 md:inline-flex",
+        "right-3 md:right-8",
         isJobCardDetail ? "h-7 w-7 md:h-9 md:w-9" : "h-8 w-8 md:h-10 md:w-10",
-        useLeftPosition ? "left-3 right-auto md:left-auto" : "right-3 md:right-8",
         isJobCardDetail
           ? "bottom-[calc(10.5rem+env(safe-area-inset-bottom))] md:bottom-8"
           : hasStickyActionBar
