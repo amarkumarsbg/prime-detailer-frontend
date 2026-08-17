@@ -1,24 +1,2 @@
-import { Router } from "express";
-import { requireAuth, requirePermission } from "../middleware/auth.js";
-import {
-  getCustomers,
-  getCustomer,
-  postCustomer,
-  postCustomersBulk,
-  putCustomer,
-  removeCustomer,
-  patchWallet,
-} from "../controllers/customer.controller.js";
-
-export const customerRouter = Router();
-
-customerRouter.use(requireAuth);
-customerRouter.use(requirePermission("CUSTOMERS"));
-
-customerRouter.get("/", getCustomers);
-customerRouter.post("/", postCustomer);
-customerRouter.post("/bulk", postCustomersBulk);
-customerRouter.patch("/:id/wallet", patchWallet);
-customerRouter.get("/:id", getCustomer);
-customerRouter.put("/:id", putCustomer);
-customerRouter.delete("/:id", removeCustomer);
+/** @deprecated Import from `../modules/customers/customer.routes.js` — Phase 1 shim. */
+export { customerRouter } from "../modules/customers/customer.routes.js";

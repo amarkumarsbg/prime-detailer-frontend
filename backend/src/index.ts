@@ -4,28 +4,29 @@ import compression from "compression";
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
-import { authRouter } from "./routes/auth.routes.js";
-import { customerRouter } from "./routes/customer.routes.js";
-import { bootstrapRouter } from "./routes/bootstrap.routes.js";
-import { collectionRouter } from "./routes/collection.routes.js";
-import { quotationRouter } from "./routes/quotation.routes.js";
-import { branchApiRouter } from "./routes/branch-api.routes.js";
-import { userApiRouter } from "./routes/user-api.routes.js";
-import { vehicleApiRouter } from "./routes/vehicle-api.routes.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
+import { customerRouter } from "./modules/customers/customer.routes.js";
+import { bootstrapRouter } from "./modules/bootstrap/bootstrap.routes.js";
+import { collectionRouter } from "./modules/collections/collection.routes.js";
+import { quotationRouter } from "./modules/quotations/quotation.routes.js";
+import { branchApiRouter } from "./modules/branches/branch-api.routes.js";
+import { userApiRouter } from "./modules/users/user-api.routes.js";
+import { vehicleApiRouter } from "./modules/vehicles/vehicle-api.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { isTwilioSmsEnabled, isTwilioWhatsAppEnabled } from "./services/twilio-sms.service.js";
-import { isPasswordResetEmailConfigured } from "./services/password-reset-email.service.js";
+import { isPasswordResetEmailConfigured } from "./modules/auth/password-reset-email.service.js";
 import { messagingRouter } from "./routes/messaging.routes.js";
-import { jobCardUploadRouter } from "./routes/job-card-upload.routes.js";
+import { jobCardsRouter } from "./modules/job-cards/job-cards.routes.js";
+import { invoicesRouter } from "./modules/invoices/invoices.routes.js";
 import { publicAttendanceRouter } from "./routes/public-attendance.routes.js";
 import { attendanceRouter } from "./routes/attendance.routes.js";
-import { partyRouter } from "./routes/party.routes.js";
-import { organizationRouter } from "./routes/organization.routes.js";
-import { platformRouter } from "./routes/platform.routes.js";
+import { partyRouter } from "./modules/parties/party.routes.js";
+import { organizationRouter } from "./modules/organization/organization.routes.js";
+import { platformRouter } from "./modules/platform/platform.routes.js";
 import { isSwaggerEnabled, registerSwagger } from "./docs/register-swagger.js";
 
 import { prisma } from "./lib/prisma.js";
-import { getPublicInvoiceView } from "./services/public-invoice.service.js";
+import { getPublicInvoiceView } from "./modules/invoices/public-invoice.service.js";
 import { getPublicBranding } from "./services/public-branding.service.js";
 
 const app = express();
@@ -114,7 +115,8 @@ app.get("/api/public/branding", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRouter);
-app.use("/api/job-cards", jobCardUploadRouter);
+app.use("/api/job-cards", jobCardsRouter);
+app.use("/api/invoices", invoicesRouter);
 app.use("/api/customers", customerRouter);
 app.use("/api/bootstrap", bootstrapRouter);
 app.use("/api/collections", collectionRouter);
@@ -131,7 +133,7 @@ app.use("/api/platform", platformRouter);
 
 app.use(errorHandler);
 
-import { ensurePlatformOwner } from "./services/ensure-platform-owner.service.js";
+import { ensurePlatformOwner } from "./modules/platform/ensure-platform-owner.service.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 

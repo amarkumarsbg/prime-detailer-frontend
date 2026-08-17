@@ -307,6 +307,7 @@ async function main() {
       where: { id: c.id },
       create: {
         id: c.id,
+        organizationId: orgId,
         name: c.name,
         phone: c.phone,
         email: c.email,
@@ -322,6 +323,7 @@ async function main() {
         createdAt: new Date(c.createdAt),
       },
       update: {
+        organizationId: orgId,
         name: c.name,
         phone: c.phone,
         email: c.email,
@@ -343,6 +345,7 @@ async function main() {
     where: { id: "c:cust-hitech" },
     create: {
       id: "c:cust-hitech",
+      organizationId: orgId,
       kind: "CUSTOMER",
       name: "HI TECH CAR SPA & DETAILING",
       mobile: "+919876543299",
@@ -354,6 +357,7 @@ async function main() {
       customerId: "cust-hitech",
     },
     update: {
+      organizationId: orgId,
       name: "HI TECH CAR SPA & DETAILING",
       gstin: "09AABCU9603R1ZM",
       pan: "AABCU9603R",
@@ -365,6 +369,7 @@ async function main() {
       where: { id: v.id },
       create: {
         id: v.id,
+        organizationId: orgId,
         customerId: v.customerId,
         customerName: v.customerName,
         registrationNumber: v.registrationNumber,
@@ -379,6 +384,7 @@ async function main() {
         previousOwners: v.previousOwners ? (v.previousOwners as object) : undefined,
       },
       update: {
+        organizationId: orgId,
         customerId: v.customerId,
         customerName: v.customerName,
         registrationNumber: v.registrationNumber,
@@ -409,6 +415,7 @@ async function main() {
         data: {
           collection: name,
           entityId: item.id,
+          organizationId: orgId,
           payload: payload as object,
         },
       });
@@ -429,9 +436,10 @@ async function main() {
       create: {
         collection: name,
         entityId: SINGLETON_ENTITY_ID,
+        organizationId: orgId,
         payload: remapped as object,
       },
-      update: { payload: remapped as object },
+      update: { payload: remapped as object, organizationId: orgId },
     });
   }
 

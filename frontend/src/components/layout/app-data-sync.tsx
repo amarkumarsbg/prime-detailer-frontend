@@ -7,17 +7,30 @@ import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 const POLL_INTERVAL_MS = 45_000;
 
 /**
+ * Ignore visibility→visible refresh shortly after shell becomes ready so the
+ * initial layout `run()` is not immediately duplicated by a first-paint visibility event.
+ */
+export const BOOTSTRAP_VISIBILITY_GRACE_MS = 5_000;
+
+/**
  * Keeps shell stores (branches, branding, entitlement) fresh.
  * Domain collections are loaded by DomainDataSync per route.
  */
 export function AppDataSync() {
   const ready = useAppBootstrapStore((s) => s.ready);
   const refresh = useAppBootstrapStore((s) => s.refresh);
-  const started = useRef(false);
 
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      const { readyAtMs, ready: isReady } = useAppBootstrapStore.getState();
+      if (
+        isReady &&
+        readyAtMs > 0 &&
+        Date.now() - readyAtMs < BOOTSTRAP_VISIBILITY_GRACE_MS
+      ) {
+        return;
+      }
       void refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -32,9 +45,6 @@ export function AppDataSync() {
 
   useEffect(() => {
     if (!ready) return;
-    if (!started.current) {
-      started.current = true;
-    }
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void refresh();

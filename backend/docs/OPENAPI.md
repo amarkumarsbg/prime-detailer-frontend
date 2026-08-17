@@ -11,6 +11,16 @@ With the API running locally (default port **4000**):
 
 Root `GET /` also lists `docs` / `openapi` when Swagger is enabled.
 
+## Architecture docs (start here)
+
+| Doc | Purpose |
+|-----|---------|
+| [ADR-001-api-architecture.md](./ADR-001-api-architecture.md) | Target architecture decision |
+| [MODULE_OWNERSHIP.md](./MODULE_OWNERSHIP.md) | Module → routes → permissions |
+| [CRUD_AND_ACTIONS.md](./CRUD_AND_ACTIONS.md) | CRUD matrix + special actions |
+| [API_CONVENTIONS.md](./API_CONVENTIONS.md) | Envelope, errors, auth, scope |
+| [MIGRATION_PHASES.md](./MIGRATION_PHASES.md) | Phased rollout |
+
 ## Enabling / disabling
 
 | Environment | Behavior |
@@ -70,14 +80,31 @@ src/docs/
 
 `GET /api/bootstrap` returns only org-scoped **branches**, public **branding**, and **entitlement**. Domain data (customers, job cards, payroll, etc.) is loaded via permission-scoped entity and collection APIs — not via bootstrap.
 
-### Domain entities via collections
+### Domain entities via collections (**legacy gateway**)
 
-Many studio resources (job cards, invoices, appointments/bookings, quotations, pickup/drop, app settings, inventory, etc.) are stored as `AppJsonRow` and exposed through:
+Many studio resources (job cards, invoices, appointments/bookings, quotations, pickup/drop, app settings, inventory, etc.) are stored as `AppJsonRow` and exposed through the **legacy** gateway:
 
 - `GET/PUT/DELETE /api/collections/{collection}/…`
 - `POST /api/collections/{collection}/snapshot`
 
-There is **no** separate HTTP route per domain for those documents. Entity shapes are documented as reusable schemas (`JobCard`, `Invoice`, `Appointment`, `Booking`, …). Bookings are `Appointment` rows with `kind: BOOKING`.
+OpenAPI tags these operations under **Collections** (legacy) as well as domain tags for discoverability.
+
+**Graduated modules (Phase 4 — FE primary on dedicated routes):**
+
+- `/api/job-cards` — list, snapshot, upsert, delete (+ photos)
+- `/api/invoices` — list, snapshot, upsert, delete
+- `/api/quotations` — list, snapshot, upsert, delete (+ convert-to-job)
+
+Matching `/api/collections/{jobCards|invoices|quotations}` paths remain for compatibility but are no longer used by the studio frontend domain loader / sync helpers.
+
+Other AppJsonRow domains still use the collections gateway. Entity shapes are documented as reusable schemas (`JobCard`, `Invoice`, `Appointment`, `Booking`, …). Bookings are `Appointment` rows with `kind: BOOKING`.
+
+Special actions:
+
+- `POST /api/quotations/convert-to-job`
+- `POST /api/job-cards/{jobCardId}/photos`
+
+See [CRUD_AND_ACTIONS.md](./CRUD_AND_ACTIONS.md).
 
 ## Packages
 

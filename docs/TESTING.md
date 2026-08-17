@@ -46,6 +46,8 @@ npm run test:list-scope
 
 Bootstrap is **thin** (branches + branding + entitlement). Domain data loads via permission-scoped collection/entity APIs; `test:bootstrap-thin` and `test:data-scope` guard that contract.
 
+API architecture docs (Phase 0): `backend/docs/ADR-001-api-architecture.md` and related files under `backend/docs/`.
+
 ## Future E2E (not wired yet)
 
 Optional Playwright smoke (manual candidate):

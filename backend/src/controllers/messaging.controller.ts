@@ -19,10 +19,14 @@ async function logMessage(params: {
   body: string;
   status: "sent" | "failed";
   error?: string;
+  organizationId?: string;
 }) {
   try {
     let customer: any = null;
-    const allCustomers = await prisma.customer.findMany();
+    const orgId = params.organizationId;
+    const allCustomers = await prisma.customer.findMany({
+      where: orgId ? { organizationId: orgId } : undefined,
+    });
     if (params.type === "email") {
       const normEmail = params.recipient.trim().toLowerCase();
       customer = allCustomers.find((c) => c.email.trim().toLowerCase() === normEmail) || null;
@@ -46,7 +50,9 @@ async function logMessage(params: {
       createdAt: new Date().toISOString(),
     };
 
-    await upsertCollectionItem("communications", id, messagePayload);
+    if (orgId) {
+      await upsertCollectionItem("communications", id, messagePayload, orgId);
+    }
     return messagePayload;
   } catch (err) {
     console.error("Failed to log message delivery:", err);
@@ -115,6 +121,7 @@ export async function postTransactionalEmail(req: Request, res: Response, next: 
     });
     if (!out.ok) {
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "email",
         recipient: body.to,
         subject: body.subject,
@@ -132,6 +139,7 @@ export async function postTransactionalEmail(req: Request, res: Response, next: 
       return;
     }
     const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
       type: "email",
       recipient: body.to,
       subject: body.subject,
@@ -172,6 +180,7 @@ export async function postWhatsApp(req: Request, res: Response, next: NextFuncti
         });
       }
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "whatsapp",
         recipient: body.phone,
         body: bodyText,
@@ -180,6 +189,7 @@ export async function postWhatsApp(req: Request, res: Response, next: NextFuncti
       res.json({ data: { ok: true as const, message: msgLog }, error: null });
     } catch (err: any) {
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "whatsapp",
         recipient: body.phone,
         body: bodyText,
@@ -228,6 +238,7 @@ export async function postSmsTest(req: Request, res: Response, next: NextFunctio
     try {
       await sendTransactionalSms(to, TEST_SMS_BODY);
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "sms",
         recipient: to,
         body: TEST_SMS_BODY,
@@ -236,6 +247,7 @@ export async function postSmsTest(req: Request, res: Response, next: NextFunctio
       res.json({ data: { ok: true as const, message: msgLog }, error: null });
     } catch (err: any) {
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "sms",
         recipient: to,
         body: TEST_SMS_BODY,
@@ -273,6 +285,7 @@ export async function postWhatsAppTest(req: Request, res: Response, next: NextFu
     try {
       const result = await sendWhatsAppMessage(phone, TEST_WHATSAPP_BODY);
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "whatsapp",
         recipient: phone,
         body: TEST_WHATSAPP_BODY,
@@ -292,6 +305,7 @@ export async function postWhatsAppTest(req: Request, res: Response, next: NextFu
       });
     } catch (err: any) {
       const msgLog = await logMessage({
+      organizationId: req.auth?.organizationId,
         type: "whatsapp",
         recipient: phone,
         body: TEST_WHATSAPP_BODY,

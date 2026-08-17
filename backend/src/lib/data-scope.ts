@@ -242,11 +242,12 @@ export function intersectQueryBranchId(
 }
 
 /**
- * Customer/Vehicle tables lack organizationId. For branch-bound users, restrict to
+ * Customer/Vehicle tables are org-scoped. For branch-bound users, further restrict to
  * entities referenced by in-scope job cards / appointments / pickup requests.
  * Org-wide roles (`allowedBranchIds === null`) → no ID filter (null sets).
  */
 export async function collectReferencedCustomerVehicleIds(
+  organizationId: string,
   allowedBranchIds: string[] | null
 ): Promise<{ customerIds: Set<string> | null; vehicleIds: Set<string> | null }> {
   if (allowedBranchIds === null) {
@@ -258,7 +259,7 @@ export async function collectReferencedCustomerVehicleIds(
 
   const collections = ["jobCards", "appointments", "pickupDropRequests"] as const;
   const rows = await prisma.appJsonRow.findMany({
-    where: { collection: { in: [...collections] } },
+    where: { organizationId, collection: { in: [...collections] } },
     select: { payload: true },
   });
 

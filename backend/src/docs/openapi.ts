@@ -9,6 +9,7 @@ import {
 import {
   collectionPaths,
   jobCardUploadPaths,
+  invoiceAliasPaths,
   quotationPaths,
 } from "./paths/collections-jobs.paths.js";
 import {
@@ -27,9 +28,9 @@ const tags = [
   { name: "Staff", description: "Alias tag for staff/user APIs" },
   { name: "Customers", description: "Customer CRM and wallet" },
   { name: "Vehicles", description: "Vehicle registry" },
-  { name: "Job Cards", description: "Job cards (collections + photo upload)" },
-  { name: "Billing", description: "Invoices and payments (via collections + email)" },
-  { name: "Quotations", description: "Quotations and convert-to-job" },
+  { name: "Job Cards", description: "Job cards dedicated API + photo upload (FE primary; collections compat)" },
+  { name: "Billing", description: "Invoices dedicated API + public invoice (FE primary; collections compat)" },
+  { name: "Quotations", description: "Quotations dedicated API + convert-to-job (FE primary; collections compat)" },
   { name: "Appointments", description: "Appointments via collections/appointments" },
   {
     name: "Bookings",
@@ -41,7 +42,7 @@ const tags = [
   { name: "Inventory", description: "parts / stockMovements / productPurchases collections" },
   { name: "Reports", description: "reportSchedules and reporting-related collections" },
   { name: "Settings", description: "appSettings + logo upload" },
-  { name: "Collections", description: "Generic AppJsonRow CRUD" },
+  { name: "Collections", description: "LEGACY gateway: generic AppJsonRow list/upsert/snapshot/delete. Prefer module docs; see backend/docs/ADR-001-api-architecture.md" },
   { name: "Branches", description: "Branch management" },
   { name: "Parties", description: "Customer/supplier parties and ledger" },
   { name: "Messaging", description: "SMS, WhatsApp, email" },
@@ -75,6 +76,10 @@ export function buildOpenApiDocument(options?: { serverUrl?: string }) {
         "Most studio routes require a permission key in the JWT (SUPER_ADMIN bypasses).",
         "Collection routes map collection names → permission keys (default-deny).",
         "",
+        "## Architecture",
+        "See `backend/docs/ADR-001-api-architecture.md`, module ownership, CRUD vs actions, and API conventions.",
+        "`/api/collections/*` is a **legacy** document gateway (AppJsonRow). Dedicated REST exists for customers, vehicles, users, branches, parties, and (Phase 4) studio FE primary paths for job-cards, invoices, and quotations. Matching collection names remain for compatibility.",
+        "",
         "## SaaS Admin",
         "`/api/platform/*` accepts PLATFORM_OWNER JWT **or** header `X-Platform-Admin-Key`.",
         "",
@@ -97,6 +102,7 @@ export function buildOpenApiDocument(options?: { serverUrl?: string }) {
       partyPaths,
       collectionPaths,
       jobCardUploadPaths,
+      invoiceAliasPaths,
       quotationPaths,
       messagingPaths,
       attendancePaths,

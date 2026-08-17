@@ -2,35 +2,35 @@ import type { Request, Response, NextFunction } from "express";
 import type { Branch, User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
-import { authenticateUser, signAuthToken, touchUserLastLogin } from "../services/auth.service.js";
+import { prisma } from "../../lib/prisma.js";
+import { authenticateUser, signAuthToken, touchUserLastLogin } from "./auth.service.js";
 import {
   consumeLoginOtpIfValid,
   findActiveUserByTenDigitPhone,
   issueLoginOtp,
   isDemoLoginOtp,
-} from "../services/login-otp.service.js";
+} from "./login-otp.service.js";
 import {
   isTwilioSmsEnabled,
   sendLoginOtpSms,
   toE164,
-} from "../services/twilio-sms.service.js";
+} from "../../services/twilio-sms.service.js";
 
-import { env } from "../config/env.js";
+import { env } from "../../config/env.js";
 import {
   isPasswordResetEmailConfigured,
   sendPasswordResetEmail,
-} from "../services/password-reset-email.service.js";
+} from "./password-reset-email.service.js";
 import {
   consumePasswordResetToken,
   createPasswordResetPlainToken,
   issuePasswordResetForUser,
   clearPasswordResetForUser,
   isPasswordResetTokenPending,
-} from "../services/password-reset.service.js";
-import { strongPasswordSchema } from "../lib/password-policy.js";
-import { updateUserApi } from "../services/user-api.service.js";
-import { persistAvatarFile } from "../services/object-storage.service.js";
+} from "./password-reset.service.js";
+import { strongPasswordSchema } from "../../lib/password-policy.js";
+import { updateUserApi } from "../users/user-api.service.js";
+import { persistAvatarFile } from "../../services/object-storage.service.js";
 
 const loginSchema = z.object({
   email: z.string().email(),

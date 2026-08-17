@@ -8,7 +8,8 @@ import {
   listPartiesWithBalance,
   upsertParty,
   type UpsertPartyInput,
-} from "../services/party.service.js";
+} from "./party.service.js";
+import { resolveBranchScope } from "../../lib/data-scope.js";
 
 const partyKindSchema = z.enum(["customer", "supplier"]);
 const openingSideSchema = z.enum(["toCollect", "toPay"]);
@@ -68,10 +69,22 @@ function paramId(req: Request): string {
   return Array.isArray(raw) ? raw[0]! : raw!;
 }
 
+async function requireOrg(req: Request) {
+  if (!req.auth) return null;
+  return resolveBranchScope(req.auth);
+}
+
 export async function getParties(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.json({ data: { parties: [] }, error: null });
+      return;
+    }
     const withBalance = req.query.balance === "1" || req.query.balance === "true";
-    const parties = withBalance ? await listPartiesWithBalance() : await listParties();
+    const parties = withBalance
+      ? await listPartiesWithBalance(scope.organizationId)
+      : await listParties(scope.organizationId);
     res.json({ data: { parties }, error: null });
   } catch (e) {
     next(e);
@@ -80,7 +93,12 @@ export async function getParties(req: Request, res: Response, next: NextFunction
 
 export async function getParty(req: Request, res: Response, next: NextFunction) {
   try {
-    const party = await getPartyById(paramId(req));
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const party = await getPartyById(paramId(req), scope.organizationId);
     if (!party) {
       res.status(404).json({ data: null, error: { message: "Party not found" } });
       return;
@@ -93,8 +111,13 @@ export async function getParty(req: Request, res: Response, next: NextFunction) 
 
 export async function getPartyLedgerHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const period = typeof req.query.period === "string" ? req.query.period : "last365";
-    const ledger = await getPartyLedger(paramId(req), period);
+    const ledger = await getPartyLedger(paramId(req), period, scope.organizationId);
     if (!ledger) {
       res.status(404).json({ data: null, error: { message: "Party not found" } });
       return;
@@ -107,8 +130,13 @@ export async function getPartyLedgerHandler(req: Request, res: Response, next: N
 
 export async function postParty(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = upsertSchema.parse(req.body);
-    const party = await upsertParty(null, body as UpsertPartyInput);
+    const party = await upsertParty(null, scope.organizationId, body as UpsertPartyInput);
     res.status(201).json({ data: { party }, error: null });
   } catch (e) {
     next(e);
@@ -117,8 +145,13 @@ export async function postParty(req: Request, res: Response, next: NextFunction)
 
 export async function putParty(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = upsertSchema.parse(req.body);
-    const party = await upsertParty(paramId(req), body as UpsertPartyInput);
+    const party = await upsertParty(paramId(req), scope.organizationId, body as UpsertPartyInput);
     res.json({ data: { party }, error: null });
   } catch (e) {
     next(e);
@@ -127,7 +160,17 @@ export async function putParty(req: Request, res: Response, next: NextFunction) 
 
 export async function removeParty(req: Request, res: Response, next: NextFunction) {
   try {
-    const ok = await hideParty(paramId(req));
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const party = await getPartyById(paramId(req), scope.organizationId);
+    if (!party) {
+      res.status(404).json({ data: null, error: { message: "Party not found" } });
+      return;
+    }
+    const ok = await hideParty(paramId(req), scope.organizationId);
     if (!ok) {
       res.status(404).json({ data: null, error: { message: "Party not found" } });
       return;

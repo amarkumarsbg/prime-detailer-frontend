@@ -6,20 +6,20 @@ import {
   canChangeRoles,
   canCreateStaffAccounts,
   isStaffManager,
-} from "../lib/rbac.js";
-import { validateStrongPassword } from "../lib/password-policy.js";
+} from "../../lib/rbac.js";
+import { validateStrongPassword } from "../../lib/password-policy.js";
 import {
   isPasswordResetEmailConfigured,
-} from "../services/password-reset-email.service.js";
-import { sendUserCredentialsEmail } from "../services/onboarding-credentials-email.service.js";
+} from "../auth/password-reset-email.service.js";
+import { sendUserCredentialsEmail } from "../auth/onboarding-credentials-email.service.js";
 import {
   listUsersApi,
   listStaffDirectoryApi,
   createUserApi,
   updateUserApi,
-} from "../services/user-api.service.js";
-import { prisma } from "../lib/prisma.js";
-import { resolveBranchScope } from "../lib/data-scope.js";
+} from "./user-api.service.js";
+import { prisma } from "../../lib/prisma.js";
+import { resolveBranchScope } from "../../lib/data-scope.js";
 
 function paramId(req: Request): string {
   const raw = req.params.id;

@@ -8,8 +8,8 @@ import {
   updateCustomer,
   deleteCustomer,
   adjustWallet,
-} from "../services/customer.service.js";
-import { resolveBranchScope } from "../lib/data-scope.js";
+} from "./customer.service.js";
+import { resolveBranchScope } from "../../lib/data-scope.js";
 
 const trimmed = (v: unknown) => (typeof v === "string" ? v.trim() : v);
 
@@ -50,22 +50,9 @@ const walletSchema = z.object({
   reason: z.string().min(1).default("Manual Adjustment"),
 });
 
-export async function getCustomers(req: Request, res: Response, next: NextFunction) {
-  try {
-    // Customer rows lack organizationId; return full list for permitted callers.
-    // Branch isolation for operational data is enforced on collections (job cards, etc.).
-    if (req.auth) {
-      const scope = await resolveBranchScope(req.auth);
-      if (!scope) {
-        res.json({ data: { customers: [] }, error: null });
-        return;
-      }
-    }
-    const customers = await listCustomers();
-    res.json({ data: { customers }, error: null });
-  } catch (e) {
-    next(e);
-  }
+async function requireOrg(req: Request) {
+  if (!req.auth) return null;
+  return resolveBranchScope(req.auth);
 }
 
 function paramId(req: Request): string {
@@ -73,9 +60,28 @@ function paramId(req: Request): string {
   return Array.isArray(raw) ? raw[0]! : raw!;
 }
 
+export async function getCustomers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.json({ data: { customers: [] }, error: null });
+      return;
+    }
+    const customers = await listCustomers({ organizationId: scope.organizationId });
+    res.json({ data: { customers }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
 export async function getCustomer(req: Request, res: Response, next: NextFunction) {
   try {
-    const customer = await getCustomerById(paramId(req));
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const customer = await getCustomerById(paramId(req), scope.organizationId);
     if (!customer) {
       res.status(404).json({ data: null, error: { message: "Customer not found" } });
       return;
@@ -88,8 +94,13 @@ export async function getCustomer(req: Request, res: Response, next: NextFunctio
 
 export async function postCustomer(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = createSchema.parse(req.body);
-    const customer = await createCustomer(body);
+    const customer = await createCustomer({ ...body, organizationId: scope.organizationId });
     res.status(201).json({ data: { customer }, error: null });
   } catch (e) {
     if (e instanceof Error && e.message === "Phone already in use") {
@@ -102,8 +113,14 @@ export async function postCustomer(req: Request, res: Response, next: NextFuncti
 
 export async function postCustomersBulk(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = bulkSchema.parse(req.body);
     const result = await createCustomersBulk(
+      scope.organizationId,
       body.customers.map((c) => ({
         name: c.name,
         phone: c.phone,
@@ -127,8 +144,13 @@ export async function postCustomersBulk(req: Request, res: Response, next: NextF
 
 export async function putCustomer(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = updateSchema.parse(req.body);
-    const customer = await updateCustomer(paramId(req), body);
+    const customer = await updateCustomer(paramId(req), scope.organizationId, body);
     if (!customer) {
       res.status(404).json({ data: null, error: { message: "Customer not found" } });
       return;
@@ -145,7 +167,12 @@ export async function putCustomer(req: Request, res: Response, next: NextFunctio
 
 export async function removeCustomer(req: Request, res: Response, next: NextFunction) {
   try {
-    const ok = await deleteCustomer(paramId(req));
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const ok = await deleteCustomer(paramId(req), scope.organizationId);
     if (!ok) {
       res.status(404).json({ data: null, error: { message: "Customer not found" } });
       return;
@@ -158,8 +185,19 @@ export async function removeCustomer(req: Request, res: Response, next: NextFunc
 
 export async function patchWallet(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = walletSchema.parse(req.body);
-    const customer = await adjustWallet(paramId(req), body.amount, body.type, body.reason);
+    const customer = await adjustWallet(
+      paramId(req),
+      scope.organizationId,
+      body.amount,
+      body.type,
+      body.reason
+    );
     if (!customer) {
       res.status(404).json({ data: null, error: { message: "Customer not found" } });
       return;

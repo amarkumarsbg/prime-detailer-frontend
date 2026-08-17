@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { BRANCH_MUTATION_ROLES } from "../lib/rbac.js";
+import { BRANCH_MUTATION_ROLES } from "../../lib/rbac.js";
 import type { UserRole } from "@prisma/client";
-import { prisma } from "../lib/prisma.js";
-import { listBranchesApi, upsertBranchApi, patchBranchApi, getBranchDeletionBlockers, deleteBranchApi } from "../services/branch-api.service.js";
+import { prisma } from "../../lib/prisma.js";
+import { listBranchesApi, upsertBranchApi, patchBranchApi, getBranchDeletionBlockers, deleteBranchApi } from "./branch-api.service.js";
 
 function forbidden(res: Response, message: string) {
   res.status(403).json({ data: null, error: { message } });

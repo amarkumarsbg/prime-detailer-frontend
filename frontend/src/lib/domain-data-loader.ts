@@ -97,6 +97,20 @@ async function getCollectionItems<T>(collection: string): Promise<T[]> {
   return Array.isArray(data.items) ? data.items : [];
 }
 
+/** List document modules via dedicated alias when graduated (Phase 4). */
+async function getDocumentItems<T>(collection: string): Promise<T[]> {
+  const path =
+    collection === "jobCards"
+      ? "/api/job-cards"
+      : collection === "invoices"
+        ? "/api/invoices"
+        : collection === "quotations"
+          ? "/api/quotations"
+          : `/api/collections/${collection}`;
+  const data = await apiGet<{ items: T[] }>(path);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 async function getSingleton<T>(collection: string): Promise<T | null> {
   const items = await getCollectionItems<T>(collection);
   return items[0] ?? null;
@@ -171,18 +185,18 @@ async function loadOne(resource: DomainResource): Promise<void> {
       return;
     }
     case "jobCards": {
-      const items = await getCollectionItems<JobCard>("jobCards");
+      const items = await getDocumentItems<JobCard>("jobCards");
       useJobCardStore.setState({ jobCards: items });
       void useAppointmentStore.getState().reconcileStaleAppointments(items);
       return;
     }
     case "invoices": {
-      useInvoiceStore.setState({ invoices: await getCollectionItems<Invoice>("invoices") });
+      useInvoiceStore.setState({ invoices: await getDocumentItems<Invoice>("invoices") });
       return;
     }
     case "quotations": {
       useQuotationStore.setState({
-        quotations: await getCollectionItems<Quotation>("quotations"),
+        quotations: await getDocumentItems<Quotation>("quotations"),
       });
       return;
     }

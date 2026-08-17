@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../lib/prisma.js";
-import { validateStrongPassword } from "../lib/password-policy.js";
+import { prisma } from "../../lib/prisma.js";
+import { validateStrongPassword } from "../../lib/password-policy.js";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 

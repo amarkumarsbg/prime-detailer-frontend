@@ -1,9 +1,2 @@
-import { Router } from "express";
-import { requireAuth, requirePermission } from "../middleware/auth.js";
-import { postConvertQuotationToJob } from "../controllers/quotation-convert.controller.js";
-
-export const quotationRouter = Router();
-
-quotationRouter.use(requireAuth);
-quotationRouter.use(requirePermission("QUOTATIONS"));
-quotationRouter.post("/convert-to-job", postConvertQuotationToJob);
+/** @deprecated Phase 2 shim. */
+export { quotationRouter } from "../modules/quotations/quotation.routes.js";

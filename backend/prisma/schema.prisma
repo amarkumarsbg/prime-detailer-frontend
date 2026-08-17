@@ -52,6 +52,10 @@ model Organization {
   subscription      OrganizationSubscription?
   branches          Branch[]
   users             User[]
+  customers         Customer[]
+  vehicles          Vehicle[]
+  parties           Party[]
+  appJsonRows       AppJsonRow[]
   platformAuditLogs PlatformAuditLog[]
 }
 
@@ -186,21 +190,25 @@ model User {
 }
 
 model Customer {
-  id            String    @id
-  name          String
-  phone         String
-  email         String
-  address       String
-  referralCode  String
-  referredBy    String?
-  totalVisits   Int       @default(0)
-  rewardPoints  Int       @default(0)
-  walletBalance Float     @default(0)
-  lastVisitDate String?
-  isInactive    Boolean   @default(false)
-  emailVerified Boolean   @default(false)
-  createdAt     DateTime
-  vehicles      Vehicle[]
+  id             String       @id
+  name           String
+  phone          String
+  email          String
+  address        String
+  referralCode   String
+  referredBy     String?
+  totalVisits    Int          @default(0)
+  rewardPoints   Int          @default(0)
+  walletBalance  Float        @default(0)
+  lastVisitDate  String?
+  isInactive     Boolean      @default(false)
+  emailVerified  Boolean      @default(false)
+  createdAt      DateTime
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  vehicles       Vehicle[]
+
+  @@index([organizationId])
 }
 
 model Vehicle {
@@ -218,6 +226,10 @@ model Vehicle {
   year               Int
   notes              String?
   previousOwners     Json?
+  organizationId     String
+  organization       Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 /**
@@ -276,6 +288,8 @@ model Party {
   dateOfBirth        String?
   customerId         String?                @unique
   vendorKey          String?
+  organizationId     String
+  organization       Organization           @relation(fields: [organizationId], references: [id])
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   shippingAddresses  PartyShippingAddress[]
@@ -284,6 +298,7 @@ model Party {
 
   @@index([kind])
   @@index([vendorKey])
+  @@index([organizationId])
 }
 
 model PartyShippingAddress {
@@ -333,12 +348,17 @@ model PartyHidden {
 
 /**
  * JSON documents keyed by collection name + entity id (e.g. jobCards / jc-001).
+ * `organizationId` scopes rows per tenant (Phase 5). PK stays (collection, entityId);
+ * entity ids must remain globally unique across orgs (enforced on write).
  */
 model AppJsonRow {
-  collection String
-  entityId   String
-  payload    Json
-  updatedAt  DateTime @updatedAt
+  collection     String
+  entityId       String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  payload        Json
+  updatedAt      DateTime     @updatedAt
 
   @@id([collection, entityId])
+  @@index([organizationId, collection])
 }

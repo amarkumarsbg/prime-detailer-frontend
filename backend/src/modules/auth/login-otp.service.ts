@@ -1,4 +1,4 @@
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../../lib/prisma.js";
 import type { User } from "@prisma/client";
 
 function digitsOnly(s: string): string {

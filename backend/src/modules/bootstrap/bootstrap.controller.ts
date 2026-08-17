@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { getBootstrapPayload } from "../services/bootstrap.service.js";
+import { getBootstrapPayload } from "./bootstrap.service.js";
 
 export async function getBootstrap(req: Request, res: Response, next: NextFunction) {
   try {

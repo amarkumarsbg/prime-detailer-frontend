@@ -7,13 +7,18 @@ import {
   deleteVehicleApi,
   replaceAllVehiclesApi,
   createVehiclesBulk,
-} from "../services/vehicle-api.service.js";
+} from "./vehicle-api.service.js";
 import { FuelType, VehicleSegment } from "@prisma/client";
-import { resolveBranchScope } from "../lib/data-scope.js";
+import { resolveBranchScope } from "../../lib/data-scope.js";
 
 function paramId(req: Request): string {
   const raw = req.params.id;
   return Array.isArray(raw) ? raw[0]! : raw!;
+}
+
+async function requireOrg(req: Request) {
+  if (!req.auth) return null;
+  return resolveBranchScope(req.auth);
 }
 
 const segmentEnum = z.enum([
@@ -66,16 +71,12 @@ const bulkSchema = z.object({
 
 export async function getVehicles(req: Request, res: Response, next: NextFunction) {
   try {
-    // Vehicle rows lack organizationId; return full list for permitted callers.
-    // Branch isolation is enforced on collections that reference vehicles.
-    if (req.auth) {
-      const scope = await resolveBranchScope(req.auth);
-      if (!scope) {
-        res.json({ data: { vehicles: [] }, error: null });
-        return;
-      }
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.json({ data: { vehicles: [] }, error: null });
+      return;
     }
-    const vehicles = await listVehiclesApi();
+    const vehicles = await listVehiclesApi({ organizationId: scope.organizationId });
     res.json({ data: { vehicles }, error: null });
   } catch (e) {
     next(e);
@@ -84,23 +85,39 @@ export async function getVehicles(req: Request, res: Response, next: NextFunctio
 
 export async function postVehicle(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = vehicleSchema.parse(req.body);
     const vehicle = await createVehicleApi({
       ...body,
+      organizationId: scope.organizationId,
       segment: body.segment as VehicleSegment,
       fuelType: body.fuelType as FuelType,
     });
     res.status(201).json({ data: { vehicle }, error: null });
   } catch (e) {
+    if (e instanceof Error && e.message === "Customer not found") {
+      res.status(400).json({ data: null, error: { message: e.message } });
+      return;
+    }
     next(e);
   }
 }
 
 export async function postVehiclesBulk(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = bulkSchema.parse(req.body);
     const yearDefault = new Date().getFullYear();
     const result = await createVehiclesBulk(
+      scope.organizationId,
       body.vehicles.map((v) => ({
         registrationNumber: v.registrationNumber,
         customerId: v.customerId,
@@ -131,9 +148,14 @@ export async function postVehiclesBulk(req: Request, res: Response, next: NextFu
 
 export async function putVehicle(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const id = paramId(req);
     const body = patchVehicleSchema.parse(req.body);
-    const vehicle = await updateVehicleApi(id, {
+    const vehicle = await updateVehicleApi(id, scope.organizationId, {
       ...body,
       segment: body.segment as VehicleSegment | undefined,
       fuelType: body.fuelType as FuelType | undefined,
@@ -150,7 +172,12 @@ export async function putVehicle(req: Request, res: Response, next: NextFunction
 
 export async function removeVehicle(req: Request, res: Response, next: NextFunction) {
   try {
-    const ok = await deleteVehicleApi(paramId(req));
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const ok = await deleteVehicleApi(paramId(req), scope.organizationId);
     if (!ok) {
       res.status(404).json({ data: null, error: { message: "Vehicle not found" } });
       return;
@@ -167,10 +194,17 @@ const snapshotBodySchema = z.object({
 
 export async function postVehicleSnapshot(req: Request, res: Response, next: NextFunction) {
   try {
+    const scope = await requireOrg(req);
+    if (!scope) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
     const body = snapshotBodySchema.parse(req.body);
     await replaceAllVehiclesApi(
+      scope.organizationId,
       body.vehicles.map((v) => ({
         ...v,
+        organizationId: scope.organizationId,
         segment: v.segment as VehicleSegment,
         fuelType: v.fuelType as FuelType,
       }))

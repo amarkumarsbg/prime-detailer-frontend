@@ -5,10 +5,10 @@ import {
   getOrganizationForPlatform,
   listOrganizationsForPlatform,
   patchOrganizationSubscription,
-} from "../services/organization-subscription.service.js";
-import { AppHttpError } from "../lib/app-http-error.js";
-import { parsePlanLimits } from "../lib/plan-catalog.js";
-import { prisma } from "../lib/prisma.js";
+} from "./organization-subscription.service.js";
+import { AppHttpError } from "../../lib/app-http-error.js";
+import { parsePlanLimits } from "../../lib/plan-catalog.js";
+import { prisma } from "../../lib/prisma.js";
 
 async function resolveOrgId(req: Request): Promise<string | undefined> {
   if (req.auth?.organizationId) return req.auth.organizationId;

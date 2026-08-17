@@ -6,16 +6,22 @@ import { bootstrapAppData } from "@/lib/bootstrap-app-data";
 interface AppBootstrapState {
   ready: boolean;
   error: string | null;
-  /** True while a background refresh is running (does not block UI). */
+  /** True while a bootstrap fetch is in flight (initial or refresh). */
   refreshing: boolean;
-  run: () => Promise<void>;
-  /** Single bootstrap fetch; keeps existing data if already ready and the request fails. */
+  /** Wall-clock ms when shell last became ready (0 if never). Used to skip early visibility refresh. */
+  readyAtMs: number;
+  /** Initial load with retries. No-op if already ready unless `{ force: true }`. */
+  run: (options?: { force?: boolean }) => Promise<void>;
+  /** Revalidate shell data; joins in-flight work; keeps cache on failure if already ready. */
   refresh: () => Promise<void>;
   reset: () => void;
 }
 
 const RETRIES = 4;
 const DELAY_MS = 2500;
+
+/** Shared single-flight promise for run + refresh. */
+let inflight: Promise<void> | null = null;
 
 async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
@@ -25,41 +31,74 @@ export const useAppBootstrapStore = create<AppBootstrapState>((set, get) => ({
   ready: false,
   error: null,
   refreshing: false,
-  reset: () => set({ ready: false, error: null, refreshing: false }),
-  refresh: async () => {
-    if (get().refreshing) return;
-    set({ refreshing: true });
-    try {
-      await bootstrapAppData();
-      set({ ready: true, error: null });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not refresh data from API";
-      if (!get().ready) {
-        set({ error: msg, ready: false });
-      } else {
-        console.warn("[bootstrap] Background refresh failed (keeping cached data):", msg);
-      }
-    } finally {
-      set({ refreshing: false });
-    }
+  readyAtMs: 0,
+
+  reset: () => {
+    inflight = null;
+    set({ ready: false, error: null, refreshing: false, readyAtMs: 0 });
   },
-  run: async () => {
-    set({ error: null, refreshing: false });
-    let lastError: unknown;
-    for (let attempt = 0; attempt < RETRIES; attempt++) {
+
+  refresh: async () => {
+    if (inflight) return inflight;
+
+    const work = (async () => {
+      set({ refreshing: true });
       try {
         await bootstrapAppData();
-        set({ ready: true, refreshing: false });
-        return;
+        set({ ready: true, error: null, readyAtMs: Date.now() });
       } catch (e) {
-        lastError = e;
-        if (attempt < RETRIES - 1) await sleep(DELAY_MS * (attempt + 1));
+        const msg = e instanceof Error ? e.message : "Could not refresh data from API";
+        if (!get().ready) {
+          set({ error: msg, ready: false });
+        } else {
+          console.warn("[bootstrap] Background refresh failed (keeping cached data):", msg);
+        }
+      } finally {
+        set({ refreshing: false });
+        inflight = null;
       }
-    }
-    set({
-      error: lastError instanceof Error ? lastError.message : "Could not load data from API",
-      ready: false,
-      refreshing: false,
-    });
+    })();
+
+    inflight = work;
+    return work;
+  },
+
+  run: async (options) => {
+    const force = options?.force === true;
+    if (get().ready && !force) return;
+    if (inflight) return inflight;
+
+    const work = (async () => {
+      set({ error: null, refreshing: true });
+      let lastError: unknown;
+      try {
+        for (let attempt = 0; attempt < RETRIES; attempt++) {
+          try {
+            await bootstrapAppData();
+            set({ ready: true, error: null, readyAtMs: Date.now(), refreshing: false });
+            return;
+          } catch (e) {
+            lastError = e;
+            if (attempt < RETRIES - 1) await sleep(DELAY_MS * (attempt + 1));
+          }
+        }
+        set({
+          error: lastError instanceof Error ? lastError.message : "Could not load data from API",
+          ready: false,
+          refreshing: false,
+        });
+      } finally {
+        if (inflight === work) inflight = null;
+        if (get().refreshing) set({ refreshing: false });
+      }
+    })();
+
+    inflight = work;
+    return work;
   },
 }));
+
+/** @internal test helper — clear module inflight between tests */
+export function __resetBootstrapInflightForTests() {
+  inflight = null;
+}
