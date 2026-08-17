@@ -41,7 +41,8 @@ export const useAppBootstrapStore = create<AppBootstrapState>((set, get) => ({
   refresh: async () => {
     if (inflight) return inflight;
 
-    const work = (async () => {
+    let work!: Promise<void>;
+    work = (async () => {
       set({ refreshing: true });
       try {
         await bootstrapAppData();
@@ -55,7 +56,7 @@ export const useAppBootstrapStore = create<AppBootstrapState>((set, get) => ({
         }
       } finally {
         set({ refreshing: false });
-        inflight = null;
+        if (inflight === work) inflight = null;
       }
     })();
 
@@ -68,7 +69,8 @@ export const useAppBootstrapStore = create<AppBootstrapState>((set, get) => ({
     if (get().ready && !force) return;
     if (inflight) return inflight;
 
-    const work = (async () => {
+    let work!: Promise<void>;
+    work = (async () => {
       set({ error: null, refreshing: true });
       let lastError: unknown;
       try {
