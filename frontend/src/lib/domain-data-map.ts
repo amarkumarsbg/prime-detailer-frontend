@@ -73,7 +73,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   { prefix: "/settings", resources: ["appSettings", "vehicleCatalog"] },
   {
     prefix: "/shared-ledger",
-    resources: ["balanceSheetManual", "invoices", "expenses", "cashBank"],
+    resources: ["balanceSheetManual", "invoices", "expenses", "cashBank", "customers"],
   },
   {
     prefix: "/accounting",

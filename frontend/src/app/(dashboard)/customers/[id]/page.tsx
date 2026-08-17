@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { ArrowLeft, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail } from "lucide-react";
+import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +50,9 @@ import {
   isWhatsAppNotConfiguredError,
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
+import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import { ApiError } from "@/lib/api-client";
 import { getTransferTagForCustomer } from "@/lib/ownership-transfers";
 import {
@@ -149,6 +152,7 @@ export default function CustomerDetailPage() {
 
   const jobCards = useJobCardStore((s) => s.jobCards);
   const invoices = useInvoiceStore((s) => s.invoices);
+  const businessName = useSettingsStore((s) => s.businessName);
 
   const customerJobCards = useMemo(() => {
     return jobCards
@@ -387,6 +391,15 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const handleShareLedger = async () => {
+    if (!customer) return;
+    await shareCustomerLedgerWhatsApp({
+      customer: { id: customer.id, name: customer.name, phone: customer.phone },
+      invoices,
+      businessName,
+    });
+  };
+
   const openAddVehicle = () => {
     reset({
       fuelType: "PETROL",
@@ -476,22 +489,45 @@ export default function CustomerDetailPage() {
 
       <Card className="border-border">
         <CardContent className="!p-6">
-          <div className="flex flex-col sm:flex-row gap-6">
-            <Avatar className="h-16 w-16 shrink-0 mt-1">
-              <AvatarFallback className="text-lg">
-                {getInitials(customer.name)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0 space-y-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">{customer.name}</h1>
-                <p className="text-muted-foreground mt-1">{customer.phone}</p>
-                <p className="text-muted-foreground">{customer.email}</p>
+          <div className="space-y-4">
+            <div className="flex items-start gap-4 sm:gap-6">
+              <Avatar className="mt-0.5 h-16 w-16 shrink-0">
+                <AvatarFallback className="text-lg">
+                  {getInitials(customer.name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl font-bold tracking-tight break-words">
+                  {customer.name}
+                </h1>
+                <p className="mt-1 break-all text-muted-foreground">{customer.phone}</p>
+                <p className="break-all text-muted-foreground">{customer.email}</p>
                 {customer.address && (
-                  <p className="text-muted-foreground mt-1">{customer.address}</p>
+                  <p className="mt-1 break-words text-muted-foreground">{customer.address}</p>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={customerLedgerHref(customer.id)}>
+                  <BookMarked className="mr-1.5 h-4 w-4" />
+                  View Ledger
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54]"
+                disabled={!customer.phone?.trim()}
+                title={customer.phone?.trim() ? "Share ledger via WhatsApp" : "No phone on file"}
+                onClick={() => void handleShareLedger()}
+              >
+                <WhatsAppIcon className="mr-1.5 h-4 w-4" />
+                Share Ledger
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium block mb-1">
                     Wallet Balance
@@ -542,13 +578,12 @@ export default function CustomerDetailPage() {
                   </div>
                 </div>
               </div>
-            </div>
           </div>
         </CardContent>
       </Card>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="bg-muted/50 w-full sm:w-auto">
+        <TabsList className="w-full flex-nowrap bg-muted/50 sm:w-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
           <TabsTrigger value="wallet">Wallet</TabsTrigger>
@@ -576,60 +611,60 @@ export default function CustomerDetailPage() {
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Name</p>
                   {isEditing ? (
                     <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
                   ) : (
-                    <p className="font-medium">{customer.name}</p>
+                    <p className="font-medium break-words">{customer.name}</p>
                   )}
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Phone</p>
                   {isEditing ? (
                     <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                   ) : (
-                    <p className="font-medium">{customer.phone}</p>
+                    <p className="font-medium break-all">{customer.phone}</p>
                   )}
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1 col-span-1 max-[479px]:col-span-2">
                   <p className="text-sm text-muted-foreground">Email</p>
                   {isEditing ? (
                     <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
                   ) : (
-                    <p className="font-medium">{customer.email}</p>
+                    <p className="font-medium break-all">{customer.email}</p>
                   )}
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1 col-span-1 max-[479px]:col-span-2">
                   <p className="text-sm text-muted-foreground">Address</p>
                   {isEditing ? (
                     <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
                   ) : (
-                    <p className="font-medium">{customer.address || "—"}</p>
+                    <p className="font-medium break-words">{customer.address || "—"}</p>
                   )}
                 </div>
-                <div>
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Referral Code</p>
-                  <p className="font-mono font-medium">{customer.referralCode}</p>
+                  <p className="font-mono font-medium break-all">{customer.referralCode}</p>
                 </div>
-                <div>
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Total Visits</p>
                   <p className="font-medium">{customer.totalVisits}</p>
                 </div>
-                <div>
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Last Visit</p>
                   <p className="font-medium">{customer.lastVisitDate ? formatDate(customer.lastVisitDate) : "—"}</p>
                 </div>
-                <div>
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Wallet Balance</p>
                   <p className="font-medium">{formatCurrency(customer.walletBalance)}</p>
                 </div>
-                <div>
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Reward Points</p>
                   <p className="font-medium">{customer.rewardPoints}</p>
                 </div>
-                <div>
+                <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Member Since</p>
                   <p className="font-medium">{formatDate(customer.createdAt)}</p>
                 </div>
@@ -1113,7 +1148,12 @@ export default function CustomerDetailPage() {
                 <Crown className="h-5 w-5 text-violet-600" />
                 Membership
               </CardTitle>
-              <Button variant="outline" size="sm" asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-auto max-w-[11rem] shrink-0 whitespace-normal px-2.5 py-1.5 text-xs leading-tight sm:h-9 sm:max-w-none sm:whitespace-nowrap sm:px-3 sm:py-2 sm:text-sm"
+                asChild
+              >
                 <Link href="/membership?tab=assign">Manage in Membership</Link>
               </Button>
             </CardHeader>
@@ -1130,37 +1170,43 @@ export default function CustomerDetailPage() {
                       key={sub.id}
                       className="rounded-xl border border-violet-200/80 bg-violet-50/40 p-4 dark:border-violet-900/50 dark:bg-violet-950/25"
                     >
-                      <p className="text-xs font-medium uppercase tracking-wide text-violet-700 dark:text-violet-300">
-                        Vehicle
-                      </p>
-                      <p className="font-mono text-base font-semibold">{vehicle.registrationNumber}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {vehicle.make} {vehicle.model}
-                      </p>
-                      {daysLeft <= 7 && daysLeft >= 0 && (
-                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                          <span>
-                            Expires in {daysLeft} day{daysLeft === 1 ? "" : "s"} — renew from Membership.
-                          </span>
+                      <div className="grid grid-cols-2 gap-x-3 sm:grid-cols-1">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                            Vehicle
+                          </p>
+                          <p className="font-mono text-base font-semibold break-all">
+                            {vehicle.registrationNumber}
+                          </p>
+                          <p className="text-sm text-muted-foreground break-words">
+                            {vehicle.make} {vehicle.model}
+                          </p>
                         </div>
-                      )}
-                      <div className="mt-3">
-                        <p className="text-sm text-muted-foreground">Package</p>
-                        <p className="font-semibold">{pkg.name}</p>
+                        {daysLeft <= 7 && daysLeft >= 0 && (
+                          <div className="col-span-2 mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 sm:col-span-1">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                            <span>
+                              Expires in {daysLeft} day{daysLeft === 1 ? "" : "s"} — renew from Membership.
+                            </span>
+                          </div>
+                        )}
+                        <div className="min-w-0 col-start-2 row-start-1 sm:col-start-auto sm:row-start-auto sm:mt-3">
+                          <p className="text-sm text-muted-foreground">Package</p>
+                          <p className="font-semibold break-words">{pkg.name}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Badge variant="secondary">{pkg.tier}</Badge>
+                            <span className="text-xs text-muted-foreground self-center">
+                              {MEMBERSHIP_TIER_DAYS[pkg.tier]} days window
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Badge variant="secondary">{pkg.tier}</Badge>
-                        <span className="text-xs text-muted-foreground self-center">
-                          {MEMBERSHIP_TIER_DAYS[pkg.tier]} days window
-                        </span>
-                      </div>
-                      <div className="mt-3 grid gap-1 sm:grid-cols-2">
-                        <div>
+                      <div className="mt-3 grid grid-cols-2 gap-1">
+                        <div className="min-w-0">
                           <p className="text-xs text-muted-foreground">Valid from</p>
                           <p className="text-sm font-medium tabular-nums">{formatDate(sub.startDate)}</p>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-xs text-muted-foreground">Valid until</p>
                           <p className="text-sm font-medium tabular-nums">{formatDate(sub.endDate)}</p>
                         </div>
@@ -1173,7 +1219,7 @@ export default function CustomerDetailPage() {
                         <p className="text-sm font-medium mb-2">Included services</p>
                         <ul className="list-inside list-disc text-sm text-muted-foreground space-y-1">
                           {pkg.includedServiceIds.map((sid) => (
-                            <li key={sid}>
+                            <li key={sid} className="break-words">
                               {serviceNameByCatalogId.get(sid) ?? sid} ×{membershipIncludedQuantity(pkg, sid)}
                               <span className="ml-1 text-xs">
                                 (Used: {getUsedIncludedServiceCount(sub, sid)} · Remaining: {getRemainingIncludedServiceCount(sub, pkg, sid)})
@@ -1248,28 +1294,31 @@ export default function CustomerDetailPage() {
                   No service history
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {customerJobCards.map((jc: JobCard) => (
                     <Link
                       key={jc.id}
                       href={`/job-cards/${jc.id}`}
-                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                      className="flex flex-col gap-1 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:p-4"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 font-mono text-sm font-medium">
                             {jc.jobNumber}
                           </span>
-                          <JobCardStatusBadge status={normalizeJobCardStatus(jc.status)} />
+                          <JobCardStatusBadge
+                            status={normalizeJobCardStatus(jc.status)}
+                            className="shrink-0"
+                          />
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="mt-0.5 text-sm text-muted-foreground sm:mt-1">
                           {jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="mt-0.5 break-words text-xs text-muted-foreground sm:mt-1">
                           {jc.services.map((s) => s.name).join(", ")}
                         </p>
                       </div>
-                      <p className="text-xs sm:text-sm text-muted-foreground sm:ml-4">
+                      <p className="text-xs text-muted-foreground sm:ml-4 sm:text-sm">
                         {formatDate(jc.createdAt)}
                       </p>
                     </Link>
@@ -1282,8 +1331,27 @@ export default function CustomerDetailPage() {
 
         <TabsContent value="billing" className="space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-base">Invoices</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={customerLedgerHref(customer.id)}>
+                    <BookMarked className="mr-1.5 h-4 w-4" />
+                    View Ledger
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54]"
+                  disabled={!customer.phone?.trim()}
+                  onClick={() => void handleShareLedger()}
+                >
+                  <WhatsAppIcon className="mr-1.5 h-4 w-4" />
+                  Share Ledger
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {customerInvoices.length === 0 ? (

@@ -37,6 +37,11 @@ interface ExpenseStore {
   removeExpense: (id: string) => Promise<void>;
   updateExpense: (id: string, updates: Partial<Expense>) => Promise<boolean>;
   addCustomCategory: (label: string, description?: string) => Promise<void>;
+  updateCustomCategory: (
+    oldLabel: string,
+    next: { label: string; description?: string }
+  ) => Promise<boolean>;
+  removeCustomCategory: (label: string) => Promise<boolean>;
   addVendorSuggestion: (name: string) => Promise<void>;
   addVendorDirectoryEntry: (input: AddVendorDirectoryInput) => Promise<ExpenseVendorProfile | null>;
   updateVendorDirectoryEntry: (
@@ -79,6 +84,49 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
       return { customCategories: nextCat, categoryDescriptions };
     });
     await persistExpenseState(get);
+  },
+
+  updateCustomCategory: async (oldLabel, next) => {
+    const from = oldLabel.trim();
+    const to = next.label.trim();
+    if (!from || !to) return false;
+    const s0 = get();
+    if (!s0.customCategories.includes(from)) return false;
+    if (to !== from && s0.customCategories.includes(to)) return false;
+
+    const desc = next.description?.trim();
+    set((s) => {
+      const customCategories = s.customCategories.map((c) => (c === from ? to : c));
+      const categoryDescriptions = { ...s.categoryDescriptions };
+      delete categoryDescriptions[from];
+      if (desc && desc.length > 0) categoryDescriptions[to] = desc;
+      else if (to !== from && s.categoryDescriptions[from]) {
+        categoryDescriptions[to] = s.categoryDescriptions[from]!;
+      }
+      const expenses =
+        to === from
+          ? s.expenses
+          : s.expenses.map((e) => (e.category === from ? { ...e, category: to } : e));
+      return { customCategories, categoryDescriptions, expenses };
+    });
+    await persistExpenseState(get);
+    return true;
+  },
+
+  removeCustomCategory: async (label) => {
+    const t = label.trim();
+    if (!t) return false;
+    if (!get().customCategories.includes(t)) return false;
+    set((s) => {
+      const categoryDescriptions = { ...s.categoryDescriptions };
+      delete categoryDescriptions[t];
+      return {
+        customCategories: s.customCategories.filter((c) => c !== t),
+        categoryDescriptions,
+      };
+    });
+    await persistExpenseState(get);
+    return true;
   },
 
   addVendorSuggestion: async (name) => {

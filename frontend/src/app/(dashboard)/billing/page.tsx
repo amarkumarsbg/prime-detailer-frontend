@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -21,7 +21,7 @@ import {
   useBranchScope,
 } from "@/lib/branch-scope";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
-import { isPendingPaymentInvoice } from "@/lib/dashboard-filters";
+import { isPendingPaymentInvoice, groupPendingPaymentCustomers } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice, InvoiceStatus } from "@/types";
@@ -29,6 +29,7 @@ import { BookMarked, Eye, IndianRupee, TrendingUp, FileText, Receipt } from "luc
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
+import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import {
   buildInvoiceReadyWhatsAppMessage,
   buildPaymentPendingReminderWhatsAppMessage,
@@ -92,6 +93,24 @@ function BillingFromJobCardEffect() {
     }
     router.replace(`/billing/invoices/${encodeURIComponent(result.invoiceId)}`);
   }, [jobCardId, router]);
+
+  return null;
+}
+
+function BillingLedgerQueryEffect({
+  onOpenLedger,
+}: {
+  onOpenLedger: (customerId: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view");
+  const customerId = searchParams.get("customerId");
+
+  useEffect(() => {
+    if (view === "ledger" && customerId) {
+      onOpenLedger(customerId);
+    }
+  }, [view, customerId, onOpenLedger]);
 
   return null;
 }
@@ -166,10 +185,32 @@ export default function BillingPage() {
     }) as Record<string, unknown>[];
 
   const allTableData = useMemo(() => toTableRows(invoicesForView), [invoicesForView]);
+  const pendingCustomers = useMemo(
+    () => groupPendingPaymentCustomers(invoicesForView),
+    [invoicesForView]
+  );
+  const pendingCustomerRows = useMemo(
+    () => pendingCustomers as unknown as Record<string, unknown>[],
+    [pendingCustomers]
+  );
+  const showingPendingCustomers = activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT;
 
-  const openCustomerLedger = (customerId: string) => {
+  const openCustomerLedger = useCallback((customerId: string) => {
     setLedgerFocusCustomerId(customerId);
     setBillingView("ledger");
+  }, []);
+
+  const sharePendingCustomerLedger = (customerId: string, phoneHint?: string) => {
+    const row = pendingCustomers.find((c) => c.customerId === customerId);
+    void shareCustomerLedgerWhatsApp({
+      customer: {
+        id: customerId,
+        name: row?.customerName ?? "Customer",
+        phone: phoneHint || row?.customerPhone,
+      },
+      invoices,
+      businessName,
+    });
   };
 
   const shareInvoiceLedgerWhatsApp = async (invoiceId: string, phoneHint?: string) => {
@@ -401,7 +442,84 @@ export default function BillingPage() {
               }}
             >
               <WhatsAppIcon className="h-3.5 w-3.5" />
-              Share
+              Share Ledger
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const pendingCustomerColumns = [
+    {
+      key: "customerName",
+      label: "Customer",
+      sortable: true,
+      render: (item: Record<string, unknown>) => (
+        <span className="font-medium">{String(item.customerName ?? "")}</span>
+      ),
+    },
+    {
+      key: "customerPhone",
+      label: "Phone",
+      sortable: true,
+      render: (item: Record<string, unknown>) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {String(item.customerPhone ?? "—")}
+        </span>
+      ),
+    },
+    {
+      key: "invoiceCount",
+      label: "Open invoices",
+      sortable: true,
+      render: (item: Record<string, unknown>) => (
+        <span className="tabular-nums">{Number(item.invoiceCount ?? 0)}</span>
+      ),
+    },
+    {
+      key: "outstanding",
+      label: "Outstanding",
+      sortable: true,
+      render: (item: Record<string, unknown>) => (
+        <span className="font-semibold tabular-nums">
+          {formatCurrency(Number(item.outstanding ?? 0))}
+        </span>
+      ),
+    },
+    {
+      key: "ledger",
+      label: "Ledger",
+      render: (item: Record<string, unknown>) => {
+        const customerId = String(item.customerId ?? "");
+        const phone = String(item.customerPhone ?? "").trim();
+        return (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5"
+              onClick={() => {
+                if (customerId) openCustomerLedger(customerId);
+              }}
+            >
+              <Eye className="h-3.5 w-3.5 shrink-0" />
+              View Ledger
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-2.5 text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54]"
+              disabled={!phone}
+              title={phone ? "Share ledger via WhatsApp" : "No phone on file"}
+              onClick={() => {
+                if (customerId) sharePendingCustomerLedger(customerId, phone);
+              }}
+            >
+              <WhatsAppIcon className="h-3.5 w-3.5" />
+              Share Ledger
             </Button>
           </div>
         );
@@ -417,6 +535,7 @@ export default function BillingPage() {
     <div className="space-y-4 sm:space-y-6">
       <Suspense fallback={null}>
         <BillingFromJobCardEffect />
+        <BillingLedgerQueryEffect onOpenLedger={openCustomerLedger} />
       </Suspense>
       <PageHeader
         title="Billing & Invoices"
@@ -504,12 +623,75 @@ export default function BillingPage() {
 
           <Card className="border-border/80 shadow-sm overflow-hidden">
             <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 pb-3 pt-4 sm:px-6 sm:pb-4">
-              <CardTitle className="text-base font-semibold">Invoices</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                {showingPendingCustomers ? "Pending payment customers" : "Invoices"}
+              </CardTitle>
               <p className="hidden text-sm text-muted-foreground md:block">
-                Open an invoice to record payments, print, or share via WhatsApp.
+                {showingPendingCustomers
+                  ? "Only customers with a balance due. Open the ledger to view or share the statement."
+                  : "Open an invoice to record payments, print, or share via WhatsApp."}
               </p>
             </CardHeader>
             <CardContent className="px-3 pt-4 sm:px-6 sm:pt-6">
+              {showingPendingCustomers ? (
+                <DataTable
+                  data={pendingCustomerRows}
+                  columns={pendingCustomerColumns}
+                  defaultSortKey="outstanding"
+                  defaultSortDir="desc"
+                  searchPlaceholder="Search customer or phone…"
+                  searchKeys={["customerName", "customerPhone"]}
+                  pageSize={10}
+                  renderMobileCard={(item) => {
+                    const customerId = String(item.customerId ?? "");
+                    const phone = String(item.customerPhone ?? "").trim();
+                    return (
+                      <>
+                        <p className="truncate text-sm font-medium leading-tight">
+                          {String(item.customerName)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {phone || "No phone"} · {Number(item.invoiceCount ?? 0)} open invoice
+                          {Number(item.invoiceCount ?? 0) === 1 ? "" : "s"}
+                        </p>
+                        <p className="mt-1.5 text-base font-bold tabular-nums leading-none">
+                          {formatCurrency(Number(item.outstanding ?? 0))}
+                        </p>
+                        <div
+                          className="mt-2 flex items-center gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 flex-1 gap-1 px-2 text-[11px]"
+                            onClick={() => {
+                              if (customerId) openCustomerLedger(customerId);
+                            }}
+                          >
+                            <Eye className="h-3 w-3" />
+                            View Ledger
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 flex-1 gap-1 px-2 text-[11px] text-[#128C7E]"
+                            disabled={!phone}
+                            onClick={() => {
+                              if (customerId) sharePendingCustomerLedger(customerId, phone);
+                            }}
+                          >
+                            <WhatsAppIcon className="h-3 w-3" />
+                            Share Ledger
+                          </Button>
+                        </div>
+                      </>
+                    );
+                  }}
+                />
+              ) : (
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
                   <TabsList className="inline-flex h-auto w-max min-w-full flex-nowrap justify-start gap-1 bg-muted/50 p-1 sm:w-full sm:flex-wrap">
@@ -620,7 +802,7 @@ export default function BillingPage() {
                                 }}
                               >
                                 <WhatsAppIcon className="h-3 w-3" />
-                                Share
+                                Share Ledger
                               </Button>
                             </div>
                           </>
@@ -630,6 +812,7 @@ export default function BillingPage() {
                   </TabsContent>
                 ))}
               </Tabs>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

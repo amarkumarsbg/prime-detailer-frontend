@@ -83,6 +83,7 @@ import {
   isTodaysBookingsJob,
   isReadyForDeliveryJob,
   isInactiveCustomer,
+  jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import type { DashboardStats, JobCard, UserRole } from "@/types";
 import { DashboardSkeleton } from "@/components/shared/skeleton-loader";
@@ -994,9 +995,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted-foreground mt-1 tabular-nums">
                   {formatCurrency(jc.estimatedAmount)}
                   <span className="mx-1.5 text-border">•</span>
-                  {jc.expectedDelivery
-                    ? formatDate(jc.expectedDelivery)
-                    : formatDate(jc.createdAt)}
+                  {formatDate(jobCardDeliveryAt(jc))}
                 </p>
               </div>
             ))}
@@ -1025,7 +1024,9 @@ export default function DashboardPage() {
                       {jc.services[0]?.name ?? "—"}
                     </td>
                     <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
-                      {jc.expectedDelivery ? formatDate(jc.expectedDelivery) : "—"}
+                      {jc.expectedDelivery || jc.status === "DELIVERED"
+                        ? formatDate(jobCardDeliveryAt(jc))
+                        : "—"}
                     </td>
                     <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
                       {formatDate(jc.createdAt)}
@@ -1529,7 +1530,9 @@ export default function DashboardPage() {
                         {jc.services[0]?.name ?? "—"}
                       </td>
                       <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
-                        {jc.expectedDelivery ? formatDate(jc.expectedDelivery) : "—"}
+                        {jc.expectedDelivery || jc.status === "DELIVERED"
+                          ? formatDate(jobCardDeliveryAt(jc))
+                          : "—"}
                       </td>
                       <td className="px-3 py-3.5 align-middle whitespace-nowrap text-muted-foreground">
                         {formatDate(jc.createdAt)}
@@ -1677,8 +1680,9 @@ export default function DashboardPage() {
                   <dd>{recentBookingPreview.services[0]?.name ?? "—"}</dd>
                   <dt className="text-muted-foreground">Booking date</dt>
                   <dd>
-                    {recentBookingPreview.expectedDelivery
-                      ? formatDate(recentBookingPreview.expectedDelivery)
+                    {recentBookingPreview.expectedDelivery ||
+                    recentBookingPreview.status === "DELIVERED"
+                      ? formatDate(jobCardDeliveryAt(recentBookingPreview))
                       : "—"}
                   </dd>
                   <dt className="text-muted-foreground">Booked on</dt>

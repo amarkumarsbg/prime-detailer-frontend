@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Pencil, Trash2 } from "lucide-react";
 import { useExpenseStore } from "@/store/expense-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -73,7 +74,10 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
   const addExpense = useExpenseStore((s) => s.addExpense);
   const updateExpense = useExpenseStore((s) => s.updateExpense);
   const customCategories = useExpenseStore((s) => s.customCategories);
+  const categoryDescriptions = useExpenseStore((s) => s.categoryDescriptions);
   const addCustomCategory = useExpenseStore((s) => s.addCustomCategory);
+  const updateCustomCategory = useExpenseStore((s) => s.updateCustomCategory);
+  const removeCustomCategory = useExpenseStore((s) => s.removeCustomCategory);
   const vendorSuggestions = useExpenseStore((s) => s.vendorSuggestions);
   const vendorDirectory = useExpenseStore((s) => s.vendorDirectory);
   const addVendorDirectoryEntry = useExpenseStore((s) => s.addVendorDirectoryEntry);
@@ -83,7 +87,6 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const { showBranchPicker } = useBranchScope();
 
-  const categoryListId = useId();
   const vendorListId = useId();
 
   const [title, setTitle] = useState("");
@@ -103,8 +106,11 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
   const [receiptName, setReceiptName] = useState("");
 
   const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [catDialogMode, setCatDialogMode] = useState<"create" | "edit">("create");
+  const [editingCategoryKey, setEditingCategoryKey] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryDesc, setNewCategoryDesc] = useState("");
+  const [manageCatsOpen, setManageCatsOpen] = useState(false);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const [vName, setVName] = useState("");
   const [vContact, setVContact] = useState("");
@@ -118,14 +124,31 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
 
   const mergedCategories = useMemo(() => {
     const set = new Set<string>([...BASE_CATEGORIES, ...customCategories]);
+    if (categoryInput.trim()) set.add(categoryInput.trim());
     return [...set];
-  }, [customCategories]);
+  }, [customCategories, categoryInput]);
 
   const mergedVendorNames = useMemo(() => {
     const set = new Set(vendorSuggestions);
     for (const v of vendorDirectory) set.add(v.name);
     return [...set];
   }, [vendorSuggestions, vendorDirectory]);
+
+  const openCreateCategory = () => {
+    setCatDialogMode("create");
+    setEditingCategoryKey(null);
+    setNewCategoryName("");
+    setNewCategoryDesc("");
+    setCatDialogOpen(true);
+  };
+
+  const openEditCategory = (key: string) => {
+    setCatDialogMode("edit");
+    setEditingCategoryKey(key);
+    setNewCategoryName(key);
+    setNewCategoryDesc(categoryDescriptions[key] ?? "");
+    setCatDialogOpen(true);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -163,18 +186,49 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
     });
   }, [open, expense, currentBranch, user?.branchId]);
 
-  const handleAddCategory = () => {
+  const handleSaveCategory = async () => {
     const t = newCategoryName.trim();
     if (!t) {
       toast.error("Enter a category name.");
       return;
     }
-    addCustomCategory(t, newCategoryDesc.trim() || undefined);
+    if (catDialogMode === "edit" && editingCategoryKey) {
+      const ok = await updateCustomCategory(editingCategoryKey, {
+        label: t,
+        description: newCategoryDesc.trim() || undefined,
+      });
+      if (!ok) {
+        toast.error("Could not update category. Name may already exist.");
+        return;
+      }
+      if (categoryInput === editingCategoryKey) setCategoryInput(t);
+      setCatDialogOpen(false);
+      toast.success("Category updated.");
+      return;
+    }
+    if (
+      BASE_CATEGORIES.includes(t as ExpenseCategory) ||
+      customCategories.includes(t)
+    ) {
+      toast.error("That category already exists.");
+      return;
+    }
+    await addCustomCategory(t, newCategoryDesc.trim() || undefined);
     setCategoryInput(t);
     setNewCategoryName("");
     setNewCategoryDesc("");
     setCatDialogOpen(false);
     toast.success("Category created.");
+  };
+
+  const handleDeleteCategory = async (key: string) => {
+    const ok = await removeCustomCategory(key);
+    if (!ok) {
+      toast.error("Could not delete category.");
+      return;
+    }
+    if (categoryInput === key) setCategoryInput("SUPPLIES");
+    toast.success("Category removed.");
   };
 
   const handleAddVendor = async () => {
@@ -364,32 +418,39 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
                 <p className={sectionLabelClass}>Category & vendor</p>
                 <div className="space-y-1.5">
                   <Label htmlFor="exp-cat">Category *</Label>
-                  <div className="flex gap-1.5">
-                    <Input
-                      id="exp-cat"
-                      list={categoryListId}
-                      value={categoryInput}
-                      onChange={(e) => setCategoryInput(e.target.value)}
-                      placeholder="Search or select..."
-                      autoComplete="off"
-                      className="min-w-0"
-                    />
-                    <datalist id={categoryListId}>
-                      {mergedCategories.map((c) => (
-                        <option key={c} value={c}>
-                          {categoryLabel(c)}
-                        </option>
-                      ))}
-                    </datalist>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="shrink-0 px-2 text-primary"
-                      onClick={() => setCatDialogOpen(true)}
-                    >
-                      + New
-                    </Button>
+                  <div className="flex flex-col gap-1.5 sm:flex-row">
+                    <Select value={categoryInput} onValueChange={setCategoryInput}>
+                      <SelectTrigger id="exp-cat" className="w-full min-w-0 sm:flex-1">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mergedCategories.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {categoryLabel(c)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex shrink-0 gap-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 px-2 text-primary sm:flex-none"
+                        onClick={openCreateCategory}
+                      >
+                        + New
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 px-2 sm:flex-none"
+                        onClick={() => setManageCatsOpen(true)}
+                      >
+                        Manage
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -560,7 +621,9 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
       <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add New Category</DialogTitle>
+            <DialogTitle>
+              {catDialogMode === "edit" ? "Edit Category" : "Add New Category"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -589,8 +652,92 @@ export function AddExpenseDialog({ open, onOpenChange, expense = null }: AddExpe
             <Button type="button" variant="outline" onClick={() => setCatDialogOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={handleAddCategory}>
-              Create Category
+            <Button type="button" onClick={() => void handleSaveCategory()}>
+              {catDialogMode === "edit" ? "Save Changes" : "Create Category"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manageCatsOpen} onOpenChange={setManageCatsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Categories</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto py-2">
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Built-in
+              </p>
+              <ul className="space-y-1.5">
+                {BASE_CATEGORIES.map((c) => (
+                  <li
+                    key={c}
+                    className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <span>{categoryLabel(c)}</span>
+                    <span className="text-xs text-muted-foreground">Fixed</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Custom
+              </p>
+              {customCategories.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border/70 px-3 py-6 text-center text-sm text-muted-foreground">
+                  No custom categories yet. Use + New to add one.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {customCategories.map((c) => (
+                    <li
+                      key={c}
+                      className="flex items-start justify-between gap-2 rounded-md border border-border/60 px-3 py-2 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">{c}</p>
+                        {categoryDescriptions[c] ? (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {categoryDescriptions[c]}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEditCategory(c)}
+                          aria-label={`Edit ${c}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => void handleDeleteCategory(c)}
+                          aria-label={`Delete ${c}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="outline" onClick={openCreateCategory}>
+              + New category
+            </Button>
+            <Button type="button" onClick={() => setManageCatsOpen(false)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

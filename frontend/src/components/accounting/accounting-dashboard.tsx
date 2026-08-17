@@ -24,7 +24,6 @@ import {
   CreditCard,
   FileBarChart,
   LineChart,
-  Package,
   Plus,
   RefreshCw,
   ShoppingBag,
@@ -382,72 +381,86 @@ export function AccountingDashboard() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="rounded-xl border border-border/80 bg-card p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-          <ExpenseDateRangePicker value={dateFilter} onChange={setDateFilter} />
+      {/* Filters — compact on mobile: date + branch row, icon action buttons */}
+      <div className="rounded-lg border border-border/80 bg-card p-2 shadow-sm sm:rounded-xl sm:p-4">
+        <div className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3 lg:contents">
+            <ExpenseDateRangePicker
+              value={dateFilter}
+              onChange={setDateFilter}
+              className="h-9 w-full min-w-0 px-2 text-xs sm:h-10 sm:w-[min(100%,280px)] sm:px-3 sm:text-sm"
+            />
 
-          {showBranchPicker ? (
-            <Select
-              value={branchFilter}
-              onValueChange={setBranchFilter}
-              disabled={branchScoped}
+            {showBranchPicker ? (
+              <Select
+                value={branchFilter}
+                onValueChange={setBranchFilter}
+                disabled={branchScoped}
+              >
+                <SelectTrigger className="h-9 w-full min-w-0 px-2 text-xs sm:h-10 sm:w-[200px] sm:px-3 sm:text-sm">
+                  <Building2 className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground sm:mr-2 sm:h-4 sm:w-4" />
+                  <SelectValue placeholder="Branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!branchScoped && <SelectItem value="all">All Branches</SelectItem>}
+                  {branches
+                    .filter((b) => b.isActive)
+                    .map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="inline-flex h-9 w-full min-w-0 items-center gap-1.5 truncate rounded-md border border-border px-2 text-xs sm:h-10 sm:w-auto sm:gap-2 sm:px-3 sm:text-sm">
+                <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
+                <span className="truncate font-medium">{viewingLabel}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-end lg:ml-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant={compare ? "secondary" : "outline"}
+              className="h-9 shrink-0 gap-1 px-2.5 text-xs sm:h-10 sm:gap-1.5 sm:px-3 sm:text-sm"
+              onClick={() => setCompare((v) => !v)}
+              disabled={!previousExpenseDateFilter(dateFilter)}
+              title="Compare to prior period"
+              aria-label="Compare to prior period"
             >
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <Building2 className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="Branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {!branchScoped && <SelectItem value="all">All Branches</SelectItem>}
-                {branches
-                  .filter((b) => b.isActive)
-                  .map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{viewingLabel}</span>
-            </div>
-          )}
-
-          <Button
-            type="button"
-            size="sm"
-            variant={compare ? "secondary" : "outline"}
-            className="h-10 gap-1.5"
-            onClick={() => setCompare((v) => !v)}
-            disabled={!previousExpenseDateFilter(dateFilter)}
-          >
-            <LineChart className="h-4 w-4" />
-            Compare
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-10 gap-1.5"
-            onClick={() => setDateFilter({ kind: "preset", preset: "all" })}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Full
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-10 gap-1 text-muted-foreground"
-            onClick={resetFilters}
-          >
-            <X className="h-4 w-4" />
-            Reset
-          </Button>
+              <LineChart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Compare
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 shrink-0 gap-1 px-2.5 text-xs sm:h-10 sm:gap-1.5 sm:px-3 sm:text-sm"
+              onClick={() => setDateFilter({ kind: "preset", preset: "all" })}
+              title="Show all time"
+              aria-label="Show all time"
+            >
+              <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Full
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-9 shrink-0 gap-1 px-2.5 text-xs text-muted-foreground sm:h-10 sm:gap-1 sm:px-3 sm:text-sm"
+              onClick={resetFilters}
+              title="Reset filters"
+              aria-label="Reset filters"
+            >
+              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Reset
+            </Button>
+          </div>
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-1.5 hidden text-sm text-muted-foreground sm:mt-3 sm:block">
           Showing:{" "}
           <span className="font-medium text-foreground">
             {dateLabel} • {scopeLabel}
@@ -456,6 +469,11 @@ export function AccountingDashboard() {
             <span className="ml-1 text-xs">(vs prior period)</span>
           ) : null}
         </p>
+        {compare && compareFilter ? (
+          <p className="mt-1 text-[11px] text-muted-foreground sm:hidden">
+            Comparing vs prior period
+          </p>
+        ) : null}
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-5">
@@ -464,7 +482,6 @@ export function AccountingDashboard() {
             [
               ["overview", "Overview"],
               ["invoices", "Invoices"],
-              ["recurring", "Recurring"],
               ["reports", "Reports"],
             ] as const
           ).map(([value, label]) => (
@@ -880,19 +897,6 @@ export function AccountingDashboard() {
                 </tbody>
               </table>
             </div>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="recurring" className="mt-0">
-          <Card className="border-border/70 shadow-sm">
-            <CardContent className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-              <Package className="h-10 w-10 text-muted-foreground/70" />
-              <h3 className="text-lg font-semibold">Recurring not available yet</h3>
-              <p className="max-w-md text-sm text-muted-foreground">
-                Recurring invoices and expenses are not supported in the current data model.
-                This tab will light up when recurring transactions are added.
-              </p>
-            </CardContent>
           </Card>
         </TabsContent>
 

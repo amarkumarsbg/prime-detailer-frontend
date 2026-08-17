@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { useCustomerStore } from "@/store/customer-store";
 import { useExpenseStore } from "@/store/expense-store";
+import { useSettingsStore } from "@/store/settings-store";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { pushActivityLog } from "@/lib/activity-log-helper";
@@ -57,11 +58,13 @@ import {
 } from "@/components/shared/mobile-table-layout";
 import { formatCurrency, cn, formatDate } from "@/lib/utils";
 import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import {
   expenseOutstanding,
   invoiceOutstanding,
   invoicePaidTotal,
 } from "@/lib/party/ledger-math";
+import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import type { Expense, ExpensePaymentMethod, Invoice } from "@/types";
 
 type PartyKind = "customer" | "supplier";
@@ -133,6 +136,7 @@ export function SharedLedgerClient({
   const customers = useCustomerStore((s) => s.customers);
   const invoices = useScopedInvoices();
   const expenses = useScopedExpenses();
+  const businessName = useSettingsStore((s) => s.businessName);
   const { viewingLabel } = useBranchScope();
   const updateExpense = useExpenseStore((s) => s.updateExpense);
   const vendorDirectory = useExpenseStore((s) => s.vendorDirectory);
@@ -265,6 +269,10 @@ export function SharedLedgerClient({
   }, [parties, query]);
 
   const selected = parties.find((p) => p.id === selectedId) ?? filteredParties[0] ?? null;
+  const selectedCustomer =
+    selected?.kind === "customer"
+      ? customers.find((c) => c.id === selected.id.slice(2)) ?? null
+      : null;
 
   const transactions = useMemo((): LedgerTx[] => {
     if (!selected) return [];
@@ -493,18 +501,45 @@ export function SharedLedgerClient({
                           options={LEDGER_PERIOD_OPTIONS}
                         />
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() =>
-                          toast.success("Download started")
-                        }
-                      >
-                        <Download className="h-4 w-4" />
-                        Download ledger
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() =>
+                            toast.success("Download started")
+                          }
+                        >
+                          <Download className="h-4 w-4" />
+                          Download ledger
+                        </Button>
+                        {selected.kind === "customer" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54]"
+                            disabled={!selectedCustomer?.phone?.trim()}
+                            title={
+                              selectedCustomer?.phone?.trim()
+                                ? "Share ledger via WhatsApp"
+                                : "No phone on file"
+                            }
+                            onClick={() => {
+                              if (!selectedCustomer) return;
+                              void shareCustomerLedgerWhatsApp({
+                                customer: selectedCustomer,
+                                invoices,
+                                businessName,
+                              });
+                            }}
+                          >
+                            <WhatsAppIcon className="h-4 w-4" />
+                            Share Ledger
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

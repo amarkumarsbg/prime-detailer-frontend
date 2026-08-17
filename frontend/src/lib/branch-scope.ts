@@ -283,7 +283,9 @@ export function computeBranchScopedDashboardStats(
     .filter((e) => isSameCalendarDay(e.date, today))
     .reduce((s, e) => s + e.amount, 0);
 
-  const pendingPayments = scopedInvoices.filter(isPendingPaymentInvoice).length;
+  const pendingPayments = new Set(
+    scopedInvoices.filter(isPendingPaymentInvoice).map((inv) => inv.customerId)
+  ).size;
 
   const jobCustomerIds = new Set(jobs.map((j) => j.customerId));
   const newCustomersToday = customers.filter(

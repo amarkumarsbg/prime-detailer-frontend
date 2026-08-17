@@ -1,4 +1,5 @@
 import type { Customer, Invoice, JobCard, Part, ServiceReminder } from "@/types";
+import { invoiceOutstanding } from "@/lib/party/ledger-math";
 
 /** Job cards created on the current calendar day (local). */
 export function isTodaysBookingsJob(jc: JobCard): boolean {
@@ -39,7 +40,40 @@ export function isLowStockPart(p: Part): boolean {
 }
 
 export function isPendingPaymentInvoice(inv: Invoice): boolean {
-  return inv.status === "ISSUED" || inv.status === "PARTIALLY_PAID";
+  if (inv.status !== "ISSUED" && inv.status !== "PARTIALLY_PAID") return false;
+  return invoiceOutstanding(inv) > 0.01;
+}
+
+export type PendingPaymentCustomer = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  outstanding: number;
+  invoiceCount: number;
+};
+
+/** One row per customer who has at least one invoice with a balance due. */
+export function groupPendingPaymentCustomers(invoices: Invoice[]): PendingPaymentCustomer[] {
+  const map = new Map<string, PendingPaymentCustomer>();
+  for (const inv of invoices.filter(isPendingPaymentInvoice)) {
+    const due = invoiceOutstanding(inv);
+    const existing = map.get(inv.customerId);
+    if (!existing) {
+      map.set(inv.customerId, {
+        id: inv.customerId,
+        customerId: inv.customerId,
+        customerName: inv.customerName,
+        customerPhone: inv.customerPhone,
+        outstanding: due,
+        invoiceCount: 1,
+      });
+    } else {
+      existing.outstanding = Math.round((existing.outstanding + due) * 100) / 100;
+      existing.invoiceCount += 1;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.outstanding - a.outstanding);
 }
 
 /** Due on or before end of today + 7 days; excludes completed/dismissed. */

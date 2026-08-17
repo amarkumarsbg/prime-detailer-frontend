@@ -26,7 +26,7 @@ import {
   jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
-import { formatDate, formatDateTime, cn } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
@@ -311,7 +311,7 @@ export default function JobCardsPage() {
         className: "align-top whitespace-nowrap text-muted-foreground",
         render: (item: JobCard) =>
           item.status === "DELIVERED" ? (
-            <span title="Delivered">{formatDateTime(item.actualDelivery ?? item.updatedAt)}</span>
+            <span title="Delivered">{formatDate(item.actualDelivery ?? item.updatedAt)}</span>
           ) : (
             <span title="Expected">{formatDate(item.expectedDelivery)}</span>
           ),
@@ -456,7 +456,7 @@ export default function JobCardsPage() {
                         </span>
                         <span className="shrink-0 tabular-nums">
                           {jc.status === "DELIVERED"
-                            ? formatDateTime(jc.actualDelivery ?? jc.updatedAt)
+                            ? formatDate(jc.actualDelivery ?? jc.updatedAt)
                             : formatDate(jc.expectedDelivery)}
                         </span>
                       </div>
@@ -546,7 +546,9 @@ export default function JobCardsPage() {
                             {jc.mechanicName ?? "Unassigned"}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            {formatDate(jc.expectedDelivery)}
+                            {jc.status === "DELIVERED"
+                              ? formatDate(jc.actualDelivery ?? jc.updatedAt)
+                              : formatDate(jc.expectedDelivery)}
                           </span>
                         </div>
                       </div>
