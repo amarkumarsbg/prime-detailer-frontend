@@ -28,6 +28,7 @@ import { isSwaggerEnabled, registerSwagger } from "./docs/register-swagger.js";
 import { prisma } from "./lib/prisma.js";
 import { getPublicInvoiceView } from "./modules/invoices/public-invoice.service.js";
 import { getPublicBranding } from "./services/public-branding.service.js";
+import { getPublicCustomerLedger } from "./modules/parties/public-ledger.service.js";
 
 const app = express();
 
@@ -99,6 +100,22 @@ app.get("/api/public/invoices/:id", async (req, res, next) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
     const data = await getPublicInvoiceView(id);
+    res.json({ data, error: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/public/ledgers/:customerId", async (req, res, next) => {
+  try {
+    const customerId = Array.isArray(req.params.customerId)
+      ? req.params.customerId[0]!
+      : req.params.customerId!;
+    const period =
+      typeof req.query.period === "string" && req.query.period.trim()
+        ? req.query.period.trim()
+        : "last365";
+    const data = await getPublicCustomerLedger(customerId, period);
     res.json({ data, error: null });
   } catch (e) {
     next(e);

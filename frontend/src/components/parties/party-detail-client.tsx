@@ -51,6 +51,7 @@ import {
 } from "@/lib/party/ledger-math";
 import {
   ArrowLeft,
+  Banknote,
   BookOpen,
   ChevronDown,
   Download,
@@ -70,6 +71,12 @@ import {
   PartyEmptyState,
 } from "@/components/parties/party-loading-states";
 import { cn } from "@/lib/utils";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
+import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
+import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
+import { invoiceOutstanding } from "@/lib/party/ledger-math";
+import { useSettingsStore } from "@/store/settings-store";
+import { useCustomerStore } from "@/store/customer-store";
 
 const tabTriggerClass =
   "rounded-none border-0 border-b-2 border-transparent bg-transparent px-1 pb-3 pt-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-violet-600 data-[state=active]:bg-transparent data-[state=active]:text-violet-700 data-[state=active]:shadow-none dark:data-[state=active]:border-violet-500 dark:data-[state=active]:text-violet-400";
@@ -106,6 +113,8 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   const { party, partyLoading, partyError, partyNotFound, refreshParty } = useParty(partyId);
   const invoices = useScopedInvoices();
   const expenses = useScopedExpenses();
+  const businessName = useSettingsStore((s) => s.businessName);
+  const customers = useCustomerStore((s) => s.customers);
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [period, setPeriod] = useState("last365");
   const [txnTypeFilter, setTxnTypeFilter] = useState("all");
@@ -113,6 +122,8 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   const [tab, setTab] = useState("transactions");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [recordPaymentInvoiceId, setRecordPaymentInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = searchParams.get("tab");
@@ -206,6 +217,45 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Downloaded CSV");
+  };
+
+  const shareLedgerWhatsApp = () => {
+    if (!party || party.kind !== "customer" || !party.customerId) {
+      toast.error("WhatsApp ledger share is available for customer parties only");
+      return;
+    }
+    const linked = customers.find((c) => c.id === party.customerId);
+    void shareCustomerLedgerWhatsApp({
+      customer: {
+        id: party.customerId,
+        name: party.name,
+        phone: party.mobile || linked?.phone,
+      },
+      invoices,
+      businessName,
+    });
+  };
+
+  const outstandingInvoices = useMemo(() => {
+    if (!party?.customerId) return [];
+    return invoices
+      .filter(
+        (inv) =>
+          inv.customerId === party.customerId &&
+          inv.status !== "DRAFT" &&
+          invoiceOutstanding(inv) > 0.01
+      )
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [party, invoices]);
+
+  const openRecordPayment = (invoiceId?: string) => {
+    const targetId = invoiceId ?? outstandingInvoices[0]?.id ?? null;
+    if (!targetId) {
+      toast.error("No outstanding invoices to collect");
+      return;
+    }
+    setRecordPaymentInvoiceId(targetId);
+    setRecordPaymentOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -311,9 +361,17 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {party.kind === "customer" ? (
-                    <DropdownMenuItem asChild>
-                      <Link href="/billing">Create sales invoice</Link>
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/billing">Create sales invoice</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={outstandingInvoices.length === 0}
+                        onClick={() => openRecordPayment()}
+                      >
+                        Record Payment
+                      </DropdownMenuItem>
+                    </>
                   ) : null}
                   <DropdownMenuItem asChild>
                     <Link href={`/parties/${encodeURIComponent(party.id)}/edit`}>Edit party</Link>
@@ -420,10 +478,10 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
             {summary && <PartySummaryCards kind={party.kind} summary={summary} />}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <PartyPeriodSelect value={period} onChange={setPeriod} className="w-full sm:w-auto" />
-              <div className="flex sm:ml-auto sm:shrink-0 sm:items-center sm:gap-2">
+              <div className="flex flex-wrap gap-2 sm:ml-auto sm:shrink-0 sm:items-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 w-full gap-1 sm:w-auto">
+                    <Button variant="outline" size="sm" className="h-9 flex-1 gap-1 sm:flex-none sm:w-auto">
                       <Download className="h-4 w-4" />
                       <span className="md:hidden">Export</span>
                       <span className="hidden md:inline">Download Excel</span>
@@ -437,32 +495,94 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 w-full sm:w-auto"
+                  className="h-9 flex-1 sm:flex-none sm:w-auto"
                   onClick={() => window.print()}
                 >
                   <Printer className="mr-1 h-4 w-4" />
                   Print
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="hidden h-9 shrink-0 md:inline-flex">
-                      <Share2 className="mr-1 h-4 w-4" />
-                      Share
-                      <ChevronDown className="ml-1 h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        toast.message("Share", {
-                          description: "Party portal link — coming with backend.",
-                        })
+                {party.kind === "customer" ? (
+                  <>
+                    {outstandingInvoices.length > 1 ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-9 flex-1 gap-1 sm:flex-none"
+                          >
+                            <Banknote className="h-4 w-4" />
+                            Record Payment
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="max-w-[280px]">
+                          {outstandingInvoices.map((inv) => (
+                            <DropdownMenuItem
+                              key={inv.id}
+                              onClick={() => openRecordPayment(inv.id)}
+                            >
+                              <span className="truncate font-mono text-xs">{inv.invoiceNumber}</span>
+                              <span className="ml-2 tabular-nums text-muted-foreground">
+                                ₹{invoiceOutstanding(inv).toLocaleString("en-IN")}
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 flex-1 gap-1 sm:flex-none"
+                        disabled={outstandingInvoices.length === 0}
+                        onClick={() => openRecordPayment()}
+                      >
+                        <Banknote className="h-4 w-4" />
+                        Record Payment
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 flex-1 gap-1 text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54] sm:flex-none"
+                      disabled={!(party.mobile || customers.find((c) => c.id === party.customerId)?.phone)?.trim()}
+                      title={
+                        (party.mobile || customers.find((c) => c.id === party.customerId)?.phone)?.trim()
+                          ? "Share ledger via WhatsApp"
+                          : "No phone on file"
                       }
+                      onClick={shareLedgerWhatsApp}
                     >
-                      Copy link
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <WhatsAppIcon className="h-4 w-4" />
+                      Share Ledger
+                    </Button>
+                  </>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="hidden h-9 shrink-0 md:inline-flex">
+                        <Share2 className="mr-1 h-4 w-4" />
+                        Share
+                        <ChevronDown className="ml-1 h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          toast.message("Share", {
+                            description: "Party portal link — coming with backend.",
+                          })
+                        }
+                      >
+                        Copy link
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
             <PartyLedgerTab lines={statement} returnTo={partyReturnPath} />
@@ -544,6 +664,15 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RecordPaymentDialog
+        open={recordPaymentOpen}
+        onOpenChange={(open) => {
+          setRecordPaymentOpen(open);
+          if (!open) setRecordPaymentInvoiceId(null);
+        }}
+        invoiceId={recordPaymentInvoiceId}
+      />
     </div>
   );
 }

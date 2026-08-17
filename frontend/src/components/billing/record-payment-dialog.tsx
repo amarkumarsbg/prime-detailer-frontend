@@ -19,11 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  needsPaymentReceivedIn,
+  PaymentReceivedInField,
+} from "@/components/billing/payment-received-in-field";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
+import { useCashBankStore } from "@/store/cash-bank-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useSettingsStore } from "@/store/settings-store";
@@ -73,13 +78,17 @@ export function RecordPaymentDialog({
 
   const remainingBalance = invoice ? invoiceOutstanding(invoice) : 0;
 
+  const cashBankAccounts = useCashBankStore((s) => s.accounts);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [receivedInAccountId, setReceivedInAccountId] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [useWallet, setUseWallet] = useState(false);
   const [addExtraToWallet, setAddExtraToWallet] = useState(false);
   const [dialogRemainingBalance, setDialogRemainingBalance] = useState(0);
   const [saving, setSaving] = useState(false);
+
+  const showReceivedIn = needsPaymentReceivedIn(paymentMethod);
 
   useEffect(() => {
     if (!open || !invoice) return;
@@ -87,6 +96,7 @@ export function RecordPaymentDialog({
     setDialogRemainingBalance(due);
     setPaymentAmount(due > 0 ? String(due) : "");
     setPaymentMethod("CASH");
+    setReceivedInAccountId("");
     setReferenceNumber("");
     setUseWallet(false);
     setAddExtraToWallet(false);
@@ -95,6 +105,13 @@ export function RecordPaymentDialog({
   const handleRecordPayment = async () => {
     const amount = Number(paymentAmount);
     if (!invoice || !Number.isFinite(amount) || amount <= 0) return;
+
+    if (showReceivedIn && !receivedInAccountId) {
+      toast.error("Select Payment Received In", {
+        description: "Choose the bank account for UPI or Card payments.",
+      });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -117,6 +134,10 @@ export function RecordPaymentDialog({
         dialogRemainingBalance - walletAmountUsed - amount
       );
 
+      const receivedInAccount = showReceivedIn
+        ? cashBankAccounts.find((a) => a.id === receivedInAccountId)
+        : undefined;
+
       const performedBy = user?.id?.toLowerCase() ?? "usr-001";
       const result = await recordInvoicePayment(
         invoice.id,
@@ -126,6 +147,8 @@ export function RecordPaymentDialog({
           method: paymentMethod,
           referenceNumber: referenceNumber.trim() || undefined,
           paidAt,
+          receivedInAccountId: receivedInAccount?.id,
+          receivedInAccountName: receivedInAccount?.displayName,
           addExtraToWallet: addExtraToWallet && extraAmount > 0,
           extraAmount: addExtraToWallet && extraAmount > 0 ? extraAmount : undefined,
         },
@@ -355,7 +378,11 @@ export function RecordPaymentDialog({
             <Label>Payment Method</Label>
             <Select
               value={paymentMethod}
-              onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+              onValueChange={(v) => {
+                const next = v as PaymentMethod;
+                setPaymentMethod(next);
+                if (!needsPaymentReceivedIn(next)) setReceivedInAccountId("");
+              }}
               disabled={!invoice}
             >
               <SelectTrigger>
@@ -370,6 +397,14 @@ export function RecordPaymentDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {showReceivedIn ? (
+            <PaymentReceivedInField
+              value={receivedInAccountId}
+              onChange={setReceivedInAccountId}
+              disabled={!invoice}
+            />
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="record-payment-ref">Reference Number (optional)</Label>
@@ -393,7 +428,8 @@ export function RecordPaymentDialog({
               !invoice ||
               !paymentAmount ||
               Number.isNaN(Number(paymentAmount)) ||
-              Number(paymentAmount) <= 0
+              Number(paymentAmount) <= 0 ||
+              (showReceivedIn && !receivedInAccountId)
             }
           >
             {saving ? "Recording…" : "Record Payment"}

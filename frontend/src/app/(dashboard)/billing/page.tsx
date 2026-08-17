@@ -29,7 +29,7 @@ import { BookMarked, Eye, IndianRupee, TrendingUp, FileText, Receipt } from "luc
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
-import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
+import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import {
   buildInvoiceReadyWhatsAppMessage,
   buildPaymentPendingReminderWhatsAppMessage,
@@ -195,10 +195,12 @@ export default function BillingPage() {
   );
   const showingPendingCustomers = activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT;
 
-  const openCustomerLedger = useCallback((customerId: string) => {
-    setLedgerFocusCustomerId(customerId);
-    setBillingView("ledger");
-  }, []);
+  const openCustomerLedger = useCallback(
+    (customerId: string) => {
+      router.push(customerLedgerHref(customerId));
+    },
+    [router]
+  );
 
   const sharePendingCustomerLedger = (customerId: string, phoneHint?: string) => {
     const row = pendingCustomers.find((c) => c.customerId === customerId);

@@ -14,12 +14,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useScopedInvoices } from "@/hooks/use-scoped-data";
+import { useCashBankStore } from "@/store/cash-bank-store";
 import { useSettingsStore } from "@/store/settings-store";
 import {
   findPaymentInInvoices,
   paymentDisplayNumber,
   salesInvoiceDetailPath,
 } from "@/lib/billing/payment-helpers";
+import { paymentReceivedInLabel } from "@/components/billing/payment-received-in-field";
 import { invoiceOutstanding, invoicePaidTotal } from "@/lib/party/ledger-math";
 import { appendReturnTo } from "@/lib/navigation/return-to";
 import { cn, formatInrTable } from "@/lib/utils";
@@ -65,6 +67,7 @@ export function PaymentInDetailClient({ paymentId }: PaymentInDetailClientProps)
   const searchParams = useSearchParams();
   const invoices = useScopedInvoices();
   const { bankName, bankAccountNumber } = useSettingsStore();
+  const cashBankAccounts = useCashBankStore((s) => s.accounts);
 
   const match = findPaymentInInvoices(invoices, paymentId);
 
@@ -91,12 +94,19 @@ export function PaymentInDetailClient({ paymentId }: PaymentInDetailClientProps)
     Math.round((invoice.grandTotal - paidOnInvoice) * 100) / 100
   );
 
-  const bankLabel =
-    payment.method === "UPI" && payment.referenceNumber
+  const receivedIn =
+    paymentReceivedInLabel(
+      cashBankAccounts,
+      payment.receivedInAccountId,
+      payment.receivedInAccountName
+    ) ||
+    (payment.method === "UPI" && payment.referenceNumber
       ? `${bankName || "Bank"} (${payment.referenceNumber})`
       : bankName && bankAccountNumber
         ? `${bankName} (${bankAccountNumber})`
-        : payment.referenceNumber || "—";
+        : payment.referenceNumber || "—");
+
+  const bankLabel = payment.method === "CASH" ? "—" : receivedIn;
 
   const handlePrint = () => window.print();
 
@@ -153,7 +163,7 @@ export function PaymentInDetailClient({ paymentId }: PaymentInDetailClientProps)
             </DetailField>
             <DetailField label="Payment In Discount">{formatInrTable(0)}</DetailField>
             <DetailField label="Payment Mode">{paymentMethodLabel(payment.method)}</DetailField>
-            <DetailField label="Bank">{bankLabel}</DetailField>
+            <DetailField label="Payment Received In">{bankLabel}</DetailField>
             <DetailField label="Notes">—</DetailField>
           </div>
         </CardContent>

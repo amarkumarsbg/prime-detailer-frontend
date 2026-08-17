@@ -7,7 +7,7 @@ import { useNotificationStore } from "@/store/notification-store";
 import {
   buildCustomerLedgerWhatsAppMessage,
   isWhatsAppNonClickableShareUrl,
-  publicInvoiceShareUrl,
+  publicCustomerLedgerShareUrl,
 } from "@/lib/whatsapp-customer-messages";
 import {
   isWhatsAppNotConfiguredError,
@@ -15,11 +15,17 @@ import {
   sendCustomerWhatsApp,
 } from "@/lib/whatsapp-send";
 
+/** MyBillBook-style per-customer ledger (Parties → Ledger tab). */
 export function customerLedgerHref(customerId: string): string {
-  return `/billing?view=ledger&customerId=${encodeURIComponent(customerId)}`;
+  return `/parties/c:${encodeURIComponent(customerId)}?tab=ledger`;
 }
 
-/** Share the existing customer ledger reminder via WhatsApp (same copy as billing). */
+/** Party id for a studio customer (`c:{customerId}`). */
+export function customerPartyId(customerId: string): string {
+  return `c:${customerId}`;
+}
+
+/** Share the customer ledger reminder via WhatsApp with a public ledger link. */
 export async function shareCustomerLedgerWhatsApp(opts: {
   customer: { id: string; name: string; phone?: string };
   invoices: Invoice[];
@@ -32,14 +38,13 @@ export async function shareCustomerLedgerWhatsApp(opts: {
   }
 
   const customerInvoices = opts.invoices.filter((inv) => inv.customerId === opts.customer.id);
-  const newest = [...customerInvoices].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  const statementUrl = newest ? publicInvoiceShareUrl(newest.id) : undefined;
+  const statementUrl = publicCustomerLedgerShareUrl(opts.customer.id);
   const message = buildCustomerLedgerWhatsAppMessage(opts.customer, customerInvoices, {
     businessName: opts.businessName,
     statementUrl,
   });
-  const warnLocalLink = Boolean(statementUrl && isWhatsAppNonClickableShareUrl(statementUrl));
-  const href = `/customers/${opts.customer.id}`;
+  const warnLocalLink = isWhatsAppNonClickableShareUrl(statementUrl);
+  const href = customerLedgerHref(opts.customer.id);
 
   try {
     await sendCustomerWhatsApp(phone, message);

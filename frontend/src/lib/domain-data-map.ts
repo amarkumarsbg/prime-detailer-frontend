@@ -123,7 +123,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   { prefix: "/vendors", resources: ["expenses", "expenseMeta", "productPurchases", "parts"] },
   {
     prefix: "/billing",
-    resources: ["invoices", "jobCards", "customers", "appSettings", "notifications"],
+    resources: ["invoices", "jobCards", "customers", "appSettings", "notifications", "cashBank"],
   },
   {
     prefix: "/quotations",
@@ -138,7 +138,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   },
   {
     prefix: "/job-cards",
-    resources: [...OPS_CORE, "parts", "stockMovements", "serviceReminders"],
+    resources: [...OPS_CORE, "parts", "stockMovements", "serviceReminders", "cashBank"],
   },
   {
     prefix: "/customers",
@@ -153,6 +153,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "serviceCatalog",
       "vehicleCatalog",
       "notifications",
+      "cashBank",
     ],
   },
   {
@@ -169,7 +170,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
     prefix: "/notifications",
     resources: ["notifications", "jobCards", "invoices", "expenses", "pickupDropRequests"],
   },
-  { prefix: "/parties", resources: ["customers", "invoices", "expenses"] },
+  { prefix: "/parties", resources: ["customers", "invoices", "expenses", "cashBank"] },
   { prefix: "/dashboard", resources: DASHBOARD_CORE },
 ];
 

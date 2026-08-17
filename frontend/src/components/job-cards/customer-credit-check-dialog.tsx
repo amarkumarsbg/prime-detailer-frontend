@@ -33,6 +33,11 @@ import { useWalletStore } from "@/store/wallet-store";
 import { notifyCustomerPaymentRecordedWhatsApp } from "@/lib/payment-received-whatsapp";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import {
+  needsPaymentReceivedIn,
+  PaymentReceivedInField,
+} from "@/components/billing/payment-received-in-field";
+import { useCashBankStore } from "@/store/cash-bank-store";
 import type { Invoice, PaymentMethod } from "@/types";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -68,6 +73,7 @@ export function CustomerCreditCheckDialog({
   const recordInvoicePayment = useInvoiceStore((s) => s.recordPayment);
   const user = useAuthStore((s) => s.user);
   const businessName = useSettingsStore((s) => s.businessName);
+  const cashBankAccounts = useCashBankStore((s) => s.accounts);
 
   const pending = useMemo(() => {
     if (!customerId) return [];
@@ -82,9 +88,12 @@ export function CustomerCreditCheckDialog({
   const [targetInvoice, setTargetInvoice] = useState<Invoice | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [receivedInAccountId, setReceivedInAccountId] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [useWallet, setUseWallet] = useState(false);
   const [addExtraToWallet, setAddExtraToWallet] = useState(false);
+
+  const showReceivedIn = needsPaymentReceivedIn(paymentMethod);
 
   useEffect(() => {
     if (!open) {
@@ -94,6 +103,7 @@ export function CustomerCreditCheckDialog({
         setPaymentAmount("");
         setReferenceNumber("");
         setPaymentMethod("CASH");
+        setReceivedInAccountId("");
         setUseWallet(false);
         setAddExtraToWallet(false);
       });
@@ -105,6 +115,7 @@ export function CustomerCreditCheckDialog({
     setTargetInvoice(inv);
     setPaymentAmount(bal > 0 ? String(Math.round(bal * 100) / 100) : "");
     setPaymentMethod("CASH");
+    setReceivedInAccountId("");
     setReferenceNumber("");
     setUseWallet(false);
     setAddExtraToWallet(false);
@@ -116,6 +127,13 @@ export function CustomerCreditCheckDialog({
     const amount = Number(paymentAmount);
     if (isNaN(amount) || amount <= 0) {
       toast.error("Enter a valid amount");
+      return;
+    }
+
+    if (showReceivedIn && !receivedInAccountId) {
+      toast.error("Select Payment Received In", {
+        description: "Choose the bank account for UPI or Card payments.",
+      });
       return;
     }
     
@@ -142,6 +160,9 @@ export function CustomerCreditCheckDialog({
     const performedBy = user?.id?.toLowerCase() ?? "usr-001";
     const paidAt = new Date().toISOString();
     const remainingAfter = Math.max(0, maxPay - walletAmountUsed - amount);
+    const receivedInAccount = showReceivedIn
+      ? cashBankAccounts.find((a) => a.id === receivedInAccountId)
+      : undefined;
 
     const result = await recordInvoicePayment(
       targetInvoice.id,
@@ -151,6 +172,8 @@ export function CustomerCreditCheckDialog({
         method: paymentMethod,
         referenceNumber: referenceNumber.trim() || undefined,
         paidAt,
+        receivedInAccountId: receivedInAccount?.id,
+        receivedInAccountName: receivedInAccount?.displayName,
         addExtraToWallet: addExtraToWallet && extraAmount > 0,
         extraAmount: addExtraToWallet && extraAmount > 0 ? extraAmount : undefined,
       },
@@ -413,7 +436,14 @@ export function CustomerCreditCheckDialog({
 
             <div className="space-y-2">
               <Label>Method</Label>
-              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
+              <Select
+                value={paymentMethod}
+                onValueChange={(v) => {
+                  const next = v as PaymentMethod;
+                  setPaymentMethod(next);
+                  if (!needsPaymentReceivedIn(next)) setReceivedInAccountId("");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -426,6 +456,13 @@ export function CustomerCreditCheckDialog({
                 </SelectContent>
               </Select>
             </div>
+            {showReceivedIn ? (
+              <PaymentReceivedInField
+                value={receivedInAccountId}
+                onChange={setReceivedInAccountId}
+                id="credit-payment-received-in"
+              />
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="credit-pay-ref">Reference (optional)</Label>
               <Input
@@ -440,7 +477,11 @@ export function CustomerCreditCheckDialog({
             <Button type="button" variant="outline" onClick={() => setRecordOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => void handleRecordPayment()} disabled={!targetInvoice}>
+            <Button
+              type="button"
+              onClick={() => void handleRecordPayment()}
+              disabled={!targetInvoice || (showReceivedIn && !receivedInAccountId)}
+            >
               Save payment
             </Button>
           </DialogFooter>

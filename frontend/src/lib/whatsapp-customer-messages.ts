@@ -248,6 +248,11 @@ export function publicInvoiceShareUrl(invoiceId: string): string {
   return `${publicAppBaseUrl()}/public-invoice/${encodeURIComponent(invoiceId)}`;
 }
 
+/** Public customer ledger statement (no auth) — used in WhatsApp ledger reminders. */
+export function publicCustomerLedgerShareUrl(customerId: string): string {
+  return `${publicAppBaseUrl()}/public-ledger/${encodeURIComponent(customerId)}`;
+}
+
 /**
  * Payment reminder — opens in WhatsApp composer (MyBillBook-style pending dues).
  */
@@ -303,7 +308,7 @@ export function buildInvoiceReadyWhatsAppMessage(
 
 /** @deprecated Prefer buildPaymentPendingReminderWhatsAppMessage / buildInvoiceReadyWhatsAppMessage */
 export function buildCustomerLedgerWhatsAppMessage(
-  customer: { name: string; phone?: string },
+  customer: { id?: string; name: string; phone?: string },
   customerInvoices: Invoice[],
   opts: { businessName: string; statementUrl?: string }
 ): string {
@@ -324,10 +329,9 @@ export function buildCustomerLedgerWhatsAppMessage(
     .filter((r) => r.due > 0.01);
 
   const totalDue = open.reduce((s, r) => s + r.due, 0);
-  const newest = open.sort((a, b) => b.inv.createdAt.localeCompare(a.inv.createdAt))[0];
   const statementUrl =
     opts.statementUrl ||
-    (newest ? publicInvoiceShareUrl(newest.inv.id) : publicAppBaseUrl());
+    (customer.id ? publicCustomerLedgerShareUrl(customer.id) : publicAppBaseUrl());
 
   return buildPaymentPendingReminderWhatsAppMessage({
     pendingAmount: totalDue,

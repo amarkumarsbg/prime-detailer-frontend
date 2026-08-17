@@ -61,6 +61,10 @@ export interface Payment {
   method: PaymentMethod;
   referenceNumber?: string;
   paidAt: string;
+  /** Cash & Bank account id when method is UPI or CARD. */
+  receivedInAccountId?: string;
+  /** Snapshot of account display name at payment time. */
+  receivedInAccountName?: string;
 }
 
 /** Print-quality PDF cached on the invoice row (AppJsonRow) for fast email attachment. */
