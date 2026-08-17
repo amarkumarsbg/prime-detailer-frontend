@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,8 @@ import {
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
+import { getReportHrefForFavouriteKey } from "@/lib/reports/report-favourites";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,23 +85,20 @@ export function ReportPageChrome({
   onPrintPdf,
   children,
 }: ReportPageChromeProps) {
-  const [favourite, setFavourite] = useState(false);
+  const reportHref = getReportHrefForFavouriteKey(favouriteStorageKey);
+  const favourite = useReportFavouritesStore((s) =>
+    reportHref ? s.hrefs.includes(reportHref) : false
+  );
+  const setFavourited = useReportFavouritesStore((s) => s.setFavourited);
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailYour, setEmailYour] = useState("agenciessamriddhi@gmail.com");
   const [emailCa, setEmailCa] = useState("nka.clients@gmail.com");
 
-  useEffect(() => {
-    try {
-      setFavourite(localStorage.getItem(favouriteStorageKey) === "1");
-    } catch {
-      /* ignore */
-    }
-  }, [favouriteStorageKey]);
-
   const toggleFavourite = () => {
-    const next = !favourite;
-    setFavourite(next);
-    writeFavouriteFlag(favouriteStorageKey, next);
+    if (!reportHref) return;
+    void setFavourited(reportHref, !favourite).catch(() => {
+      toast.error("Could not update favourite");
+    });
   };
 
   const printPdf = () => {

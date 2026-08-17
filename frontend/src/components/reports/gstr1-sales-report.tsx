@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
+import { getReportHrefForFavouriteKey } from "@/lib/reports/report-favourites-keys";
 
 const FAV_KEY = "prime-detailer-gstr1-favourite";
 
@@ -67,7 +69,8 @@ function downloadBlob(content: Blob, filename: string) {
 
 export function Gstr1SalesReport() {
   const invoices = useScopedInvoices();
-  const [favourite, setFavourite] = useState(false);
+  const reportHref = getReportHrefForFavouriteKey(FAV_KEY) ?? "/reports/gst/gstr-1-sales";
+  const favourite = useReportFavouritesStore((s) => s.hrefs.includes(reportHref));
   const [dateRange, setDateRange] = useState("fy");
   const [viewMode, setViewMode] = useState("invoice");
 
@@ -76,18 +79,8 @@ export function Gstr1SalesReport() {
     return buildGstr1InvoiceRows(filtered);
   }, [invoices, dateRange]);
 
-  useEffect(() => {
-    try {
-      queueMicrotask(() => setFavourite(localStorage.getItem(FAV_KEY) === "1"));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const toggleFavourite = () => {
-    const next = !favourite;
-    setFavourite(next);
-    writeFavouriteFlag(FAV_KEY, next);
+    writeFavouriteFlag(FAV_KEY, !favourite);
   };
 
   const exportJson = () => {

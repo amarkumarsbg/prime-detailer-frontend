@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
+import { getReportHrefForFavouriteKey } from "@/lib/reports/report-favourites-keys";
 
 const FAV_KEY = "prime-detailer-pl-favourite";
 
@@ -53,21 +55,12 @@ export function ProfitLossReport() {
   const invoices = useScopedInvoices();
   const expenses = useScopedExpenses();
 
-  const [favourite, setFavourite] = useState(false);
+  const reportHref = getReportHrefForFavouriteKey(FAV_KEY) ?? "/reports/finance/profit-loss";
+  const favourite = useReportFavouritesStore((s) => s.hrefs.includes(reportHref));
   const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
 
-  useEffect(() => {
-    try {
-      queueMicrotask(() => setFavourite(localStorage.getItem(FAV_KEY) === "1"));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const toggleFavourite = () => {
-    const next = !favourite;
-    setFavourite(next);
-    writeFavouriteFlag(FAV_KEY, next);
+    writeFavouriteFlag(FAV_KEY, !favourite);
   };
 
   const { saleTotal, expenseTotal, netSimplified } = useMemo(() => {

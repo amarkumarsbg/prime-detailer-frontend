@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +47,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
+import { getReportHrefForFavouriteKey } from "@/lib/reports/report-favourites-keys";
 
 const FAV_KEY = "prime-detailer-gstr2-favourite";
 
@@ -185,25 +187,16 @@ const selectItemClass =
 export function Gstr2PurchaseReport() {
   const purchases = useInventoryStore((s) => s.productPurchases);
   const parts = useInventoryStore((s) => s.parts);
-  const [favourite, setFavourite] = useState(false);
+  const reportHref = getReportHrefForFavouriteKey(FAV_KEY) ?? "/reports/gst/gstr-2-purchase";
+  const favourite = useReportFavouritesStore((s) => s.hrefs.includes(reportHref));
   const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [mainTab, setMainTab] = useState("purchase");
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailYour, setEmailYour] = useState("agenciessamriddhi@gmail.com");
   const [emailCa, setEmailCa] = useState("nka.clients@gmail.com");
 
-  useEffect(() => {
-    try {
-      queueMicrotask(() => setFavourite(localStorage.getItem(FAV_KEY) === "1"));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const toggleFavourite = () => {
-    const next = !favourite;
-    setFavourite(next);
-    writeFavouriteFlag(FAV_KEY, next);
+    writeFavouriteFlag(FAV_KEY, !favourite);
   };
 
   const filteredPurchase = useMemo(() => {

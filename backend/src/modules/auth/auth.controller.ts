@@ -31,6 +31,10 @@ import {
 import { strongPasswordSchema } from "../../lib/password-policy.js";
 import { updateUserApi } from "../users/user-api.service.js";
 import { persistAvatarFile } from "../../services/object-storage.service.js";
+import {
+  getUserReportFavourites,
+  setUserReportFavourites,
+} from "./report-favourites.service.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -549,4 +553,64 @@ export async function me(req: Request, res: Response) {
     },
     error: null,
   });
+}
+
+const reportFavouritesSchema = z.object({
+  hrefs: z.array(z.string().min(1)).max(200),
+});
+
+/** User-specific favourite report hrefs (AppJsonRow, keyed by user id). */
+export async function getMyReportFavourites(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: req.auth.id },
+      select: { id: true, isActive: true, organizationId: true },
+    });
+    if (!user?.isActive) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const hrefs = await getUserReportFavourites(user.id, user.organizationId);
+    res.json({ data: { hrefs }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function putMyReportFavourites(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.auth) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: req.auth.id },
+      select: { id: true, isActive: true, organizationId: true },
+    });
+    if (!user?.isActive) {
+      res.status(401).json({ data: null, error: { message: "Unauthorized" } });
+      return;
+    }
+    const body = reportFavouritesSchema.parse(req.body);
+    const hrefs = await setUserReportFavourites(
+      user.id,
+      user.organizationId,
+      body.hrefs
+    );
+    res.json({ data: { hrefs }, error: null });
+  } catch (e) {
+    next(e);
+  }
 }

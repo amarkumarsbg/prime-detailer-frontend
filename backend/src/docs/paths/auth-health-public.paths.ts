@@ -185,6 +185,43 @@ export const authPaths: OpenApiPaths = {
       },
     },
   },
+  "/api/auth/me/report-favourites": {
+    get: {
+      tags: ["Auth"],
+      summary: "List favourite report hrefs for the current user",
+      security: bearerSecurity,
+      responses: {
+        "200": okResponse({
+          type: "object",
+          properties: {
+            hrefs: { type: "array", items: { type: "string" } },
+          },
+        }),
+        ...commonErrorResponses(),
+      },
+    },
+    put: {
+      tags: ["Auth"],
+      summary: "Replace favourite report hrefs for the current user",
+      security: bearerSecurity,
+      requestBody: jsonBody({
+        type: "object",
+        required: ["hrefs"],
+        properties: {
+          hrefs: { type: "array", items: { type: "string" }, maxItems: 200 },
+        },
+      }),
+      responses: {
+        "200": okResponse({
+          type: "object",
+          properties: {
+            hrefs: { type: "array", items: { type: "string" } },
+          },
+        }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
   "/api/auth/me/avatar": {
     post: {
       tags: ["Auth"],

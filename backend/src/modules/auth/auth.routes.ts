@@ -10,8 +10,10 @@ import {
   completePasswordReset,
   getResetPasswordTokenStatus,
   changePassword,
+  getMyReportFavourites,
+  putMyReportFavourites,
 } from "./auth.controller.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireAnyPermission } from "../../middleware/auth.js";
 import { avatarUploadHandler } from "../../middleware/avatar-upload.js";
 
 export const authRouter = Router();
@@ -26,3 +28,15 @@ authRouter.post("/otp/verify", verifyLoginOtp);
 authRouter.get("/me", requireAuth, me);
 authRouter.patch("/me", requireAuth, patchMe);
 authRouter.post("/me/avatar", requireAuth, avatarUploadHandler, uploadMyAvatar);
+authRouter.get(
+  "/me/report-favourites",
+  requireAuth,
+  requireAnyPermission(["REPORTS", "ADVANCED_REPORTS"]),
+  getMyReportFavourites
+);
+authRouter.put(
+  "/me/report-favourites",
+  requireAuth,
+  requireAnyPermission(["REPORTS", "ADVANCED_REPORTS"]),
+  putMyReportFavourites
+);

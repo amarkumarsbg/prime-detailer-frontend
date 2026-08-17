@@ -10,12 +10,10 @@ import {
   reportHubFilterScrollClass,
 } from "@/lib/reports/report-mobile-ui";
 import {
-  isReportFavourited,
   REPORT_FAVOURITE_EVENT,
-  seedDefaultReportFavourites,
-  setReportFavourited,
 } from "@/lib/reports/report-favourites";
-import { useBalanceSheetLedgerStore } from "@/store/balance-sheet-ledger-store";
+import { useAuthStore } from "@/store/auth-store";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
 import {
   ChevronDown,
   ChevronUp,
@@ -36,6 +34,9 @@ type ReportDef = {
   label: string;
   href: string;
   filters?: FilterId[];
+  /** Stable order within original category (0-based). */
+  categoryOrder: number;
+  categoryId: string;
 };
 
 type SectionDef = {
@@ -43,7 +44,7 @@ type SectionDef = {
   title: string;
   icon: typeof Sparkles;
   collapseAt?: number;
-  items: ReportDef[];
+  items: Omit<ReportDef, "categoryOrder" | "categoryId">[];
 };
 
 const FILTER_PILLS: { id: FilterId; label: string }[] = [
@@ -55,7 +56,7 @@ const FILTER_PILLS: { id: FilterId; label: string }[] = [
   { id: "summary", label: "Summary" },
 ];
 
-/** All catalogue reports (Favourite is built dynamically). */
+/** All catalogue reports with fixed category order (Favourite is built dynamically). */
 const CATALOG_SECTIONS: SectionDef[] = [
   {
     id: "gst",
@@ -63,6 +64,7 @@ const CATALOG_SECTIONS: SectionDef[] = [
     icon: Percent,
     collapseAt: 4,
     items: [
+      { label: "GSTR-1 (Sales)", href: "/reports/gst/gstr-1-sales", filters: ["invoice", "summary"] },
       { label: "GSTR-2 (Purchase)", href: "/reports/gst/gstr-2-purchase", filters: ["invoice"] },
       { label: "GSTR-3b", href: "/reports/gst/gstr-3b", filters: ["invoice", "summary"] },
       {
@@ -94,6 +96,11 @@ const CATALOG_SECTIONS: SectionDef[] = [
     items: [
       { label: "Audit Trail", href: "/activity", filters: ["summary"] },
       {
+        label: "Balance Sheet",
+        href: "/reports/finance/balance-sheet",
+        filters: ["summary"],
+      },
+      {
         label: "Bill Wise Profit",
         href: "/reports/transaction/bill-wise-profit",
         filters: ["invoice"],
@@ -115,8 +122,18 @@ const CATALOG_SECTIONS: SectionDef[] = [
         filters: ["category", "payment"],
       },
       {
+        label: "Profit And Loss Report",
+        href: "/reports/finance/profit-loss",
+        filters: ["summary", "category"],
+      },
+      {
         label: "Purchase Summary",
         href: "/reports/transaction/purchase-summary",
+        filters: ["summary"],
+      },
+      {
+        label: "Analytics dashboard",
+        href: "/reports/analytics",
         filters: ["summary"],
       },
     ],
@@ -175,40 +192,15 @@ const CATALOG_SECTIONS: SectionDef[] = [
   },
 ];
 
-const ALL_REPORTS: ReportDef[] = (() => {
-  const map = new Map<string, ReportDef>();
-  for (const sec of CATALOG_SECTIONS) {
-    for (const item of sec.items) {
-      if (!map.has(item.href)) map.set(item.href, item);
-    }
-  }
-  map.set("/reports/finance/balance-sheet", {
-    label: "Balance Sheet",
-    href: "/reports/finance/balance-sheet",
-    filters: ["summary"],
-  });
-  map.set("/reports/gst/gstr-1-sales", {
-    label: "GSTR-1 (Sales)",
-    href: "/reports/gst/gstr-1-sales",
-    filters: ["invoice", "summary"],
-  });
-  map.set("/reports/finance/profit-loss", {
-    label: "Profit And Loss Report",
-    href: "/reports/finance/profit-loss",
-    filters: ["summary", "category"],
-  });
-  map.set("/reports/sales-summary-staff", {
-    label: "Sales Summary - Staff wise",
-    href: "/reports/sales-summary-staff",
-    filters: ["summary", "party", "invoice"],
-  });
-  map.set("/reports/analytics", {
-    label: "Analytics dashboard",
-    href: "/reports/analytics",
-    filters: ["summary"],
-  });
-  return [...map.values()];
-})();
+const CATALOG_REPORTS: ReportDef[] = CATALOG_SECTIONS.flatMap((sec) =>
+  sec.items.map((item, index) => ({
+    ...item,
+    categoryId: sec.id,
+    categoryOrder: index,
+  }))
+);
+
+const REPORT_BY_HREF = new Map(CATALOG_REPORTS.map((r) => [r.href, r]));
 
 function matchesSearch(label: string, q: string): boolean {
   if (!q.trim()) return true;
@@ -216,7 +208,7 @@ function matchesSearch(label: string, q: string): boolean {
 }
 
 function matchesFilter(
-  item: ReportDef,
+  item: ReportDef | Omit<ReportDef, "categoryOrder" | "categoryId">,
   activeFilter: FilterId,
   sectionId: string
 ): boolean {
@@ -233,27 +225,15 @@ export function ReportsHub() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterId>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [favTick, setFavTick] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
-  const balanceSheetFavourite = useBalanceSheetLedgerStore((s) => s.favourite);
-  const setBalanceSheetFavourite = useBalanceSheetLedgerStore((s) => s.setFavourite);
+  const userId = useAuthStore((s) => s.user?.id);
+  const favouriteHrefs = useReportFavouritesStore((s) => s.hrefs);
+  const hydrateForUser = useReportFavouritesStore((s) => s.hydrateForUser);
+  const favouritedSet = useMemo(() => new Set(favouriteHrefs), [favouriteHrefs]);
 
   useEffect(() => {
-    seedDefaultReportFavourites(setBalanceSheetFavourite);
-  }, [setBalanceSheetFavourite]);
-
-  useEffect(() => {
-    const refresh = () => setFavTick((t) => t + 1);
-    queueMicrotask(refresh);
-    window.addEventListener(REPORT_FAVOURITE_EVENT, refresh);
-    window.addEventListener("storage", refresh);
-    window.addEventListener("focus", refresh);
-    return () => {
-      window.removeEventListener(REPORT_FAVOURITE_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("focus", refresh);
-    };
-  }, []);
+    if (userId) void hydrateForUser(userId);
+  }, [userId, hydrateForUser]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -266,61 +246,67 @@ export function ReportsHub() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Keep hub in sync when a report page toggles favourite
+  const [, setFavTick] = useState(0);
+  useEffect(() => {
+    const refresh = () => setFavTick((t) => t + 1);
+    window.addEventListener(REPORT_FAVOURITE_EVENT, refresh);
+    return () => window.removeEventListener(REPORT_FAVOURITE_EVENT, refresh);
+  }, []);
+
   const favouriteItems = useMemo(() => {
-    void favTick;
-    return ALL_REPORTS.filter((r) =>
-      isReportFavourited(r.href, balanceSheetFavourite)
-    ).filter(
-      (it) => matchesSearch(it.label, query) && matchesFilter(it, activeFilter, "favourite")
-    );
-  }, [favTick, balanceSheetFavourite, query, activeFilter]);
+    return favouriteHrefs
+      .map((href) => REPORT_BY_HREF.get(href))
+      .filter((r): r is ReportDef => Boolean(r))
+      .filter(
+        (it) => matchesSearch(it.label, query) && matchesFilter(it, activeFilter, "favourite")
+      );
+  }, [favouriteHrefs, query, activeFilter]);
 
   const visibleSections = useMemo(() => {
-    const favouriteSection: SectionDef & { items: ReportDef[] } = {
+    const rest = CATALOG_SECTIONS.map((sec) => {
+      const items = sec.items
+        .filter((it) => !favouritedSet.has(it.href))
+        .filter(
+          (it) => matchesSearch(it.label, query) && matchesFilter(it, activeFilter, sec.id)
+        );
+      return { ...sec, items };
+    }).filter((sec) => sec.items.length > 0);
+
+    const sections: (SectionDef & { items: ReportDef[] | Omit<ReportDef, "categoryOrder" | "categoryId">[] })[] =
+      [];
+    sections.push({
       id: "favourite",
       title: "Favourite",
       icon: Sparkles,
       items: favouriteItems,
-    };
-
-    const rest = CATALOG_SECTIONS.map((sec) => {
-      const items = sec.items.filter(
-        (it) => matchesSearch(it.label, query) && matchesFilter(it, activeFilter, sec.id)
-      );
-      return { ...sec, items };
-    }).filter((sec) => sec.items.length > 0);
-
-    const sections: (SectionDef & { items: ReportDef[] })[] = [];
-    if (favouriteItems.length > 0) {
-      sections.push(favouriteSection);
-    } else if (!query.trim() && !activeFilter) {
-      sections.push({ ...favouriteSection, items: [] });
-    }
+    });
     sections.push(...rest);
     return sections;
-  }, [favouriteItems, query, activeFilter]);
+  }, [favouriteItems, favouritedSet, query, activeFilter]);
 
   const toggleSection = useCallback((id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
-  const unfavourite = useCallback(
-    (href: string) => {
-      setReportFavourited(href, false, {
-        setBalanceSheetFavourite,
-      });
-      setFavTick((t) => t + 1);
-      toast.message("Removed from favourites");
-    },
-    [setBalanceSheetFavourite]
-  );
+  const toggleFavourite = useCallback(async (href: string, next: boolean) => {
+    try {
+      await useReportFavouritesStore.getState().setFavourited(href, next);
+      toast.message(next ? "Added to favourites" : "Removed from favourites");
+    } catch {
+      toast.error("Could not update favourite");
+    }
+  }, []);
 
-  const renderSectionCard = (sec: SectionDef & { items: ReportDef[] }) => {
+  const renderSectionCard = (
+    sec: SectionDef & { items: Array<Omit<ReportDef, "categoryOrder" | "categoryId"> | ReportDef> }
+  ) => {
     const Icon = sec.icon;
     const cap = sec.collapseAt;
     const isCollapsible = cap != null && sec.items.length > cap;
     const open = expanded[sec.id] ?? false;
     const shown = !isCollapsible || open ? sec.items : sec.items.slice(0, cap);
+    const isFavouriteSection = sec.id === "favourite";
 
     return (
       <div
@@ -332,38 +318,55 @@ export function ReportsHub() {
           <span className="font-semibold text-foreground max-md:text-sm">{sec.title}</span>
         </div>
         <ul className="flex flex-1 flex-col gap-0 px-2 py-2 max-md:px-1.5">
-          {sec.id === "favourite" && shown.length === 0 ? (
+          {isFavouriteSection && shown.length === 0 ? (
             <li className="px-3 py-8 text-center text-sm text-muted-foreground">
               No favourite reports. Star a report to add it here.
             </li>
           ) : (
-            shown.map((item) => (
-              <li key={item.href}>
-                <div className="flex min-h-[44px] items-center gap-1 rounded-md px-2 py-1 text-sm text-foreground/90 transition-colors hover:bg-muted max-md:px-2 max-md:py-2">
-                  <Link
-                    href={item.href}
-                    className="min-w-0 flex-1 px-1 py-2 leading-snug max-md:text-[15px]"
-                  >
-                    {item.label}
-                  </Link>
-                  {sec.id === "favourite" ? (
+            shown.map((item) => {
+              const favourited = isFavouriteSection || favouritedSet.has(item.href);
+              return (
+                <li key={item.href}>
+                  <div className="group flex min-h-[44px] items-center gap-1 rounded-md px-2 py-1 text-sm text-foreground/90 transition-colors hover:bg-muted max-md:px-2 max-md:py-2">
+                    <Link
+                      href={item.href}
+                      className="min-w-0 flex-1 px-1 py-2 leading-snug max-md:text-[15px]"
+                    >
+                      {item.label}
+                    </Link>
                     <button
                       type="button"
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                      aria-label={`Remove ${item.label} from favourites`}
-                      title="Remove from favourites"
+                      className={cn(
+                        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-opacity",
+                        favourited
+                          ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                          : "text-muted-foreground opacity-100 hover:bg-muted md:opacity-0 md:group-hover:opacity-100"
+                      )}
+                      aria-label={
+                        favourited
+                          ? `Remove ${item.label} from favourites`
+                          : `Add ${item.label} to favourites`
+                      }
+                      title={favourited ? "Remove from favourites" : "Add to favourites"}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        unfavourite(item.href);
+                        void toggleFavourite(item.href, !favourited);
                       }}
                     >
-                      <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          favourited
+                            ? "fill-amber-400 text-amber-500"
+                            : "fill-none text-muted-foreground"
+                        )}
+                      />
                     </button>
-                  ) : null}
-                </div>
-              </li>
-            ))
+                  </div>
+                </li>
+              );
+            })
           )}
         </ul>
         {isCollapsible && (
@@ -447,13 +450,13 @@ export function ReportsHub() {
       <div className="grid gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
           .filter((s) => ["favourite", "gst", "transaction"].includes(s.id))
-          .map(renderSectionCard)}
+          .map((s) => renderSectionCard(s))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
           .filter((s) => ["item", "party"].includes(s.id))
-          .map(renderSectionCard)}
+          .map((s) => renderSectionCard(s))}
       </div>
 
       {visibleSections.length === 0 && (

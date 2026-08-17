@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCashBankStore } from "@/store/cash-bank-store";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
 import {
   BALANCE_SHEET_CATEGORY_LABEL,
   type BalanceSheetLedgerEntry,
@@ -161,10 +162,12 @@ export function BalanceSheetReport() {
   const accounts = useCashBankStore((s) => s.accounts);
 
   const entries = useBalanceSheetLedgerStore((s) => s.entries);
-  const favourite = useBalanceSheetLedgerStore((s) => s.favourite);
   const lastUpdatedAt = useBalanceSheetLedgerStore((s) => s.lastUpdatedAt);
-  const setFavourite = useBalanceSheetLedgerStore((s) => s.setFavourite);
   const addEntry = useBalanceSheetLedgerStore((s) => s.addEntry);
+  const favourite = useReportFavouritesStore((s) =>
+    s.hrefs.includes("/reports/finance/balance-sheet")
+  );
+  const setFavourited = useReportFavouritesStore((s) => s.setFavourited);
 
   const [modalMode, setModalMode] = useState<BalanceSheetModalMode | null>(null);
   const [formPickCategory, setFormPickCategory] = useState<BalanceSheetManualCategory>("gstPayable");
@@ -363,7 +366,11 @@ export function BalanceSheetReport() {
             variant="outline"
             size="sm"
             className="gap-1.5 border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-            onClick={() => setFavourite(!favourite)}
+            onClick={() => {
+              void setFavourited("/reports/finance/balance-sheet", !favourite).catch(() => {
+                toast.error("Could not update favourite");
+              });
+            }}
           >
             <Star
               className={`h-4 w-4 ${favourite ? "fill-amber-400 text-amber-500" : "text-muted-foreground"}`}

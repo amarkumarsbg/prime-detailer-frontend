@@ -9,6 +9,7 @@ import {
   defaultBranchForUser,
 } from "@/lib/branch-selection";
 import { buildApiUrl } from "@/lib/api-base";
+import { useReportFavouritesStore } from "@/store/report-favourites-store";
 
 export type SendLoginOtpResult =
   | {
@@ -71,6 +72,7 @@ export const useAuthStore = create<AuthState>()(
           ),
           isAuthenticated: true,
         });
+        void useReportFavouritesStore.getState().hydrateForUser(data.user.id);
       },
 
       ensureValidSession: async () => {
@@ -99,6 +101,7 @@ export const useAuthStore = create<AuthState>()(
             ),
             isAuthenticated: true,
           });
+          void useReportFavouritesStore.getState().hydrateForUser(user.id);
         } catch {
           get().logout();
         }
@@ -215,6 +218,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        useReportFavouritesStore.getState().clear();
         set({
           user: null,
           currentBranch: null,
