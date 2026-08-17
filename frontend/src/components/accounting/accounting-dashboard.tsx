@@ -344,81 +344,82 @@ export function AccountingDashboard() {
   };
 
   return (
-    <div className="space-y-5">
-      {/* Mobile page title (desktop uses app header) */}
-      <div className="md:hidden">
-        <h1 className="text-xl font-bold tracking-tight">Accounting</h1>
-        <p className="text-sm text-muted-foreground">Manage your operations</p>
-      </div>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Accounting &amp; Finance
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Comprehensive financial management and analytics
-          </p>
+    <div className="space-y-3 md:space-y-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <div className="md:hidden">
+            <h1 className="text-lg font-bold tracking-tight text-foreground">Accounting</h1>
+            <p className="text-xs text-muted-foreground">Manage your finances</p>
+          </div>
+          <div className="hidden md:block space-y-1">
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              Accounting &amp; Finance
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Comprehensive financial management and analytics
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
-            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            className="h-8 bg-emerald-600 px-2.5 text-xs text-white hover:bg-emerald-700 sm:h-9 sm:px-3 sm:text-sm"
             onClick={() => setAddExpenseOpen(true)}
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
             Add Expense
           </Button>
           <Button
             variant="outline"
             size="sm"
+            className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
             onClick={() => void handleRefresh()}
             disabled={refreshing}
           >
-            <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
+            <RefreshCw
+              className={cn("mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4", refreshing && "animate-spin")}
+            />
             Refresh
           </Button>
         </div>
       </div>
 
-      {/* Filters — compact on mobile: date + branch row, icon action buttons */}
+      {/* Filters — full-width date/branch on mobile so labels stay readable */}
       <div className="rounded-lg border border-border/80 bg-card p-2 shadow-sm sm:rounded-xl sm:p-4">
         <div className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3 lg:contents">
-            <ExpenseDateRangePicker
-              value={dateFilter}
-              onChange={setDateFilter}
-              className="h-9 w-full min-w-0 px-2 text-xs sm:h-10 sm:w-[min(100%,280px)] sm:px-3 sm:text-sm"
-            />
+          <ExpenseDateRangePicker
+            value={dateFilter}
+            onChange={setDateFilter}
+            className="h-9 w-full min-w-0 justify-start px-2.5 text-left text-xs sm:h-10 sm:w-[min(100%,280px)] sm:px-3 sm:text-sm"
+          />
 
-            {showBranchPicker ? (
-              <Select
-                value={branchFilter}
-                onValueChange={setBranchFilter}
-                disabled={branchScoped}
-              >
-                <SelectTrigger className="h-9 w-full min-w-0 px-2 text-xs sm:h-10 sm:w-[200px] sm:px-3 sm:text-sm">
-                  <Building2 className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground sm:mr-2 sm:h-4 sm:w-4" />
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {!branchScoped && <SelectItem value="all">All Branches</SelectItem>}
-                  {branches
-                    .filter((b) => b.isActive)
-                    .map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="inline-flex h-9 w-full min-w-0 items-center gap-1.5 truncate rounded-md border border-border px-2 text-xs sm:h-10 sm:w-auto sm:gap-2 sm:px-3 sm:text-sm">
-                <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
-                <span className="truncate font-medium">{viewingLabel}</span>
-              </div>
-            )}
-          </div>
+          {showBranchPicker ? (
+            <Select
+              value={branchFilter}
+              onValueChange={setBranchFilter}
+              disabled={branchScoped}
+            >
+              <SelectTrigger className="h-9 w-full min-w-0 px-2.5 text-xs sm:h-10 sm:w-[200px] sm:px-3 sm:text-sm">
+                <Building2 className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground sm:mr-2 sm:h-4 sm:w-4" />
+                <SelectValue placeholder="Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {!branchScoped && <SelectItem value="all">All Branches</SelectItem>}
+                {branches
+                  .filter((b) => b.isActive)
+                  .map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="inline-flex h-9 w-full min-w-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs sm:h-10 sm:w-auto sm:gap-2 sm:px-3 sm:text-sm">
+              <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
+              <span className="truncate font-medium">{viewingLabel}</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-end lg:ml-auto">
             <Button
@@ -476,8 +477,8 @@ export function AccountingDashboard() {
         ) : null}
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-        <TabsList className="h-auto w-full justify-start gap-0 rounded-none border-b border-border bg-transparent p-0">
+      <Tabs value={tab} onValueChange={setTab} className="space-y-3 md:space-y-5">
+        <TabsList className="h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 flex-nowrap scrollbar-none">
           {(
             [
               ["overview", "Overview"],
@@ -489,7 +490,7 @@ export function AccountingDashboard() {
               key={value}
               value={value}
               className={cn(
-                "rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium shadow-none",
+                "shrink-0 rounded-none border-b-2 border-transparent px-3 py-2 text-sm font-medium shadow-none sm:px-4 sm:py-2.5",
                 "data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-700",
                 "dark:data-[state=active]:text-blue-400"
               )}
@@ -499,7 +500,7 @@ export function AccountingDashboard() {
           ))}
         </TabsList>
 
-        <TabsContent value="overview" className="mt-0 space-y-5">
+        <TabsContent value="overview" className="mt-0 space-y-3 md:space-y-5">
           {/* KPI row */}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <MetricCard
@@ -859,7 +860,7 @@ export function AccountingDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="invoices" className="mt-0 space-y-4">
+        <TabsContent value="invoices" className="mt-0 space-y-3 md:space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
               Invoice data from Billing — open any row for full detail.
@@ -900,7 +901,7 @@ export function AccountingDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="reports" className="mt-0 space-y-4">
+        <TabsContent value="reports" className="mt-0 space-y-3 md:space-y-4">
           <AccountingReportsPanel
             invoices={periodInvoices}
             expenses={periodExpenses}

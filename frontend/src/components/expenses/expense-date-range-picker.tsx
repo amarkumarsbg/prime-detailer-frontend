@@ -166,7 +166,9 @@ export function ExpenseDateRangePicker({
           )}
         >
           <CalendarRange className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate">{formatExpenseDateFilterLabel(value)}</span>
+          <span className="min-w-0 flex-1 whitespace-nowrap text-left">
+            {formatExpenseDateFilterLabel(value)}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(calc(100vw-2rem),360px)] p-0" align="start">
