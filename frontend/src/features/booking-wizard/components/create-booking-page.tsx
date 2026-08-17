@@ -154,7 +154,6 @@ import {
 import { catalogPriceForSegment, withCatalogPrice, withCustomPrice } from "@/lib/service-line-price";
 import type { CreateBookingVariant, JobWizardStepId } from "@/features/booking-wizard/types";
 import {
-  GST_RATE,
   QUICK_INTERNAL_NOTES,
   TRENDING_IDS,
   ADDON_IDS_PREFERRED,
@@ -163,6 +162,11 @@ import {
   MOBILE_DATE_TIME_INPUT_ICON_END,
   JOB_WIZARD_LABEL,
 } from "@/features/booking-wizard/constants";
+import {
+  computeGstFromSubtotal,
+  DEFAULT_GST_RATE,
+  isGstRegistered as isGstRegisteredStatus,
+} from "@/lib/gst-tax";
 import { wizardTrackerMilestone, wizardTrackerLabels } from "@/features/booking-wizard/lib/wizard-steps";
 import {
   datetimeLocalValue,
@@ -255,8 +259,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     businessWebsite,
     gstRegistrationStatus,
   } = useSettingsStore();
-  const isGstRegistered = gstRegistrationStatus !== "NOT_REGISTERED";
-  const activeGstRate = isGstRegistered ? GST_RATE : 0;
+  const isGstRegistered = isGstRegisteredStatus(gstRegistrationStatus);
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
@@ -1234,8 +1237,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     Math.max(0, catalogSubtotalExclGst - totalDiscount) +
     highEndSubtotalExclGst +
     partsSubtotalExclGst;
-  const gstAmount = Math.round(afterDiscount * activeGstRate * 100) / 100;
-  const totalPayable = Math.round((afterDiscount + gstAmount) * 100) / 100;
+  const { taxAmount: gstAmount, grandTotal: totalPayable } = computeGstFromSubtotal(
+    afterDiscount,
+    gstRegistrationStatus
+  );
 
   /** Parsed advance for summary & cap (matches submit logic). */
   const summaryAdvanceAmount = useMemo(() => {
@@ -2650,7 +2655,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           </div>
           {isGstRegistered ? (
             <div className="flex justify-between text-amber-700 dark:text-amber-400">
-              <span>GST (18%)</span>
+              <span>GST ({Math.round(DEFAULT_GST_RATE * 100)}%)</span>
               <span className="tabular-nums">+{formatCurrency(gstAmount)}</span>
             </div>
           ) : null}

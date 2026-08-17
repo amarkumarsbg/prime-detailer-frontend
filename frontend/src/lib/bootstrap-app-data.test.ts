@@ -14,7 +14,11 @@ describe("thin BootstrapPayload contract", () => {
   it("only allows shell keys", () => {
     const sample: BootstrapPayload = {
       branches: [],
-      branding: { businessName: "Studio", brandPrimary: "#000000" },
+      branding: {
+        businessName: "Studio",
+        brandPrimary: "#000000",
+        gstRegistrationStatus: "NOT_REGISTERED",
+      },
       entitlement: null,
     };
     for (const key of Object.keys(sample)) {
@@ -24,5 +28,7 @@ describe("thin BootstrapPayload contract", () => {
       expect(bad in sample).toBe(false);
     }
     expect("bankAccountNumber" in (sample.branding as object)).toBe(false);
+    expect("gstin" in (sample.branding as object)).toBe(false);
+    expect(sample.branding.gstRegistrationStatus).toBe("NOT_REGISTERED");
   });
 });

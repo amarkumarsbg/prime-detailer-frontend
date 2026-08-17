@@ -1,7 +1,9 @@
 import type { VehicleSegment } from "@/types";
+import { DEFAULT_GST_RATE } from "@/lib/gst-tax";
 import type { JobWizardStepId } from "./types";
 
-export const GST_RATE = 0.18;
+/** @deprecated Prefer `effectiveGstRate` / `DEFAULT_GST_RATE` from `@/lib/gst-tax`. */
+export const GST_RATE = DEFAULT_GST_RATE;
 
 export const QUICK_INTERNAL_NOTES = [
   "Scratch on bumper",

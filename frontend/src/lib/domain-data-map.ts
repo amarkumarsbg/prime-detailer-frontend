@@ -62,6 +62,8 @@ const OPS_CORE: DomainResource[] = [
   "invoices",
   "membership",
   "notifications",
+  /** GST / tax registration — required before job card, booking, and invoice pricing. */
+  "appSettings",
 ];
 
 /** Longest-prefix wins. */
@@ -127,9 +129,9 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   },
   {
     prefix: "/quotations",
-    resources: [...OPS_CORE, "quotations", "vehicleCatalog", "appSettings"],
+    resources: [...OPS_CORE, "quotations", "vehicleCatalog"],
   },
-  { prefix: "/appointments", resources: [...OPS_CORE, "vehicleCatalog", "appSettings"] },
+  { prefix: "/appointments", resources: [...OPS_CORE, "vehicleCatalog"] },
   { prefix: "/bookings", resources: [...OPS_CORE, "vehicleCatalog"] },
   { prefix: "/booking", resources: [...OPS_CORE, "vehicleCatalog", "pickupDropRequests"] },
   {
@@ -154,6 +156,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "vehicleCatalog",
       "notifications",
       "cashBank",
+      "appSettings",
     ],
   },
   {
@@ -170,7 +173,10 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
     prefix: "/notifications",
     resources: ["notifications", "jobCards", "invoices", "expenses", "pickupDropRequests"],
   },
-  { prefix: "/parties", resources: ["customers", "invoices", "expenses", "cashBank"] },
+  {
+    prefix: "/parties",
+    resources: ["customers", "invoices", "expenses", "cashBank", "appSettings"],
+  },
   { prefix: "/dashboard", resources: DASHBOARD_CORE },
 ];
 

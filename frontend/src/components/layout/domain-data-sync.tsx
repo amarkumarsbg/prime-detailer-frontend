@@ -19,7 +19,8 @@ export function DomainDataSync() {
   useEffect(() => {
     if (!shellReady) return;
     const resources = resourcesForPath(pathname);
-    void ensureDomainResources(resources);
+    // Always hydrate GST / business settings before any pricing UI can run.
+    void ensureDomainResources(["appSettings", ...resources]);
   }, [pathname, shellReady]);
 
   return null;

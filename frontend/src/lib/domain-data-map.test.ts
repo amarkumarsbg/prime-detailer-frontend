@@ -21,4 +21,15 @@ describe("resourcesForPath", () => {
     expect(r).toContain("jobCards");
     expect(r).toContain("serviceCatalog");
   });
+
+  it("loads appSettings for job-cards, booking, and payment pricing routes", () => {
+    expect(resourcesForPath("/job-cards")).toContain("appSettings");
+    expect(resourcesForPath("/job-cards/new")).toContain("appSettings");
+    expect(resourcesForPath("/booking")).toContain("appSettings");
+    expect(resourcesForPath("/bookings")).toContain("appSettings");
+    expect(resourcesForPath("/billing")).toContain("appSettings");
+    expect(resourcesForPath("/quotations")).toContain("appSettings");
+    expect(resourcesForPath("/customers")).toContain("appSettings");
+    expect(resourcesForPath("/parties")).toContain("appSettings");
+  });
 });

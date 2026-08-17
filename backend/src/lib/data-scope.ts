@@ -143,6 +143,8 @@ export const BRANDING_KEYS = [
   "businessAddress",
   "businessWebsite",
   "brandPrimary",
+  /** GST on/off for pricing — not a secret; GSTIN stays SETTINGS-only. */
+  "gstRegistrationStatus",
 ] as const;
 
 export type BrandingPayload = Partial<Record<(typeof BRANDING_KEYS)[number], string>>;

@@ -9,7 +9,7 @@ import {
   useSettingsStore,
 } from "@/store/settings-store";
 
-/** Public branding fields from thin `/api/bootstrap` (no bank/GST secrets). */
+/** Public branding fields from thin `/api/bootstrap` (no bank/GSTIN secrets). */
 export type BootstrapBranding = {
   businessName?: string;
   businessLogo?: string;
@@ -20,6 +20,8 @@ export type BootstrapBranding = {
   businessAddress?: string;
   businessWebsite?: string;
   brandPrimary?: string;
+  /** GST on/off for pricing — hydrated for all authenticated users. */
+  gstRegistrationStatus?: "REGISTERED" | "NOT_REGISTERED";
 };
 
 /** Shell-only bootstrap payload (domain data loads via permission-scoped APIs). */

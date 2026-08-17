@@ -56,6 +56,11 @@ import { useSettingsStore } from "@/store/settings-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { cn, formatCurrency } from "@/lib/utils";
 import { taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
+import {
+  computeGstFromSubtotal,
+  DEFAULT_GST_RATE,
+  isGstRegistered,
+} from "@/lib/gst-tax";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -118,8 +123,6 @@ import {
   QuotationStatusFilters,
   quotationCanConvertToJob,
 } from "@/components/quotations/quotation-status-filters";
-
-const TAX_RATE = 0.18;
 
 const SEGMENT_OPTIONS: { value: VehicleSegment; label: string }[] = [
   { value: "HATCHBACK", label: "Hatchback" },
@@ -329,9 +332,7 @@ export default function QuotationsPage() {
       const custom = formCustomPrices[sid];
       subtotal += custom != null ? custom : catalogPrice;
     });
-    const activeTaxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE;
-    const taxAmount = Math.round(subtotal * activeTaxRate);
-    const grandTotal = subtotal + taxAmount;
+    const { taxAmount, grandTotal } = computeGstFromSubtotal(subtotal, gstRegistrationStatus);
     return { subtotal, taxAmount, grandTotal };
   }, [formServiceIds, formCustomPrices, effectiveSegment, catalog, gstRegistrationStatus]);
 
@@ -690,7 +691,10 @@ export default function QuotationsPage() {
         priceSource: priced.priceSource,
       };
     });
-    const taxRate = gstRegistrationStatus === "NOT_REGISTERED" ? 0 : TAX_RATE;
+    const { taxRate } = computeGstFromSubtotal(
+      formCalculations.subtotal,
+      gstRegistrationStatus
+    );
 
     if (editingQuotation) {
       if (!quotationIsEditable(editingQuotation)) {
@@ -1964,9 +1968,9 @@ export default function QuotationsPage() {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="font-medium tabular-nums">{formatCurrency(formCalculations.subtotal)}</span>
                   </div>
-                  {gstRegistrationStatus !== "NOT_REGISTERED" && (
+                  {isGstRegistered(gstRegistrationStatus) && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Tax ({Math.round(TAX_RATE * 100)}%)</span>
+                      <span className="text-muted-foreground">Tax ({Math.round(DEFAULT_GST_RATE * 100)}%)</span>
                       <span className="font-medium tabular-nums">{formatCurrency(formCalculations.taxAmount)}</span>
                     </div>
                   )}

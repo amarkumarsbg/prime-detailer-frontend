@@ -93,16 +93,18 @@ describe("data-scope nested singletons", () => {
 });
 
 describe("data-scope branding + directory", () => {
-  it("extractBranding drops bank and gst fields", () => {
+  it("extractBranding keeps gstRegistrationStatus but drops bank and gstin", () => {
     const branding = extractBranding({
       businessName: "Studio",
       brandPrimary: "#111111",
       bankAccountNumber: "secret",
       gstin: "secret",
       companyPan: "secret",
+      gstRegistrationStatus: "NOT_REGISTERED",
     });
     assert.equal(branding.businessName, "Studio");
     assert.equal(branding.brandPrimary, "#111111");
+    assert.equal(branding.gstRegistrationStatus, "NOT_REGISTERED");
     assert.equal("bankAccountNumber" in branding, false);
     assert.equal("gstin" in branding, false);
   });

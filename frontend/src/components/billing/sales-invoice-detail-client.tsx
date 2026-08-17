@@ -81,6 +81,7 @@ import {
   type InvoicePdfOpts,
 } from "@/lib/invoice-pdf";
 import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
+import { DEFAULT_GST_RATE, isGstRegistered } from "@/lib/gst-tax";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
 import type { InvoiceLineItem, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
@@ -226,7 +227,7 @@ function recalculateInvoiceFromLines(
     Math.round(lineItems.reduce((sum, li) => sum + li.total, 0) * 100) / 100;
   const reductions = Math.max(0, discountAmount) + Math.max(0, rewardDiscount) + Math.max(0, referralDiscount);
   const taxable = Math.max(0, subtotal - reductions);
-  const effectiveRate = gstRegistered ? taxRateAsFraction(taxRate) : 0;
+  const effectiveRate = gstRegistered ? taxRateAsFraction(taxRate || DEFAULT_GST_RATE) : 0;
   const taxAmount = Math.round(taxable * effectiveRate * 100) / 100;
   const grandTotal = Math.round((taxable + taxAmount) * 100) / 100;
   return { subtotal, taxAmount, grandTotal, walletAmountUsed };
@@ -542,12 +543,11 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const hasDiscountToApply =
     activeFlatDiscount > 0 || activeRewardDiscount > 0 || activeReferralDiscount > 0;
   const taxableSubtotal = Math.max(0, subtotal - discountTotal);
-  const taxRate =
-    gstRegistrationStatus === "NOT_REGISTERED"
-      ? 0
-      : invoice
-        ? taxRateAsFraction(invoice.taxRate)
-        : 0.18;
+  const taxRate = !isGstRegistered(gstRegistrationStatus)
+    ? 0
+    : invoice
+      ? taxRateAsFraction(invoice.taxRate)
+      : DEFAULT_GST_RATE;
   const taxAmount = Math.round(taxableSubtotal * taxRate * 100) / 100;
   const grandTotalComputed = Math.round((taxableSubtotal + taxAmount) * 100) / 100;
   const pointsToEarn = Math.floor(taxableSubtotal / 100);
@@ -866,7 +866,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       toast.error("Add at least one line item with a description");
       return;
     }
-    const gstRegistered = gstRegistrationStatus !== "NOT_REGISTERED";
+    const gstRegistered = isGstRegistered(gstRegistrationStatus);
     const totals = recalculateInvoiceFromLines(
       cleaned,
       invoice.taxRate,
@@ -952,7 +952,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const handleInvoiceWhatsApp = async () => {
     if (!invoice) return;
-    const invoiceLabel = gstRegistrationStatus === "NOT_REGISTERED" ? "invoice" : "tax invoice";
+    const invoiceLabel = isGstRegistered(gstRegistrationStatus) ? "tax invoice" : "invoice";
     const message = buildInvoiceWhatsAppMessage(invoice, {
       businessName,
       remainingBalance,
@@ -1015,8 +1015,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       customerEmail: toEmail,
     };
     const attachmentFilename = invoicePdfFilename(invoice.invoiceNumber, gstRegistrationStatus);
-    const titleCaseLabel = gstRegistrationStatus === "NOT_REGISTERED" ? "Invoice" : "Tax Invoice";
-    const sentenceCaseLabel = gstRegistrationStatus === "NOT_REGISTERED" ? "invoice" : "tax invoice";
+    const titleCaseLabel = isGstRegistered(gstRegistrationStatus) ? "Tax Invoice" : "Invoice";
+    const sentenceCaseLabel = isGstRegistered(gstRegistrationStatus) ? "tax invoice" : "invoice";
     const emailHtml = buildInvoiceEmailHtml({
       customerName: invoice.customerName,
       invoiceNumber: invoice.invoiceNumber,
@@ -1194,7 +1194,7 @@ ${businessNameVal}`;
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
           {previewHtml ? (
             <iframe
-              title={gstRegistrationStatus === "NOT_REGISTERED" ? "Invoice preview" : "Tax invoice preview"}
+              title={isGstRegistered(gstRegistrationStatus) ? "Tax invoice preview" : "Invoice preview"}
               className="h-[min(85vh,920px)] w-full border-0"
               srcDoc={previewHtml}
             />
@@ -1387,7 +1387,7 @@ ${businessNameVal}`;
                       <span className="font-mono">-{formatCurrency(activeReferralDiscount)}</span>
                     </div>
                   )}
-                  {gstRegistrationStatus !== "NOT_REGISTERED" ? (
+                  {isGstRegistered(gstRegistrationStatus) ? (
                     <>
                       <div className="flex justify-between font-semibold border-t border-border pt-1.5 text-[13px]">
                         <span>Taxable Subtotal</span>

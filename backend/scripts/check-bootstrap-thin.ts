@@ -55,6 +55,7 @@ assertThinShape({
   branding: extractBranding({
     businessName: "X",
     brandPrimary: "#000000",
+    gstRegistrationStatus: "NOT_REGISTERED",
     bankAccountNumber: "should-be-stripped",
     gstin: "should-be-stripped",
   }),
@@ -66,8 +67,9 @@ assert.deepEqual(
     businessName: "Studio",
     bankAccountNumber: "secret",
     gstin: "secret",
+    gstRegistrationStatus: "REGISTERED",
   }),
-  { businessName: "Studio" }
+  { businessName: "Studio", gstRegistrationStatus: "REGISTERED" }
 );
 
 console.log("OK: thin bootstrap contract checks passed.");
