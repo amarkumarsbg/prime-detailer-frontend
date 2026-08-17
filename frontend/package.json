@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev:api": "npm run dev --prefix backend",
-    "dev": "next dev --webpack",
-    "dev:turbo": "next dev --turbopack",
-    "dev:lan": "next dev --webpack -H 0.0.0.0",
+    "dev": "next dev --turbopack",
+    "dev:webpack": "next dev --webpack",
+    "dev:lan": "next dev --turbopack -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

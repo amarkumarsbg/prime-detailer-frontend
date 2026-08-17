@@ -326,9 +326,9 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   };
 
   return (
-    <div className="flex flex-col rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:overflow-hidden">
+    <div className="flex flex-col rounded-lg border border-border bg-background md:h-[calc(100dvh-8rem)] md:max-h-[calc(100dvh-8rem)] md:overflow-hidden lg:flex-row">
       <PartyListPanel
-        className="w-full max-w-[300px] shrink-0 hidden lg:flex"
+        className="hidden h-full w-[300px] shrink-0 lg:flex"
         parties={partiesWithBalance}
         query={sidebarQuery}
         onQueryChange={setSidebarQuery}
@@ -339,7 +339,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
       <Tabs
         value={tab}
         onValueChange={handleTabChange}
-        className="flex min-w-0 flex-1 flex-col md:overflow-hidden"
+        className="flex min-h-0 min-w-0 flex-1 flex-col md:overflow-hidden"
       >
         <div className="shrink-0 border-b border-border bg-background px-4 py-3 sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

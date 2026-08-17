@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { cn, formatInrTable } from "@/lib/utils";
 import { balanceFlow } from "@/lib/party/ledger-math";
@@ -15,6 +16,16 @@ type PartyListPanelProps = {
   className?: string;
 };
 
+function idsMatch(a: string | null, b: string): boolean {
+  if (!a) return false;
+  if (a === b) return true;
+  try {
+    return decodeURIComponent(a) === decodeURIComponent(b);
+  } catch {
+    return false;
+  }
+}
+
 export function PartyListPanel({
   parties,
   query,
@@ -23,6 +34,8 @@ export function PartyListPanel({
   onSelect,
   className,
 }: PartyListPanelProps) {
+  const selectedRef = useRef<HTMLButtonElement | null>(null);
+
   const filtered = parties
     .filter((p) => {
       const q = query.trim().toLowerCase();
@@ -35,10 +48,14 @@ export function PartyListPanel({
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, filtered.length]);
+
   return (
     <div
       className={cn(
-        "flex flex-col border-r border-border bg-muted/30 overflow-hidden min-h-0",
+        "flex min-h-0 flex-col overflow-hidden border-r border-border bg-muted/30",
         className
       )}
     >
@@ -59,11 +76,12 @@ export function PartyListPanel({
         ) : (
           filtered.map((p) => {
             const flow = balanceFlow(p.kind, p.balance);
-            const active = selectedId === p.id;
+            const active = idsMatch(selectedId, p.id);
             const kindLabel = p.kind === "customer" ? "Customer" : "Supplier";
             return (
               <button
                 key={p.id}
+                ref={active ? selectedRef : undefined}
                 type="button"
                 onClick={() => onSelect(p.id)}
                 className={cn(

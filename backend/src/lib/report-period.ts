@@ -112,3 +112,71 @@ export function dateInPreset(iso: string, preset: string): boolean {
   }
   return true;
 }
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/** Inclusive local date bounds for a period preset (or `custom:YYYY-MM-DD:YYYY-MM-DD`). */
+export function getPeriodBounds(
+  period: string,
+  now = new Date()
+): { start: Date; end: Date } {
+  const custom = parseCustomPeriod(period);
+  if (custom) {
+    return {
+      start: startOfDay(new Date(`${custom.start}T12:00:00`)),
+      end: endOfDay(new Date(`${custom.end}T12:00:00`)),
+    };
+  }
+
+  const today = startOfDay(now);
+  const endNow = endOfDay(now);
+
+  if (period === "today") return { start: today, end: endNow };
+  if (period === "yesterday") {
+    const y = new Date(today);
+    y.setDate(y.getDate() - 1);
+    return { start: startOfDay(y), end: endOfDay(y) };
+  }
+  if (period === "last365") {
+    const from = new Date(today);
+    from.setDate(from.getDate() - 364);
+    return { start: startOfDay(from), end: endNow };
+  }
+  if (period === "last30") {
+    const from = new Date(today);
+    from.setDate(from.getDate() - 29);
+    return { start: startOfDay(from), end: endNow };
+  }
+  if (period === "last7") {
+    const from = new Date(today);
+    from.setDate(from.getDate() - 6);
+    return { start: startOfDay(from), end: endNow };
+  }
+  if (period === "month") {
+    return {
+      start: startOfDay(new Date(now.getFullYear(), now.getMonth(), 1)),
+      end: endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  if (period === "fy") {
+    const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return {
+      start: startOfDay(new Date(y, 3, 1)),
+      end: endOfDay(new Date(y + 1, 2, 31)),
+    };
+  }
+  // Default: last 365 days
+  const from = new Date(today);
+  from.setDate(from.getDate() - 364);
+  return { start: startOfDay(from), end: endNow };
+}
+
+/** MyBillBook-style range: `05/04/2026 - 15/08/2026` */
+export function formatPeriodRangeLabel(period: string, now = new Date()): string {
+  const { start, end } = getPeriodBounds(period, now);
+  const fmt = (d: Date) =>
+    `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return `${fmt(start)} - ${fmt(end)}`;
+}

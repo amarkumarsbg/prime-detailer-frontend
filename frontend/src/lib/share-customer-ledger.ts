@@ -15,14 +15,14 @@ import {
   sendCustomerWhatsApp,
 } from "@/lib/whatsapp-send";
 
-/** MyBillBook-style per-customer ledger (Parties → Ledger tab). */
-export function customerLedgerHref(customerId: string): string {
-  return `/parties/c:${encodeURIComponent(customerId)}?tab=ledger`;
-}
-
 /** Party id for a studio customer (`c:{customerId}`). */
 export function customerPartyId(customerId: string): string {
   return `c:${customerId}`;
+}
+
+/** MyBillBook-style per-customer ledger (Parties → Ledger tab). */
+export function customerLedgerHref(customerId: string): string {
+  return `/parties/${encodeURIComponent(customerPartyId(customerId))}?tab=ledger`;
 }
 
 /** Share the customer ledger reminder via WhatsApp with a public ledger link. */

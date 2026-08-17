@@ -1,9 +1,12 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/app-error.js";
-import { getPublicBranding } from "../../services/public-branding.service.js";
+import { SINGLETON_ENTITY_ID } from "../../constants/json-collections.js";
+import { formatPeriodRangeLabel } from "../../lib/report-period.js";
 import {
   buildPartyStatement,
   buildPartySummary,
+  invoiceOutstanding,
+  invoicePaidTotal,
 } from "../../lib/party-ledger.js";
 import type { Party } from "../../types/party.js";
 import { loadFinanceDocuments } from "./party.service.js";
@@ -12,9 +15,34 @@ function customerPartyId(customerId: string) {
   return `c:${customerId}`;
 }
 
+function str(raw: Record<string, unknown>, key: string): string {
+  const v = raw[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+async function loadPublicBusinessProfile() {
+  const row = await prisma.appJsonRow.findUnique({
+    where: {
+      collection_entityId: { collection: "appSettings", entityId: SINGLETON_ENTITY_ID },
+    },
+  });
+  const raw =
+    row?.payload && typeof row.payload === "object"
+      ? (row.payload as Record<string, unknown>)
+      : {};
+
+  return {
+    businessName: str(raw, "businessName") || "Prime Detailers",
+    businessLogo: str(raw, "businessLogo") || str(raw, "logoUrl"),
+    businessPhone: str(raw, "businessPhone") || str(raw, "businessWhatsApp"),
+    businessAddress: str(raw, "businessAddress"),
+  };
+}
+
 /**
  * Public-safe customer ledger statement (no auth).
  * Identified by studio customer id (`Customer.id`).
+ * Shape mirrors MyBillBook Party Ledger share page / PDF.
  */
 export async function getPublicCustomerLedger(customerId: string, period = "last365") {
   const customer = await prisma.customer.findUnique({
@@ -58,33 +86,49 @@ export async function getPublicCustomerLedger(customerId: string, period = "last
   const { invoices, expenses } = await loadFinanceDocuments(customer.organizationId);
   const statement = buildPartyStatement(party, invoices, expenses, period);
   const summary = buildPartySummary(party, invoices, expenses, period);
-  const branding = await getPublicBranding();
+  const business = await loadPublicBusinessProfile();
+
+  const customerInvoices = invoices.filter((i) => i.customerId === customer.id);
+  const outstanding = Math.round(
+    customerInvoices.reduce((s, inv) => s + invoiceOutstanding(inv), 0) * 100
+  ) / 100;
 
   return {
     customer: {
       id: customer.id,
       name: customer.name,
+      phone: customer.phone || party.mobile || "",
     },
     period,
+    dateRangeLabel: formatPeriodRangeLabel(period),
     summary: {
       totalReceivableOrPayable: summary.totalReceivableOrPayable,
       overdueAmount: summary.overdueAmount,
       totalSalesOrPurchases: summary.totalSalesOrPurchases,
       totalReceivedOrPaid: summary.totalReceivedOrPaid,
+      totalOutstanding: outstanding > 0.01 ? outstanding : summary.totalReceivableOrPayable,
     },
-    statement: statement.map((line) => ({
-      id: line.id,
-      date: line.date,
-      voucher: line.voucher,
-      credit: line.credit ?? null,
-      debit: line.debit ?? null,
-      balance: line.balance,
-      isSummary: Boolean(line.isSummary),
-      dueLabel: line.dueLabel ?? null,
-    })),
-    business: {
-      businessName: branding.businessName,
-      businessLogo: branding.businessLogo,
-    },
+    statement: statement.map((line) => {
+      const invId = line.id.startsWith("inv-") ? line.id.slice(4) : null;
+      const inv = invId ? customerInvoices.find((i) => i.id === invId) : undefined;
+      let dueLabel = line.dueLabel ?? null;
+      if (inv && invoiceOutstanding(inv) > 0.01) {
+        const paid = invoicePaidTotal(inv);
+        dueLabel = paid > 0.01 ? "Partially Paid" : dueLabel;
+      }
+      return {
+        id: line.id,
+        date: line.date,
+        voucher: line.voucher === "Sales Invoices" ? "Sales Invoice" : line.voucher,
+        serialNo: line.serialNo,
+        paymentMode: line.paymentMode,
+        credit: line.credit ?? null,
+        debit: line.debit ?? null,
+        balance: line.balance,
+        isSummary: Boolean(line.isSummary),
+        dueLabel,
+      };
+    }),
+    business,
   };
 }

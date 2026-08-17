@@ -31,9 +31,9 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
 import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import {
-  buildInvoiceReadyWhatsAppMessage,
   buildPaymentPendingReminderWhatsAppMessage,
   isWhatsAppNonClickableShareUrl,
+  publicCustomerLedgerShareUrl,
   publicInvoiceShareUrl,
 } from "@/lib/whatsapp-customer-messages";
 import {
@@ -228,23 +228,24 @@ export default function BillingPage() {
     }
 
     const pendingAmount = invoiceOutstanding(inv);
-    const viewUrl = publicInvoiceShareUrl(inv.id);
-    const composerMessage = buildPaymentPendingReminderWhatsAppMessage({
+    const invoiceUrl = publicInvoiceShareUrl(inv.id);
+    const ledgerUrl = publicCustomerLedgerShareUrl(inv.customerId);
+    const message = buildPaymentPendingReminderWhatsAppMessage({
+      mode: "singleInvoice",
       pendingAmount,
-      statementUrl: viewUrl,
+      statementUrl: ledgerUrl,
+      invoiceUrl,
+      invoiceNumber: inv.invoiceNumber,
       businessName,
-    });
-    const deliveryMessage = buildInvoiceReadyWhatsAppMessage(inv, {
-      businessName,
-      remainingBalance: pendingAmount,
-      viewUrl,
     });
 
     const branchId = jobCards.find((j) => j.id === inv.jobCardId)?.branchId;
-    const warnLocalLink = isWhatsAppNonClickableShareUrl(viewUrl);
+    const warnLocalLink =
+      isWhatsAppNonClickableShareUrl(invoiceUrl) ||
+      isWhatsAppNonClickableShareUrl(ledgerUrl);
 
     try {
-      await sendCustomerWhatsApp(phone, deliveryMessage);
+      await sendCustomerWhatsApp(phone, message);
       toast.success("Payment reminder sent via WhatsApp", { description: phone });
       if (warnLocalLink) {
         toast.warning("Link may not be tappable in WhatsApp", {
@@ -254,7 +255,7 @@ export default function BillingPage() {
       }
       useNotificationStore.getState().addNotification({
         type: "whatsapp_sent",
-        title: "Ledger reminder shared via WhatsApp",
+        title: "Payment reminder shared via WhatsApp",
         message: `${inv.invoiceNumber} → ${phone}`,
         href: `/billing/invoices/${inv.id}`,
         branchId,
@@ -264,11 +265,11 @@ export default function BillingPage() {
         entityType: "INVOICE",
         entityId: inv.id,
         entityLabel: inv.invoiceNumber,
-        details: `Payment reminder for ${inv.customerName} via WhatsApp`,
+        details: `Payment reminder for ${inv.customerName} via WhatsApp (invoice + ledger)`,
       });
     } catch (err) {
       if (isWhatsAppNotConfiguredError(err)) {
-        openWhatsAppComposer(phone, composerMessage);
+        openWhatsAppComposer(phone, message);
         toast.info("WhatsApp opened", {
           description: warnLocalLink
             ? "Review and send. Note: localhost links are not clickable in WhatsApp."
@@ -277,12 +278,12 @@ export default function BillingPage() {
         if (warnLocalLink) {
           toast.warning("Link may not be tappable in WhatsApp", {
             description:
-              "Set NEXT_PUBLIC_APP_URL to a public https URL (e.g. your deployed app) so the invoice link works.",
+              "Set NEXT_PUBLIC_APP_URL to a public https URL (e.g. your deployed app) so the invoice and ledger links work.",
           });
         }
         useNotificationStore.getState().addNotification({
           type: "whatsapp_sent",
-          title: "Ledger — WhatsApp composer",
+          title: "Payment reminder — WhatsApp composer",
           message: `${inv.invoiceNumber} → ${phone}`,
           href: `/billing/invoices/${inv.id}`,
           branchId,
@@ -292,11 +293,11 @@ export default function BillingPage() {
           entityType: "INVOICE",
           entityId: inv.id,
           entityLabel: inv.invoiceNumber,
-          details: `Payment reminder for ${inv.customerName} via WhatsApp`,
+          details: `Payment reminder for ${inv.customerName} via WhatsApp (invoice + ledger)`,
         });
         return;
       }
-      toast.error("Could not share ledger via WhatsApp");
+      toast.error("Could not share payment reminder via WhatsApp");
     }
   };
 

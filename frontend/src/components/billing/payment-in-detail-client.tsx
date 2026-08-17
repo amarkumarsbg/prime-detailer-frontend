@@ -24,6 +24,7 @@ import {
 import { paymentReceivedInLabel } from "@/components/billing/payment-received-in-field";
 import { invoiceOutstanding, invoicePaidTotal } from "@/lib/party/ledger-math";
 import { appendReturnTo } from "@/lib/navigation/return-to";
+import { customerPartyId } from "@/lib/share-customer-ledger";
 import { cn, formatInrTable } from "@/lib/utils";
 import type { PaymentMethod } from "@/types";
 import { toast } from "sonner";
@@ -82,7 +83,7 @@ export function PaymentInDetailClient({ paymentId }: PaymentInDetailClientProps)
 
   const { payment, invoice } = match;
   const displayNo = paymentDisplayNumber(payment.id);
-  const partyHref = `/parties/c:${encodeURIComponent(invoice.customerId)}`;
+  const partyHref = `/parties/${encodeURIComponent(customerPartyId(invoice.customerId))}`;
   const invoiceHref = salesInvoiceDetailPath(invoice.id);
   const returnQuery = searchParams.toString();
   const currentReturnPath = returnQuery ? `${pathname}?${returnQuery}` : pathname;

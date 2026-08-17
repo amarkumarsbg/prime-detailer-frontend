@@ -510,6 +510,7 @@ export function AccountingDashboard() {
               subtitle="All revenue streams"
               icon={TrendingUp}
               iconWrap="bg-emerald-500 text-white"
+              headerBg="bg-emerald-50/90 dark:bg-emerald-950/30"
               delta={incomeDelta}
               defaultOpen
               breakdownTitle="Calculation Breakdown"
@@ -547,6 +548,7 @@ export function AccountingDashboard() {
               subtitle="Operational costs"
               icon={TrendingDown}
               iconWrap="bg-rose-500 text-white"
+              headerBg="bg-rose-50/90 dark:bg-rose-950/30"
               delta={expenseDelta}
               deltaInvert
               breakdownTitle="Calculation Breakdown"
@@ -567,6 +569,7 @@ export function AccountingDashboard() {
               subtitle="Income - Expenses"
               icon={Activity}
               iconWrap="bg-blue-500 text-white"
+              headerBg="bg-blue-50/90 dark:bg-blue-950/30"
               breakdownTitle="Calculation Breakdown"
               breakdown={[
                 { label: "Total Income", amount: totalIncome, dot: "bg-emerald-500" },
@@ -584,6 +587,7 @@ export function AccountingDashboard() {
               subtitle="Unpaid invoices"
               icon={CreditCard}
               iconWrap="bg-orange-500 text-white"
+              headerBg="bg-orange-50/90 dark:bg-orange-950/30"
               onCardClick={() => setTab("invoices")}
               breakdownTitle="Calculation Breakdown"
               breakdown={[
@@ -602,6 +606,7 @@ export function AccountingDashboard() {
               subtitle="Pending payments"
               icon={Wallet}
               iconWrap="bg-violet-500 text-white"
+              headerBg="bg-violet-50/90 dark:bg-violet-950/30"
               onCardClick={() => router.push("/expenses")}
               breakdownTitle="Calculation Breakdown"
               breakdown={[
@@ -621,6 +626,7 @@ export function AccountingDashboard() {
               subtitle="Staff payments due"
               icon={Users}
               iconWrap="bg-pink-500 text-white"
+              headerBg="bg-pink-50/90 dark:bg-pink-950/30"
               onCardClick={() => router.push("/payroll")}
               breakdownTitle="Calculation Breakdown"
               breakdown={[
@@ -930,6 +936,7 @@ function MetricCard({
   subtitle,
   icon: Icon,
   iconWrap,
+  headerBg,
   delta,
   deltaInvert,
   breakdown,
@@ -944,6 +951,7 @@ function MetricCard({
   subtitle: string;
   icon: LucideIcon;
   iconWrap: string;
+  headerBg: string;
   delta?: number | null;
   deltaInvert?: boolean;
   breakdown?: { label: string; amount: number; dot: string }[];
@@ -955,8 +963,8 @@ function MetricCard({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <Card className="border-border/70 bg-card shadow-sm">
-      <CardContent className="p-4 sm:p-5">
+    <Card className="overflow-hidden border-border/70 bg-card p-0 shadow-sm gap-0">
+      <div className={cn("p-4 sm:p-5", headerBg)}>
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
@@ -990,62 +998,62 @@ function MetricCard({
             <Icon className="h-5 w-5" />
           </div>
         </div>
+      </div>
 
-        {breakdown && breakdown.length > 0 ? (
-          <div className="mt-3 border-t border-border/60 pt-3">
-            {open ? (
-              <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {breakdownTitle}
-                </p>
-                <ul className="space-y-1.5">
-                  {breakdown.map((row) => (
-                    <li
-                      key={row.label}
-                      className="flex items-center justify-between gap-2 text-sm"
+      {breakdown && breakdown.length > 0 ? (
+        <div className="border-t border-border/60 bg-card px-4 py-3 sm:px-5">
+          {open ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {breakdownTitle}
+              </p>
+              <ul className="space-y-1.5">
+                {breakdown.map((row) => (
+                  <li
+                    key={row.label}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", row.dot)} />
+                      <span className="truncate">{row.label}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 font-medium tabular-nums",
+                        row.amount < 0 && "text-rose-600"
+                      )}
                     >
-                      <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", row.dot)} />
-                        <span className="truncate">{row.label}</span>
-                      </span>
-                      <span
-                        className={cn(
-                          "shrink-0 font-medium tabular-nums",
-                          row.amount < 0 && "text-rose-600"
-                        )}
-                      >
-                        {row.amount < 0
-                          ? `-${formatCurrency(Math.abs(row.amount))}`
-                          : formatCurrency(row.amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {breakdownNote ? (
-                  <p className="rounded-md bg-muted/60 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                    {breakdownNote}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  Hide Breakdown
-                </button>
-              </div>
-            ) : (
+                      {row.amount < 0
+                        ? `-${formatCurrency(Math.abs(row.amount))}`
+                        : formatCurrency(row.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {breakdownNote ? (
+                <p className="rounded-md bg-muted/60 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {breakdownNote}
+                </p>
+              ) : null}
               <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={() => setOpen(false)}
                 className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
               >
-                View Breakdown
+                Hide Breakdown
               </button>
-            )}
-          </div>
-        ) : null}
-      </CardContent>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              View Breakdown
+            </button>
+          )}
+        </div>
+      ) : null}
     </Card>
   );
 }
