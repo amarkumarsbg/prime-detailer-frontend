@@ -1,4 +1,18 @@
+import type { PaymentMethod } from "./billing";
+
 export const BUILTIN_PART_CATEGORIES = [
+  "Engine",
+  "Brakes",
+  "Electrical",
+  "Filters",
+  "Suspension",
+  "AC",
+  "Body",
+  "Lubricants",
+  "Tires",
+  "Detailing",
+  "Other",
+] as const;
   "Engine",
   "Brakes",
   "Electrical",
@@ -110,6 +124,16 @@ export interface StockMovement {
 
 export type InventoryPaymentStatus = "UNPAID" | "PARTIAL" | "PAID";
 
+export interface InventoryPurchasePayment {
+  id: string;
+  amount: number;
+  method: PaymentMethod;
+  paidAt: string;
+  receivedInAccountId?: string;
+  receivedInAccountName?: string;
+  referenceNumber?: string;
+}
+
 export interface InventoryPurchaseLine {
   partId: string;
   partName: string;
@@ -149,6 +173,7 @@ export interface ProductPurchase {
   grandTotal?: number;
   amountPaid?: number;
   paymentStatus?: InventoryPaymentStatus;
+  payments?: InventoryPurchasePayment[];
 }
 
 export interface BranchStock {

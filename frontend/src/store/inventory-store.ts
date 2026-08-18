@@ -7,6 +7,7 @@ import type {
   JobCard,
   Part,
   PartCategoryRecord,
+  PaymentMethod,
   ProductPurchase,
   StockMovement,
   StockMovementKind,
@@ -57,7 +58,16 @@ interface InventoryStore {
     recordedBy: string;
     amountPaid?: number;
   }) => { ok: true; purchase: ProductPurchase } | { ok: false; error: string };
-  recordPurchasePayment: (purchaseId: string, amount: number) => { ok: boolean; error?: string };
+  recordPurchasePayment: (
+    purchaseId: string,
+    input: {
+      amount: number;
+      method?: PaymentMethod;
+      receivedInAccountId?: string;
+      receivedInAccountName?: string;
+      referenceNumber?: string;
+    }
+  ) => { ok: boolean; error?: string };
   renamePurchaseVendor: (fromName: string, toName: string) => void;
   recordStockAdjustment: (input: {
     partId: string;
@@ -504,16 +514,33 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     return { ok: true, purchase };
   },
 
-  recordPurchasePayment: (purchaseId, amount) => {
+  recordPurchasePayment: (purchaseId, input) => {
+    const amount = input.amount;
     if (!(amount > 0)) return { ok: false, error: "Enter a payment amount greater than zero." };
     const purchase = get().productPurchases.find((p) => p.id === purchaseId);
     if (!purchase) return { ok: false, error: "Purchase not found." };
     const nextPaid = (purchase.amountPaid ?? 0) + amount;
     const dueAfter = Math.max(0, (purchase.grandTotal ?? 0) - nextPaid);
     const paymentStatus = dueAfter <= 0.01 ? "PAID" : nextPaid > 0.01 ? "PARTIAL" : "UNPAID";
+    const payment = {
+      id: `ppay-${Date.now()}`,
+      amount,
+      method: input.method ?? "CASH",
+      paidAt: new Date().toISOString(),
+      receivedInAccountId: input.receivedInAccountId,
+      receivedInAccountName: input.receivedInAccountName,
+      referenceNumber: input.referenceNumber,
+    };
     set((state) => ({
       productPurchases: state.productPurchases.map((p) =>
-        p.id === purchaseId ? { ...p, amountPaid: nextPaid, paymentStatus } : p
+        p.id === purchaseId
+          ? {
+              ...p,
+              amountPaid: nextPaid,
+              paymentStatus,
+              payments: [...(p.payments ?? []), payment],
+            }
+          : p
       ),
     }));
     persistInventorySnapshot(get);

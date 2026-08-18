@@ -36,12 +36,13 @@ import {
   isActiveReservation,
 } from "@/lib/appointment-reminders";
 import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
+import { invoicePaidTotal } from "@/lib/party/ledger-math";
 import { useReservationReminders } from "@/hooks/use-reservation-reminders";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { appointmentIsEditable } from "@/lib/appointment-edit-policy";
 import { EditReservationDialog } from "@/components/reservations/edit-reservation-dialog";
-import type { Appointment, JobCard, JobCardStatus } from "@/types";
+import type { Appointment, Invoice, JobCard, JobCardStatus } from "@/types";
 import {
   Plus,
   ClipboardList,
@@ -214,10 +215,11 @@ export default function BookingsPage() {
     );
   }, [filteredBookings, searchQuery, branchNameById]);
 
-  const invoiceByJobId = useMemo(
-    () => Object.fromEntries(invoices.map((inv) => [inv.jobCardId, inv])),
-    [invoices]
-  );
+  const invoiceByJobId = useMemo(() => {
+    const map: Record<string, Invoice> = {};
+    for (const inv of invoices) map[inv.jobCardId] = inv;
+    return map;
+  }, [invoices]);
 
   const confirmedAppointmentsNeedingJob = useMemo(() => {
     return bookingReservations
@@ -271,7 +273,7 @@ export default function BookingsPage() {
       if (inv) {
         invoiced++;
         totalRevenue += inv.grandTotal;
-        const paid = inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
+        const paid = invoicePaidTotal(inv);
         amountReceived += paid;
         pendingAmount += Math.max(0, inv.grandTotal - paid);
       } else {

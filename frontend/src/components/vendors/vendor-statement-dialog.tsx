@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { BookMarked, Receipt, ShoppingCart } from "lucide-react";
 import {
   Dialog,
@@ -14,9 +13,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
 import {
   derivePaymentStatus,
   purchaseAmountPaid,
@@ -29,7 +28,6 @@ import {
   expensePayableAmount,
   type VendorSummary,
 } from "@/lib/vendors/vendor-metrics";
-import { useInventoryStore } from "@/store/inventory-store";
 
 export function VendorStatementDialog({
   vendor,
@@ -40,9 +38,7 @@ export function VendorStatementDialog({
   onClose: () => void;
   onEdit: () => void;
 }) {
-  const recordPurchasePayment = useInventoryStore((s) => s.recordPurchasePayment);
-  const [payId, setPayId] = useState<string | null>(null);
-  const [payAmount, setPayAmount] = useState("");
+  const [payTargetId, setPayTargetId] = useState<string | null>(null);
 
   const ledger = useMemo(() => {
     if (!vendor) return [];
@@ -71,19 +67,10 @@ export function VendorStatementDialog({
 
   if (!vendor) return null;
 
-  const submitPay = (purchaseId: string) => {
-    const n = Number(payAmount);
-    const result = recordPurchasePayment(purchaseId, n);
-    if (!result.ok) {
-      toast.error(result.error ?? "Could not record payment.");
-      return;
-    }
-    toast.success("Payment recorded.");
-    setPayId(null);
-    setPayAmount("");
-  };
+  const payTarget = vendor.purchases.find((p) => p.id === payTargetId) ?? null;
 
   return (
+    <>
     <Dialog open={!!vendor} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,800px)] sm:max-w-3xl")}
@@ -126,9 +113,26 @@ export function VendorStatementDialog({
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 px-6 py-4">
             {vendor.outstanding > 0.01 ? (
-              <p className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-300">
-                Outstanding balance of {formatCurrency(vendor.outstanding)} is payable to this vendor.
-              </p>
+              <div className="flex flex-col gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:border-orange-900/50 dark:bg-orange-950/30">
+                <p className="text-sm text-orange-800 dark:text-orange-300">
+                  Outstanding balance of {formatCurrency(vendor.outstanding)} is payable to this vendor.
+                </p>
+                {vendor.purchases.some((p) => purchaseDue(p) > 0.01) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      const next = [...vendor.purchases]
+                        .filter((p) => purchaseDue(p) > 0.01)
+                        .sort((a, b) => new Date(a.purchasedAt).getTime() - new Date(b.purchasedAt).getTime())[0];
+                      if (next) setPayTargetId(next.id);
+                    }}
+                  >
+                    Record payment
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
 
             <Tabs defaultValue="purchases">
@@ -219,41 +223,15 @@ export function VendorStatementDialog({
                                 </td>
                                 <td className="px-3 py-2 text-right">
                                   {due > 0.01 ? (
-                                    payId === p.id ? (
-                                      <form
-                                        className="flex justify-end gap-1"
-                                        onSubmit={(e) => {
-                                          e.preventDefault();
-                                          submitPay(p.id);
-                                        }}
-                                      >
-                                        <Input
-                                          className="h-8 w-24"
-                                          type="number"
-                                          min="0.01"
-                                          step="0.01"
-                                          value={payAmount}
-                                          onChange={(e) => setPayAmount(e.target.value)}
-                                          required
-                                        />
-                                        <Button type="submit" size="sm" className="h-8">
-                                          Pay
-                                        </Button>
-                                      </form>
-                                    ) : (
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8"
-                                        onClick={() => {
-                                          setPayId(p.id);
-                                          setPayAmount(String(due));
-                                        }}
-                                      >
-                                        Pay
-                                      </Button>
-                                    )
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8"
+                                      onClick={() => setPayTargetId(p.id)}
+                                    >
+                                      Pay
+                                    </Button>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
                                   )}
@@ -355,6 +333,14 @@ export function VendorStatementDialog({
         </div>
       </DialogContent>
     </Dialog>
+    <VendorPurchasePaymentDialog
+      purchase={payTarget}
+      open={!!payTarget}
+      onOpenChange={(open) => {
+        if (!open) setPayTargetId(null);
+      }}
+    />
+    </>
   );
 }
 

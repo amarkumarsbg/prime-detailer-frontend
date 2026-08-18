@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -36,6 +35,7 @@ import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-s
 import { useAuthStore } from "@/store/auth-store";
 import { InventoryQuickAddPartDialog } from "@/components/inventory/inventory-quick-add-part-dialog";
 import { VendorFormDialog } from "@/components/expenses/vendor-form-dialog";
+import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
 import type { InventoryPurchaseLine, ProductPurchase } from "@/types";
 import { Package, CircleDollarSign, Wallet, AlertCircle } from "lucide-react";
 
@@ -56,7 +56,6 @@ export function InventoryPurchasesTab() {
   const purchases = useInventoryStore((s) => s.productPurchases);
   const parts = useInventoryStore((s) => s.parts);
   const addInventoryPurchase = useInventoryStore((s) => s.addInventoryPurchase);
-  const recordPurchasePayment = useInventoryStore((s) => s.recordPurchasePayment);
   const branches = useBranchStore((s) => s.branches);
   const vendors = useExpenseStore((s) => s.vendorDirectory);
   const addVendorDirectoryEntry = useExpenseStore((s) => s.addVendorDirectoryEntry);
@@ -79,7 +78,6 @@ export function InventoryPurchasesTab() {
   const [amountPaid, setAmountPaid] = useState("0");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [payTarget, setPayTarget] = useState<ProductPurchase | null>(null);
-  const [payAmount, setPayAmount] = useState("");
 
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
   const hasMultipleBranches = activeBranches.length > 1;
@@ -300,7 +298,6 @@ export function InventoryPurchasesTab() {
                   variant="outline"
                   onClick={() => {
                     setPayTarget(p);
-                    setPayAmount("");
                   }}
                 >
                   Record payment
@@ -616,37 +613,13 @@ export function InventoryPurchasesTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!payTarget} onOpenChange={(v) => !v && setPayTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Record payment</DialogTitle>
-            <DialogDescription>
-              Due {payTarget ? formatCurrency(purchaseDue(payTarget)) : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!payTarget) return;
-              const n = Number(payAmount);
-              const result = recordPurchasePayment(payTarget.id, n);
-              if (!result.ok) {
-                toast.error(result.error);
-                return;
-              }
-              toast.success("Payment recorded.");
-              setPayTarget(null);
-            }}
-          >
-            <Input type="number" min="0.01" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} required />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPayTarget(null)}>Cancel</Button>
-              <Button type="submit">Save</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <VendorPurchasePaymentDialog
+        purchase={payTarget}
+        open={!!payTarget}
+        onOpenChange={(open) => {
+          if (!open) setPayTarget(null);
+        }}
+      />
 
       <VendorFormDialog
         open={vendorDialogOpen}
