@@ -16,6 +16,8 @@ import {
   Boxes,
   Sparkles,
 } from "lucide-react";
+import { isGstRegistered } from "@/lib/gst-tax";
+import { useSettingsStore } from "@/store/settings-store";
 
 function gstDisplay(s: ServiceCatalogItem): string {
   if (s.gstApplicable === false) return "No GST";
@@ -32,6 +34,7 @@ export function ServicePackageCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const gstOn = isGstRegistered(useSettingsStore((s) => s.gstRegistrationStatus));
   const scope = service.scope ?? "GLOBAL";
   const sp = service.segmentPricing;
 
@@ -81,9 +84,11 @@ export function ServicePackageCard({
             <Globe className="h-3 w-3" />
             {scope === "GLOBAL" ? "Global" : "Branch"}
           </Badge>
-          <Badge variant="secondary" className="text-[10px] font-normal">
-            {gstDisplay(service)}
-          </Badge>
+          {gstOn ? (
+            <Badge variant="secondary" className="text-[10px] font-normal">
+              {gstDisplay(service)}
+            </Badge>
+          ) : null}
           <Badge variant="secondary" className="gap-1 text-[10px] font-normal">
             <Clock className="h-3 w-3" />
             {formatServiceDurationLabel(service)}
@@ -99,9 +104,11 @@ export function ServicePackageCard({
         <div className="mb-3 rounded-lg bg-muted/40 p-2.5 sm:mb-4 sm:p-3">
           <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Pricing</span>
-            <span className="font-normal normal-case">
-              + {service.gstPercent ?? 18}% GST
-            </span>
+            {gstOn && service.gstApplicable !== false ? (
+              <span className="font-normal normal-case">
+                + {service.gstPercent ?? 18}% GST
+              </span>
+            ) : null}
           </div>
           <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
             {(

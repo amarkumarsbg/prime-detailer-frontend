@@ -90,13 +90,6 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
       },
       { label: "Billing", href: "/billing", icon: Receipt, permissionKey: "BILLING" },
       {
-        label: "Inventory Hub",
-        href: "/inventory",
-        icon: Package,
-        roles: ["ADMIN", "MANAGER"],
-        permissionKey: "INVENTORY",
-      },
-      {
         label: "Reports",
         href: "/reports",
         icon: FileBarChart,
@@ -138,7 +131,13 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
     label: "Workshop",
     items: [
       { label: "Services", href: "/services", icon: Wrench, roles: ["ADMIN", "MANAGER"], permissionKey: "SERVICES" },
-      { label: "Inventory", href: "/inventory", icon: Package, roles: ["ADMIN", "MANAGER"], permissionKey: "INVENTORY" },
+      {
+        label: "Inventory Hub",
+        href: "/inventory",
+        icon: Package,
+        roles: ["ADMIN", "MANAGER"],
+        permissionKey: "INVENTORY",
+      },
     ],
   },
   {

@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { isGstRegistered } from "@/lib/gst-tax";
 import type { SegmentPricing, ServiceCatalogItem } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -52,7 +54,7 @@ export type AddPackageForm = {
   isHighEnd: boolean;
 };
 
-function emptyAddPackage(): AddPackageForm {
+function emptyAddPackage(gstOn = true): AddPackageForm {
   return {
     name: "",
     description: "",
@@ -61,7 +63,7 @@ function emptyAddPackage(): AddPackageForm {
     sedan: "",
     suv: "",
     bike: "",
-    gstApplicable: true,
+    gstApplicable: gstOn,
     gstPercent: "18",
     durationMin: "",
     maxDuration: "",
@@ -123,12 +125,14 @@ export function AddServicePackageDialog({
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
   const currentBranch = useAuthStore((s) => s.currentBranch);
+  const gstRegistrationStatus = useSettingsStore((s) => s.gstRegistrationStatus);
+  const gstOn = isGstRegistered(gstRegistrationStatus);
 
   const [internalExtra, setInternalExtra] = useState<string[]>([]);
   const extraCategories = extraCategoriesProp ?? internalExtra;
   const setExtraCategories = setExtraCategoriesProp ?? setInternalExtra;
 
-  const [addForm, setAddForm] = useState<AddPackageForm>(emptyAddPackage);
+  const [addForm, setAddForm] = useState<AddPackageForm>(() => emptyAddPackage(true));
   const [saving, setSaving] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [catName, setCatName] = useState("");
@@ -139,9 +143,9 @@ export function AddServicePackageDialog({
 
   useEffect(() => {
     if (open) {
-      queueMicrotask(() => setAddForm(emptyAddPackage()));
+      queueMicrotask(() => setAddForm(emptyAddPackage(gstOn)));
     }
-  }, [open]);
+  }, [open, gstOn]);
 
   useEffect(() => {
     if (categoryDialogOpen) {
@@ -217,7 +221,10 @@ export function AddServicePackageDialog({
       BIKE: bike,
     };
     const incentive = Math.min(100, Math.max(0, parseFloat(addForm.incentivePercent) || 0));
-    const gstPct = addForm.gstApplicable ? Math.min(100, Math.max(0, parseFloat(addForm.gstPercent) || 0)) : undefined;
+    const gstApplicable = gstOn && addForm.gstApplicable;
+    const gstPct = gstApplicable
+      ? Math.min(100, Math.max(0, parseFloat(addForm.gstPercent) || 0))
+      : undefined;
     const durationMinutes = addForm.durationMin.trim()
       ? Math.max(0, parseInt(addForm.durationMin, 10))
       : undefined;
@@ -235,7 +242,7 @@ export function AddServicePackageDialog({
       isActive: addForm.active,
       isHighEnd: addForm.isHighEnd,
       incentivePercent: incentive,
-      gstApplicable: addForm.gstApplicable,
+      gstApplicable,
       gstPercent: gstPct,
       durationMinutes,
       maxDurationMinutes,
@@ -373,47 +380,49 @@ export function AddServicePackageDialog({
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div
-                  className={cn(
-                    "rounded-xl border-2 border-amber-200/90 bg-amber-50/50 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
-                  )}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="asp-pkg-gst"
-                        checked={addForm.gstApplicable}
-                        onCheckedChange={(c) =>
-                          setAddForm((f) => ({ ...f, gstApplicable: c === true }))
-                        }
-                      />
-                      <Label htmlFor="asp-pkg-gst" className="cursor-pointer text-sm font-medium">
-                        GST applicable
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="asp-pkg-gst-rate" className="whitespace-nowrap text-sm text-muted-foreground">
-                        Rate
-                      </Label>
-                      <Input
-                        id="asp-pkg-gst-rate"
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        className="h-9 w-16"
-                        disabled={!addForm.gstApplicable}
-                        value={addForm.gstPercent}
-                        onChange={(e) =>
-                          setAddForm((f) => ({ ...f, gstPercent: e.target.value }))
-                        }
-                      />
-                      <span className="text-sm text-muted-foreground">%</span>
+                {gstOn ? (
+                  <div
+                    className={cn(
+                      "rounded-xl border-2 border-amber-200/90 bg-amber-50/50 p-3 dark:border-amber-900/50 dark:bg-amber-950/25"
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="asp-pkg-gst"
+                          checked={addForm.gstApplicable}
+                          onCheckedChange={(c) =>
+                            setAddForm((f) => ({ ...f, gstApplicable: c === true }))
+                          }
+                        />
+                        <Label htmlFor="asp-pkg-gst" className="cursor-pointer text-sm font-medium">
+                          GST applicable
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="asp-pkg-gst-rate" className="whitespace-nowrap text-sm text-muted-foreground">
+                          Rate
+                        </Label>
+                        <Input
+                          id="asp-pkg-gst-rate"
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          className="h-9 w-16"
+                          disabled={!addForm.gstApplicable}
+                          value={addForm.gstPercent}
+                          onChange={(e) =>
+                            setAddForm((f) => ({ ...f, gstPercent: e.target.value }))
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : null}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className={cn("grid grid-cols-2 gap-3", !gstOn && "lg:col-span-2")}>
                   <div className="space-y-2">
                     <Label htmlFor="asp-pkg-dur">Duration (min)</Label>
                     <Input

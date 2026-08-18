@@ -20,6 +20,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { isGstRegistered } from "@/lib/gst-tax";
 import type { SegmentPricing, ServiceCatalogItem } from "@/types";
 import { toast } from "sonner";
 
@@ -66,6 +68,7 @@ export function AddAddonDialog({
 }) {
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
+  const gstOn = isGstRegistered(useSettingsStore((s) => s.gstRegistrationStatus));
   const [form, setForm] = useState<AddAddonForm>(emptyForm);
 
   useEffect(() => {
@@ -108,8 +111,8 @@ export function AddAddonDialog({
       isHighEnd: false,
       incentivePercent: 3,
       durationMinutes,
-      gstPercent: 18,
-      gstApplicable: true,
+      gstPercent: gstOn ? 18 : undefined,
+      gstApplicable: gstOn,
     };
 
     setSaving(true);

@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { isGstRegistered } from "@/lib/gst-tax";
+import { useSettingsStore } from "@/store/settings-store";
 import type { SegmentPricing, ServiceCatalogItem } from "@/types";
 import { toast } from "sonner";
 
@@ -96,7 +98,11 @@ function serviceToForm(s: ServiceCatalogItem): EditFormState {
   };
 }
 
-function formToService(base: ServiceCatalogItem, form: EditFormState): ServiceCatalogItem {
+function formToService(
+  base: ServiceCatalogItem,
+  form: EditFormState,
+  gstOn: boolean
+): ServiceCatalogItem {
   const segmentPricing = SEGMENT_KEYS.reduce(
     (acc, k) => ({
       ...acc,
@@ -107,7 +113,8 @@ function formToService(base: ServiceCatalogItem, form: EditFormState): ServiceCa
   const four = ["HATCHBACK", "SEDAN", "SUV", "BIKE"] as const;
   const avg =
     four.reduce((a, k) => a + segmentPricing[k], 0) / 4;
-  const gstPct = form.gstApplicable
+  const gstApplicable = gstOn && form.gstApplicable;
+  const gstPct = gstApplicable
     ? Math.min(100, Math.max(0, parseFloat(form.gstPercent) || 0))
     : undefined;
   const durationMinutes = form.durationMin.trim()
@@ -127,7 +134,7 @@ function formToService(base: ServiceCatalogItem, form: EditFormState): ServiceCa
     isHighEnd: form.isHighEnd,
     isActive: form.isActive,
     incentivePercent: Math.min(100, Math.max(0, parseFloat(form.incentivePercent) || 0)),
-    gstApplicable: form.gstApplicable,
+    gstApplicable,
     gstPercent: gstPct,
     durationMinutes,
     maxDurationMinutes,
@@ -148,6 +155,7 @@ export function EditServiceCatalogDialog({
   categories: string[];
   onSave: (next: ServiceCatalogItem) => void;
 }) {
+  const gstOn = isGstRegistered(useSettingsStore((s) => s.gstRegistrationStatus));
   const [form, setForm] = useState<EditFormState | null>(null);
 
   useEffect(() => {
@@ -182,7 +190,7 @@ export function EditServiceCatalogDialog({
       toast.error("Enter at least one vehicle price under compatibility.");
       return;
     }
-    onSave(formToService(service, form));
+    onSave(formToService(service, form, gstOn));
     onOpenChange(false);
   };
 
@@ -377,55 +385,57 @@ export function EditServiceCatalogDialog({
               </div>
             </div>
 
-            {/* GST settings */}
-            <div
-              className={cn(
-                "rounded-xl border-2 border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/25"
-              )}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="esp-gst"
-                    checked={form.gstApplicable}
-                    onCheckedChange={(c) =>
-                      setForm((f) => (f ? { ...f, gstApplicable: c === true } : f))
-                    }
-                  />
-                  <Label htmlFor="esp-gst" className="text-sm font-medium cursor-pointer">
-                    GST Applicable
-                  </Label>
+            {/* GST settings — only when org is GST registered */}
+            {gstOn ? (
+              <div
+                className={cn(
+                  "rounded-xl border-2 border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/25"
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="esp-gst"
+                      checked={form.gstApplicable}
+                      onCheckedChange={(c) =>
+                        setForm((f) => (f ? { ...f, gstApplicable: c === true } : f))
+                      }
+                    />
+                    <Label htmlFor="esp-gst" className="text-sm font-medium cursor-pointer">
+                      GST Applicable
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label
+                      htmlFor="esp-gst-rate"
+                      className="text-sm text-muted-foreground whitespace-nowrap"
+                    >
+                      GST Rate
+                    </Label>
+                    <Input
+                      id="esp-gst-rate"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      className="h-9 w-24"
+                      disabled={!form.gstApplicable}
+                      value={form.gstPercent}
+                      onChange={(e) =>
+                        setForm((f) => (f ? { ...f, gstPercent: e.target.value } : f))
+                      }
+                    />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Label
-                    htmlFor="esp-gst-rate"
-                    className="text-sm text-muted-foreground whitespace-nowrap"
-                  >
-                    GST Rate
-                  </Label>
-                  <Input
-                    id="esp-gst-rate"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    className="h-9 w-24"
-                    disabled={!form.gstApplicable}
-                    value={form.gstPercent}
-                    onChange={(e) =>
-                      setForm((f) => (f ? { ...f, gstPercent: e.target.value } : f))
-                    }
-                  />
-                  <span className="text-sm text-muted-foreground">%</span>
-                </div>
+                <p className="text-xs text-amber-900/90 dark:text-amber-100/85 mt-3 leading-relaxed">
+                  Prices entered above are <strong>GST-inclusive</strong>. GST (
+                  {form.gstApplicable ? `${parseFloat(form.gstPercent || "0").toFixed(2)}%` : "—"})
+                  will be automatically reverse-extracted for tax compliance. Customers pay the price
+                  you enter.
+                </p>
               </div>
-              <p className="text-xs text-amber-900/90 dark:text-amber-100/85 mt-3 leading-relaxed">
-                Prices entered above are <strong>GST-inclusive</strong>. GST (
-                {form.gstApplicable ? `${parseFloat(form.gstPercent || "0").toFixed(2)}%` : "—"})
-                will be automatically reverse-extracted for tax compliance. Customers pay the price
-                you enter.
-              </p>
-            </div>
+            ) : null}
 
             {/* Duration */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
