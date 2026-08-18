@@ -528,8 +528,7 @@ export default function DashboardPage() {
       {/* ——— Mobile-only layout ——— */}
       <div className="md:hidden space-y-3">
       <div>
-        <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
           <Building2 className="w-3.5 h-3.5 shrink-0" />
           <span>
             Viewing:{" "}
@@ -1121,8 +1120,7 @@ export default function DashboardPage() {
       <div className="hidden md:block space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
               <Building2 className="w-3.5 h-3.5 shrink-0" />
               <span>
                 Viewing:{" "}

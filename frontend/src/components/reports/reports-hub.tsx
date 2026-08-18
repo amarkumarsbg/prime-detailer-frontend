@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { navDescriptionForPath } from "@/lib/nav-items";
 import {
   reportHubFilterInnerClass,
   reportHubFilterScrollClass,
@@ -395,9 +396,9 @@ export function ReportsHub() {
   return (
     <div className="relative flex min-h-[calc(100vh-8rem)] flex-col gap-6 pb-16 max-md:gap-4 max-md:pb-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between max-md:gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground max-md:text-xl">
-          Reports
-        </h1>
+        <p className="min-w-0 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+          {navDescriptionForPath("/reports")}
+        </p>
         <Button
           type="button"
           className="shrink-0 bg-violet-600 hover:bg-violet-700 max-md:w-full"

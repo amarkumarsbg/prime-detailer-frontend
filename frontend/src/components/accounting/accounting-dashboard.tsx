@@ -51,6 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { navDescriptionForPath } from "@/lib/nav-items";
 import {
   applyBranchFilters,
   invoiceBranchId,
@@ -347,18 +348,9 @@ export function AccountingDashboard() {
     <div className="space-y-3 md:space-y-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <div className="md:hidden">
-            <h1 className="text-lg font-bold tracking-tight text-foreground">Accounting</h1>
-            <p className="text-xs text-muted-foreground">Manage your finances</p>
-          </div>
-          <div className="hidden md:block space-y-1">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Accounting &amp; Finance
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Comprehensive financial management and analytics
-            </p>
-          </div>
+          <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            {navDescriptionForPath("/accounting")}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button

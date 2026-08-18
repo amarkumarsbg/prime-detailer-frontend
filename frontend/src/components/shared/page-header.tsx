@@ -1,6 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { isDuplicateNavTitle, navDescriptionForPath, navTitleForPath } from "@/lib/nav-items";
 
 interface PageHeaderProps {
   title: string;
@@ -21,41 +24,70 @@ export function PageHeader({
   inlineActionsOnMobile = false,
   hideDescriptionOnMobile = false,
 }: PageHeaderProps) {
+  const pathname = usePathname();
+  const showTitle = useMemo(
+    () => !isDuplicateNavTitle(title, navTitleForPath(pathname)),
+    [pathname, title]
+  );
+  const resolvedDescription = description ?? navDescriptionForPath(pathname);
+  const showDescription = Boolean(resolvedDescription);
+  const showLead = showTitle || showDescription;
+  const mobileLeadEmpty = !showTitle && showDescription && hideDescriptionOnMobile;
+
+  if (!showLead && !actions) {
+    return null;
+  }
+
   return (
     <div
       className={cn(
         "mb-6 flex gap-3",
-        inlineActionsOnMobile
-          ? "flex-row items-center justify-between"
-          : "flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
+        mobileLeadEmpty && !actions && "hidden md:flex",
+        !showLead
+          ? "flex-row items-center justify-end"
+          : mobileLeadEmpty
+            ? "flex-row items-center justify-end md:justify-between"
+            : inlineActionsOnMobile || !showTitle
+              ? "flex-row items-center justify-between"
+              : "flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
         className
       )}
     >
-      <div className={cn("min-w-0 space-y-1", inlineActionsOnMobile && "flex-1")}>
-        <h1
+      {showLead ? (
+        <div
           className={cn(
-            "font-bold tracking-tight text-foreground",
-            inlineActionsOnMobile ? "text-xl sm:text-2xl" : "text-2xl"
+            "min-w-0 space-y-1",
+            (inlineActionsOnMobile || !showTitle) && "flex-1",
+            mobileLeadEmpty && "hidden md:block"
           )}
         >
-          {title}
-        </h1>
-        {description && (
-          <p
-            className={cn(
-              "max-w-2xl text-sm leading-relaxed text-muted-foreground",
-              hideDescriptionOnMobile && "hidden md:block"
-            )}
-          >
-            {description}
-          </p>
-        )}
-      </div>
+          {showTitle ? (
+            <h1
+              className={cn(
+                "font-bold tracking-tight text-foreground",
+                inlineActionsOnMobile ? "text-xl sm:text-2xl" : "text-2xl"
+              )}
+            >
+              {title}
+            </h1>
+          ) : null}
+          {showDescription ? (
+            <p
+              className={cn(
+                "max-w-3xl text-sm leading-relaxed text-muted-foreground",
+                hideDescriptionOnMobile && "hidden md:block"
+              )}
+            >
+              {resolvedDescription}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {actions && (
         <div
           className={cn(
             "flex flex-wrap items-center gap-2",
-            inlineActionsOnMobile
+            !showLead || inlineActionsOnMobile || !showTitle || mobileLeadEmpty
               ? "w-auto shrink-0 justify-end"
               : cn(
                   "w-full sm:w-auto sm:min-w-0 sm:justify-end",

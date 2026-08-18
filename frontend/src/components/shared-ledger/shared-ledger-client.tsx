@@ -48,7 +48,6 @@ import {
 import { useCustomerStore } from "@/store/customer-store";
 import { useExpenseStore } from "@/store/expense-store";
 import { useSettingsStore } from "@/store/settings-store";
-import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import {
@@ -57,6 +56,7 @@ import {
   MobileRowCard,
 } from "@/components/shared/mobile-table-layout";
 import { formatCurrency, cn, formatDate } from "@/lib/utils";
+import { navDescriptionForPath } from "@/lib/nav-items";
 import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import {
@@ -137,7 +137,6 @@ export function SharedLedgerClient({
   const invoices = useScopedInvoices();
   const expenses = useScopedExpenses();
   const businessName = useSettingsStore((s) => s.businessName);
-  const { viewingLabel } = useBranchScope();
   const updateExpense = useExpenseStore((s) => s.updateExpense);
   const vendorDirectory = useExpenseStore((s) => s.vendorDirectory);
   const vendorSuggestions = useExpenseStore((s) => s.vendorSuggestions);
@@ -362,10 +361,8 @@ export function SharedLedgerClient({
               <BookMarked className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Shared Ledger</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Receivables and payables for {viewingLabel} — wired to branch-scoped invoices and
-                expenses.
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {navDescriptionForPath("/shared-ledger")}
               </p>
             </div>
           </div>

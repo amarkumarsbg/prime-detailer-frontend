@@ -40,6 +40,7 @@ import {
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useSidebarStore } from "@/store/sidebar-store";
+import { navTitleForPath } from "@/lib/nav-items";
 
 export function Header() {
   const { user, currentBranch, logout, setBranch } = useAuthStore();
@@ -57,12 +58,7 @@ export function Header() {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const pageHeading = useMemo(() => {
-    if (pathname === "/accounting" || pathname.startsWith("/accounting/")) {
-      return { title: "Accounting", subtitle: "Manage your operations" };
-    }
-    return null;
-  }, [pathname]);
+  const pageTitle = useMemo(() => navTitleForPath(pathname), [pathname]);
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
@@ -135,57 +131,46 @@ export function Header() {
 
   return (
     <header
-      className="shrink-0 z-30 min-w-0 border-b border-border bg-background px-3 sm:px-4 md:px-6 py-2 md:py-0 md:h-16 md:box-border max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:gap-x-1.5 sm:max-md:gap-x-2 max-md:[grid-template-areas:'hdr_logo_hdr_branch_hdr_tools'] md:flex md:flex-nowrap md:items-center md:justify-between md:gap-3"
+      className="shrink-0 z-30 min-w-0 border-b border-border bg-background px-3 sm:px-4 md:px-6 py-2 md:py-0 md:h-16 md:box-border max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto_auto] max-md:items-center max-md:gap-x-1.5 sm:max-md:gap-x-2 max-md:[grid-template-areas:'hdr_logo_hdr_branch_hdr_tools'] md:flex md:flex-nowrap md:items-center md:justify-between md:gap-3"
     >
-      {/* Mobile only — company logo (desktop branding lives in the sidebar) */}
-      <Link
-        href="/dashboard"
-        className="md:hidden max-md:[grid-area:hdr_logo] flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Avatar className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-lg border border-border/60 bg-transparent">
-          {companyLogoSrc ? (
-            <AvatarImage
-              src={companyLogoSrc}
-              alt={businessName}
-              className="object-cover"
-              key={companyLogoSrc}
-            />
-          ) : null}
-          <AvatarFallback className="bg-primary text-primary-foreground">
-            <Wrench className="w-[1.125rem] h-[1.125rem] sm:w-5 sm:h-5" />
-          </AvatarFallback>
-        </Avatar>
-        <div className="hidden min-[380px]:flex flex-col leading-tight min-w-0">
-          <span className="text-xs sm:text-sm font-bold text-foreground truncate max-w-[5.5rem] min-[380px]:max-w-[7rem] sm:max-w-[120px]">
-            {businessName}
-          </span>
-          <span className="text-[10px] text-muted-foreground hidden sm:block truncate">Service Management</span>
-        </div>
-      </Link>
-
-      {/* Desktop: show sidebar when collapsed — keep on the left */}
-      {sidebarCollapsed ? (
-        <button
-          type="button"
-          onClick={() => setSidebarCollapsed(false)}
-          className="hidden md:inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-          aria-label="Show sidebar"
-          title="Show sidebar"
+      <div className="max-md:[grid-area:hdr_logo] flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <Link
+          href="/dashboard"
+          className="md:hidden flex shrink-0 items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
-        </button>
-      ) : null}
+          <Avatar className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-lg border border-border/60 bg-transparent">
+            {companyLogoSrc ? (
+              <AvatarImage
+                src={companyLogoSrc}
+                alt={businessName}
+                className="object-cover"
+                key={companyLogoSrc}
+              />
+            ) : null}
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              <Wrench className="w-[1.125rem] h-[1.125rem] sm:w-5 sm:h-5" />
+            </AvatarFallback>
+          </Avatar>
+        </Link>
 
-      {pageHeading ? (
-        <div className="hidden md:flex min-w-0 flex-1 flex-col justify-center leading-tight">
-          <h1 className="truncate text-lg font-bold tracking-tight text-foreground">
-            {pageHeading.title}
-          </h1>
-          <p className="truncate text-xs text-muted-foreground">{pageHeading.subtitle}</p>
-        </div>
-      ) : null}
+        {sidebarCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            className="hidden md:inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Show sidebar"
+            title="Show sidebar"
+          >
+            <PanelLeft className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        ) : null}
 
-      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:w-full max-md:max-w-full max-md:self-center max-md:pl-8 sm:max-md:pl-10 max-md:flex max-md:items-center max-md:justify-end max-md:gap-1 max-md:translate-x-2 sm:max-md:translate-x-3 md:flex md:items-center md:gap-2 md:shrink-0 md:min-w-0 md:max-w-none md:translate-x-0 md:ml-auto">
+        <h1 className="min-w-0 truncate text-[20px] font-semibold leading-tight tracking-tight text-foreground lg:text-[22px]">
+          {pageTitle}
+        </h1>
+      </div>
+
+      <div className="max-md:[grid-area:hdr_branch] max-md:min-w-0 max-md:self-center max-md:flex max-md:items-center max-md:justify-end max-md:gap-1 md:flex md:items-center md:gap-2 md:shrink-0 md:min-w-0 md:max-w-none md:ml-auto">
         {showBranchDropdown ? (
           <Select
             value={

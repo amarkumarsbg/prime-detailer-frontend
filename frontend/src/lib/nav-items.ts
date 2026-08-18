@@ -172,3 +172,119 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
     ],
   },
 ];
+
+const EXTRA_PAGE_TITLES: { href: string; label: string }[] = [
+  { href: "/profile", label: "Profile" },
+  { href: "/notifications", label: "Notifications" },
+];
+
+const NAV_DESCRIPTIONS: Record<string, string> = {
+  "/job-cards": "Create and manage job cards, track workshop progress, and close deliveries",
+  "/bookings": "Create walk-in and scheduled bookings, then convert them to job cards",
+  "/pickup-drop": "Schedule vehicle pickup and delivery and track driver assignments",
+  "/quotations": "Create and manage quotations, send estimates via WhatsApp, and convert to job cards",
+  "/appointments": "Schedule appointments, manage the calendar, and track confirmations",
+  "/customers": "Add and manage customers, vehicles, and service history",
+  "/membership": "Create membership packages and assign them to customers",
+  "/vehicles": "Manage the vehicle directory and link cars to customers",
+  "/reminders": "Track service due dates and send follow-up reminders",
+  "/follow-ups": "Work inactive customers and complete follow-up tasks",
+  "/referrals": "Track referral codes, rewards, and new customer sign-ups",
+  "/accounting": "Review finances, expenses, revenue, and workshop analytics",
+  "/expenses": "Track and manage operational expenses by category and vendor",
+  "/vendors": "Manage supplier relationships and outstanding payables",
+  "/billing": "Create invoices, record payments, and track outstanding dues",
+  "/reports": "Open GST, sales, and finance reports for this branch",
+  "/reports/analytics": "Review performance trends, revenue, and workshop analytics",
+  "/cash-bank": "Manage cash on hand, bank accounts, and account transactions",
+  "/parties": "Maintain customers and suppliers in one ledger",
+  "/shared-ledger": "Review receivables and payables across invoices and expenses",
+  "/staff": "Manage staff accounts, roles, and attendance PINs",
+  "/attendance": "Track QR and PIN punch, check-in/out, and working hours",
+  "/payroll": "Manage staff salaries, bonuses, and disbursements",
+  "/services": "Manage service packages, add-ons, and categories",
+  "/inventory": "Manage parts catalog, branch stock, transfers, purchases, and history",
+  "/branches": "Manage workshop locations, contacts, and operating status",
+  "/performance": "Review branch and staff performance across jobs and revenue",
+  "/mechanics": "Track mechanic jobs, utilization, and performance stats",
+  "/advanced-reports": "Run deep-dive reports across jobs, billing, and operations",
+  "/activity": "Review tracked actions across jobs, invoices, and expenses",
+  "/messages": "Track transactional email, SMS, and WhatsApp messages to customers",
+  "/settings": "Manage business profile, branding, and workspace preferences",
+  "/profile": "Manage your account settings and preferences",
+  "/notifications": "Review alerts, reminders, and workspace notifications",
+};
+
+function navMatchForPath(pathname: string): { href: string; label: string } | undefined {
+  const path = pathname.split(/[?#]/)[0] ?? pathname;
+  const candidates = [
+    ...NAV_GROUPS.flatMap((group) =>
+      group.items.map((item) => ({ href: item.href, label: item.label }))
+    ),
+    ...EXTRA_PAGE_TITLES,
+  ];
+  return candidates
+    .filter((item) => path === item.href || path.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
+/** Active sidebar/menu title for the current dashboard route (longest href match). */
+export function navTitleForPath(pathname: string): string {
+  return navMatchForPath(pathname)?.label ?? "Dashboard";
+}
+
+/** Menu description shown under the navbar title on hub pages. */
+export function navDescriptionForPath(pathname: string): string | undefined {
+  const match = navMatchForPath(pathname);
+  if (!match) return undefined;
+  return NAV_DESCRIPTIONS[match.href];
+}
+
+function normalizePageTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stemTitleWord(word: string): string {
+  if (word.endsWith("ies") && word.length > 4) return `${word.slice(0, -3)}y`;
+  if (word.endsWith("s") && word.length > 3) return word.slice(0, -1);
+  return word;
+}
+
+/** True when a content heading repeats the top-navbar page title. */
+export function isDuplicateNavTitle(pageTitle: string, navTitle: string): boolean {
+  const page = normalizePageTitle(pageTitle);
+  const nav = normalizePageTitle(navTitle);
+  if (!page || !nav) return false;
+  if (page === nav) return true;
+
+  const longer = page.length >= nav.length ? page : nav;
+  const shorter = page.length >= nav.length ? nav : page;
+  if (longer.startsWith(`${shorter} `)) return true;
+
+  const pageWords = page.split(" ");
+  const navWords = nav.split(" ");
+  const pageFirst = pageWords[0];
+  const navFirst = navWords[0];
+  if (
+    pageFirst &&
+    navFirst &&
+    pageFirst.length >= 5 &&
+    navFirst.length >= 5 &&
+    stemTitleWord(pageFirst) === stemTitleWord(navFirst)
+  ) {
+    return true;
+  }
+
+  const navOnly = navWords[0];
+  const pageLast = pageWords[pageWords.length - 1];
+  if (navWords.length === 1 && pageWords.length >= 2 && navOnly && pageLast === navOnly) {
+    return true;
+  }
+
+  return false;
+}
