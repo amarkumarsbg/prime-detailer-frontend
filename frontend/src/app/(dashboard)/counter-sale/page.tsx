@@ -180,7 +180,7 @@ export default function CounterSalePage() {
           phone: normalizePhoneDigits(customerPhone),
           email: "",
           address: "",
-          referralCode: "",
+          referralCode: `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
           totalVisits: 0,
           rewardPoints: 0,
           walletBalance: 0,

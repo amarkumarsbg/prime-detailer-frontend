@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail } from "lucide-react";
+import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -141,7 +142,7 @@ export default function CustomerDetailPage() {
     [getModels, watchMake]
   );
 
-  const { customers: allCustomers, updateCustomer, findByPhone } = useCustomerStore();
+  const { customers: allCustomers, updateCustomer, findByPhone, deleteCustomer } = useCustomerStore();
   const customer = useMemo(() => {
     return allCustomers.find((c) => c.id === id) ?? null;
   }, [id, allCustomers]);
@@ -311,6 +312,8 @@ export default function CustomerDetailPage() {
   };
 
   const [isEditing, setIsEditing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -357,6 +360,24 @@ export default function CustomerDetailPage() {
       toast.error("Could not save customer", {
         description: "Check that the API server is running.",
       });
+    }
+  };
+
+  const confirmDeleteCustomer = async () => {
+    if (!customer) return;
+    setDeleting(true);
+    try {
+      await deleteCustomer(customer.id);
+      setVehicles((prev) => prev.filter((v) => v.customerId !== customer.id));
+      toast.success("Customer deleted", { description: customer.name });
+      router.push("/customers");
+    } catch (e) {
+      toast.error("Could not delete customer", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
     }
   };
 
@@ -525,6 +546,16 @@ export default function CustomerDetailPage() {
               >
                 <WhatsAppIcon className="mr-1.5 h-4 w-4" />
                 Share Ledger
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                Delete
               </Button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
@@ -1397,6 +1428,30 @@ export default function CustomerDetailPage() {
           <CustomerCommunications customerId={id} />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => !open && !deleting && setDeleteOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete customer?</DialogTitle>
+            <DialogDescription>
+              This removes {customer.name} and their vehicles. Invoices and job cards stay in history.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void confirmDeleteCustomer()}
+            >
+              {deleting ? "Deleting…" : "Delete customer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

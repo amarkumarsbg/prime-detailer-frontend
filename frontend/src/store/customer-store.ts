@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { Customer } from "@/types";
-import { apiGet, apiPost, apiPut, apiPatch, ApiError } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, ApiError } from "@/lib/api-client";
 import { normalizePhoneDigits } from "@/lib/phone";
 
 export type NewCustomerInput = Omit<Customer, "id" | "createdAt"> & {
@@ -40,6 +40,7 @@ interface CustomerStore {
   importCustomers: (customers: CustomerImportPayloadItem[]) => Promise<CustomerBulkImportResult>;
   /** Returns false if updates.phone is already used by another customer. */
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<boolean>;
+  deleteCustomer: (id: string) => Promise<void>;
   findByPhone: (phone: string) => Customer | undefined;
   findByEmail: (email: string) => Customer | undefined;
   findByReferralCode: (code: string) => Customer | undefined;
@@ -120,6 +121,13 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
       if (e instanceof ApiError && e.status === 409) return false;
       throw e;
     }
+  },
+
+  deleteCustomer: async (id) => {
+    await apiDelete<{ ok: boolean }>(`/api/customers/${id}`);
+    set((state) => ({
+      customers: state.customers.filter((c) => c.id !== id),
+    }));
   },
 
   findByPhone: (phone) => {
