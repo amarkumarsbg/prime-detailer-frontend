@@ -131,7 +131,7 @@ export function dropDeliveryIsPremature(
   if (job.status === "DELIVERED") return false;
   if (jobStatusRank(job.status) < jobStatusRank("READY")) return true;
   const pickup = getLinkedPickupRequest(drop.jobCardId, requests);
-  if (pickup && !isPickupAtWorkshop(pickup) && job.status !== "DELIVERED") return true;
+  if (pickup && !isPickupAtWorkshop(pickup)) return true;
   return false;
 }
 
@@ -244,7 +244,7 @@ export function validatePickupDropAdvance(
     if (job?.status === "CANCELLED") {
       return "This job is cancelled.";
     }
-    if (job && jobStatusRank(job.status) < jobStatusRank("READY") && job.status !== "DELIVERED") {
+    if (job && jobStatusRank(job.status) < jobStatusRank("READY")) {
       return "The vehicle is at the workshop under maintenance. Finish service and mark the job Ready before drop-off.";
     }
   }
