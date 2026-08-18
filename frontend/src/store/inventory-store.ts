@@ -69,6 +69,7 @@ interface InventoryStore {
     performedBy: string;
     branchId?: string;
     movementKind?: StockMovementKind;
+    invoiceId?: string;
   }) => { ok: boolean; error?: string };
   updateBranchStockMeta: (
     partId: string,
@@ -591,6 +592,7 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       displayUnit: unit,
       movementKind,
       branchId: input.branchId,
+      invoiceId: input.invoiceId,
     };
 
     set((state) => ({

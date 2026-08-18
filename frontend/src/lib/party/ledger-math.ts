@@ -117,7 +117,7 @@ export function buildPartyTransactions(
         rows.push({
           id: inv.id,
           at: inv.createdAt,
-          typeLabel: "Sales Invoices",
+          typeLabel: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoices",
           reference: inv.invoiceNumber,
           amount: inv.grandTotal,
           unpaidAmount: out > 0.01 ? out : undefined,
@@ -214,7 +214,7 @@ export function buildPartyStatement(
         line: {
           id: `inv-${inv.id}`,
           date: formatLedgerDate(inv.createdAt),
-          voucher: "Sales Invoices",
+          voucher: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoices",
           serialNo: inv.invoiceNumber,
           paymentMode: "—",
           debit: inv.grandTotal,

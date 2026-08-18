@@ -11,7 +11,7 @@ export const invoicePayloadSchema = z
   .object({
     id: nonEmptyString,
     invoiceNumber: nonEmptyString,
-    jobCardId: nonEmptyString,
+    jobCardId: z.string().optional(),
     customerId: nonEmptyString,
     customerName: z.string(),
     customerPhone: z.string(),

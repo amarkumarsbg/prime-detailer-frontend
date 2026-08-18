@@ -24,7 +24,7 @@ export interface InvoiceLineItem {
 export interface Invoice {
   id: string;
   invoiceNumber: string;
-  jobCardId: string;
+  jobCardId?: string;
   jobNumber: string;
   customerId: string;
   customerName: string;
@@ -41,6 +41,8 @@ export interface Invoice {
   status: InvoiceStatus;
   payments: InvoicePayment[];
   createdAt: string;
+  source?: "COUNTER_SALE";
+  branchId?: string;
 }
 
 export type ExpensePaymentStatus = "PAID" | "PENDING" | "PARTIAL" | "OVERDUE";

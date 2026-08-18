@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import type { StockMovement, Part } from "@/types";
-import { inferMovementKind, MOVEMENT_KIND_LABEL } from "@/lib/inventory/movement-labels";
+import { movementKindLabel } from "@/lib/inventory/movement-labels";
 
 export type InventoryHistoryExportRow = {
   date: string;
@@ -59,7 +59,7 @@ export function buildInventoryHistoryExportRows(
       date: format(new Date(m.createdAt), "dd MMM yyyy HH:mm"),
       part: part?.name ?? m.partId,
       sku: part?.sku ?? "",
-      type: MOVEMENT_KIND_LABEL[inferMovementKind(m)],
+      type: movementKindLabel(m),
       qty: `${m.type === "OUT" ? "-" : "+"}${qty} ${unit}`,
       branch: branchName(m.branchId),
       reference: m.jobCardId ?? m.purchaseId ?? m.transferId ?? m.invoiceId ?? m.reason,

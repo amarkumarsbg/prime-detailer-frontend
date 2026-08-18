@@ -27,10 +27,17 @@ export function inferMovementKind(m: StockMovement): StockMovementKind {
   if (m.purchaseId) return "PURCHASE";
   if (m.transferId) return m.type === "IN" ? "TRANSFER_IN" : "TRANSFER_OUT";
   if (m.jobCardId) return "JOB_CARD";
+  if (m.reason.toLowerCase().includes("counter sale")) return "DIRECT_ISSUE";
   if (m.reason.toLowerCase().includes("direct issue")) return "DIRECT_ISSUE";
   if (m.reason.toLowerCase().includes("return")) return "RETURN";
   if (m.reason.toLowerCase().includes("adjust")) return "ADJUSTMENT";
   return "OTHER";
+}
+
+export function movementKindLabel(m: StockMovement): string {
+  const kind = inferMovementKind(m);
+  if (kind === "DIRECT_ISSUE" && /counter sale/i.test(m.reason)) return "Counter Sale";
+  return MOVEMENT_KIND_LABEL[kind];
 }
 
 export const TRANSFER_STATUS_LABEL: Record<StockTransferStatus, string> = {

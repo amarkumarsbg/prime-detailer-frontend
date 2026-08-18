@@ -17,6 +17,7 @@ import {
   ALL_MOVEMENT_KINDS,
   inferMovementKind,
   MOVEMENT_KIND_LABEL,
+  movementKindLabel,
 } from "@/lib/inventory/movement-labels";
 import {
   buildInventoryHistoryExportRows,
@@ -67,7 +68,7 @@ export function InventoryHistoryTab() {
           ...m,
           partName: part?.name ?? m.partId,
           sku: part?.sku ?? "",
-          kindLabel: MOVEMENT_KIND_LABEL[inferMovementKind(m)],
+          kindLabel: movementKindLabel(m),
           branchName: branchName(m.branchId),
           userName: userName(m.performedBy),
           qtyLabel: `${m.type === "OUT" ? "-" : "+"}${m.displayQuantity ?? m.quantity} ${m.displayUnit ?? m.unit}`,

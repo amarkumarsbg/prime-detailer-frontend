@@ -455,7 +455,9 @@ table.inv .b { font-weight: 700; color: #171717; }
       </div>
     </div>
     <div class="invoice-title-block" style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; height: 56px;">
-      <div class="doc-title" style="font-size: 20px; font-weight: 700; color: #1e3a8a; letter-spacing: 1.5px; text-transform: uppercase;">${isGstRegistered ? "TAX INVOICE" : "INVOICE"}</div>
+      <div class="doc-title" style="font-size: 20px; font-weight: 700; color: #1e3a8a; letter-spacing: 1.5px; text-transform: uppercase;">${
+        invoice.source === "COUNTER_SALE" ? "COUNTER SALE" : isGstRegistered ? "TAX INVOICE" : "INVOICE"
+      }</div>
       <div style="font-size: 8.5px; font-weight: 600; color: #3b82f6; border: 1px solid #3b82f6; padding: 3px 6px; border-radius: 3px; background: #eff6ff; text-transform: uppercase; letter-spacing: 0.5px;">Original for Recipient</div>
     </div>
   </div>

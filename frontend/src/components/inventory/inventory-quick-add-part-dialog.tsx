@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { PartCategorySelect } from "@/components/inventory/part-category-select";
+import { PartUsedInFields } from "@/components/inventory/part-used-in-fields";
+import { DEFAULT_PART_USED_IN, type PartUsedIn } from "@/lib/inventory/part-used-in";
 import { useInventoryStore } from "@/store/inventory-store";
 import type { Part } from "@/types";
 
@@ -33,6 +35,7 @@ export function InventoryQuickAddPartDialog({
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [category, setCategory] = useState("Other");
+  const [usedIn, setUsedIn] = useState<PartUsedIn[]>([...DEFAULT_PART_USED_IN]);
   const [cost, setCost] = useState("");
   const [sell, setSell] = useState("");
   const [unit, setUnit] = useState("Piece");
@@ -41,6 +44,7 @@ export function InventoryQuickAddPartDialog({
     setName("");
     setSku("");
     setCategory("Other");
+    setUsedIn([...DEFAULT_PART_USED_IN]);
     setCost("");
     setSell("");
     setUnit("Piece");
@@ -77,6 +81,7 @@ export function InventoryQuickAddPartDialog({
       gstRate: 18,
       isActive: true,
       branchScope: "GLOBAL",
+      usedIn,
     };
     addPart(part);
     toast.success("Part added to catalog.");
@@ -117,6 +122,7 @@ export function InventoryQuickAddPartDialog({
             </Label>
             <PartCategorySelect value={category} onChange={setCategory} />
           </div>
+          <PartUsedInFields value={usedIn} onChange={setUsedIn} />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>

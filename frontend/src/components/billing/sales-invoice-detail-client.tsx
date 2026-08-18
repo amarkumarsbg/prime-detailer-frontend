@@ -1112,7 +1112,9 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <DetailBackButton fallbackHref="/billing" />
-          <h1 className="text-lg font-semibold">Sales Invoice #{invoice.invoiceNumber}</h1>
+          <h1 className="text-lg font-semibold">
+            {invoice.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoice"} #{invoice.invoiceNumber}
+          </h1>
           <InvoiceStatusBadge status={invoice.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">

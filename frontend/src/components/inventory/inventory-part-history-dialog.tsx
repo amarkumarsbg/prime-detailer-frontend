@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency, formatDateTime, cn } from "@/lib/utils";
-import { inferMovementKind, MOVEMENT_KIND_LABEL } from "@/lib/inventory/movement-labels";
+import { inferMovementKind, movementKindLabel } from "@/lib/inventory/movement-labels";
 import {
   formatMlAndLitres,
   formatPartStockQuantity,
@@ -325,7 +325,7 @@ export function InventoryPartHistoryDialog({
                                 kindBadgeClass(kind)
                               )}
                             >
-                              {MOVEMENT_KIND_LABEL[kind]}
+                              {movementKindLabel(m)}
                             </span>
                             <span className="truncate rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
                               {movementRef(m, purchase?.purchaseNumber)}

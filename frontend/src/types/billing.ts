@@ -79,7 +79,7 @@ export interface InvoiceStoredPdf {
 export interface Invoice {
   id: string;
   invoiceNumber: string;
-  jobCardId: string;
+  jobCardId?: string;
   jobNumber: string;
   customerId: string;
   customerName: string;
@@ -109,4 +109,7 @@ export interface Invoice {
   /** Snapshot of membership subscription id at invoice time (Bill To). */
   membershipId?: string;
   membershipPackageName?: string;
+  /** Counter Sale invoices have no job card. */
+  source?: "COUNTER_SALE";
+  branchId?: string;
 }

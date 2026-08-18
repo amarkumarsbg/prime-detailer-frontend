@@ -64,6 +64,11 @@ export interface Part {
   isActive?: boolean;
   /** `GLOBAL` or a branch id. Catalog metadata — stock is still tracked per branch when branch stocks exist. */
   branchScope?: string;
+  /**
+   * Where this part can be consumed. Omitted on legacy rows = Services only.
+   * `DIRECT_SALE` is the internal flag; Counter Sale filters on it.
+   */
+  usedIn?: Array<"SERVICES" | "DIRECT_SALE">;
 }
 
 export type StockMovementKind =

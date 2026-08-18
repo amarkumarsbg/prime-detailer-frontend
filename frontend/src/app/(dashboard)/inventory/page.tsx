@@ -63,7 +63,13 @@ import { InventoryPurchasesTab } from "@/components/inventory/inventory-purchase
 import { InventoryHistoryTab } from "@/components/inventory/inventory-history-tab";
 import { InventoryPartHistoryDialog } from "@/components/inventory/inventory-part-history-dialog";
 import { PartCategorySelect } from "@/components/inventory/part-category-select";
+import { PartUsedInFields } from "@/components/inventory/part-used-in-fields";
 import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
+import {
+  DEFAULT_PART_USED_IN,
+  normalizePartUsedIn,
+  type PartUsedIn,
+} from "@/lib/inventory/part-used-in";
 import { toast } from "sonner";
 import { useInventoryStore, parseLitresInput } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
@@ -118,6 +124,7 @@ export default function InventoryPage() {
   const [addPartBrand, setAddPartBrand] = useState("");
   const [addPartSku, setAddPartSku] = useState("");
   const [addPartCategory, setAddPartCategory] = useState<PartCategory>("Other");
+  const [addPartUsedIn, setAddPartUsedIn] = useState<PartUsedIn[]>([...DEFAULT_PART_USED_IN]);
   const [addPartUnit, setAddPartUnit] = useState("Piece");
   const [addPartQty, setAddPartQty] = useState("");
   const [addPartPrice, setAddPartPrice] = useState("");
@@ -142,6 +149,7 @@ export default function InventoryPage() {
     setAddPartBrand("");
     setAddPartSku("");
     setAddPartCategory("Other");
+    setAddPartUsedIn([...DEFAULT_PART_USED_IN]);
     setAddPartUnit("Piece");
     setAddPartQty("");
     setAddPartPrice("");
@@ -167,6 +175,7 @@ export default function InventoryPage() {
     setAddPartBrand(part.brand ?? "");
     setAddPartSku(part.sku);
     setAddPartCategory(part.category);
+    setAddPartUsedIn(normalizePartUsedIn(part.usedIn));
     setAddPartUnit(part.primaryUnit || "Piece");
     setAddPartBarcode(part.barcode ?? "");
     setAddPartSupplier(part.supplier === "—" ? "" : part.supplier);
@@ -632,6 +641,7 @@ export default function InventoryPage() {
         gstApplicable: addPartGstApplicable,
         isActive: addPartActive,
         branchScope: addPartBranchScope,
+        usedIn: addPartUsedIn,
       };
     } else {
       const qty = Math.round(qtyInput);
@@ -685,6 +695,7 @@ export default function InventoryPage() {
         gstApplicable: addPartGstApplicable,
         isActive: addPartActive,
         branchScope: addPartBranchScope,
+        usedIn: addPartUsedIn,
       };
     }
 
@@ -935,6 +946,7 @@ export default function InventoryPage() {
                         onChange={setAddPartCategory}
                       />
                     </div>
+                    <PartUsedInFields value={addPartUsedIn} onChange={setAddPartUsedIn} />
                     <div className="space-y-2">
                       <Label htmlFor="add-part-unit">Primary unit</Label>
                       <Select value={addPartUnit} onValueChange={setAddPartUnit}>

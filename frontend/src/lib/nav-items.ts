@@ -31,6 +31,7 @@ import {
   BookMarked,
   QrCode,
   IndianRupee,
+  ShoppingCart,
 } from "lucide-react";
 
 export type NavItemDef = {
@@ -49,6 +50,7 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
       { label: "Job Cards", href: "/job-cards", icon: ClipboardList, permissionKey: "JOB_CARDS" },
       { label: "Bookings", href: "/bookings", icon: CalendarCheck, permissionKey: "BOOKINGS" },
       { label: "Pickup & Drop", href: "/pickup-drop", icon: Truck, permissionKey: "PICKUP_DROP" },
+      { label: "Counter Sale", href: "/counter-sale", icon: ShoppingCart, permissionKey: "BILLING" },
       { label: "Quotations", href: "/quotations", icon: FileText, permissionKey: "QUOTATIONS" },
       { label: "Appointments", href: "/appointments", icon: Calendar, permissionKey: "APPOINTMENTS" },
     ],
@@ -182,6 +184,7 @@ const NAV_DESCRIPTIONS: Record<string, string> = {
   "/job-cards": "Create and manage job cards, track workshop progress, and close deliveries",
   "/bookings": "Create walk-in and scheduled bookings, then convert them to job cards",
   "/pickup-drop": "Schedule vehicle pickup and delivery and track driver assignments",
+  "/counter-sale": "Sell parts at the counter, collect payment, and update stock",
   "/quotations": "Create and manage quotations, send estimates via WhatsApp, and convert to job cards",
   "/appointments": "Schedule appointments, manage the calendar, and track confirmations",
   "/customers": "Add and manage customers, vehicles, and service history",

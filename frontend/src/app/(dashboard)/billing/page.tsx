@@ -170,6 +170,7 @@ export default function BillingPage() {
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         jobNumber: inv.jobNumber,
+        source: inv.source ?? "",
         customerId: inv.customerId,
         customerName: inv.customerName,
         customerPhone: inv.customerPhone,
@@ -363,7 +364,9 @@ export default function BillingPage() {
       key: "jobNumber",
       label: "Job #",
       render: (item: Record<string, unknown>) => (
-        <span className="font-mono text-sm text-muted-foreground">{item.jobNumber as string}</span>
+        <span className="font-mono text-sm text-muted-foreground">
+          {item.source === "COUNTER_SALE" ? "Counter Sale" : (item.jobNumber as string)}
+        </span>
       ),
       sortable: true,
     },
@@ -763,7 +766,9 @@ export default function BillingPage() {
                             <p className="mt-0.5 text-[11px] text-muted-foreground">
                               <span className="font-mono">{String(item.vehicleRegNumber)}</span>
                               <span aria-hidden> · </span>
-                              <span className="font-mono">{String(item.jobNumber)}</span>
+                              <span className="font-mono">
+                                {item.source === "COUNTER_SALE" ? "Counter Sale" : String(item.jobNumber)}
+                              </span>
                             </p>
                             <div className="mt-1.5 flex items-baseline justify-between gap-2">
                               <p className="text-base font-bold tabular-nums leading-none">
