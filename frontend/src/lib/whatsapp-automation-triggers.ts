@@ -4,6 +4,7 @@ import type {
   JobCard,
   MembershipTier,
   PaymentMethod,
+  PickupDropRequest,
   Quotation,
 } from "@/types";
 import type { BookingConfirmationBusiness } from "@/lib/booking-confirmation-message";
@@ -14,6 +15,8 @@ import {
   buildInvoiceWhatsAppMessage,
   buildJobDeliveredWhatsAppMessage,
   buildJobReadyForPickupWhatsAppMessage,
+  buildPickupAndDropScheduledWhatsAppMessage,
+  buildPickupDropWhatsAppMessage,
   buildQuotationConvertedWhatsAppMessage,
   buildMembershipWelcomeWhatsAppMessage,
   buildHighEndAdvanceReceiptWhatsAppMessage,
@@ -260,4 +263,74 @@ export function notifyHighEndAdvanceRecordedWhatsApp(
       details: `Advance receipt WhatsApp (${amount} ${method})`,
     },
   });
+}
+
+function pickupDropPhone(req: PickupDropRequest): string | undefined {
+  const direct = req.customerPhone?.trim();
+  if (direct) return direct;
+  const m = req.notes?.match(/Phone:\s*([^\n]+)/i);
+  return m?.[1]?.trim() || undefined;
+}
+
+function pickupDropWhatsAppContext(req: PickupDropRequest) {
+  const typeLabel = req.type === "PICKUP" ? "Pickup" : "Drop-off";
+  return {
+    href: "/pickup-drop",
+    branchId: req.branchId,
+    notificationSummary: `${typeLabel} ${req.id} → ${pickupDropPhone(req) ?? ""}`,
+    activityLog: {
+      entityType: "JOB_CARD" as const,
+      entityId: req.jobCardId,
+      entityLabel: req.jobNumber !== "NEW" ? req.jobNumber : req.id,
+      details: `${typeLabel} WhatsApp to ${req.customerName}`,
+    },
+  };
+}
+
+export function notifyPickupDropWhatsApp(
+  req: PickupDropRequest,
+  opts: { branchName?: string; businessName?: string } = {}
+): void {
+  const phone = pickupDropPhone(req);
+  if (!phone) return;
+  const typeLabel = req.type === "PICKUP" ? "Pickup" : "Drop-off";
+  const ctx = pickupDropWhatsAppContext(req);
+  void executeCustomerWhatsAppAutomation({
+    phone,
+    message: buildPickupDropWhatsAppMessage(req, opts),
+    titles: {
+      api: `${typeLabel} — WhatsApp sent`,
+      composer: `${typeLabel} — WhatsApp composer`,
+    },
+    ...ctx,
+  });
+}
+
+export function notifyPickupDropCreatedWhatsApp(
+  created: PickupDropRequest[],
+  opts: { branchName?: string; businessName?: string } = {}
+): void {
+  const pickup = created.find((r) => r.type === "PICKUP");
+  const drop = created.find((r) => r.type === "DROP");
+  if (pickup && drop) {
+    const phone = pickupDropPhone(pickup) ?? pickupDropPhone(drop);
+    if (!phone) return;
+    const ctx = pickupDropWhatsAppContext(pickup);
+    void executeCustomerWhatsAppAutomation({
+      phone,
+      message: buildPickupAndDropScheduledWhatsAppMessage(pickup, drop, opts),
+      titles: {
+        api: "Pickup & drop-off — WhatsApp sent",
+        composer: "Pickup & drop-off — WhatsApp composer",
+      },
+      ...ctx,
+      activityLog: {
+        ...ctx.activityLog,
+        details: `Pickup & drop-off scheduled WhatsApp to ${pickup.customerName}`,
+      },
+    });
+    return;
+  }
+  const only = pickup ?? drop;
+  if (only) notifyPickupDropWhatsApp(only, opts);
 }

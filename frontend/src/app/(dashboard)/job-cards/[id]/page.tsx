@@ -87,6 +87,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useJobCardStore } from "@/store/job-card-store";
+import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -128,6 +129,14 @@ import {
 } from "@/lib/high-end-follow-up";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { pushActivityLog } from "@/lib/activity-log-helper";
+import { useBranchScope } from "@/lib/branch-scope";
+import {
+  buildDropRequestInput,
+  getLinkedDropRequest,
+  getLinkedPickupRequest,
+  jobNeedsDropOffForm,
+  orphanPickupRequestIdForJob,
+} from "@/lib/pickup-drop-flow";
 import type {
   JobCard,
   JobCardStatus,
@@ -182,6 +191,9 @@ export default function JobCardDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const { jobCards, updateJobCard } = useJobCardStore();
+  const pickupDropRequests = usePickupDropStore((s) => s.requests);
+  const pickupDropHydrated = usePickupDropStore((s) => s.hydrated);
+  const { selectedBranchId } = useBranchScope();
   const customers = useCustomerStore((s) => s.customers);
   const staff = useStaffStore((s) => s.staff);
 
@@ -190,10 +202,40 @@ export default function JobCardDetailPage() {
     [jobCards, id]
   );
 
+  useEffect(() => {
+    if (!jobCard || !pickupDropHydrated) return;
+    const orphanId = orphanPickupRequestIdForJob(jobCard, pickupDropRequests);
+    if (!orphanId) return;
+    usePickupDropStore.getState().linkJobCard(orphanId, jobCard.id, jobCard.jobNumber, {
+      vehicleRegNumber: jobCard.vehicleRegNumber,
+      vehicleMakeModel: jobCard.vehicleMakeModel,
+      customerName: jobCard.customerName,
+      customerPhone: jobCard.customerPhone,
+    });
+  }, [jobCard, pickupDropHydrated, pickupDropRequests]);
+
   const customerRecord = useMemo(
     () => (jobCard ? customers.find((c) => c.id === jobCard.customerId) : undefined),
     [customers, jobCard]
   );
+
+  const dropOffPrefill = useMemo(() => {
+    if (!jobCard || !jobNeedsDropOffForm(jobCard, pickupDropRequests)) return null;
+    const drop = getLinkedDropRequest(jobCard.id, pickupDropRequests);
+    const pickup = getLinkedPickupRequest(jobCard.id, pickupDropRequests);
+    return {
+      branchId: jobCard.branchId,
+      branchScoped: Boolean(selectedBranchId),
+      address:
+        drop?.address?.trim() ||
+        pickup?.address?.trim() ||
+        customerRecord?.address?.trim() ||
+        "",
+      driverId: drop?.driverId,
+      driverName: drop?.driverName,
+      scheduledTime: drop?.scheduledTime || jobCard.expectedDelivery,
+    };
+  }, [jobCard, pickupDropRequests, selectedBranchId, customerRecord]);
 
   const invoices = useInvoiceStore((s) => s.invoices);
   const businessName = useSettingsStore((s) => s.businessName);
@@ -1338,6 +1380,32 @@ export default function JobCardDetailPage() {
 
     setDeliverVehicleSubmitting(true);
     const nowIso = new Date().toISOString();
+
+    if (result.dropOff) {
+      const pd = usePickupDropStore.getState();
+      const pickup = getLinkedPickupRequest(jobCard.id, pd.requests);
+      const existingDrop = getLinkedDropRequest(jobCard.id, pd.requests);
+      if (existingDrop) {
+        pd.updateRequest(existingDrop.id, {
+          address: result.dropOff.address,
+          scheduledTime: result.dropOff.scheduledTime,
+          driverId: result.dropOff.driverId,
+          driverName: result.dropOff.driverName,
+          status: "DELIVERED",
+        });
+      } else {
+        const createdDrop = pd.addRequest({
+          ...buildDropRequestInput(jobCard, pickup),
+          address: result.dropOff.address,
+          scheduledTime: result.dropOff.scheduledTime,
+          driverId: result.dropOff.driverId,
+          driverName: result.dropOff.driverName,
+          notes: "Completed from Deliver Vehicle",
+        });
+        pd.updateStatus(createdDrop.id, "DELIVERED");
+      }
+    }
+
     const patch: Partial<JobCard> = {
       status: "DELIVERED",
       updatedAt: nowIso,
@@ -3262,6 +3330,7 @@ export default function JobCardDetailPage() {
         onOpenChange={setDeliverVehicleOpen}
         jobNumber={jobCard.jobNumber}
         submitting={deliverVehicleSubmitting}
+        dropOff={dropOffPrefill}
         onConfirm={handleDeliverVehicle}
       />
       <RecordPaymentDialog

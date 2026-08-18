@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
+import { useBranchStore } from "@/store/branch-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { notifyPickupDropWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import {
   getLinkedPickupRequest,
   nextPickupDropStatus,
@@ -104,6 +107,14 @@ export function JobCardPickupPanel({ jobCardId, branchId, className }: JobCardPi
     }
     assignDriver(pickup.id, value, driverName);
     if (driverName) toast.success(`Pickup driver: ${driverName}`);
+    const updated = usePickupDropStore.getState().requests.find((row) => row.id === pickup.id);
+    if (updated) {
+      const branchName = useBranchStore.getState().branches.find((b) => b.id === updated.branchId)?.name;
+      notifyPickupDropWhatsApp(updated, {
+        branchName,
+        businessName: useSettingsStore.getState().businessName,
+      });
+    }
   };
 
   const handleAdvance = () => {
@@ -118,6 +129,14 @@ export function JobCardPickupPanel({ jobCardId, branchId, className }: JobCardPi
       return;
     }
     toast.success(PICKUP_DROP_STATUS_LABEL[next]);
+    const updated = usePickupDropStore.getState().requests.find((row) => row.id === pickup.id);
+    if (updated) {
+      const branchName = useBranchStore.getState().branches.find((b) => b.id === updated.branchId)?.name;
+      notifyPickupDropWhatsApp(updated, {
+        branchName,
+        businessName: useSettingsStore.getState().businessName,
+      });
+    }
   };
 
   const advanceLabel =

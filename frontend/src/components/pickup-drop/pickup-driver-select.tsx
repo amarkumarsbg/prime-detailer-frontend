@@ -47,6 +47,7 @@ type PickupDriverSelectProps = {
   /** When set, only list drivers for this branch. When empty, lists all active mechanics. */
   branchScoped?: boolean;
   size?: "default" | "compact";
+  disabled?: boolean;
 };
 
 export function PickupDriverSelect({
@@ -57,6 +58,7 @@ export function PickupDriverSelect({
   placeholder = "Assign driver",
   branchScoped = true,
   size = "default",
+  disabled = false,
 }: PickupDriverSelectProps) {
   const staff = useStaffStore((s) => s.staff);
   const addStaff = useStaffStore((s) => s.addStaff);
@@ -135,7 +137,7 @@ export function PickupDriverSelect({
 
   return (
     <>
-      <Select value={value || "unassigned"} onValueChange={handleSelect}>
+      <Select value={value || "unassigned"} onValueChange={handleSelect} disabled={disabled}>
         <SelectTrigger
           className={cn(
             "bg-background",

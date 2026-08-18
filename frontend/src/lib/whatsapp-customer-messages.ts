@@ -135,33 +135,152 @@ export function buildFollowUpWhatsAppMessage(fu: FollowUp, lastVisitLabel: strin
 
 export function buildPickupDropWhatsAppMessage(
   req: PickupDropRequest,
-  opts: { branchName?: string } = {}
+  opts: { branchName?: string; businessName?: string } = {}
 ): string {
+  const biz = opts.businessName?.trim() || "Prime Detailers";
   const first = req.customerName.trim().split(/\s+/)[0] ?? req.customerName;
-  const typeLabel = req.type === "PICKUP" ? "Pickup" : "Drop";
-  const when = format(parseISO(req.scheduledTime), "EEE, dd-MMM-yyyy 'at' h:mm a");
-  const branchLine = opts.branchName?.trim() ? `Branch: *${opts.branchName.trim()}*` : "";
+  const when = (() => {
+    try {
+      return format(parseISO(req.scheduledTime), "EEE, dd-MMM-yyyy 'at' h:mm a");
+    } catch {
+      return req.scheduledTime;
+    }
+  })();
+  const branchLine = opts.branchName?.trim() ? `Workshop: *${opts.branchName.trim()}*` : "";
   const driverLine = req.driverName?.trim() ? `Driver: *${req.driverName.trim()}*` : "";
   const mm = req.vehicleMakeModel?.trim();
   const reg = req.vehicleRegNumber?.trim();
+  const vehicleLine =
+    mm && reg ? `Vehicle: ${mm} (${reg})` : mm ? `Vehicle: ${mm}` : reg ? `Vehicle: ${reg}` : "";
+  const jobLine =
+    req.jobNumber && req.jobNumber !== "NEW" ? `Job: *${req.jobNumber}*` : "";
+  const note = (req.notes ?? "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^Phone:/i.test(line))
+    .join(" ")
+    .trim();
+  const noteLine = note ? `Note: ${note}` : "";
+
+  const pickupBody = (): string[] => {
+    switch (req.status) {
+      case "PENDING":
+        return [
+          `We’ve scheduled a *pickup* for your vehicle from *${biz}*.`,
+          `Our driver will collect it from:`,
+          req.address,
+          `Scheduled: *${when}*`,
+        ];
+      case "DRIVER_ASSIGNED":
+        return [
+          `A driver is on the way to *pick up* your vehicle.`,
+          driverLine,
+          `Pickup address: ${req.address}`,
+          `Scheduled: *${when}*`,
+        ];
+      case "PICKED_UP":
+        return [
+          `Your vehicle has been *collected* and is heading to our workshop.`,
+          driverLine,
+          branchLine,
+        ];
+      case "IN_SERVICE":
+        return [
+          `Your vehicle has *arrived at our workshop* and is with our team.`,
+          branchLine,
+          `We’ll update you when service is complete.`,
+        ];
+      default:
+        return [
+          `Pickup update from *${biz}*.`,
+          `Scheduled: *${when}*`,
+          `Address: ${req.address}`,
+          driverLine,
+        ];
+    }
+  };
+
+  const dropBody = (): string[] => {
+    switch (req.status) {
+      case "PENDING":
+        return [
+          `We’ve scheduled *drop-off* to return your vehicle after service.`,
+          `Return address: ${req.address}`,
+          `Scheduled: *${when}*`,
+        ];
+      case "DRIVER_ASSIGNED":
+      case "IN_SERVICE":
+        return [
+          `A driver is assigned to *return your vehicle* after service.`,
+          driverLine,
+          `Drop-off address: ${req.address}`,
+          `Scheduled: *${when}*`,
+        ];
+      case "DELIVERED":
+        return [
+          `Your vehicle has been *delivered* to you. Thank you for choosing *${biz}*.`,
+          `Drop-off address: ${req.address}`,
+        ];
+      default:
+        return [
+          `Drop-off update from *${biz}*.`,
+          `Address: ${req.address}`,
+          `Scheduled: *${when}*`,
+          driverLine,
+        ];
+    }
+  };
+
+  return [
+    `Hi *${first}*,`,
+    ``,
+    ...(req.type === "PICKUP" ? pickupBody() : dropBody()),
+    vehicleLine,
+    jobLine,
+    noteLine,
+    ``,
+    `Reply here if you have any questions.`,
+    ``,
+    `— ${biz}`,
+  ]
+    .filter((line) => line !== undefined && line !== "")
+    .join("\n");
+}
+
+export function buildPickupAndDropScheduledWhatsAppMessage(
+  pickup: PickupDropRequest,
+  drop: PickupDropRequest,
+  opts: { branchName?: string; businessName?: string } = {}
+): string {
+  const biz = opts.businessName?.trim() || "Prime Detailers";
+  const first = pickup.customerName.trim().split(/\s+/)[0] ?? pickup.customerName;
+  const when = (() => {
+    try {
+      return format(parseISO(pickup.scheduledTime), "EEE, dd-MMM-yyyy 'at' h:mm a");
+    } catch {
+      return pickup.scheduledTime;
+    }
+  })();
+  const mm = pickup.vehicleMakeModel?.trim() || drop.vehicleMakeModel?.trim();
+  const reg = pickup.vehicleRegNumber?.trim() || drop.vehicleRegNumber?.trim();
   const vehicleLine =
     mm && reg ? `Vehicle: ${mm} (${reg})` : mm ? `Vehicle: ${mm}` : reg ? `Vehicle: ${reg}` : "";
 
   return [
     `Hi *${first}*,`,
     ``,
-    `*${typeLabel}* update for job *${req.jobNumber}* at *Prime Detailers*.`,
+    `We’ve scheduled *pickup and drop-off* for your vehicle with *${biz}*.`,
     vehicleLine,
+    `Pickup: ${pickup.address}`,
+    `Drop-off: ${drop.address}`,
     `Scheduled: *${when}*`,
-    branchLine,
-    `Address: ${req.address}`,
-    driverLine,
-    `Status: *${req.status.replace(/_/g, " ")}*`,
-    req.notes?.trim() ? `Note: ${req.notes.trim()}` : "",
+    pickup.driverName?.trim() ? `Pickup driver: *${pickup.driverName.trim()}*` : "",
+    drop.driverName?.trim() ? `Drop-off driver: *${drop.driverName.trim()}*` : "",
+    opts.branchName?.trim() ? `Workshop: *${opts.branchName.trim()}*` : "",
     ``,
-    `Reply here if you need to reschedule.`,
+    `We’ll message you when the driver is on the way. Reply here to reschedule.`,
     ``,
-    `— Team Prime Detailers`,
+    `— ${biz}`,
   ]
     .filter(Boolean)
     .join("\n");

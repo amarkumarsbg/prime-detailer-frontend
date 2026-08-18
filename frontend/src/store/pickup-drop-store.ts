@@ -1,12 +1,14 @@
 "use client";
 
 import { create } from "zustand";
-import type { PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
+import type { JobCard, PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { postCollectionSnapshot } from "@/lib/collection-sync";
 import {
+  dropDeliveryIsPremature,
   findPickupDropRequest,
   nextPickupDropStatus,
   PICKUP_DROP_STATUS_LABEL,
+  statusAfterRewindDrop,
   validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
 
@@ -41,23 +43,40 @@ export type AddPickupDropInput = {
   notes?: string;
 };
 
+export type LinkJobCardExtras = {
+  vehicleRegNumber?: string;
+  vehicleMakeModel?: string;
+  customerName?: string;
+  customerPhone?: string;
+};
+
 interface PickupDropStore {
   requests: PickupDropRequest[];
+  /** False until domain bootstrap has loaded this collection (do not persist before then). */
+  hydrated: boolean;
   /** Hydrated by bootstrap — replaces prior browser-local persistence */
   setRequestsFromBootstrap: (requests: PickupDropRequest[]) => void;
   addRequest: (input: AddPickupDropInput) => PickupDropRequest;
   /** Same Partial patch pattern as appointments / job cards / quotations. */
   updateRequest: (id: string, updates: Partial<PickupDropRequest>) => void;
   updateStatus: (id: string, status: PickupDropStatus) => void;
+  repairPrematureDropDeliveries: (jobs: JobCard[]) => void;
   assignDriver: (id: string, driverId: string | undefined, driverName: string | undefined) => void;
-  advanceStatus: (id: string) => PickupDropStatus | null;
-  linkJobCard: (oldJobCardId: string, newJobCardId: string, newJobNumber: string) => void;
+  advanceStatus: (id: string, job?: JobCard | null) => PickupDropStatus | null;
+  /** `pickupRequestIdOrOldJobId` may be a PND id or the temporary `new-…` jobCardId. */
+  linkJobCard: (
+    pickupRequestIdOrOldJobId: string,
+    newJobCardId: string,
+    newJobNumber: string,
+    extras?: LinkJobCardExtras
+  ) => void;
 }
 
 export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
   requests: [],
+  hydrated: false,
 
-  setRequestsFromBootstrap: (requests) => set({ requests }),
+  setRequestsFromBootstrap: (requests) => set({ requests, hydrated: true }),
 
   addRequest: (input) => {
     const existing = findPickupDropRequest(input.jobCardId, input.type, get().requests);
@@ -85,7 +104,7 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
     };
     const requests = [row, ...get().requests];
     set({ requests });
-    pushPickupSnapshot(requests);
+    if (get().hydrated) pushPickupSnapshot(requests);
     return row;
   },
 
@@ -133,6 +152,28 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
     });
   },
 
+  repairPrematureDropDeliveries: (jobs) => {
+    if (!get().hydrated) return;
+    const jobById = new Map(jobs.map((j) => [j.id, j]));
+    set((s) => {
+      let changed = false;
+      const requests = s.requests.map((r) => {
+        if (r.type !== "DROP" || r.status !== "DELIVERED") return r;
+        const job = jobById.get(r.jobCardId);
+        if (!dropDeliveryIsPremature(r, job, s.requests)) return r;
+        changed = true;
+        return {
+          ...r,
+          status: statusAfterRewindDrop(r),
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      if (!changed) return s;
+      pushPickupSnapshot(requests);
+      return { requests };
+    });
+  },
+
   assignDriver: (id, driverId, driverName) => {
     set((s) => {
       const requests = s.requests.map((r) => {
@@ -152,10 +193,10 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
     });
   },
 
-  advanceStatus: (id) => {
+  advanceStatus: (id, job) => {
     const current = get().requests.find((r) => r.id === id);
     if (!current) return null;
-    const block = validatePickupDropAdvance(current);
+    const block = validatePickupDropAdvance(current, { job, requests: get().requests });
     if (block) return null;
     const next = nextPickupDropStatus(current.type, current.status);
     if (!next) return null;
@@ -163,19 +204,28 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
     return next;
   },
 
-  linkJobCard: (oldJobCardId, newJobCardId, newJobNumber) => {
+  linkJobCard: (pickupRequestIdOrOldJobId, newJobCardId, newJobNumber, extras) => {
     set((s) => {
-      const requests = s.requests.map((r) =>
-        r.jobCardId === oldJobCardId
-          ? {
-              ...r,
-              jobCardId: newJobCardId,
-              jobNumber: newJobNumber,
-              updatedAt: new Date().toISOString(),
-            }
-          : r
-      );
-      pushPickupSnapshot(requests);
+      const source = s.requests.find((r) => r.id === pickupRequestIdOrOldJobId);
+      const oldJobCardId = source?.jobCardId ?? pickupRequestIdOrOldJobId;
+      const now = new Date().toISOString();
+      const requests = s.requests.map((r) => {
+        const linked =
+          r.id === pickupRequestIdOrOldJobId ||
+          (oldJobCardId && r.jobCardId === oldJobCardId);
+        if (!linked) return r;
+        return {
+          ...r,
+          jobCardId: newJobCardId,
+          jobNumber: newJobNumber,
+          vehicleRegNumber: extras?.vehicleRegNumber?.trim() || r.vehicleRegNumber,
+          vehicleMakeModel: extras?.vehicleMakeModel?.trim() || r.vehicleMakeModel,
+          customerName: extras?.customerName?.trim() || r.customerName,
+          customerPhone: extras?.customerPhone?.trim() || r.customerPhone,
+          updatedAt: now,
+        };
+      });
+      if (s.hydrated) pushPickupSnapshot(requests);
       return { requests };
     });
   },

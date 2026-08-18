@@ -4,6 +4,8 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { DataTable } from "@/components/shared/data-table";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -27,7 +29,7 @@ import {
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { formatDate, cn } from "@/lib/utils";
-import { sortByNewest } from "@/lib/sort-by-date";
+import { jobNumberSortKey, sortJobCardsByNumberThenCreated } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
 import { Plus, LayoutGrid, List, ChevronDown } from "lucide-react";
@@ -96,6 +98,7 @@ const KANBAN_COLORS: Record<JobCardStatus, string> = {
 };
 
 export default function JobCardsPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const { jobCards } = useJobCardStore();
   const branches = useBranchStore((s) => s.branches);
@@ -144,17 +147,8 @@ export default function JobCardsPage() {
     } else if (activeFilter === DASHBOARD_FILTER.READY_FOR_DELIVERY) {
       list = list.filter(isReadyForDeliveryJob);
     }
-    return sortByNewest(list, "createdAt");
+    return sortJobCardsByNumberThenCreated(list);
   }, [branchScopedJobCards, activeFilter]);
-
-  /** Newest delivery / expected date first so the Delivery column reads in order. */
-  const jobCardsForList = useMemo(
-    () =>
-      [...jobCardsForView].sort((a, b) =>
-        new Date(jobCardDeliveryAt(b)).getTime() - new Date(jobCardDeliveryAt(a)).getTime()
-      ),
-    [jobCardsForView]
-  );
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: jobCardsForView.length };
@@ -216,7 +210,7 @@ export default function JobCardsPage() {
       if (jc.status !== "CANCELLED" && map[jc.status]) map[jc.status].push(jc);
     });
     KANBAN_COLUMNS.forEach((s) => {
-      map[s] = sortByNewest(map[s] ?? [], "createdAt");
+      map[s] = sortJobCardsByNumberThenCreated(map[s] ?? []);
     });
     return map;
   }, [jobCardsForView]);
@@ -234,15 +228,17 @@ export default function JobCardsPage() {
   }, [kanbanData]);
 
   const filteredJobCardsForListTab = useMemo(() => {
-    if (activeTab === "ALL") return jobCardsForList;
-    return jobCardsForList.filter((jc) => jc.status === activeTab);
-  }, [jobCardsForList, activeTab]);
+    if (activeTab === "ALL") return jobCardsForView;
+    return jobCardsForView.filter((jc) => jc.status === activeTab);
+  }, [jobCardsForView, activeTab]);
 
   const columns = useMemo(
     () => [
       {
         key: "jobNumber",
         label: "Job number",
+        sortable: true,
+        sortValue: (item: JobCard) => jobNumberSortKey(item.jobNumber),
         className: "align-top whitespace-nowrap w-[1%]",
         render: (item: JobCard) => (
           <span className="font-mono text-xs font-semibold text-primary">{item.jobNumber}</span>
@@ -320,6 +316,7 @@ export default function JobCardsPage() {
         key: "createdAt",
         label: "Created",
         sortable: true,
+        sortValue: (item: JobCard) => item.createdAt,
         className: "align-top whitespace-nowrap text-muted-foreground",
         render: (item: JobCard) => formatDate(item.createdAt),
       },
@@ -328,6 +325,10 @@ export default function JobCardsPage() {
   );
 
   const searchMatchJobCard = useCallback((jc: JobCard, qLower: string) => jobCardMatchesSearch(jc, qLower), []);
+
+  if (!storesReady) {
+    return <PageSkeleton />;
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 max-md:pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
@@ -417,7 +418,7 @@ export default function JobCardsPage() {
                   key={activeTab}
                   data={filteredJobCardsForListTab}
                   columns={columns}
-                  defaultSortKey="expectedDelivery"
+                  defaultSortKey="jobNumber"
                   defaultSortDir="desc"
                   searchPlaceholder="Search jobs, customers, vehicles..."
                   searchMatch={searchMatchJobCard}

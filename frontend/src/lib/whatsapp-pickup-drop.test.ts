@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildPickupAndDropScheduledWhatsAppMessage,
+  buildPickupDropWhatsAppMessage,
+} from "./whatsapp-customer-messages";
+import type { PickupDropRequest } from "@/types";
+
+const pickup = {
+  id: "PND-2026-0009",
+  jobCardId: "jc-1",
+  jobNumber: "JC-2026-0112",
+  type: "PICKUP",
+  customerName: "amar kumar",
+  customerPhone: "7004509790",
+  vehicleMakeModel: "Nissan xyz",
+  vehicleRegNumber: "JH78D2312",
+  address: "Greater Noida",
+  scheduledTime: "2026-08-18T12:33:00.000Z",
+  driverName: "Ravi Mechanic",
+  status: "PENDING",
+  branchId: "br-1",
+  createdAt: "2026-08-18T12:00:00.000Z",
+  updatedAt: "2026-08-18T12:00:00.000Z",
+} as PickupDropRequest;
+
+describe("pickup and drop WhatsApp messages", () => {
+  it("writes a pickup scheduled message without raw status codes", () => {
+    const text = buildPickupDropWhatsAppMessage(pickup, { businessName: "Prime Detailers" });
+    expect(text).toMatch(/scheduled a \*pickup\*/i);
+    expect(text).not.toMatch(/DRIVER_ASSIGNED|IN_SERVICE/);
+  });
+
+  it("writes a drop-off delivered confirmation", () => {
+    const text = buildPickupDropWhatsAppMessage(
+      { ...pickup, type: "DROP", status: "DELIVERED" },
+      { businessName: "Prime Detailers" }
+    );
+    expect(text).toMatch(/has been \*delivered\*/i);
+  });
+
+  it("combines pickup and drop-off when both are created", () => {
+    const drop = { ...pickup, id: "PND-2026-0010", type: "DROP" as const };
+    const text = buildPickupAndDropScheduledWhatsAppMessage(pickup, drop, {
+      businessName: "Prime Detailers",
+    });
+    expect(text).toMatch(/pickup and drop-off/i);
+    expect(text).toContain("Greater Noida");
+  });
+});

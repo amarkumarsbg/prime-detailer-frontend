@@ -592,6 +592,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             (v) => normalizeRegistrationNumber(v.registrationNumber) === pickupVehicleReg
           )
         : undefined;
+      if (sourcePickupId && pickupVehicleReg && !pickupVehicleMatch) {
+        setSelectedVehicleId(null);
+        setAddingNewVehicle(true);
+        openCreditDialogIfCustomerHasDues(found.id);
+        return;
+      }
       const v =
         pickupVehicleMatch ??
         [...owned].sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber))[0];
@@ -1888,7 +1894,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       if (sourcePickupId) {
         const createdJob = useJobCardStore.getState().jobCards.find((j) => j.id === jid);
         if (createdJob) {
-          usePickupDropStore.getState().linkJobCard(sourcePickupId, jid, createdJob.jobNumber);
+          usePickupDropStore.getState().linkJobCard(sourcePickupId, jid, createdJob.jobNumber, {
+            vehicleRegNumber: createdJob.vehicleRegNumber,
+            vehicleMakeModel: createdJob.vehicleMakeModel,
+            customerName: createdJob.customerName,
+            customerPhone: createdJob.customerPhone,
+          });
           reconcilePickupWithJobCards();
         }
       }

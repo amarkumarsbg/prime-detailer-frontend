@@ -11,8 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
+import { datetimeLocalValue } from "@/features/booking-wizard/lib/datetime-local";
+import { isDatetimeLocalInPast, localDatetimeLocalInputMin } from "@/lib/booking-calendar-validation";
 
 export const DELIVERY_CHECKLIST_ITEMS = [
   { id: "customerSatisfaction", label: "Customer Satisfaction Confirmed" },
@@ -22,9 +26,26 @@ export const DELIVERY_CHECKLIST_ITEMS = [
 
 export type DeliveryChecklistId = (typeof DELIVERY_CHECKLIST_ITEMS)[number]["id"];
 
+export type DeliverVehicleDropOff = {
+  address: string;
+  scheduledTime: string;
+  driverId: string;
+  driverName?: string;
+};
+
 export type DeliverVehicleResult = {
   deliveryNotes: string;
   deliveryChecklist: Record<DeliveryChecklistId, boolean>;
+  dropOff?: DeliverVehicleDropOff;
+};
+
+export type DeliverVehicleDropOffPrefill = {
+  branchId: string;
+  branchScoped: boolean;
+  address: string;
+  driverId?: string;
+  driverName?: string;
+  scheduledTime?: string;
 };
 
 type Props = {
@@ -32,6 +53,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   jobNumber: string;
   submitting?: boolean;
+  dropOff?: DeliverVehicleDropOffPrefill | null;
   onConfirm: (result: DeliverVehicleResult) => void | Promise<void>;
 };
 
@@ -40,6 +62,7 @@ export function DeliverVehicleDialog({
   onOpenChange,
   jobNumber,
   submitting = false,
+  dropOff = null,
   onConfirm,
 }: Props) {
   const [notes, setNotes] = useState("");
@@ -48,6 +71,10 @@ export function DeliverVehicleDialog({
     keysDelivered: false,
     finalWalkthrough: false,
   });
+  const [dropAddress, setDropAddress] = useState("");
+  const [dropDriverId, setDropDriverId] = useState("unassigned");
+  const [dropDriverName, setDropDriverName] = useState<string | undefined>();
+  const [dropScheduledLocal, setDropScheduledLocal] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -57,24 +84,88 @@ export function DeliverVehicleDialog({
       keysDelivered: false,
       finalWalkthrough: false,
     });
-  }, [open]);
+    setDropAddress(dropOff?.address?.trim() ?? "");
+    setDropDriverId(dropOff?.driverId || "unassigned");
+    setDropDriverName(undefined);
+    const scheduled = dropOff?.scheduledTime ? new Date(dropOff.scheduledTime) : null;
+    const local =
+      scheduled && !Number.isNaN(scheduled.getTime())
+        ? datetimeLocalValue(scheduled)
+        : datetimeLocalValue(new Date(Date.now() + 2 * 60 * 60 * 1000));
+    setDropScheduledLocal(isDatetimeLocalInPast(local) ? localDatetimeLocalInputMin() : local);
+  }, [open, dropOff]);
 
   const allChecked = DELIVERY_CHECKLIST_ITEMS.every((item) => checks[item.id]);
+  const dropOffReady =
+    !dropOff ||
+    (dropAddress.trim().length > 0 &&
+      dropDriverId !== "unassigned" &&
+      dropScheduledLocal &&
+      !isDatetimeLocalInPast(dropScheduledLocal) &&
+      !Number.isNaN(new Date(dropScheduledLocal).getTime()));
+  const canSubmit = allChecked && dropOffReady && !submitting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={dropOff ? "sm:max-w-lg" : "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5 text-primary" />
             Deliver Vehicle
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Complete the checklist before marking {jobNumber} as delivered.
+            {dropOff
+              ? "Confirm drop-off details and complete the checklist. This marks drop-off complete and delivers the job at the workshop."
+              : `Complete the checklist before marking ${jobNumber} as delivered.`}
           </p>
         </DialogHeader>
 
         <div className="space-y-4">
+          {dropOff ? (
+            <div className="space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4">
+              <p className="text-sm font-semibold">Drop-off</p>
+              <p className="text-xs text-muted-foreground">
+                Return {jobNumber} to the customer. Confirming Deliver Vehicle marks this drop-off
+                complete.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="drop-off-address">Drop-off address</Label>
+                <Textarea
+                  id="drop-off-address"
+                  rows={2}
+                  placeholder="Customer address for return"
+                  value={dropAddress}
+                  onChange={(e) => setDropAddress(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Driver</Label>
+                  <PickupDriverSelect
+                    branchId={dropOff.branchId}
+                    branchScoped={dropOff.branchScoped}
+                    value={dropDriverId}
+                    onValueChange={(id, name) => {
+                      setDropDriverId(id);
+                      setDropDriverName(name);
+                    }}
+                    triggerClassName="w-full max-w-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="drop-off-when">Scheduled time</Label>
+                  <Input
+                    id="drop-off-when"
+                    type="datetime-local"
+                    min={localDatetimeLocalInputMin()}
+                    value={dropScheduledLocal}
+                    onChange={(e) => setDropScheduledLocal(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label htmlFor="delivery-notes">Delivery Notes</Label>
             <Textarea
@@ -124,12 +215,26 @@ export function DeliverVehicleDialog({
           </Button>
           <Button
             type="button"
-            disabled={!allChecked || submitting}
-            title={!allChecked ? "Complete all checklist items first" : undefined}
+            disabled={!canSubmit}
+            title={
+              !allChecked
+                ? "Complete all checklist items first"
+                : dropOff && !dropOffReady
+                  ? "Enter drop-off address, driver, and a future time"
+                  : undefined
+            }
             onClick={() =>
               void onConfirm({
                 deliveryNotes: notes.trim(),
                 deliveryChecklist: checks,
+                dropOff: dropOff
+                  ? {
+                      address: dropAddress.trim(),
+                      scheduledTime: new Date(dropScheduledLocal).toISOString(),
+                      driverId: dropDriverId,
+                      driverName: dropDriverName || dropOff.driverName,
+                    }
+                  : undefined,
               })
             }
           >

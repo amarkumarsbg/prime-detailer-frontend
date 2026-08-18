@@ -153,7 +153,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   },
   {
     prefix: "/job-cards",
-    resources: [...OPS_CORE, "parts", "stockMovements", "serviceReminders", "cashBank"],
+    resources: [...OPS_CORE, "parts", "stockMovements", "serviceReminders", "cashBank", "pickupDropRequests"],
   },
   {
     prefix: "/customers",

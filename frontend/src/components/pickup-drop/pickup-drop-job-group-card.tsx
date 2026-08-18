@@ -10,13 +10,14 @@ import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-selec
 import { pickupAdvanceActionLabel } from "@/components/pickup-drop/pickup-leg-stepper";
 import type { PickupDropJobGroup } from "@/lib/pickup-drop-flow";
 import {
-  isPickupLegComplete,
+  effectivePickupDropStatus,
   nextPickupDropStatus,
   pickupDropDisplayLabel,
   PICKUP_DROP_STATUS_LABEL,
+  validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
 import { cn, formatDateTime } from "@/lib/utils";
-import type { PickupDropRequest, PickupDropStatus } from "@/types";
+import type { JobCard, PickupDropRequest, PickupDropStatus } from "@/types";
 
 const STATUS_STYLE: Record<PickupDropStatus, string> = {
   PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
@@ -29,6 +30,7 @@ const STATUS_STYLE: Record<PickupDropStatus, string> = {
 type LegRowProps = {
   leg: PickupDropRequest;
   allRequests: PickupDropRequest[];
+  job?: JobCard | null;
   branchScoped: boolean;
   hasPhone: boolean;
   onAssignDriver: (requestId: string, driverId: string, driverName?: string) => void;
@@ -40,6 +42,7 @@ type LegRowProps = {
 function LegRow({
   leg,
   allRequests,
+  job,
   branchScoped,
   hasPhone,
   onAssignDriver,
@@ -48,10 +51,16 @@ function LegRow({
   onEdit,
 }: LegRowProps) {
   const router = useRouter();
-  const pickupLegComplete = isPickupLegComplete(leg, allRequests);
-  const displayStatus = pickupLegComplete ? "DELIVERED" : leg.status;
-  const statusLabel = pickupDropDisplayLabel(leg, allRequests);
-  const nextStatus = pickupLegComplete ? null : nextPickupDropStatus(leg.type, leg.status);
+  const status = effectivePickupDropStatus(leg, job, allRequests);
+  const statusLabel = pickupDropDisplayLabel(leg, allRequests, job);
+  const nextStatus = nextPickupDropStatus(leg.type, status);
+  const advanceBlock = nextStatus
+    ? validatePickupDropAdvance({ ...leg, status }, { job, requests: allRequests })
+    : null;
+  const canAdvance = Boolean(nextStatus) && !advanceBlock;
+  const legComplete = nextStatus === null;
+  const showCreateJobCard =
+    leg.type === "PICKUP" && status === "IN_SERVICE" && leg.jobNumber === "NEW";
   const legTitle = leg.type === "PICKUP" ? "1. Pickup" : "2. Drop-off";
   const legHint =
     leg.type === "PICKUP"
@@ -69,7 +78,7 @@ function LegRow({
         <span
           className={cn(
             "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap",
-            STATUS_STYLE[displayStatus]
+            STATUS_STYLE[status]
           )}
         >
           {statusLabel}
@@ -87,10 +96,11 @@ function LegRow({
             onValueChange={(id, name) => onAssignDriver(leg.id, id, name)}
             size="compact"
             branchScoped={branchScoped}
+            disabled={legComplete}
           />
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
-          {leg.type === "PICKUP" && leg.status === "IN_SERVICE" && leg.jobNumber === "NEW" ? (
+          {showCreateJobCard ? (
             <Button
               type="button"
               variant="default"
@@ -102,23 +112,28 @@ function LegRow({
             >
               Create Job Card
             </Button>
-          ) : (
+          ) : canAdvance || nextStatus ? (
             <Button
               type="button"
-              variant={nextStatus ? "default" : "secondary"}
+              variant={canAdvance ? "default" : "secondary"}
               size="sm"
               className="h-8 text-xs"
-              disabled={!nextStatus}
+              disabled={!canAdvance}
               title={
-                nextStatus
-                  ? pickupAdvanceActionLabel(leg.type, nextStatus)
-                  : PICKUP_DROP_STATUS_LABEL[leg.status]
+                advanceBlock
+                  ? advanceBlock
+                  : nextStatus
+                    ? pickupAdvanceActionLabel(leg.type, nextStatus)
+                    : PICKUP_DROP_STATUS_LABEL[leg.status]
               }
-              onClick={() => onAdvance(leg)}
+              onClick={() => onAdvance({ ...leg, status })}
             >
-              {nextStatus ? pickupAdvanceActionLabel(leg.type, nextStatus) : "Complete"}
+              {nextStatus && !advanceBlock
+                ? pickupAdvanceActionLabel(leg.type, nextStatus)
+                : "Waiting for workshop"}
             </Button>
-          )}
+          ) : null}
+          {legComplete ? null : (
           <Button
             type="button"
             variant="outline"
@@ -129,6 +144,7 @@ function LegRow({
           >
             <Pencil className="w-3.5 h-3.5" />
           </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -149,6 +165,7 @@ function LegRow({
 export type PickupDropJobGroupCardProps = {
   group: PickupDropJobGroup;
   allRequests: PickupDropRequest[];
+  job?: JobCard | null;
   branchScoped: boolean;
   customerPhone?: string;
   onAssignDriver: (requestId: string, driverId: string, driverName?: string) => void;
@@ -160,6 +177,7 @@ export type PickupDropJobGroupCardProps = {
 export function PickupDropJobGroupCard({
   group,
   allRequests,
+  job,
   branchScoped,
   customerPhone,
   onAssignDriver,
@@ -181,6 +199,7 @@ export function PickupDropJobGroupCard({
           <LegRow
             leg={group.orphan}
             allRequests={allRequests}
+            job={job}
             branchScoped={branchScoped}
             hasPhone={hasPhone}
             onAssignDriver={onAssignDriver}
@@ -253,6 +272,7 @@ export function PickupDropJobGroupCard({
           <LegRow
             leg={group.pickup}
             allRequests={allRequests}
+            job={job}
             branchScoped={branchScoped}
             hasPhone={hasPhone}
             onAssignDriver={onAssignDriver}
@@ -266,6 +286,7 @@ export function PickupDropJobGroupCard({
           <LegRow
             leg={group.drop}
             allRequests={allRequests}
+            job={job}
             branchScoped={branchScoped}
             hasPhone={hasPhone}
             onAssignDriver={onAssignDriver}

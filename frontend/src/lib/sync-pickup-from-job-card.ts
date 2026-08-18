@@ -3,14 +3,12 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
 import {
   buildDropRequestInput,
-  getLinkedDropRequest,
   getLinkedPickupRequest,
   jobDeclinesDropOff,
   jobHasDropIntent,
   jobHasPickupIntent,
   jobStatusRank,
   pickupAtWorkshop,
-  pickupDropStatusRank,
 } from "@/lib/pickup-drop-flow";
 
 /**
@@ -22,6 +20,7 @@ export function ensureDropRequestForJob(jobCardId: string): void {
   if (!job) return;
 
   const store = usePickupDropStore.getState();
+  if (!store.hydrated) return;
   const linked = store.requests.filter((r) => r.jobCardId === jobCardId);
   if (linked.some((r) => r.type === "DROP")) return;
   if (jobDeclinesDropOff(job)) return;
@@ -42,40 +41,24 @@ export function ensureDropRequestForJob(jobCardId: string): void {
 }
 
 /**
- * Limited sync from job → drop only. Pickup leg is always manual (driver ops).
+ * Limited sync from job → drop only. Pickup and drop legs stay manual (driver ops).
  * Drop may already exist from booking; otherwise auto-created at Ready when allowed.
- * Drop completes on job Delivered only if a driver was assigned for the return trip.
+ * Never mark drop-off Delivered from the job card — that happens after service is Ready.
  */
 export function syncPickupFromJobCard(jobCardId: string, jobStatus: JobCardStatus): void {
-  const store = usePickupDropStore.getState();
-  const linked = store.requests.filter((r) => r.jobCardId === jobCardId);
-  const pickup = getLinkedPickupRequest(jobCardId, linked);
-
   if (jobStatusRank(jobStatus) >= jobStatusRank("READY")) {
     ensureDropRequestForJob(jobCardId);
   }
-
-  if (jobStatus !== "DELIVERED") return;
-
-  const drop = getLinkedDropRequest(jobCardId, store.requests);
-  if (!drop) return;
-  if (pickup && !pickupAtWorkshop(pickup)) return;
-  if (pickupDropStatusRank(drop.status) >= pickupDropStatusRank("DELIVERED")) return;
-  if (!drop.driverId) return;
-  if (pickupDropStatusRank(drop.status) < pickupDropStatusRank("DRIVER_ASSIGNED")) return;
-
-  store.updateStatus(drop.id, "DELIVERED");
 }
 
-/** Create missing drop rows for ready jobs; never rewrite pickup status from job card. */
+/** Create missing drop rows for ready jobs; rewind drop-off marked delivered too early. */
 export function reconcilePickupWithJobCards(): void {
+  if (!usePickupDropStore.getState().hydrated) return;
   const jobCards = useJobCardStore.getState().jobCards;
   for (const jc of jobCards) {
     if (jobStatusRank(jc.status) >= jobStatusRank("READY")) {
       ensureDropRequestForJob(jc.id);
     }
-    if (jc.status === "DELIVERED") {
-      syncPickupFromJobCard(jc.id, "DELIVERED");
-    }
   }
+  usePickupDropStore.getState().repairPrematureDropDeliveries(jobCards);
 }

@@ -102,28 +102,70 @@ export function findPickupDropRequest(
   return requests.find((r) => r.jobCardId === jobCardId && r.type === type);
 }
 
-/** Pickup leg is done once the vehicle is at the workshop and the return (drop) trip exists. */
-export function isPickupLegComplete(
-  pickup: PickupDropRequest | undefined,
-  requests: PickupDropRequest[]
+/** Pickup trip is done when the vehicle is at the workshop (service may still be in progress). */
+export function isPickupAtWorkshop(
+  pickup: PickupDropRequest | undefined
 ): boolean {
   if (!pickup || pickup.type !== "PICKUP") return false;
-  if (pickupDropStatusRank(pickup.status) < pickupDropStatusRank("IN_SERVICE")) return false;
-  return Boolean(getLinkedDropRequest(pickup.jobCardId, requests));
+  return pickupDropStatusRank(pickup.status) >= pickupDropStatusRank("IN_SERVICE");
+}
+
+/** @deprecated Use isPickupAtWorkshop — pickup complete does not mean customer delivery. */
+export function isPickupLegComplete(
+  pickup: PickupDropRequest | undefined,
+  _requests?: PickupDropRequest[]
+): boolean {
+  return isPickupAtWorkshop(pickup);
+}
+
+/** Drop marked delivered before the job is Ready (car still in the workshop). */
+export function dropDeliveryIsPremature(
+  drop: PickupDropRequest,
+  job: JobCard | null | undefined,
+  requests: PickupDropRequest[] = []
+): boolean {
+  if (drop.type !== "DROP" || drop.status !== "DELIVERED") return false;
+  if (drop.jobCardId.startsWith("new-") || drop.jobNumber === "NEW") return true;
+  if (!job) return false;
+  if (job.status === "CANCELLED") return true;
+  if (job.status === "DELIVERED") return false;
+  if (jobStatusRank(job.status) < jobStatusRank("READY")) return true;
+  const pickup = getLinkedPickupRequest(drop.jobCardId, requests);
+  if (pickup && !isPickupAtWorkshop(pickup) && job.status !== "DELIVERED") return true;
+  return false;
+}
+
+export function statusAfterRewindDrop(drop: PickupDropRequest): PickupDropStatus {
+  return drop.driverId ? "DRIVER_ASSIGNED" : "PENDING";
+}
+
+export function effectivePickupDropStatus(
+  req: PickupDropRequest,
+  job: JobCard | null | undefined,
+  requests: PickupDropRequest[] = []
+): PickupDropStatus {
+  if (dropDeliveryIsPremature(req, job, requests)) return statusAfterRewindDrop(req);
+  return req.status;
 }
 
 export function pickupDropDisplayLabel(
   req: PickupDropRequest,
-  requests: PickupDropRequest[]
+  requests: PickupDropRequest[] = [],
+  job?: JobCard | null
 ): string {
-  if (isPickupLegComplete(req, requests)) return "Pickup complete";
   if (req.type === "DROP") {
-    if (req.status === "IN_SERVICE") return "Drop-off in progress";
-    if (req.status === "DELIVERED") return "Complete";
-  } else {
-    if (req.status === "IN_SERVICE" && req.jobNumber === "NEW") {
-      return "At workshop (Needs Job Card)";
+    if (dropDeliveryIsPremature(req, job, requests)) {
+      return req.driverId ? "Waiting for workshop" : "Pending";
     }
+    if (req.status === "IN_SERVICE") return "Drop-off in progress";
+    if (req.status === "DELIVERED") return "Delivered to customer";
+  } else if (req.status === "IN_SERVICE") {
+    const drop = getLinkedDropRequest(req.jobCardId, requests);
+    const dropDone =
+      drop?.status === "DELIVERED" && !dropDeliveryIsPremature(drop, job, requests);
+    const jobFinished = job ? jobStatusRank(job.status) >= jobStatusRank("DELIVERED") : false;
+    if (dropDone || jobFinished) return "Pickup complete";
+    return req.jobNumber === "NEW" ? "At workshop (Needs Job Card)" : "At workshop";
   }
   return PICKUP_DROP_STATUS_LABEL[req.status];
 }
@@ -158,18 +200,55 @@ export function pickupGateForWorkshopStart(
   return pickupBlocksJobAdvance(jobCardId, requests, "AWAITING_SERVICE");
 }
 
-export function validatePickupDropAdvance(req: PickupDropRequest): string | null {
+export function pickupAtWorkshop(pickup: PickupDropRequest | undefined): boolean {
+  return isPickupAtWorkshop(pickup);
+}
+
+export type PickupDropAdvanceContext = {
+  job?: JobCard | null;
+  requests?: PickupDropRequest[];
+};
+
+export function resolveJobCardForPickupDrop(
+  req: Pick<PickupDropRequest, "jobCardId" | "jobNumber">,
+  jobs: JobCard[]
+): JobCard | undefined {
+  const byId = jobs.find((j) => j.id === req.jobCardId);
+  if (byId) return byId;
+  if (!req.jobNumber || req.jobNumber === "NEW") return undefined;
+  return jobs.find((j) => j.jobNumber === req.jobNumber);
+}
+
+export function validatePickupDropAdvance(
+  req: PickupDropRequest,
+  ctx?: PickupDropAdvanceContext
+): string | null {
   const next = nextPickupDropStatus(req.type, req.status);
   if (!next) return "This request is already at its final status.";
   if (!req.driverId) {
     return "Assign a driver before advancing the status.";
   }
+  if (req.type === "DROP" && next === "DELIVERED") {
+    const requests = ctx?.requests ?? [];
+    const pickup = getLinkedPickupRequest(req.jobCardId, requests);
+    const job = ctx?.job;
+    if (pickup && !isPickupAtWorkshop(pickup) && job?.status !== "DELIVERED") {
+      return "Finish pickup first. The vehicle must be at the workshop before drop-off.";
+    }
+    const linkedToOpenJob = Boolean(job) && job!.status !== "CANCELLED";
+    const stillUnlinked =
+      !linkedToOpenJob && (req.jobCardId.startsWith("new-") || req.jobNumber === "NEW");
+    if (stillUnlinked) {
+      return "The vehicle is at the workshop. Create the job card and finish service before drop-off.";
+    }
+    if (job?.status === "CANCELLED") {
+      return "This job is cancelled.";
+    }
+    if (job && jobStatusRank(job.status) < jobStatusRank("READY") && job.status !== "DELIVERED") {
+      return "The vehicle is at the workshop under maintenance. Finish service and mark the job Ready before drop-off.";
+    }
+  }
   return null;
-}
-
-export function pickupAtWorkshop(pickup: PickupDropRequest | undefined): boolean {
-  if (!pickup) return false;
-  return pickupDropStatusRank(pickup.status) >= pickupDropStatusRank("IN_SERVICE");
 }
 
 export function jobHasPickupIntent(job: JobCard, requests: PickupDropRequest[]): boolean {
@@ -189,6 +268,42 @@ export function jobDeclinesDropOff(job: JobCard): boolean {
 export function jobHasDropIntent(job: JobCard, requests: PickupDropRequest[]): boolean {
   if (requests.some((r) => r.jobCardId === job.id && r.type === "DROP")) return true;
   return /drop-off required:\s*yes/i.test(jobNotesBlob(job));
+}
+
+/** Show the drop-off form on Deliver Vehicle when a return trip exists or was requested. */
+export function jobNeedsDropOffForm(job: JobCard, requests: PickupDropRequest[]): boolean {
+  if (jobDeclinesDropOff(job)) return false;
+  const drop = getLinkedDropRequest(job.id, requests);
+  if (drop?.status === "DELIVERED") return false;
+  if (drop) return true;
+  return jobHasDropIntent(job, requests);
+}
+
+/** Pickup request id whose group should be attached to this job (still sitting on a temporary NEW id). */
+export function orphanPickupRequestIdForJob(
+  job: JobCard,
+  requests: PickupDropRequest[]
+): string | undefined {
+  if (requests.some((r) => r.jobCardId === job.id)) return undefined;
+  const orphans = requests.filter(
+    (r) => r.jobCardId.startsWith("new-") || r.jobNumber === "NEW"
+  );
+  if (!orphans.length) return undefined;
+
+  const jobReg = (job.vehicleRegNumber ?? "").replace(/[\s-]/g, "").toUpperCase();
+  const jobPhone = (job.customerPhone ?? "").replace(/\D/g, "");
+  const byReg = jobReg
+    ? orphans.filter(
+        (r) => (r.vehicleRegNumber ?? "").replace(/[\s-]/g, "").toUpperCase() === jobReg
+      )
+    : [];
+  const pool = byReg.length
+    ? byReg
+    : jobPhone.length >= 10
+      ? orphans.filter((r) => (r.customerPhone ?? "").replace(/\D/g, "") === jobPhone)
+      : [];
+  if (!pool.length) return undefined;
+  return [...pool].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0]?.id;
 }
 
 export function buildDropRequestInput(
@@ -255,9 +370,21 @@ function pickPreferredLeg(
   incoming: PickupDropRequest
 ): PickupDropRequest {
   if (!current) return incoming;
+  const incomingCreated = Date.parse(incoming.createdAt) || 0;
+  const currentCreated = Date.parse(current.createdAt) || 0;
+  if (incomingCreated !== currentCreated) {
+    return incomingCreated > currentCreated ? incoming : current;
+  }
   return pickupDropStatusRank(incoming.status) > pickupDropStatusRank(current.status)
     ? incoming
     : current;
+}
+
+function groupCreatedAtMs(group: PickupDropJobGroup): number {
+  const legs = [group.pickup, group.drop, group.orphan].filter(
+    (x): x is PickupDropRequest => x != null
+  );
+  return Math.max(0, ...legs.map((leg) => Date.parse(leg.createdAt) || 0));
 }
 
 /** One UI row per job — pickup + drop-off are legs of the same booking, not duplicate jobs. */
@@ -269,7 +396,7 @@ export function groupPickupDropByJob(requests: PickupDropRequest[]): PickupDropJ
   const orphans: PickupDropRequest[] = [];
 
   for (const r of requests) {
-    if (!r.jobCardId || r.jobCardId.startsWith("new-")) {
+    if (!r.jobCardId) {
       orphans.push(r);
       continue;
     }
@@ -311,6 +438,8 @@ export function groupPickupDropByJob(requests: PickupDropRequest[]): PickupDropJ
   }
 
   return groups.sort((a, b) => {
+    const createdDiff = groupCreatedAtMs(b) - groupCreatedAtMs(a);
+    if (createdDiff !== 0) return createdDiff;
     const ta = new Date(a.scheduledTime).getTime();
     const tb = new Date(b.scheduledTime).getTime();
     if (tb !== ta) return tb - ta;

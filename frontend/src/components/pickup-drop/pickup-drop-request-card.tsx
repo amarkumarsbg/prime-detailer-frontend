@@ -18,7 +18,6 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import { pickupAdvanceActionLabel } from "@/components/pickup-drop/pickup-leg-stepper";
 import {
-  isPickupLegComplete,
   nextPickupDropStatus,
   pickupDropDisplayLabel,
   PICKUP_DROP_STATUS_LABEL,
@@ -103,12 +102,10 @@ export function PickupDropRequestCard({
   onWhatsApp,
 }: PickupDropRequestCardProps) {
   const typeConfig = TYPE_CONFIG[r.type];
-  const pickupLegComplete = isPickupLegComplete(r, allRequests);
-  const displayStatus = pickupLegComplete ? "DELIVERED" : r.status;
-  const statusVisual = STATUS_ICON_CONFIG[displayStatus];
+  const statusVisual = STATUS_ICON_CONFIG[r.status];
   const StatusIcon = statusVisual.icon;
   const statusLabel = pickupDropDisplayLabel(r, allRequests);
-  const nextStatus = pickupLegComplete ? null : nextPickupDropStatus(r.type, r.status);
+  const nextStatus = nextPickupDropStatus(r.type, r.status);
   const jobHref =
     r.jobCardId && !r.jobCardId.startsWith("new-") ? `/job-cards/${r.jobCardId}` : null;
 
@@ -170,7 +167,7 @@ export function PickupDropRequestCard({
                 <span
                   className={cn(
                     "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap",
-                    STATUS_STYLE[displayStatus]
+                    STATUS_STYLE[r.status]
                   )}
                 >
                   {statusLabel}

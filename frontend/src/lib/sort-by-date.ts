@@ -43,6 +43,25 @@ export function sortByNewest<T>(
   });
 }
 
+/** Numeric rank for job numbers like JC-2026-0110 so 0110 sorts after 0109 and 105. */
+export function jobNumberSortKey(jobNumber: string): number {
+  const match = /^JC-(\d{4})-(\d+)$/i.exec(jobNumber.trim());
+  if (match) return Number(match[1]) * 1_000_000 + Number(match[2]);
+  const tail = jobNumber.match(/(\d+)$/);
+  return tail ? Number(tail[1]) : 0;
+}
+
+/** Newest job number first, then newest createdAt. */
+export function sortJobCardsByNumberThenCreated<
+  T extends { jobNumber: string; createdAt: string },
+>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const byNumber = jobNumberSortKey(b.jobNumber) - jobNumberSortKey(a.jobNumber);
+    if (byNumber !== 0) return byNumber;
+    return dateSortValue(b.createdAt) - dateSortValue(a.createdAt);
+  });
+}
+
 /** DataTable / generic comparator — handles ISO date strings and numbers. */
 export function compareFieldValues(
   aVal: unknown,

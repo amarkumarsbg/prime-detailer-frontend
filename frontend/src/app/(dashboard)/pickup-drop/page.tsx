@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -38,14 +40,11 @@ import { Plus, ChevronsUpDown, Search, Check, ChevronRight, Car } from "lucide-r
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { buildPickupDropWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
-  sendCustomerWhatsApp,
-  openWhatsAppComposer,
-  isWhatsAppNotConfiguredError,
-} from "@/lib/whatsapp-send";
-import { useNotificationStore } from "@/store/notification-store";
-import { ApiError } from "@/lib/api-client";
+  notifyPickupDropCreatedWhatsApp,
+  notifyPickupDropWhatsApp,
+} from "@/lib/whatsapp-automation-triggers";
+import { useSettingsStore } from "@/store/settings-store";
 import {
   isDatetimeLocalInPast,
   localDatetimeLocalInputMin,
@@ -73,10 +72,12 @@ import {
   queryLooksLikeVehicleReg,
 } from "@/lib/customer-vehicle-lookup";
 import {
+  findPickupDropRequest,
   groupPickupDropByJob,
   pickupDropAddressFieldLabel,
   pickupDropGroupMatchesFilters,
   PICKUP_DROP_STATUS_LABEL,
+  resolveJobCardForPickupDrop,
   resolvePickupDropAddressForJobCard,
   validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
@@ -97,6 +98,10 @@ function defaultScheduledDatetimeLocal(): string {
   const d = new Date();
   d.setHours(d.getHours() + 2, 0, 0, 0);
   return formatDatetimeLocalInput(d);
+}
+
+function newStandaloneJobCardId(): string {
+  return `new-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())}`;
 }
 
 const STATUS_OPTIONS: { value: PickupDropStatus | "ALL"; label: string }[] = [
@@ -124,13 +129,21 @@ const dialogSurfaceClass =
   "!duration-[1200ms] data-[state=open]:!duration-[1200ms] data-[state=closed]:!duration-[1000ms]";
 
 export default function PickupDropPage() {
+  const storesReady = useDashboardStoresReady();
   const { jobCards } = useJobCardStore();
-  const { requests, addRequest, updateRequest, assignDriver, advanceStatus } = usePickupDropStore();
+  const { requests, addRequest, updateRequest, assignDriver, advanceStatus, repairPrematureDropDeliveries } =
+    usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
   const appointments = useAppointmentStore((s) => s.appointments);
   const customers = useCustomerStore((s) => s.customers);
+  const businessName = useSettingsStore((s) => s.businessName);
   const { selectedBranchId, viewingLabel } = useBranchScope();
+
+  useEffect(() => {
+    if (!storesReady) return;
+    repairPrematureDropDeliveries(jobCards);
+  }, [storesReady, jobCards, requests, repairPrematureDropDeliveries]);
 
   const [statusFilter, setStatusFilter] = useState<PickupDropStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<PickupDropType | "ALL">("ALL");
@@ -240,11 +253,14 @@ export default function PickupDropPage() {
   const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
   const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
 
-  const [requestAddress, setRequestAddress] = useState("");
+  const [pickupRequired, setPickupRequired] = useState(true);
+  const [dropRequired, setDropRequired] = useState(false);
+  const [pickupAddress, setPickupAddress] = useState("");
+  const [dropAddress, setDropAddress] = useState("");
+  const [pickupDriverId, setPickupDriverId] = useState("unassigned");
+  const [dropDriverId, setDropDriverId] = useState("unassigned");
   const [newBranchId, setNewBranchId] = useState<string>("");
   const [newScheduledLocal, setNewScheduledLocal] = useState("");
-  const [reqType, setReqType] = useState<PickupDropType>("PICKUP");
-  const [driverId, setDriverId] = useState<string>("unassigned");
   const [notes, setNotes] = useState("");
 
   const brandForModelDialog = addVehicleForExistingCustomerDialogOpen
@@ -519,11 +535,14 @@ export default function PickupDropPage() {
     setNewCustomerAddress("");
     setLookupQuery("");
     setLookupPanelCustomers([]);
-    setRequestAddress("");
+    setPickupRequired(true);
+    setDropRequired(false);
+    setPickupAddress("");
+    setDropAddress("");
+    setPickupDriverId("unassigned");
+    setDropDriverId("unassigned");
     setNewBranchId("");
     setNewScheduledLocal("");
-    setReqType("PICKUP");
-    setDriverId("unassigned");
     setNotes("");
     setVehicleReg("");
     setVehicleMake("");
@@ -543,14 +562,16 @@ export default function PickupDropPage() {
   };
 
   const handleCreate = () => {
-    const driver =
-      driverId !== "unassigned"
-        ? staff.find((d) => d.id === driverId)
-        : undefined;
-
-    const addr = requestAddress.trim();
-    if (!addr) {
-      toast.error(`Enter the ${pickupDropAddressFieldLabel(reqType).toLowerCase()}.`);
+    if (!pickupRequired && !dropRequired) {
+      toast.error("Choose pickup, drop-off, or both.");
+      return;
+    }
+    if (pickupRequired && !pickupAddress.trim()) {
+      toast.error("Enter the pickup address.");
+      return;
+    }
+    if (dropRequired && !dropAddress.trim()) {
+      toast.error("Enter the drop-off address.");
       return;
     }
     if (!newBranchId) {
@@ -604,52 +625,102 @@ export default function PickupDropPage() {
           normalizeRegistrationNumber(j.vehicleRegNumber) === regStored)
     );
 
-    const targetJobCardId = activeJob
+    // Attach to an open job card when this vehicle does not already have that pickup/drop leg.
+    // If the job already has those legs, create a standalone request so it appears as a new card.
+    let targetJobCardId = activeJob
       ? activeJob.id
-      : `new-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())}`;
-    const targetJobNumber = activeJob ? activeJob.jobNumber : "NEW";
+      : newStandaloneJobCardId();
+    let targetJobNumber = activeJob ? activeJob.jobNumber : "NEW";
+    const wouldReplaceExisting =
+      (pickupRequired && Boolean(findPickupDropRequest(targetJobCardId, "PICKUP", requests))) ||
+      (dropRequired && Boolean(findPickupDropRequest(targetJobCardId, "DROP", requests)));
+    if (wouldReplaceExisting) {
+      targetJobCardId = newStandaloneJobCardId();
+      targetJobNumber = "NEW";
+    }
 
     const phoneLine = customerPhoneStr
       ? `Phone: ${customerPhoneStr}`
       : "";
     const combinedNotes = [phoneLine, notes.trim()].filter(Boolean).join("\n\n");
 
-    addRequest({
+    const shared = {
       jobCardId: targetJobCardId,
       jobNumber: targetJobNumber,
       branchId: newBranchId,
       customerName: customerNameStr,
       customerPhone: customerPhoneStr || undefined,
-      address: addr,
       scheduledTime: scheduled.toISOString(),
-      type: reqType,
-      driverId: driver?.id,
-      driverName: driver?.name,
       notes: combinedNotes || undefined,
       vehicleMakeModel: vehicleMakeModelStr || undefined,
       vehicleRegNumber: vehicleRegNumberStr || undefined,
-    });
+    };
 
+    const pickupDriver =
+      pickupDriverId !== "unassigned" ? staff.find((d) => d.id === pickupDriverId) : undefined;
+    const dropDriver =
+      dropDriverId !== "unassigned" ? staff.find((d) => d.id === dropDriverId) : undefined;
+
+    const created: PickupDropRequest[] = [];
+    if (pickupRequired) {
+      created.push(
+        addRequest({
+          ...shared,
+          address: pickupAddress.trim(),
+          type: "PICKUP",
+          driverId: pickupDriver?.id,
+          driverName: pickupDriver?.name,
+        })
+      );
+    }
+    if (dropRequired) {
+      created.push(
+        addRequest({
+          ...shared,
+          address: dropAddress.trim(),
+          type: "DROP",
+          driverId: dropDriver?.id,
+          driverName: dropDriver?.name,
+        })
+      );
+    }
+
+    const branchName = branches.find((b) => b.id === newBranchId)?.name;
+    notifyPickupDropCreatedWhatsApp(created, { branchName, businessName });
+
+    toast.success(
+      pickupRequired && dropRequired
+        ? "Pickup and drop-off requests created"
+        : pickupRequired
+          ? "Pickup request created"
+          : "Drop-off request created"
+    );
     setCreateOpen(false);
     resetForm();
   };
 
-  const addressFieldLabel = pickupDropAddressFieldLabel(reqType);
+  const fallbackCustomerAddress = hasExistingCustomer
+    ? selectedExistingCustomer?.address?.trim() ?? ""
+    : newCustomerAddress.trim();
 
-  const canSubmitCreate = hasExistingCustomer
-    ? !!(existingCustomerId && selectedVehicleId && requestAddress.trim() && newBranchId && newScheduledLocal)
-    : !!(
-        newCustomerName.trim() &&
-        newCustomerPhone.trim() &&
-        vehicleReg.trim() &&
-        vehicleMake.trim() &&
-        vehicleModel.trim() &&
-        requestAddress.trim() &&
-        newBranchId &&
-        newScheduledLocal
-      );
+  const canSubmitCreate = (() => {
+    const customerReady = hasExistingCustomer
+      ? !!(existingCustomerId && selectedVehicleId)
+      : !!(
+          newCustomerName.trim() &&
+          newCustomerPhone.trim() &&
+          vehicleReg.trim() &&
+          vehicleMake.trim() &&
+          vehicleModel.trim()
+        );
+    const legsReady =
+      (pickupRequired || dropRequired) &&
+      (!pickupRequired || pickupAddress.trim()) &&
+      (!dropRequired || dropAddress.trim());
+    return customerReady && legsReady && !!newBranchId && !!newScheduledLocal;
+  })();
 
-  const handlePickupDropWhatsApp = async (r: PickupDropRequest) => {
+  const handlePickupDropWhatsApp = (r: PickupDropRequest) => {
     const phone = customerPhoneFromPickupRequest(r);
     if (!phone) {
       toast.error("No customer phone", {
@@ -658,47 +729,32 @@ export default function PickupDropPage() {
       return;
     }
     const branchName = branches.find((b) => b.id === r.branchId)?.name;
-    const message = buildPickupDropWhatsAppMessage(r, { branchName });
-    const notify = (channel: "api" | "composer") => {
-      useNotificationStore.getState().addNotification({
-        type: "whatsapp_sent",
-        title: channel === "api" ? "Pickup/Drop update via WhatsApp" : "Pickup/Drop — WhatsApp composer",
-        message: `${r.jobNumber} → ${phone}`,
-        href: "/pickup-drop",
-        branchId: r.branchId,
-      });
-    };
-    try {
-      await sendCustomerWhatsApp(phone, message);
-      toast.success("WhatsApp sent", { description: phone });
-      notify("api");
-    } catch (e) {
-      if (isWhatsAppNotConfiguredError(e)) {
-        openWhatsAppComposer(phone, message);
-        toast.info("WhatsApp opened", {
-          description: "Finish sending in the app, or configure Twilio on the server.",
-        });
-        notify("composer");
-        return;
-      }
-      toast.error("WhatsApp failed", {
-        description: e instanceof ApiError ? e.message : "Could not send",
-      });
-    }
+    notifyPickupDropWhatsApp(r, { branchName, businessName });
+    toast.success("WhatsApp sent", { description: phone });
   };
 
   const handleAdvanceStatus = (r: PickupDropRequest) => {
-    const block = validatePickupDropAdvance(r);
+    const job = resolveJobCardForPickupDrop(r, jobCards) ?? null;
+    const block = validatePickupDropAdvance(r, { job, requests });
     if (block) {
       toast.error(block);
       return;
     }
-    const next = advanceStatus(r.id);
+    const next = advanceStatus(r.id, job);
     if (!next) {
       toast.message("Already at final status");
       return;
     }
-    toast.success(PICKUP_DROP_STATUS_LABEL[next]);
+    const updated = usePickupDropStore.getState().requests.find((row) => row.id === r.id);
+    if (updated) {
+      const branchName = branches.find((b) => b.id === updated.branchId)?.name;
+      notifyPickupDropWhatsApp(updated, { branchName, businessName });
+    }
+    toast.success(
+      r.type === "DROP" && next === "DELIVERED"
+        ? "Drop-off complete — delivered to customer"
+        : PICKUP_DROP_STATUS_LABEL[next]
+    );
   };
 
   const handleAssignDriver = (requestId: string, value: string, driverName?: string) => {
@@ -710,7 +766,16 @@ export default function PickupDropPage() {
     if (driverName) {
       toast.success(`Driver: ${driverName}`);
     }
+    const updated = usePickupDropStore.getState().requests.find((row) => row.id === requestId);
+    if (updated) {
+      const branchName = branches.find((b) => b.id === updated.branchId)?.name;
+      notifyPickupDropWhatsApp(updated, { branchName, businessName });
+    }
   };
+
+  if (!storesReady) {
+    return <PageSkeleton />;
+  }
 
   return (
     <div>
@@ -817,9 +882,14 @@ export default function PickupDropPage() {
               undefined;
             return (
               <PickupDropJobGroupCard
-                key={group.jobCardId}
+                key={group.pickup?.id ?? group.drop?.id ?? group.orphan?.id ?? group.jobCardId}
                 group={group}
                 allRequests={scopedRequests}
+                job={
+                  jobCards.find((jc) => jc.id === group.jobCardId) ??
+                  jobCards.find((jc) => jc.jobNumber === group.jobNumber) ??
+                  null
+                }
                 branchScoped={!!selectedBranchId}
                 customerPhone={phone}
                 onAssignDriver={handleAssignDriver}
@@ -1207,16 +1277,156 @@ export default function PickupDropPage() {
             {/* STEP 3: Request details */}
             {currentStep === "details" && (
               <div className="space-y-4 pb-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="pd-existing-address">{addressFieldLabel} *</Label>
-                  <Textarea
-                    id="pd-existing-address"
-                    value={requestAddress}
-                    onChange={(e) => setRequestAddress(e.target.value)}
-                    rows={3}
-                    className="resize-none border-input"
-                    placeholder="Street, landmark, pincode…"
-                  />
+                <div className="rounded-xl border border-border bg-card p-4 space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-base font-semibold">Pickup &amp; Drop</p>
+                    <Badge variant="secondary" className="font-normal">
+                      {[
+                        pickupRequired ? "Pickup" : null,
+                        dropRequired ? "Drop-off" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" + ") || "Not Required"}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Is pickup required?</p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={pickupRequired ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setPickupRequired(true);
+                            if (!pickupAddress.trim() && fallbackCustomerAddress) {
+                              setPickupAddress(fallbackCustomerAddress);
+                            }
+                          }}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={!pickupRequired ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setPickupRequired(false);
+                            setPickupDriverId("unassigned");
+                          }}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    </div>
+                    {pickupRequired && (
+                      <div className="grid gap-4 pt-2 border-t border-border/60">
+                        <div className="space-y-2">
+                          <Label htmlFor="pd-pickup-address">Pickup address *</Label>
+                          <Textarea
+                            id="pd-pickup-address"
+                            value={pickupAddress}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              setPickupAddress(next);
+                              if (dropRequired && (!dropAddress.trim() || dropAddress === pickupAddress)) {
+                                setDropAddress(next);
+                              }
+                            }}
+                            rows={2}
+                            className="resize-none border-input"
+                            placeholder="Where should the driver collect the vehicle?"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Pickup driver (optional)</Label>
+                          <PickupDriverSelect
+                            branchId={newBranchId || selectedBranchId || ""}
+                            value={pickupDriverId}
+                            onValueChange={(id) => setPickupDriverId(id)}
+                            branchScoped={!!selectedBranchId}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Driver collects the vehicle from the customer.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 border-t border-border/60 pt-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Is drop-off required?</p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={dropRequired ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setDropRequired(true);
+                            if (!dropAddress.trim()) {
+                              setDropAddress(pickupAddress.trim() || fallbackCustomerAddress);
+                            }
+                          }}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={!dropRequired ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setDropRequired(false);
+                            setDropDriverId("unassigned");
+                          }}
+                        >
+                          No
+                        </Button>
+                      </div>
+                    </div>
+                    {dropRequired && (
+                      <div className="grid gap-4 pt-2 border-t border-border/60">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Label htmlFor="pd-drop-address">Drop-off address *</Label>
+                            {pickupRequired &&
+                              pickupAddress.trim() &&
+                              dropAddress.trim() !== pickupAddress.trim() && (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  className="h-auto p-0 text-xs"
+                                  onClick={() => setDropAddress(pickupAddress)}
+                                >
+                                  Same as pickup
+                                </Button>
+                              )}
+                          </div>
+                          <Textarea
+                            id="pd-drop-address"
+                            value={dropAddress}
+                            onChange={(e) => setDropAddress(e.target.value)}
+                            rows={2}
+                            className="resize-none border-input"
+                            placeholder="Where should the driver return the vehicle?"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Drop-off driver (optional)</Label>
+                          <PickupDriverSelect
+                            branchId={newBranchId || selectedBranchId || ""}
+                            value={dropDriverId}
+                            onValueChange={(id) => setDropDriverId(id)}
+                            branchScoped={!!selectedBranchId}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Driver returns the vehicle after service.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -1263,29 +1473,6 @@ export default function PickupDropPage() {
                       }}
                     />
                   </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Request Type</Label>
-                  <Select value={reqType} onValueChange={(v) => setReqType(v as PickupDropType)}>
-                    <SelectTrigger className={selectTriggerClass}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className={selectContentClass}>
-                      <SelectItem value="PICKUP">Pickup</SelectItem>
-                      <SelectItem value="DROP">Drop</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Assign Driver (Optional)</Label>
-                  <PickupDriverSelect
-                    branchId={newBranchId || selectedBranchId || ""}
-                    value={driverId}
-                    onValueChange={(id) => setDriverId(id)}
-                    branchScoped={!!selectedBranchId}
-                  />
                 </div>
 
                 <div className="grid gap-2">
@@ -1340,6 +1527,11 @@ export default function PickupDropPage() {
                   type="button"
                   onClick={() => {
                     if (validateVehicleStep()) {
+                      const addr = fallbackCustomerAddress;
+                      if (addr) {
+                        setPickupAddress((prev) => prev.trim() || addr);
+                        setDropAddress((prev) => prev.trim() || addr);
+                      }
                       setCurrentStep("details");
                     }
                   }}
