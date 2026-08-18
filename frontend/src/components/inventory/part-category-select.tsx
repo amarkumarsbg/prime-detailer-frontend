@@ -5,17 +5,6 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  dialogMobileSheetContentClasses,
-  dialogMobileSheetHeaderClasses,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -24,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
 import { useInventoryStore } from "@/store/inventory-store";
 
@@ -49,11 +37,10 @@ export function PartCategorySelect({
     [parts, partCategories]
   );
 
-  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveCategory = () => {
     const result = addPartCategory(name);
     if (!result.ok) {
       toast.error(result.error);
@@ -61,18 +48,18 @@ export function PartCategorySelect({
     }
     onChange(result.name);
     setName("");
-    setOpen(false);
+    setAdding(false);
     toast.success("Category added");
   };
 
   return (
-    <>
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
         <Select
           value={value || undefined}
           onValueChange={(next) => {
             if (next === ADD_CATEGORY_VALUE) {
-              setOpen(true);
+              setAdding(true);
               return;
             }
             onChange(next);
@@ -97,50 +84,47 @@ export function PartCategorySelect({
           type="button"
           variant="outline"
           className="shrink-0 gap-1 px-3"
-          onClick={() => setOpen(true)}
+          onClick={() => setAdding(true)}
         >
           <Plus className="h-3.5 w-3.5" />
           Add
         </Button>
       </div>
-
-      <Dialog
-        open={open}
-        onOpenChange={(v) => {
-          setOpen(v);
-          if (!v) setName("");
-        }}
-      >
-        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-w-sm")}>
-          <DialogHeader className={dialogMobileSheetHeaderClasses}>
-            <DialogTitle>Add category</DialogTitle>
-            <DialogDescription>
-              This category will appear on new and existing catalog items.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={submit} className="space-y-4 px-6 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-part-category">
-                Category name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="new-part-category"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Chemicals"
-                autoFocus
-                required
-              />
-            </div>
-            <DialogFooter className="px-0">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Save category</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+      {adding ? (
+        <div className="flex items-center gap-2">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Chemicals"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                saveCategory();
+              }
+              if (e.key === "Escape") {
+                setAdding(false);
+                setName("");
+              }
+            }}
+          />
+          <Button type="button" size="sm" onClick={saveCategory}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setAdding(false);
+              setName("");
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }

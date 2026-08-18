@@ -308,8 +308,20 @@ export function CatalogItemFormDialog({
         className={cn(dialogMobileSheetContentClasses, "z-[80] max-h-[min(92dvh,720px)]")}
         overlayClassName="z-[80]"
         onOpenAutoFocus={(e) => e.preventDefault()}
-        onPointerDownOutside={(e) => e.stopPropagation()}
-        onInteractOutside={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (target?.closest("[data-radix-select-content], [data-radix-popper-content-wrapper]")) {
+            e.preventDefault();
+          }
+          e.stopPropagation();
+        }}
+        onInteractOutside={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (target?.closest("[data-radix-select-content], [data-radix-popper-content-wrapper]")) {
+            e.preventDefault();
+          }
+          e.stopPropagation();
+        }}
       >
         <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
           <DialogTitle>{editingPart ? "Edit catalog item" : "New catalog item"}</DialogTitle>
@@ -443,18 +455,34 @@ export function CatalogItemFormDialog({
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="catalog-part-price">Selling price (₹)</Label>
-                <Input
-                  id="catalog-part-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="e.g. 500 per BOX"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  required
-                />
+              <div className="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-part-cost">
+                    Cost price {editingPart ? "" : <span className="text-destructive">*</span>}
+                  </Label>
+                  <Input
+                    id="catalog-part-cost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    required={!editingPart}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-part-price">Selling price (₹)</Label>
+                  <Input
+                    id="catalog-part-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 500 per BOX"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-secondary-price">Secondary unit price (₹, optional)</Label>
@@ -498,20 +526,6 @@ export function CatalogItemFormDialog({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Optional notes about this part"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="catalog-part-cost">
-                  Cost price {editingPart ? "" : <span className="text-destructive">*</span>}
-                </Label>
-                <Input
-                  id="catalog-part-cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  required={!editingPart}
                 />
               </div>
               <div className="space-y-2">
