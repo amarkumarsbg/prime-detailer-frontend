@@ -113,7 +113,7 @@ export function VendorFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh] sm:max-w-lg")}>
-        <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
+        <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2 pr-12")}>
           <DialogTitle>
             {isEdit ? `Edit Vendor${vendor?.name ? ` — ${vendor.name}` : ""}` : "Add Vendor"}
           </DialogTitle>

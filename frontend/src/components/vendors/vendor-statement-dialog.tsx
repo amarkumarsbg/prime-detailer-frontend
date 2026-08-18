@@ -75,7 +75,7 @@ export function VendorStatementDialog({
       <DialogContent
         className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,800px)] sm:max-w-3xl")}
       >
-        <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
+        <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3 pr-12")}>
           <DialogTitle>Vendor Statement — {vendor.vendorName}</DialogTitle>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -113,25 +113,10 @@ export function VendorStatementDialog({
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 px-6 py-4">
             {vendor.outstanding > 0.01 ? (
-              <div className="flex flex-col gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:border-orange-900/50 dark:bg-orange-950/30">
+              <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-900/50 dark:bg-orange-950/30">
                 <p className="text-sm text-orange-800 dark:text-orange-300">
                   Outstanding balance of {formatCurrency(vendor.outstanding)} is payable to this vendor.
                 </p>
-                {vendor.purchases.some((p) => purchaseDue(p) > 0.01) ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      const next = [...vendor.purchases]
-                        .filter((p) => purchaseDue(p) > 0.01)
-                        .sort((a, b) => new Date(a.purchasedAt).getTime() - new Date(b.purchasedAt).getTime())[0];
-                      if (next) setPayTargetId(next.id);
-                    }}
-                  >
-                    Record payment
-                  </Button>
-                ) : null}
               </div>
             ) : null}
 
