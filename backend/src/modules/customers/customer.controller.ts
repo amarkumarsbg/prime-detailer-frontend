@@ -28,7 +28,7 @@ const createSchema = z.object({
   emailVerified: z.boolean().optional(),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.partial().omit({ referredBy: true });
 
 const bulkItemSchema = z.object({
   name: z.string().min(1),

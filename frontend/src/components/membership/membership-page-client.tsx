@@ -514,6 +514,9 @@ export function MembershipPageClient() {
           customerName: cust.name,
           customerPhone: cust.phone,
           vehicleRegNumber: veh?.registrationNumber,
+          vehicleMakeModel: veh ? `${veh.make} ${veh.model}`.trim() : undefined,
+          membershipStartDate: subRow.startDate,
+          membershipEndDate: subRow.endDate,
           branchId: currentBranch?.id,
         });
         if (!invRes.ok) {

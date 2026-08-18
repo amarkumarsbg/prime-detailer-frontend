@@ -53,6 +53,7 @@ const DialogContent = React.forwardRef<
     mobileVariant?: DialogMobileVariant;
     /** Drag handle on mobile bottom sheets (default: true for sheet variant). */
     showMobileHandle?: boolean;
+    overlayClassName?: string;
   }
 >(
   (
@@ -62,6 +63,7 @@ const DialogContent = React.forwardRef<
       showClose = true,
       mobileVariant = "sheet",
       showMobileHandle,
+      overlayClassName,
       ...props
     },
     ref
@@ -71,7 +73,7 @@ const DialogContent = React.forwardRef<
 
     return (
       <DialogPortal>
-        <DialogOverlay />
+        <DialogOverlay className={overlayClassName} />
         <DialogPrimitive.Content
           ref={ref}
           className={cn(

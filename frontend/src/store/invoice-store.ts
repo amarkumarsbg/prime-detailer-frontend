@@ -2,13 +2,14 @@
 
 import { create } from "zustand";
 import type { Invoice, InvoiceStatus, Payment } from "@/types";
-import { putCollectionDocument } from "@/lib/collection-sync";
+import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
 
 interface InvoiceStore {
   invoices: Invoice[];
   addInvoice: (invoice: Invoice) => Promise<void>;
   getNextInvoiceNumber: () => string;
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
+  deleteInvoice: (id: string) => Promise<void>;
   recordPayment: (
     invoiceId: string,
     payment: Omit<Payment, "id"> & { id?: string; addExtraToWallet?: boolean; extraAmount?: number },
@@ -49,6 +50,11 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     set((state) => ({
       invoices: state.invoices.map((inv) => (inv.id === id ? next : inv)),
     }));
+  },
+
+  deleteInvoice: async (id) => {
+    await deleteCollectionDocument("invoices", id);
+    set((state) => ({ invoices: state.invoices.filter((inv) => inv.id !== id) }));
   },
 
   recordPayment: async (invoiceId, payment, options, walletAmountUsed = 0) => {

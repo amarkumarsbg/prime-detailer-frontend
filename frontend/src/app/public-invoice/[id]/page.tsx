@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiGet } from "@/lib/api-client";
 import { buildTaxInvoicePrintHtml } from "@/lib/tax-invoice-format";
+import { resolveMembershipInvoiceDetails } from "@/lib/membership-invoice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -92,7 +93,7 @@ export default function PublicInvoicePage() {
         customerPhone: invoice.customerPhone,
         customerEmail: jobCard?.customerEmail ?? "",
         customerAddress: jobCard?.customerAddress ?? "",
-        vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
+        vehicleMakeModel: invoice.vehicleMakeModel || jobCard?.vehicleMakeModel || "—",
         business: businessDetails,
         payments: invoice.payments || [],
         totalPaid,
@@ -102,6 +103,7 @@ export default function PublicInvoicePage() {
         newCustomerDiscount: invoice.discountAmount || 0,
         membershipId: invoice.membershipId,
         membershipPackageName: invoice.membershipPackageName,
+        membershipDetails: resolveMembershipInvoiceDetails({ invoice }) ?? undefined,
       },
       { includePrintScript: false }
     );

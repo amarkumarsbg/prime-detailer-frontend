@@ -16,6 +16,8 @@ import {
 } from "@/components/job-cards/multi-photo-camera-capture";
 import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { createInvoiceForMembershipActivation } from "@/lib/membership-invoice";
+import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
+import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { getNextBookingId } from "@/lib/appointment-ids";
 import {
   getBookingConfirmationBusiness,
@@ -347,6 +349,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [internalNotes, setInternalNotes] = useState("");
   const [customerNotes, setCustomerNotes] = useState("");
   const [referralCode, setReferralCode] = useState("");
+  const [referrerInfo, setReferrerInfo] = useState<{ id: string; name: string } | null>(null);
+  const [referralError, setReferralError] = useState(false);
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[] | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [hasManuallySetExpectedDelivery, setHasManuallySetExpectedDelivery] = useState(false);
@@ -373,6 +377,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             setCustomerPhone(existingCust.phone || "");
             setCustomerEmail(existingCust.email || "");
             setCustomerAddress(existingCust.address || "");
+            setReferralCode("");
+            setReferrerInfo(null);
+            setReferralError(false);
           } else {
             setExistingCustomerId(null);
             setCustomerName(pickup.customerName);
@@ -432,8 +439,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   >({});
   /** Optional advance amount (₹, incl. GST cap) saved on the job card when creating. */
   const [advanceAmountInput, setAdvanceAmountInput] = useState("");
-  const [referrerInfo, setReferrerInfo] = useState<{ id: string; name: string } | null>(null);
-  const [referralError, setReferralError] = useState(false);
   /** When set, membership is activated for the customer when the booking / job card is submitted. */
   const [wizardMembershipPackageId, setWizardMembershipPackageId] = useState<string | null>(null);
   /** For an existing vehicle-scoped pass: whether this visit uses included services (Yes) or normal booking (No). */
@@ -578,6 +583,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
     prevMatchRef.current = found.id;
     setExistingCustomerId(found.id);
+    setReferralCode("");
+    setReferrerInfo(null);
+    setReferralError(false);
     setCustomerName(found.name);
     const p10 = normalizePhoneDigits(found.phone);
     if (p10.length === 10) setCustomerPhone(p10);
@@ -629,6 +637,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const applySelectedCustomer = (c: Customer) => {
     prevMatchRef.current = c.id;
     setExistingCustomerId(c.id);
+    setReferralCode("");
+    setReferrerInfo(null);
+    setReferralError(false);
     setCustomerName(c.name);
     const p10 = normalizePhoneDigits(c.phone);
     if (p10.length === 10) setCustomerPhone(p10);
@@ -1420,7 +1431,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
     if (!existingCustomerId) {
       const newReferralCode = `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-      const referredByWalkIn = referralCode.trim() || undefined;
+      let referredByWalkIn: string | undefined;
+      if (!isJobCard) {
+        const parsed = referredByFromOptionalInput(referralCode, findByReferralCode);
+        if (parsed.error) {
+          toast.error(parsed.error);
+          return;
+        }
+        referredByWalkIn = parsed.referredBy;
+      }
       const referredByJobCard =
         isJobCard && referrerInfo ? referralCode.trim().toUpperCase() : undefined;
       let createdWalkIn;
@@ -1516,6 +1535,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             customerName: customerName.trim(),
             customerPhone,
             vehicleRegNumber: regStored,
+            vehicleMakeModel: matchedVehicle
+              ? `${matchedVehicle.make} ${matchedVehicle.model}`.trim()
+              : `${vehicleBrand} ${vehicleModel}`.trim(),
+            membershipStartDate: subRow.startDate,
+            membershipEndDate: subRow.endDate,
             branchId,
           });
           if (invRes.ok) {
@@ -2957,15 +2981,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     )}
                   </div>
                   {!existingCustomerId && isWalkIn && (
-                    <div className={cn("sm:col-span-2", compactCustomerStep ? "space-y-1" : "space-y-2")}>
-                      <Label className={cn(compactCustomerStep && "text-xs")}>Referral code (optional)</Label>
-                      <Input
+                    <div className="sm:col-span-2">
+                      <NewCustomerReferralCodeField
+                        id="walk-in-referral"
                         value={referralCode}
-                        onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                        placeholder="Referral code"
-                        className={cn(compactCustomerStep && "h-9")}
+                        onChange={setReferralCode}
+                        compact={compactCustomerStep}
                       />
-                      <p className="text-xs text-muted-foreground">If referred by another customer</p>
                     </div>
                   )}
                   {!existingCustomerId && isJobCard && (

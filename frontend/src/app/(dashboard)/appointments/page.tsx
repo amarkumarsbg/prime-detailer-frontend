@@ -17,6 +17,8 @@ import {
   isBrandNameTaken,
 } from "@/lib/vehicle-catalog-extras";
 import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
+import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
+import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { useSettingsStore } from "@/store/settings-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useBranchScope } from "@/lib/branch-scope";
@@ -162,6 +164,7 @@ export default function AppointmentsPage() {
   const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
+  const findByReferralCode = useCustomerStore((s) => s.findByReferralCode);
   const staff = useStaffStore((s) => s.staff);
   const appointments = useScopedAppointments();
   const jobCards = useJobCardStore((s) => s.jobCards);
@@ -236,6 +239,7 @@ export default function AppointmentsPage() {
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [newCustomerAddress, setNewCustomerAddress] = useState("");
+  const [newCustomerReferralCode, setNewCustomerReferralCode] = useState("");
   const [newVehicleReg, setNewVehicleReg] = useState("");
   const [newVehicleMake, setNewVehicleMake] = useState("");
   const [newVehicleModel, setNewVehicleModel] = useState("");
@@ -335,6 +339,7 @@ export default function AppointmentsPage() {
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
     setFormVehicleId(owned[0]?.id ?? "");
     setLookupPanelCustomers([]);
+    setNewCustomerReferralCode("");
   };
 
   const clearSelectedCustomer = () => {
@@ -423,6 +428,7 @@ export default function AppointmentsPage() {
     setNewCustomerPhone("");
     setNewCustomerEmail("");
     setNewCustomerAddress("");
+    setNewCustomerReferralCode("");
     setNewVehicleReg("");
     setNewVehicleMake("");
     setNewVehicleModel("");
@@ -518,6 +524,11 @@ export default function AppointmentsPage() {
         toast.error("Enter vehicle registration, make, and model");
         return;
       }
+      const referred = referredByFromOptionalInput(newCustomerReferralCode, findByReferralCode);
+      if (referred.error) {
+        toast.error(referred.error);
+        return;
+      }
       const referralCode = `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       let createdCustomer;
       try {
@@ -529,6 +540,7 @@ export default function AppointmentsPage() {
             `noemail+${phoneDigits}@customers.placeholder`,
           address: newCustomerAddress.trim(),
           referralCode,
+          referredBy: referred.referredBy,
           totalVisits: 0,
           rewardPoints: 0,
           walletBalance: 0,
@@ -935,6 +947,14 @@ export default function AppointmentsPage() {
                               onChange={(e) => setNewCustomerAddress(e.target.value)}
                               placeholder="City / area"
                               className="h-9"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <NewCustomerReferralCodeField
+                              id="apt-new-referral"
+                              value={newCustomerReferralCode}
+                              onChange={setNewCustomerReferralCode}
+                              compact
                             />
                           </div>
                         </div>

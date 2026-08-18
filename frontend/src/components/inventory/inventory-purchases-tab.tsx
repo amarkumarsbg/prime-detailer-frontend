@@ -33,7 +33,7 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
-import { InventoryQuickAddPartDialog } from "@/components/inventory/inventory-quick-add-part-dialog";
+import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-dialog";
 import { VendorFormDialog } from "@/components/expenses/vendor-form-dialog";
 import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
 import type { InventoryPurchaseLine, ProductPurchase } from "@/types";
@@ -321,6 +321,15 @@ export function InventoryPurchasesTab() {
         <DialogContent
           className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,720px)] sm:max-w-3xl")}
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => {
+            if (quickPartOpen || vendorDialogOpen) e.preventDefault();
+          }}
+          onFocusOutside={(e) => {
+            if (quickPartOpen || vendorDialogOpen) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (quickPartOpen || vendorDialogOpen) e.preventDefault();
+          }}
         >
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
             <DialogTitle>Create purchase</DialogTitle>
@@ -448,7 +457,16 @@ export function InventoryPurchasesTab() {
                   Purchase Items
                 </p>
                 <div className="flex gap-1.5">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setQuickPartOpen(true)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setQuickPartOpen(true);
+                    }}
+                  >
                     New part
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setItems((prev) => [...prev, emptyItem()])}>
@@ -628,17 +646,26 @@ export function InventoryPurchasesTab() {
         onSave={handleAddSupplier}
       />
 
-      <InventoryQuickAddPartDialog
+      <CatalogItemFormDialog
         open={quickPartOpen}
         onOpenChange={setQuickPartOpen}
-        onCreated={(partId) => {
+        onCreated={(part) => {
           setItems((prev) => {
             const next = [...prev];
+            const patch = {
+              partId: part.id,
+              unitPrice: String(part.costPrice ?? part.unitPrice ?? ""),
+              gstRate: String(part.gstRate ?? 18),
+            };
             const emptyIdx = next.findIndex((i) => !i.partId);
-            if (emptyIdx >= 0) next[emptyIdx] = { ...next[emptyIdx]!, partId };
-            else next.push({ ...emptyItem(), partId });
+            if (emptyIdx >= 0) {
+              next[emptyIdx] = { ...next[emptyIdx]!, ...patch };
+            } else {
+              next.push({ ...emptyItem(), ...patch });
+            }
             return next;
           });
+          setQuickPartOpen(false);
         }}
       />
     </div>

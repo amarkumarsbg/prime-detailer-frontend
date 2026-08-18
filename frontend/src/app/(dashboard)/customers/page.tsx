@@ -48,11 +48,14 @@ import {
   downloadCustomersPdf,
 } from "@/lib/customer-export";
 import { cn, formatDate, formatCurrency, getInitials } from "@/lib/utils";
+import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
+import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
   email: z.string().email("Invalid email address"),
   address: z.string().min(1, "Address is required"),
+  referredBy: z.string().optional(),
 });
 
 type AddCustomerFormData = z.infer<typeof addCustomerSchema>;
@@ -68,7 +71,7 @@ function normalizeVehicleToken(s: string): string {
 
 export default function CustomersPage() {
   const router = useRouter();
-  const { customers, addCustomer: addCustomerToStore, fetchCustomers } = useCustomerStore();
+  const { customers, addCustomer: addCustomerToStore, fetchCustomers, findByReferralCode } = useCustomerStore();
   const vehicles = useVehicleStore((s) => s.vehicles);
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
@@ -194,13 +197,20 @@ export default function CustomersPage() {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<AddCustomerFormData>({
     resolver: zodResolver(addCustomerSchema),
-    defaultValues: { name: "", phone: "", email: "", address: "" },
+    defaultValues: { name: "", phone: "", email: "", address: "", referredBy: "" },
   });
 
   const onSubmit = async (data: AddCustomerFormData) => {
+    const referred = referredByFromOptionalInput(data.referredBy ?? "", findByReferralCode);
+    if (referred.error) {
+      toast.error(referred.error);
+      return;
+    }
     try {
       const created = await addCustomerToStore({
         name: data.name,
@@ -208,6 +218,7 @@ export default function CustomersPage() {
         email: data.email,
         address: data.address,
         referralCode: generateReferralCode(),
+        referredBy: referred.referredBy,
         totalVisits: 0,
         rewardPoints: 0,
         walletBalance: 0,
@@ -486,6 +497,11 @@ export default function CustomersPage() {
                   <p className="text-sm text-destructive">{errors.address.message}</p>
                 )}
               </div>
+              <NewCustomerReferralCodeField
+                id="referredBy"
+                value={watch("referredBy") ?? ""}
+                onChange={(value) => setValue("referredBy", value)}
+              />
             </div>
             <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>

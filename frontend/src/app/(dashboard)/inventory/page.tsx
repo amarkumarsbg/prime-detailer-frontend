@@ -13,8 +13,6 @@ import {
   formatPartStockQuantity,
   getStockStatus,
   isMlTrackedPart,
-  litresToMl,
-  mlToLitres,
   partStockValueInr,
   stockStatusShortLabel,
 } from "@/lib/inventory-units";
@@ -53,25 +51,17 @@ import {
   BookMarked,
   ShoppingCart,
 } from "lucide-react";
-import type { Part, PartCategory } from "@/types";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import type { Part } from "@/types";
 import { InventoryBranchStockTab } from "@/components/inventory/inventory-branch-stock-tab";
 import { InventoryTransfersTab } from "@/components/inventory/inventory-transfers-tab";
 import { InventoryTransferLedgerTab } from "@/components/inventory/inventory-transfer-ledger-tab";
 import { InventoryPurchasesTab } from "@/components/inventory/inventory-purchases-tab";
 import { InventoryHistoryTab } from "@/components/inventory/inventory-history-tab";
 import { InventoryPartHistoryDialog } from "@/components/inventory/inventory-part-history-dialog";
-import { PartCategorySelect } from "@/components/inventory/part-category-select";
-import { PartUsedInFields } from "@/components/inventory/part-used-in-fields";
+import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-dialog";
 import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
-import {
-  DEFAULT_PART_USED_IN,
-  normalizePartUsedIn,
-  type PartUsedIn,
-} from "@/lib/inventory/part-used-in";
 import { toast } from "sonner";
-import { useInventoryStore, parseLitresInput } from "@/store/inventory-store";
+import { useInventoryStore } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { carsPossibleForPartAndService } from "@/lib/inventory/consumption";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
@@ -80,30 +70,7 @@ import { FilterBanner } from "@/components/shared/filter-banner";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 
-/** Primary units for stock; Litre uses ml-backed quantity like existing fluid parts. */
-const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
-  { value: "Piece", label: "Piece" },
-  { value: "Set", label: "Set" },
-  { value: "Kg", label: "Kg" },
-  { value: "Litre", label: "Litre (fluid)" },
-  { value: "Roll", label: "Roll" },
-  { value: "Box", label: "Box" },
-  { value: "Pack", label: "Pack" },
-  { value: "Carton", label: "Carton" },
-  { value: "Pair", label: "Pair" },
-];
-
 type StockTableFilter = "all" | "low" | "out";
-
-/** Keep focused fields visible when the mobile keyboard opens inside a dialog. */
-function focusMobileFormField(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  if (typeof window === "undefined") return;
-  if (!window.matchMedia("(max-width: 639px)").matches) return;
-  const el = e.currentTarget;
-  window.setTimeout(() => {
-    el.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, 320);
-}
 
 export default function InventoryPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
@@ -114,101 +81,17 @@ export default function InventoryPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const parts = useInventoryStore((s) => s.parts);
   const savedPartCategories = useInventoryStore((s) => s.partCategories);
-  const addPart = useInventoryStore((s) => s.addPart);
   const updatePart = useInventoryStore((s) => s.updatePart);
   const removePart = useInventoryStore((s) => s.removePart);
 
   const [stockTableFilter, setStockTableFilter] = useState<StockTableFilter>("all");
-
-  const [addPartName, setAddPartName] = useState("");
-  const [addPartBrand, setAddPartBrand] = useState("");
-  const [addPartSku, setAddPartSku] = useState("");
-  const [addPartCategory, setAddPartCategory] = useState<PartCategory>("Other");
-  const [addPartUsedIn, setAddPartUsedIn] = useState<PartUsedIn[]>([...DEFAULT_PART_USED_IN]);
-  const [addPartUnit, setAddPartUnit] = useState("Piece");
-  const [addPartQty, setAddPartQty] = useState("");
-  const [addPartPrice, setAddPartPrice] = useState("");
-  const [addPartReorder, setAddPartReorder] = useState("");
-  const [addPartSupplier, setAddPartSupplier] = useState("");
-  const [addPartBarcode, setAddPartBarcode] = useState("");
-  const [addPartSecondaryUnit, setAddPartSecondaryUnit] = useState("");
-  const [addPartConversionRate, setAddPartConversionRate] = useState("1");
-  const [addPartSecondaryPrice, setAddPartSecondaryPrice] = useState("");
-  const [addPartDescription, setAddPartDescription] = useState("");
-  const [addPartCost, setAddPartCost] = useState("");
-  const [addPartGstRate, setAddPartGstRate] = useState("18");
-  const [addPartHsn, setAddPartHsn] = useState("");
-  const [addPartGstApplicable, setAddPartGstApplicable] = useState(true);
-  const [addPartActive, setAddPartActive] = useState(true);
-  const [addPartBranchScope, setAddPartBranchScope] = useState("GLOBAL");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [historyPartId, setHistoryPartId] = useState<string | null>(null);
-
-  const resetAddPartForm = () => {
-    setAddPartName("");
-    setAddPartBrand("");
-    setAddPartSku("");
-    setAddPartCategory("Other");
-    setAddPartUsedIn([...DEFAULT_PART_USED_IN]);
-    setAddPartUnit("Piece");
-    setAddPartQty("");
-    setAddPartPrice("");
-    setAddPartReorder("");
-    setAddPartSupplier("");
-    setAddPartBarcode("");
-    setAddPartSecondaryUnit("");
-    setAddPartConversionRate("1");
-    setAddPartSecondaryPrice("");
-    setAddPartDescription("");
-    setAddPartCost("");
-    setAddPartGstRate("18");
-    setAddPartHsn("");
-    setAddPartGstApplicable(true);
-    setAddPartActive(true);
-    setAddPartBranchScope("GLOBAL");
-    setEditingPartId(null);
-  };
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editingPart, setEditingPart] = useState<Part | null>(null);
 
   const openEditPart = useCallback((part: Part) => {
-    setEditingPartId(part.id);
-    setAddPartName(part.name);
-    setAddPartBrand(part.brand ?? "");
-    setAddPartSku(part.sku);
-    setAddPartCategory(part.category);
-    setAddPartUsedIn(normalizePartUsedIn(part.usedIn));
-    setAddPartUnit(part.primaryUnit || "Piece");
-    setAddPartBarcode(part.barcode ?? "");
-    setAddPartSupplier(part.supplier === "—" ? "" : part.supplier);
-    setAddPartPrice(String(part.unitPrice ?? ""));
-    setAddPartSecondaryPrice(
-      part.unitPriceSecondary != null ? String(part.unitPriceSecondary) : ""
-    );
-    setAddPartDescription(part.description ?? "");
-    setAddPartCost(part.costPrice != null ? String(part.costPrice) : "");
-    setAddPartGstRate(part.gstRate != null ? String(part.gstRate) : "18");
-    setAddPartHsn(part.hsnCode ?? "");
-    setAddPartGstApplicable(part.gstApplicable !== false);
-    setAddPartActive(part.isActive !== false);
-    setAddPartBranchScope(part.branchScope ?? "GLOBAL");
-    if (isMlTrackedPart(part)) {
-      setAddPartUnit("Litre");
-      setAddPartSecondaryUnit("ML");
-      setAddPartConversionRate("1000");
-      setAddPartQty(String(mlToLitres(part.stockQuantityMl ?? 0)));
-      setAddPartReorder(
-        part.reorderLevelMl != null ? String(mlToLitres(part.reorderLevelMl)) : ""
-      );
-    } else {
-      const sec = part.secondaryUnit?.trim() ?? "";
-      const dual =
-        !!sec &&
-        sec.toLowerCase() !== (part.primaryUnit || "").toLowerCase() &&
-        part.conversionFactor > 1;
-      setAddPartSecondaryUnit(dual ? sec : "");
-      setAddPartConversionRate(dual ? String(part.conversionFactor) : "1");
-      setAddPartQty(String(part.quantity ?? 0));
-      setAddPartReorder(String(part.reorderLevel ?? ""));
-    }
+    setEditingPart(part);
     setAddDialogOpen(true);
   }, []);
 
@@ -233,18 +116,9 @@ export default function InventoryPage() {
   );
   const productPurchases = useInventoryStore((s) => s.productPurchases);
   const stockTransfers = useInventoryStore((s) => s.stockTransfers);
-  const addPurchase = useInventoryStore((s) => s.addPurchase);
   const recordStockAdjustment = useInventoryStore((s) => s.recordStockAdjustment);
 
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editingPartId, setEditingPartId] = useState<string | null>(null);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
-  const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
-
-  const [purchasePartId, setPurchasePartId] = useState("");
-  const [purchaseVendor, setPurchaseVendor] = useState("");
-  const [purchaseLitres, setPurchaseLitres] = useState("");
-  const [purchaseRef, setPurchaseRef] = useState("");
 
   const [adjustPartId, setAdjustPartId] = useState("");
   const [adjustDirection, setAdjustDirection] = useState<"IN" | "OUT">("IN");
@@ -287,7 +161,6 @@ export default function InventoryPage() {
     try {
       await removePart(deleteTarget.id);
       if (adjustPartId === deleteTarget.id) setAdjustPartId("");
-      if (purchasePartId === deleteTarget.id) setPurchasePartId("");
       toast.success("Catalog item deleted");
       setDeleteTarget(null);
     } catch {
@@ -295,7 +168,7 @@ export default function InventoryPage() {
     } finally {
       setDeletingPart(false);
     }
-  }, [deleteTarget, removePart, adjustPartId, purchasePartId]);
+  }, [deleteTarget, removePart, adjustPartId]);
 
   const columns = useMemo(
     () => [
@@ -519,31 +392,6 @@ export default function InventoryPage() {
     [openDeletePart, openEditPart, branches, updatePart]
   );
 
-  const mlPartsForPurchase = parts.filter((p) => isMlTrackedPart(p));
-
-  const handlePurchaseSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const ml = parseLitresInput(purchaseLitres);
-    if (!purchasePartId || !purchaseVendor.trim() || ml == null || ml <= 0) {
-      toast.error("Enter a valid part, vendor, and quantity (litres).");
-      return;
-    }
-    addPurchase({
-      partId: purchasePartId,
-      vendorName: purchaseVendor.trim(),
-      quantityMl: ml,
-      reference: purchaseRef.trim() || undefined,
-      purchasedAt: new Date().toISOString(),
-      recordedBy: performedBy,
-    });
-    toast.success("Purchase recorded and stock updated.");
-    setPurchaseDialogOpen(false);
-    setPurchasePartId("");
-    setPurchaseVendor("");
-    setPurchaseLitres("");
-    setPurchaseRef("");
-  };
-
   const handleAdjustSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const p = parts.find((x) => x.id === adjustPartId);
@@ -581,133 +429,6 @@ export default function InventoryPage() {
     toast.success("Stock adjusted.");
     setAdjustDialogOpen(false);
     setAdjustAmount("");
-  };
-
-  const handleAddPartSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = addPartName.trim();
-    const brand = addPartBrand.trim() || undefined;
-    const sku = addPartSku.trim();
-    const supplier = addPartSupplier.trim() || "—";
-    if (!name || !sku) {
-      toast.error("Enter part name and SKU");
-      return;
-    }
-    const price = Number(addPartPrice);
-    if (Number.isNaN(price) || price < 0) {
-      toast.error("Enter a valid selling price");
-      return;
-    }
-    const costPrice = Number(addPartCost);
-    if (!editingPartId && (Number.isNaN(costPrice) || addPartCost.trim() === "" || costPrice < 0)) {
-      toast.error("Cost price is required");
-      return;
-    }
-    const qtyInput = Number(addPartQty);
-    const reorderInput = Number(addPartReorder);
-    if (Number.isNaN(qtyInput) || qtyInput < 0) {
-      toast.error("Enter a valid initial quantity");
-      return;
-    }
-    const now = new Date().toISOString();
-    const existing = editingPartId ? parts.find((p) => p.id === editingPartId) : null;
-    const id = existing?.id ?? `prt-${Date.now().toString(36)}`;
-
-    let next: Part;
-    if (addPartUnit === "Litre") {
-      const reorderLitres =
-        Number.isNaN(reorderInput) || reorderInput < 0 ? 0 : reorderInput;
-      next = {
-        id,
-        name,
-        brand,
-        sku,
-        category: addPartCategory,
-        quantity: 0,
-        primaryUnit: "Litre",
-        secondaryUnit: "ML",
-        conversionFactor: 1000,
-        unitPrice: price,
-        reorderLevel: 0,
-        supplier,
-        barcode: addPartBarcode.trim() || undefined,
-        stockQuantityMl: litresToMl(qtyInput),
-        reorderLevelMl: litresToMl(reorderLitres),
-        lastRestocked: existing?.lastRestocked ?? now,
-        description: addPartDescription.trim() || undefined,
-        costPrice: Number.isFinite(costPrice) && addPartCost.trim() !== "" ? costPrice : existing?.costPrice,
-        gstRate: Number(addPartGstRate) || 0,
-        hsnCode: addPartHsn.trim() || undefined,
-        gstApplicable: addPartGstApplicable,
-        isActive: addPartActive,
-        branchScope: addPartBranchScope,
-        usedIn: addPartUsedIn,
-      };
-    } else {
-      const qty = Math.round(qtyInput);
-      const reorder =
-        Number.isNaN(reorderInput) || reorderInput < 0 ? 0 : Math.round(reorderInput);
-      const isKg = addPartUnit === "Kg";
-      const isRoll = addPartUnit === "Roll";
-      const isBox = addPartUnit === "Box" || addPartUnit === "Pack" || addPartUnit === "Carton";
-      const secondaryUnit =
-        addPartSecondaryUnit.trim() ||
-        (isKg ? "Grams" : isRoll ? "Sq.ft" : isBox ? "PCS" : addPartUnit);
-      const conversionRaw = Number(addPartConversionRate);
-      const conversionFactor =
-        Number.isFinite(conversionRaw) && conversionRaw > 0
-          ? conversionRaw
-          : isKg
-            ? 1000
-            : isRoll
-              ? 50
-              : isBox
-                ? 100
-                : 1;
-      const secondaryPriceRaw = Number(addPartSecondaryPrice);
-      const unitPriceSecondary =
-        Number.isFinite(secondaryPriceRaw) && secondaryPriceRaw >= 0
-          ? secondaryPriceRaw
-          : conversionFactor > 1
-            ? price / conversionFactor
-            : undefined;
-      next = {
-        id,
-        name,
-        brand,
-        sku,
-        barcode: addPartBarcode.trim() || undefined,
-        category: addPartCategory,
-        quantity: qty,
-        primaryUnit: addPartUnit,
-        secondaryUnit,
-        conversionFactor,
-        unitPrice: price,
-        unitPriceSecondary,
-        stockQuantitySecondary: conversionFactor > 1 ? qty * conversionFactor : undefined,
-        reorderLevel: reorder,
-        supplier,
-        lastRestocked: existing?.lastRestocked ?? now,
-        description: addPartDescription.trim() || undefined,
-        costPrice: Number.isFinite(costPrice) && addPartCost.trim() !== "" ? costPrice : existing?.costPrice,
-        gstRate: Number(addPartGstRate) || 0,
-        hsnCode: addPartHsn.trim() || undefined,
-        gstApplicable: addPartGstApplicable,
-        isActive: addPartActive,
-        branchScope: addPartBranchScope,
-        usedIn: addPartUsedIn,
-      };
-    }
-
-    if (existing) {
-      updatePart(existing.id, next);
-      toast.success("Catalog item updated");
-    } else {
-      addPart(next);
-      toast.success("Catalog item created");
-    }
-    setAddDialogOpen(false);
-    resetAddPartForm();
   };
 
   return (
@@ -782,378 +503,23 @@ export default function InventoryPage() {
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={purchaseDialogOpen} onOpenChange={setPurchaseDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Log purchase
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Log fluid purchase</DialogTitle>
-                  <DialogDescription>
-                    Vendor, timestamp (now), and litres received. Stock updates in millilitres.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handlePurchaseSubmit} className="space-y-4 mt-2">
-                  <div className="space-y-2">
-                    <Label>Fluid part</Label>
-                    <Select value={purchasePartId} onValueChange={setPurchasePartId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select part" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mlPartsForPurchase.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Vendor</Label>
-                    <Input
-                      value={purchaseVendor}
-                      onChange={(e) => setPurchaseVendor(e.target.value)}
-                      placeholder="Supplier name"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Quantity (litres)</Label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={purchaseLitres}
-                      onChange={(e) => setPurchaseLitres(e.target.value)}
-                      placeholder="e.g. 24"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Reference (optional)</Label>
-                    <Input
-                      value={purchaseRef}
-                      onChange={(e) => setPurchaseRef(e.target.value)}
-                      placeholder="PO number"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" onClick={() => setPurchaseDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">Save</Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-            <Dialog
+            <Button
+              onClick={() => {
+                setEditingPart(null);
+                setAddDialogOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New item
+            </Button>
+            <CatalogItemFormDialog
               open={addDialogOpen}
               onOpenChange={(open) => {
                 setAddDialogOpen(open);
-                if (!open) resetAddPartForm();
+                if (!open) setEditingPart(null);
               }}
-            >
-              <DialogTrigger asChild>
-                <Button
-                  onClick={() => {
-                    setEditingPartId(null);
-                    resetAddPartForm();
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New item
-                </Button>
-              </DialogTrigger>
-              <DialogContent
-                className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,720px)]")}
-                onOpenAutoFocus={(e) => e.preventDefault()}
-              >
-                <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
-                  <DialogTitle>{editingPartId ? "Edit catalog item" : "New catalog item"}</DialogTitle>
-                  <DialogDescription>
-                    {editingPartId
-                      ? "Update units, conversion, pricing, and on-hand quantity. Primary = pack unit; secondary = count unit (e.g. 1 Box = 12 PCS)."
-                      : "Choose Piece, Set, Kg, etc., or Litre for fluids. For packs, set secondary unit + conversion (e.g. 1 Box = 12 PCS)."}
-                  </DialogDescription>
-                </DialogHeader>
-                <form
-                  onSubmit={handleAddPartSubmit}
-                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
-                >
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 [-webkit-overflow-scrolling:touch]">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="add-part-name">
-                          Part Name <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          id="add-part-name"
-                          placeholder="e.g. Brake Pad Set"
-                          value={addPartName}
-                          onChange={(e) => setAddPartName(e.target.value)}
-                          onFocus={focusMobileFormField}
-                          autoComplete="off"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="add-part-brand">Brand</Label>
-                        <Input
-                          id="add-part-brand"
-                          placeholder="e.g. Bosch"
-                          value={addPartBrand}
-                          onChange={(e) => setAddPartBrand(e.target.value)}
-                          onFocus={focusMobileFormField}
-                          autoComplete="off"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-sku">
-                        SKU / Part number <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="add-part-sku"
-                        placeholder="e.g. BRK-PAD-001"
-                        value={addPartSku}
-                        onChange={(e) => setAddPartSku(e.target.value)}
-                        onFocus={focusMobileFormField}
-                        autoComplete="off"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-barcode">Barcode (optional)</Label>
-                      <Input
-                        id="add-part-barcode"
-                        placeholder="Scan or enter barcode"
-                        value={addPartBarcode}
-                        onChange={(e) => setAddPartBarcode(e.target.value)}
-                        onFocus={focusMobileFormField}
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>
-                        Category <span className="text-destructive">*</span>
-                      </Label>
-                      <PartCategorySelect
-                        value={addPartCategory}
-                        onChange={setAddPartCategory}
-                      />
-                    </div>
-                    <PartUsedInFields value={addPartUsedIn} onChange={setAddPartUsedIn} />
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-unit">Primary unit</Label>
-                      <Select value={addPartUnit} onValueChange={setAddPartUnit}>
-                        <SelectTrigger id="add-part-unit">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PART_STOCK_UNIT_OPTIONS.map((u) => (
-                            <SelectItem key={u.value} value={u.value}>
-                              {u.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {addPartUnit !== "Litre" && (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="add-part-secondary-unit">Secondary unit (optional)</Label>
-                          <Input
-                            id="add-part-secondary-unit"
-                            placeholder="e.g. PCS, GM, ML"
-                            value={addPartSecondaryUnit}
-                            onChange={(e) => setAddPartSecondaryUnit(e.target.value)}
-                            onFocus={focusMobileFormField}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="add-part-conversion">Conversion (1 primary = ? secondary)</Label>
-                          <Input
-                            id="add-part-conversion"
-                            type="number"
-                            min={1}
-                            step={1}
-                            placeholder="e.g. 100 for 1 BOX = 100 PCS"
-                            value={addPartConversionRate}
-                            onChange={(e) => setAddPartConversionRate(e.target.value)}
-                            onFocus={focusMobileFormField}
-                          />
-                        </div>
-                      </>
-                    )}
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-qty">
-                        {addPartUnit === "Litre"
-                          ? editingPartId
-                            ? "On-hand stock (litres)"
-                            : "Initial stock (litres)"
-                          : editingPartId
-                            ? `On-hand quantity (${addPartUnit})`
-                            : "Initial quantity"}
-                      </Label>
-                      <Input
-                        id="add-part-qty"
-                        type="number"
-                        min="0"
-                        step={addPartUnit === "Litre" ? "0.01" : "1"}
-                        placeholder="0"
-                        value={addPartQty}
-                        onChange={(e) => setAddPartQty(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-price">Selling price (₹)</Label>
-                      <Input
-                        id="add-part-price"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 500 per BOX"
-                        value={addPartPrice}
-                        onChange={(e) => setAddPartPrice(e.target.value)}
-                        required
-                      />
-                    </div>
-                    {addPartUnit !== "Litre" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="add-part-secondary-price">Secondary unit price (₹, optional)</Label>
-                        <Input
-                          id="add-part-secondary-price"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Auto from primary ÷ conversion"
-                          value={addPartSecondaryPrice}
-                          onChange={(e) => setAddPartSecondaryPrice(e.target.value)}
-                        />
-                      </div>
-                    )}
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-reorder">
-                        {addPartUnit === "Litre" ? "Reorder at (litres)" : `Reorder level (${addPartUnit})`}
-                      </Label>
-                      <Input
-                        id="add-part-reorder"
-                        type="number"
-                        min="0"
-                        step={addPartUnit === "Litre" ? "0.01" : "1"}
-                        placeholder="0"
-                        value={addPartReorder}
-                        onChange={(e) => setAddPartReorder(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="add-part-supplier">Supplier</Label>
-                      <Input
-                        id="add-part-supplier"
-                        placeholder="e.g. Bosch India (optional)"
-                        value={addPartSupplier}
-                        onChange={(e) => setAddPartSupplier(e.target.value)}
-                        onFocus={focusMobileFormField}
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="add-part-description">Description</Label>
-                      <Textarea
-                        id="add-part-description"
-                        value={addPartDescription}
-                        onChange={(e) => setAddPartDescription(e.target.value)}
-                        placeholder="Optional notes about this part"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-cost">
-                        Cost price {editingPartId ? "" : <span className="text-destructive">*</span>}
-                      </Label>
-                      <Input
-                        id="add-part-cost"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={addPartCost}
-                        onChange={(e) => setAddPartCost(e.target.value)}
-                        required={!editingPartId}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-gst">GST rate %</Label>
-                      <Input
-                        id="add-part-gst"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={addPartGstRate}
-                        onChange={(e) => setAddPartGstRate(e.target.value)}
-                        disabled={!addPartGstApplicable}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="add-part-hsn">HSN code</Label>
-                      <Input
-                        id="add-part-hsn"
-                        value={addPartHsn}
-                        onChange={(e) => setAddPartHsn(e.target.value)}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Branch scope</Label>
-                      <Select value={addPartBranchScope} onValueChange={setAddPartBranchScope}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="GLOBAL">All branches</SelectItem>
-                          {branches.filter((b) => b.isActive).map((b) => (
-                            <SelectItem key={b.id} value={b.id}>
-                              {b.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                      <Checkbox
-                        checked={addPartGstApplicable}
-                        onCheckedChange={(v) => setAddPartGstApplicable(v === true)}
-                      />
-                      GST applicable
-                    </label>
-                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                      <Checkbox
-                        checked={addPartActive}
-                        onCheckedChange={(v) => setAddPartActive(v === true)}
-                      />
-                      Active
-                    </label>
-                  </div>
-                  </div>
-                  <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-background px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setAddDialogOpen(false);
-                        resetAddPartForm();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit">{editingPartId ? "Save changes" : "Create item"}</Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+              editingPart={editingPart}
+            />
           </div>
         }
       />

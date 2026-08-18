@@ -1,6 +1,27 @@
 import type { Customer as CustomerRow } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { randomBytes } from "node:crypto";
+import { AppError } from "../../lib/app-error.js";
+import { REFERRAL_EXISTING_CUSTOMER_MESSAGE } from "../../lib/referral-eligibility.js";
+
+async function resolveAdvocateReferralCode(
+  organizationId: string,
+  referredBy: string | undefined | null
+): Promise<string | null> {
+  const code = referredBy?.trim().toUpperCase() || "";
+  if (!code) return null;
+  const advocate = await prisma.customer.findFirst({
+    where: {
+      organizationId,
+      referralCode: { equals: code, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (!advocate) {
+    throw AppError.validation("Invalid referral code.");
+  }
+  return code;
+}
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "").slice(-10);
@@ -74,6 +95,8 @@ export async function createCustomer(data: {
     if (clash) throw new Error("Phone already in use");
   }
 
+  const referredBy = await resolveAdvocateReferralCode(data.organizationId, data.referredBy);
+
   const id = `cust-${randomBytes(4).toString("hex")}`;
   const createdAt = new Date();
   const row = await prisma.customer.create({
@@ -85,7 +108,7 @@ export async function createCustomer(data: {
       email: data.email.trim(),
       address: data.address.trim(),
       referralCode: data.referralCode.trim(),
-      referredBy: data.referredBy?.trim() || null,
+      referredBy,
       totalVisits: data.totalVisits ?? 0,
       rewardPoints: data.rewardPoints ?? 0,
       walletBalance: data.walletBalance ?? 0,
@@ -130,6 +153,17 @@ export async function updateCustomer(
   const current = await prisma.customer.findFirst({ where: { id, organizationId } });
   if (!current) return null;
 
+  if (data.referredBy !== undefined) {
+    const next = data.referredBy === null ? "" : data.referredBy.trim();
+    const currentVal = current.referredBy?.trim() || "";
+    if (next && !currentVal) {
+      throw AppError.validation(REFERRAL_EXISTING_CUSTOMER_MESSAGE);
+    }
+    if (next && currentVal && next.toUpperCase() !== currentVal.toUpperCase()) {
+      throw AppError.validation("Referral code cannot be changed after customer creation.");
+    }
+  }
+
   const row = await prisma.customer.update({
     where: { id },
     data: {
@@ -139,7 +173,7 @@ export async function updateCustomer(
       ...(data.address !== undefined && { address: data.address.trim() }),
       ...(data.referralCode !== undefined && { referralCode: data.referralCode.trim() }),
       ...(data.referredBy !== undefined && {
-        referredBy: data.referredBy === null ? null : data.referredBy.trim(),
+        referredBy: current.referredBy,
       }),
       ...(data.totalVisits !== undefined && { totalVisits: data.totalVisits }),
       ...(data.rewardPoints !== undefined && { rewardPoints: data.rewardPoints }),

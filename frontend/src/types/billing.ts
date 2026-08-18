@@ -109,6 +109,11 @@ export interface Invoice {
   /** Snapshot of membership subscription id at invoice time (Bill To). */
   membershipId?: string;
   membershipPackageName?: string;
+  /** Membership pass window (ISO), snapshotted at activation. */
+  membershipStartDate?: string;
+  membershipEndDate?: string;
+  /** Vehicle make + model when this invoice is not tied to a job card. */
+  vehicleMakeModel?: string;
   /** Counter Sale / Membership invoices have no job card. */
   source?: "COUNTER_SALE" | "MEMBERSHIP";
   branchId?: string;

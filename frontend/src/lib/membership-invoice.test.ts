@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMembershipInvoice } from "./membership-invoice";
+import { buildMembershipInvoice, resolveMembershipInvoiceDetails } from "./membership-invoice";
 import { invoiceSourceColumnLabel, invoiceSourceLedgerLabel, invoiceSourceTitle } from "./invoice-source";
 import { invoiceOutstanding, invoicePaidTotal, buildPartyTransactions } from "./party/ledger-math";
 
@@ -50,5 +50,35 @@ describe("membership invoice", () => {
     };
     const rows = buildPartyTransactions(party, [inv], [], "fy");
     expect(rows.find((r) => r.id === inv.id)?.typeLabel).toBe("Membership");
+  });
+
+  it("snapshots package, vehicle, and validity window", () => {
+    const withDetails = buildMembershipInvoice({
+      id: "inv-mem-2",
+      invoiceNumber: "INV-2026-0201",
+      membershipId: "memsub-1787076726200-ed7098f",
+      packageName: "Silver 1m",
+      packagePrice: 2499,
+      taxRate: 0,
+      taxAmount: 0,
+      grandTotal: 2499,
+      customerId: "c-1",
+      customerName: "Amar Kumar",
+      customerPhone: "7004509790",
+      vehicleRegNumber: "MH02RK9001",
+      vehicleMakeModel: "Skoda Kodiaq",
+      membershipStartDate: "2026-08-18T12:00:00.000Z",
+      membershipEndDate: "2026-09-17T23:59:59.999Z",
+      createdAt: "2026-08-18T12:00:00.000Z",
+    });
+    const details = resolveMembershipInvoiceDetails({ invoice: withDetails });
+    expect(details).toEqual({
+      packageName: "Silver 1m",
+      validFrom: "2026-08-18T12:00:00.000Z",
+      validUntil: "2026-09-17T23:59:59.999Z",
+      vehicleName: "Skoda Kodiaq",
+      vehicleRegNumber: "MH02RK9001",
+      membershipId: "memsub-1787076726200-ed7098f",
+    });
   });
 });

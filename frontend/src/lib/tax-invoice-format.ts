@@ -106,6 +106,15 @@ export type TaxInvoiceDocumentOpts = {
   membershipId?: string;
   /** Optional package name shown next to membership id. */
   membershipPackageName?: string;
+  /** Dedicated Membership Details block (membership invoices only). */
+  membershipDetails?: {
+    packageName: string;
+    validFrom: string;
+    validUntil: string;
+    vehicleName: string;
+    vehicleRegNumber: string;
+    membershipId: string;
+  };
 };
 
 export function numberToWords(amount: number): string {
@@ -186,6 +195,7 @@ export function buildTaxInvoicePrintHtml(
     newCustomerDiscount = 0,
     membershipId,
     membershipPackageName,
+    membershipDetails,
   } = opts;
 
   const isGstRegistered = business.gstRegistrationStatus !== "NOT_REGISTERED";
@@ -235,6 +245,41 @@ export function buildTaxInvoicePrintHtml(
   const expectedDel = jobCard?.expectedDelivery
     ? formatDate(jobCard.expectedDelivery)
     : "—";
+  const dash = (value: string) => {
+    const t = value.trim();
+    return t ? escapeHtml(t) : "—";
+  };
+  const membershipDetailsHtml = membershipDetails
+    ? `<div class="membership-details">
+    <h4>Membership Details</h4>
+    <div class="membership-details-grid">
+      <div>
+        <div class="lbl">Package</div>
+        <div class="val">${dash(membershipDetails.packageName)}</div>
+      </div>
+      <div>
+        <div class="lbl">Valid From</div>
+        <div class="val">${membershipDetails.validFrom ? escapeHtml(formatDate(membershipDetails.validFrom)) : "—"}</div>
+      </div>
+      <div>
+        <div class="lbl">Valid Until</div>
+        <div class="val">${membershipDetails.validUntil ? escapeHtml(formatDate(membershipDetails.validUntil)) : "—"}</div>
+      </div>
+      <div>
+        <div class="lbl">Vehicle</div>
+        <div class="val" style="text-transform:capitalize;">${dash(membershipDetails.vehicleName)}</div>
+      </div>
+      <div>
+        <div class="lbl">Vehicle Number</div>
+        <div class="val" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${dash(membershipDetails.vehicleRegNumber)}</div>
+      </div>
+      <div>
+        <div class="lbl">Membership ID</div>
+        <div class="val" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${dash(membershipDetails.membershipId)}</div>
+      </div>
+    </div>
+  </div>`
+    : "";
   const taxable = displayGrandTotal - displayTaxAmount;
   const termsText = TAX_INVOICE_DISCLAIMER;
   const notesText =
@@ -341,8 +386,14 @@ body { font-family: 'Outfit', system-ui, sans-serif; font-size: 10.5px; color: #
 }
 .brand-text { min-width: 0; }
 .metadata-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 16px 0; padding: 10px 12px; border-top: 1.5px solid #3b82f6; border-bottom: 1.5px solid #3b82f6; background: #eff6ff; border-radius: 2px; }
+.metadata-bar.membership { grid-template-columns: repeat(2, 1fr); }
 .metadata-item div:first-child { color: #737373; font-weight: 500; text-transform: uppercase; font-size: 8px; margin-bottom: 2px; letter-spacing: 0.5px; }
 .metadata-item div:last-child { font-weight: 700; color: #171717; font-size: 10px; }
+.membership-details { border: 1px solid #d4d4d4; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; background: #fafafa; }
+.membership-details h4 { font-size: 9.5px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; border-bottom: 1px solid #e5e5e5; padding-bottom: 4px; }
+.membership-details-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
+.membership-details-grid .lbl { color: #737373; font-size: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.membership-details-grid .val { font-weight: 700; color: #171717; font-size: 10px; }
 .bill-to { margin-bottom: 16px; font-size: 10px; }
 .bill-to h3 { font-size: 11px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; }
 table.inv { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; border: 1px solid #d4d4d4; }
@@ -392,6 +443,7 @@ table.inv .b { font-weight: 700; color: #171717; }
   .invoice-title-block { align-items: flex-start !important; height: auto !important; text-align: left !important; }
   .invoice-title-block .doc-title { font-size: 14px !important; }
   .metadata-bar { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .membership-details-grid { grid-template-columns: 1fr 1fr; }
   .bill-booking-row { flex-direction: column !important; gap: 12px !important; }
   .footer-grid { grid-template-columns: 1fr; }
   table.inv { font-size: 9px; }
@@ -463,7 +515,7 @@ table.inv .b { font-weight: 700; color: #171717; }
     </div>
   </div>
 
-  <div class="metadata-bar">
+  <div class="metadata-bar${membershipDetails ? " membership" : ""}">
     <div class="metadata-item">
       <div>Invoice No.</div>
       <div>${escapeHtml(invoice.invoiceNumber)}</div>
@@ -472,7 +524,10 @@ table.inv .b { font-weight: 700; color: #171717; }
       <div>Invoice Date</div>
       <div>${escapeHtml(formatDate(invoice.createdAt))}</div>
     </div>
-    <div class="metadata-item">
+    ${
+      membershipDetails
+        ? ""
+        : `<div class="metadata-item">
       <div>Due Date</div>
       <div>${escapeHtml(expectedDel)}</div>
     </div>
@@ -483,7 +538,8 @@ table.inv .b { font-weight: 700; color: #171717; }
     <div class="metadata-item">
       <div>Vehicle Number</div>
       <div style="font-family: monospace;">${escapeHtml(invoice.vehicleRegNumber)}</div>
-    </div>
+    </div>`
+    }
   </div>
 
   <div class="bill-booking-row" style="display: flex; justify-content: space-between; gap: 24px; margin-bottom: 12px;">
@@ -495,7 +551,12 @@ table.inv .b { font-weight: 700; color: #171717; }
       ${customerEmail ? `<p><span style="color:#737373;">Email:</span> <strong>${escapeHtml(customerEmail)}</strong></p>` : ""}
       ${customerAddress ? `<p><span style="color:#737373;">Address:</span> <strong>${escapeHtml(customerAddress)}</strong></p>` : ""}
       ${
-        membershipId
+        membershipDetails && isGstRegistered
+          ? `<p><span style="color:#737373;">GSTIN:</span> <strong>${escapeHtml(business.gstin)}</strong></p>`
+          : ""
+      }
+      ${
+        membershipId && !membershipDetails
           ? `<p><span style="color:#737373;">Membership ID:</span> <strong style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(membershipId)}</strong>${
               membershipPackageName
                 ? ` <span style="color:#737373; font-weight:500;">(${escapeHtml(membershipPackageName)})</span>`
@@ -504,14 +565,20 @@ table.inv .b { font-weight: 700; color: #171717; }
           : ""
       }
     </div>
-    <div style="flex: 1; border: 1px solid #d4d4d4; border-radius: 4px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; background: #fafafa;">
+    ${
+      membershipDetails
+        ? ""
+        : `<div style="flex: 1; border: 1px solid #d4d4d4; border-radius: 4px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; background: #fafafa;">
       <h4 style="font-size: 9.5px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; border-bottom: 1px solid #e5e5e5; padding-bottom: 4px;">Booking Details</h4>
       <p style="font-size: 9.5px; color: #404040; margin-bottom: 2px;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">Booking Ref:</span> <strong>${escapeHtml(bookingRef)}</strong></p>
       <p style="font-size: 9.5px; color: #404040; margin-bottom: 2px;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">Booking Date:</span> <strong>${escapeHtml(bookingWhen)}</strong></p>
       <p style="font-size: 9.5px; color: #404040; margin-bottom: 2px;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">Service Mode:</span> <strong>${escapeHtml(serviceModeLabel)}</strong></p>
       ${isGstRegistered ? `<p style="font-size: 9.5px; color: #404040;"><span style="color:#737373; font-size:8.5px; width:100px; display:inline-block;">GSTIN:</span> <strong>${escapeHtml(business.gstin)}</strong></p>` : ""}
-    </div>
+    </div>`
+    }
   </div>
+
+  ${membershipDetailsHtml}
 
   <table class="inv">
     <thead>

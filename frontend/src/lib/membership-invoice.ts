@@ -1,8 +1,67 @@
-import type { Invoice, InvoiceLineItem, MembershipPackage } from "@/types";
+import type {
+  CustomerMembership,
+  Invoice,
+  InvoiceLineItem,
+  MembershipPackage,
+  Vehicle,
+} from "@/types";
 import { computeGstFromSubtotal } from "@/lib/gst-tax";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useMembershipStore } from "@/store/membership-store";
 import { useSettingsStore } from "@/store/settings-store";
+
+export type MembershipInvoiceDetails = {
+  packageName: string;
+  validFrom: string;
+  validUntil: string;
+  vehicleName: string;
+  vehicleRegNumber: string;
+  membershipId: string;
+};
+
+export function vehicleMakeModelLabel(
+  vehicle: Pick<Vehicle, "make" | "model"> | null | undefined
+): string {
+  if (!vehicle) return "";
+  return `${vehicle.make} ${vehicle.model}`.replace(/\s+/g, " ").trim();
+}
+
+/** Display fields for a membership invoice. Prefers invoice snapshots, then live membership/vehicle. */
+export function resolveMembershipInvoiceDetails(input: {
+  invoice: Pick<
+    Invoice,
+    | "source"
+    | "membershipId"
+    | "membershipPackageName"
+    | "membershipStartDate"
+    | "membershipEndDate"
+    | "vehicleRegNumber"
+    | "vehicleMakeModel"
+  >;
+  membership?: Pick<CustomerMembership, "id" | "startDate" | "endDate"> | null;
+  packageName?: string | null;
+  vehicle?: Pick<Vehicle, "make" | "model" | "registrationNumber"> | null;
+}): MembershipInvoiceDetails | null {
+  const { invoice, membership, vehicle } = input;
+  if (invoice.source !== "MEMBERSHIP") return null;
+  const packageName = (invoice.membershipPackageName || input.packageName || "").trim();
+  const membershipId = (invoice.membershipId || membership?.id || "").trim();
+  const validFrom = invoice.membershipStartDate || membership?.startDate || "";
+  const validUntil = invoice.membershipEndDate || membership?.endDate || "";
+  const vehicleName = (invoice.vehicleMakeModel || vehicleMakeModelLabel(vehicle)).trim();
+  const storedReg = invoice.vehicleRegNumber?.trim();
+  const vehicleRegNumber =
+    storedReg && storedReg !== "—" ? storedReg : vehicle?.registrationNumber?.trim() || "";
+  if (!packageName && !membershipId) return null;
+  return {
+    packageName,
+    validFrom,
+    validUntil,
+    vehicleName,
+    vehicleRegNumber,
+    membershipId,
+  };
+}
 
 export function buildMembershipInvoice(input: {
   id: string;
@@ -17,6 +76,9 @@ export function buildMembershipInvoice(input: {
   customerName: string;
   customerPhone: string;
   vehicleRegNumber: string;
+  vehicleMakeModel?: string;
+  membershipStartDate?: string;
+  membershipEndDate?: string;
   branchId?: string;
   createdAt: string;
 }): Invoice {
@@ -41,6 +103,7 @@ export function buildMembershipInvoice(input: {
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     vehicleRegNumber: input.vehicleRegNumber || "—",
+    vehicleMakeModel: input.vehicleMakeModel || undefined,
     lineItems,
     subtotal: unitPrice,
     taxRate: input.taxRate,
@@ -54,6 +117,8 @@ export function buildMembershipInvoice(input: {
     createdAt: input.createdAt,
     membershipId: input.membershipId,
     membershipPackageName: input.packageName,
+    membershipStartDate: input.membershipStartDate,
+    membershipEndDate: input.membershipEndDate,
     source: "MEMBERSHIP",
     branchId: input.branchId,
   };
@@ -66,6 +131,9 @@ export async function createInvoiceForMembershipActivation(input: {
   customerName: string;
   customerPhone: string;
   vehicleRegNumber?: string;
+  vehicleMakeModel?: string;
+  membershipStartDate?: string;
+  membershipEndDate?: string;
   branchId?: string;
 }): Promise<{ ok: true; invoiceId: string; invoiceNumber: string } | { ok: false; error: string }> {
   const invoiceStore = useInvoiceStore.getState();
@@ -99,6 +167,9 @@ export async function createInvoiceForMembershipActivation(input: {
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     vehicleRegNumber: input.vehicleRegNumber ?? "—",
+    vehicleMakeModel: input.vehicleMakeModel,
+    membershipStartDate: input.membershipStartDate,
+    membershipEndDate: input.membershipEndDate,
     branchId: input.branchId,
     createdAt: now,
   });

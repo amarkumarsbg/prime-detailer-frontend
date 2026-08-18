@@ -29,7 +29,8 @@ export function buildInvoicePdfCacheKey(opts: InvoicePdfOpts): string {
   const lines = inv.lineItems.map((l) => `${l.id}:${l.total}:${l.unitPrice}`).join(",");
   const pays = inv.payments.map((p) => `${p.id}:${p.amount}`).join(",");
   const gstMode = opts.business.gstRegistrationStatus ?? "REGISTERED";
-  return `${inv.id}:${inv.grandTotal}:${inv.subtotal}:${inv.taxAmount}:${inv.status}:${gstMode}:${lines}:${pays}`;
+  const mem = opts.membershipDetails;
+  return `${inv.id}:${inv.grandTotal}:${inv.subtotal}:${inv.taxAmount}:${inv.status}:${gstMode}:${lines}:${pays}:${mem?.membershipId ?? ""}:${mem?.validFrom ?? ""}:${mem?.vehicleName ?? ""}`;
 }
 
 function buildPrintHtml(opts: InvoicePdfOpts): string {

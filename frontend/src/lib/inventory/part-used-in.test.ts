@@ -29,6 +29,12 @@ describe("part usedIn", () => {
     expect(partUsedInDirectSale(base)).toBe(false);
   });
 
+  it("does not treat an explicit empty usedIn as Services", () => {
+    const none = { ...base, usedIn: [] as const };
+    expect(partUsedInServices(none)).toBe(false);
+    expect(partUsedInDirectSale(none)).toBe(false);
+  });
+
   it("shows Direct Sale parts in Counter Sale and hides Services-only", () => {
     const both = { ...base, id: "a", usedIn: ["SERVICES", "DIRECT_SALE"] as const };
     const servicesOnly = { ...base, id: "b", usedIn: ["SERVICES"] as const };
@@ -37,7 +43,10 @@ describe("part usedIn", () => {
     expect(ids).toEqual(["a", "c"]);
   });
 
-  it("does not drop the last usedIn value", () => {
-    expect(togglePartUsedIn(["SERVICES"], "SERVICES")).toEqual(["SERVICES"]);
+  it("toggles Services and Direct Sale independently, including none selected", () => {
+    expect(togglePartUsedIn(["SERVICES"], "DIRECT_SALE")).toEqual(["SERVICES", "DIRECT_SALE"]);
+    expect(togglePartUsedIn(["SERVICES", "DIRECT_SALE"], "DIRECT_SALE")).toEqual(["SERVICES"]);
+    expect(togglePartUsedIn(["SERVICES"], "SERVICES")).toEqual([]);
+    expect(togglePartUsedIn([], "DIRECT_SALE")).toEqual(["DIRECT_SALE"]);
   });
 });

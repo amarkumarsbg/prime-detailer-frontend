@@ -25,25 +25,20 @@ import { isPendingPaymentInvoice, groupPendingPaymentCustomers } from "@/lib/das
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { Invoice, InvoiceStatus } from "@/types";
-import { BookMarked, Eye, IndianRupee, TrendingUp, FileText, Receipt } from "lucide-react";
+import { BookMarked, Eye, IndianRupee, Pencil, Trash2, TrendingUp, FileText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
 import { invoiceSourceColumnLabel } from "@/lib/invoice-source";
 import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
-import {
-  buildPaymentPendingReminderWhatsAppMessage,
-  isWhatsAppNonClickableShareUrl,
-  publicCustomerLedgerShareUrl,
-  publicInvoiceShareUrl,
-} from "@/lib/whatsapp-customer-messages";
-import {
-  isWhatsAppNotConfiguredError,
-  openWhatsAppComposer,
-  sendCustomerWhatsApp,
-} from "@/lib/whatsapp-send";
-import { pushActivityLog } from "@/lib/activity-log-helper";
-import { useNotificationStore } from "@/store/notification-store";
 
 const STATUS_TABS: { value: "all" | InvoiceStatus; label: string; shortLabel?: string }[] = [
   { value: "all", label: "All" },
@@ -118,6 +113,59 @@ function BillingLedgerQueryEffect({
 
 type BillingView = "invoices" | "ledger";
 
+function invoiceRowIsMutable(item: Record<string, unknown>): boolean {
+  const status = item.status as InvoiceStatus;
+  const paymentCount = Number(item.paymentCount ?? 0);
+  const wallet = Number(item.walletAmountUsed ?? 0);
+  return paymentCount === 0 && wallet <= 0 && status !== "PAID" && status !== "PARTIALLY_PAID";
+}
+
+function InvoiceRowActions({
+  item,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  item: Record<string, unknown>;
+  onView: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const mutable = invoiceRowIsMutable(item);
+  const lockedHint = "Recorded payments lock this invoice from edit or delete";
+  return (
+    <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="View invoice" onClick={onView}>
+        <Eye className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        aria-label="Edit invoice"
+        disabled={!mutable}
+        title={mutable ? "Edit invoice" : lockedHint}
+        onClick={onEdit}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-destructive hover:text-destructive"
+        aria-label="Delete invoice"
+        disabled={!mutable}
+        title={mutable ? "Delete invoice" : lockedHint}
+        onClick={onDelete}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 export default function BillingPage() {
   const router = useRouter();
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
@@ -125,7 +173,14 @@ export default function BillingPage() {
   const [billingView, setBillingView] = useState<BillingView>("invoices");
   const [activeTab, setActiveTab] = useState<string>("all");
   const [ledgerFocusCustomerId, setLedgerFocusCustomerId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    invoiceNumber: string;
+    customerName: string;
+  } | null>(null);
+  const [deletingInvoice, setDeletingInvoice] = useState(false);
   const invoices = useInvoiceStore((s) => s.invoices);
+  const deleteInvoice = useInvoiceStore((s) => s.deleteInvoice);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const businessName = useSettingsStore((s) => s.businessName);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
@@ -181,6 +236,7 @@ export default function BillingPage() {
         outstanding: invoiceOutstanding(inv),
         status: inv.status,
         paymentMethod: inv.payments[0]?.method ?? null,
+        paymentCount: inv.payments.length,
         walletAmountUsed: inv.walletAmountUsed,
         createdAt: inv.createdAt,
       };
@@ -213,92 +269,6 @@ export default function BillingPage() {
       invoices,
       businessName,
     });
-  };
-
-  const shareInvoiceLedgerWhatsApp = async (invoiceId: string, phoneHint?: string) => {
-    const inv = invoices.find((i) => i.id === invoiceId);
-    if (!inv) {
-      toast.error("Invoice not found");
-      return;
-    }
-    const phone = (phoneHint || inv.customerPhone || "").trim();
-    if (!phone) {
-      toast.error("No customer phone on file for this ledger");
-      return;
-    }
-
-    const pendingAmount = invoiceOutstanding(inv);
-    const invoiceUrl = publicInvoiceShareUrl(inv.id);
-    const ledgerUrl = publicCustomerLedgerShareUrl(inv.customerId);
-    const message = buildPaymentPendingReminderWhatsAppMessage({
-      mode: "singleInvoice",
-      pendingAmount,
-      statementUrl: ledgerUrl,
-      invoiceUrl,
-      invoiceNumber: inv.invoiceNumber,
-      businessName,
-    });
-
-    const branchId = jobCards.find((j) => j.id === inv.jobCardId)?.branchId;
-    const warnLocalLink =
-      isWhatsAppNonClickableShareUrl(invoiceUrl) ||
-      isWhatsAppNonClickableShareUrl(ledgerUrl);
-
-    try {
-      await sendCustomerWhatsApp(phone, message);
-      toast.success("Payment reminder sent via WhatsApp", { description: phone });
-      if (warnLocalLink) {
-        toast.warning("Link may not be tappable in WhatsApp", {
-          description:
-            "WhatsApp does not open localhost links. Set NEXT_PUBLIC_APP_URL to your public https domain.",
-        });
-      }
-      useNotificationStore.getState().addNotification({
-        type: "whatsapp_sent",
-        title: "Payment reminder shared via WhatsApp",
-        message: `${inv.invoiceNumber} → ${phone}`,
-        href: `/billing/invoices/${inv.id}`,
-        branchId,
-      });
-      pushActivityLog({
-        action: "WHATSAPP_SENT",
-        entityType: "INVOICE",
-        entityId: inv.id,
-        entityLabel: inv.invoiceNumber,
-        details: `Payment reminder for ${inv.customerName} via WhatsApp (invoice + ledger)`,
-      });
-    } catch (err) {
-      if (isWhatsAppNotConfiguredError(err)) {
-        openWhatsAppComposer(phone, message);
-        toast.info("WhatsApp opened", {
-          description: warnLocalLink
-            ? "Review and send. Note: localhost links are not clickable in WhatsApp."
-            : "Review the payment reminder and send it from WhatsApp.",
-        });
-        if (warnLocalLink) {
-          toast.warning("Link may not be tappable in WhatsApp", {
-            description:
-              "Set NEXT_PUBLIC_APP_URL to a public https URL (e.g. your deployed app) so the invoice and ledger links work.",
-          });
-        }
-        useNotificationStore.getState().addNotification({
-          type: "whatsapp_sent",
-          title: "Payment reminder — WhatsApp composer",
-          message: `${inv.invoiceNumber} → ${phone}`,
-          href: `/billing/invoices/${inv.id}`,
-          branchId,
-        });
-        pushActivityLog({
-          action: "WHATSAPP_SENT",
-          entityType: "INVOICE",
-          entityId: inv.id,
-          entityLabel: inv.invoiceNumber,
-          details: `Payment reminder for ${inv.customerName} via WhatsApp (invoice + ledger)`,
-        });
-        return;
-      }
-      toast.error("Could not share payment reminder via WhatsApp");
-    }
   };
 
   const kpis = useMemo(() => {
@@ -415,41 +385,26 @@ export default function BillingPage() {
       },
     },
     {
-      key: "ledger",
-      label: "Ledger",
+      key: "actions",
+      label: "Actions",
+      className: "text-right w-[120px]",
       render: (item: Record<string, unknown>) => {
-        const customerId = String(item.customerId ?? "");
         const invoiceId = String(item.id ?? "");
-        const phone = String(item.customerPhone ?? "").trim();
         return (
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 px-2.5"
-              onClick={() => {
-                if (customerId) openCustomerLedger(customerId);
-              }}
-            >
-              <Eye className="h-3.5 w-3.5 shrink-0" />
-              Ledger
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 px-2.5 text-[#128C7E] hover:bg-[#25D366]/10 hover:text-[#075E54]"
-              disabled={!phone}
-              title={phone ? "Share payment reminder via WhatsApp" : "No phone on file"}
-              onClick={() => {
-                if (invoiceId) void shareInvoiceLedgerWhatsApp(invoiceId, phone);
-              }}
-            >
-              <WhatsAppIcon className="h-3.5 w-3.5" />
-              Share Ledger
-            </Button>
-          </div>
+          <InvoiceRowActions
+            item={item}
+            onView={() => router.push(`/billing/invoices/${encodeURIComponent(invoiceId)}`)}
+            onEdit={() =>
+              router.push(`/billing/invoices/${encodeURIComponent(invoiceId)}?edit=1`)
+            }
+            onDelete={() =>
+              setDeleteTarget({
+                id: invoiceId,
+                invoiceNumber: String(item.invoiceNumber ?? ""),
+                customerName: String(item.customerName ?? ""),
+              })
+            }
+          />
         );
       },
     },
@@ -534,6 +489,20 @@ export default function BillingPage() {
 
   const handleRowClick = (item: Record<string, unknown>) => {
     router.push(`/billing/invoices/${encodeURIComponent(String(item.id ?? ""))}`);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    if (!deleteTarget) return;
+    setDeletingInvoice(true);
+    try {
+      await deleteInvoice(deleteTarget.id);
+      toast.success("Invoice deleted", { description: deleteTarget.invoiceNumber });
+      setDeleteTarget(null);
+    } catch {
+      toast.error("Could not delete invoice");
+    } finally {
+      setDeletingInvoice(false);
+    }
   };
 
   return (
@@ -744,9 +713,7 @@ export default function BillingPage() {
                         const paymentLabel = item.paymentMethod
                           ? getPaymentMethodLabel(String(item.paymentMethod))
                           : null;
-                        const customerId = String(item.customerId ?? "");
                         const invoiceId = String(item.id ?? "");
-                        const phone = String(item.customerPhone ?? "").trim();
                         return (
                           <>
                             <div className="flex items-start justify-between gap-2">
@@ -780,37 +747,25 @@ export default function BillingPage() {
                               {String(item.servicesSummary)}
                               {paymentLabel ? ` · ${paymentLabel}` : ""}
                             </p>
-                            <div
-                              className="mt-2 flex items-center gap-1.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 flex-1 gap-1 px-2 text-[11px]"
-                                onClick={() => {
-                                  if (customerId) openCustomerLedger(customerId);
-                                }}
-                              >
-                                <Eye className="h-3 w-3" />
-                                Ledger
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 flex-1 gap-1 px-2 text-[11px] text-[#128C7E]"
-                                disabled={!phone}
-                                onClick={() => {
-                                  if (invoiceId) {
-                                    void shareInvoiceLedgerWhatsApp(invoiceId, phone);
-                                  }
-                                }}
-                              >
-                                <WhatsAppIcon className="h-3 w-3" />
-                                Share Ledger
-                              </Button>
+                            <div className="mt-1 flex justify-end">
+                              <InvoiceRowActions
+                                item={item}
+                                onView={() =>
+                                  router.push(`/billing/invoices/${encodeURIComponent(invoiceId)}`)
+                                }
+                                onEdit={() =>
+                                  router.push(
+                                    `/billing/invoices/${encodeURIComponent(invoiceId)}?edit=1`
+                                  )
+                                }
+                                onDelete={() =>
+                                  setDeleteTarget({
+                                    id: invoiceId,
+                                    invoiceNumber: String(item.invoiceNumber ?? ""),
+                                    customerName: String(item.customerName ?? ""),
+                                  })
+                                }
+                              />
                             </div>
                           </>
                         );
@@ -832,6 +787,37 @@ export default function BillingPage() {
           />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && !deletingInvoice && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete invoice?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `${deleteTarget.invoiceNumber} for ${deleteTarget.customerName} will be permanently removed.`
+                : "This invoice will be permanently removed."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletingInvoice}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingInvoice}
+              onClick={() => void confirmDeleteInvoice()}
+            >
+              {deletingInvoice ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

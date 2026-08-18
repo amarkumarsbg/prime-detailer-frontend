@@ -54,6 +54,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore } from "@/store/membership-store";
+import { useVehicleStore } from "@/store/vehicle-store";
+import { resolveMembershipInvoiceDetails, vehicleMakeModelLabel } from "@/lib/membership-invoice";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
@@ -84,10 +86,15 @@ import {
 } from "@/lib/invoice-pdf";
 import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
 import { invoiceSourceTitle } from "@/lib/invoice-source";
+import {
+  canApplyReferralOnInvoice,
+  invoiceCarriesReferral,
+  REFERRAL_EXISTING_CUSTOMER_MESSAGE,
+} from "@/lib/referral-eligibility";
 import { DEFAULT_GST_RATE, isGstRegistered } from "@/lib/gst-tax";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
-import type { InvoiceLineItem, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
+import type { Invoice, InvoiceLineItem, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
 import { Textarea } from "@/components/ui/textarea";
 
 function InvoicePartPickSelect({
@@ -283,6 +290,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
   const membershipPackages = useMembershipStore((s) => s.packages);
   const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
+  const vehicles = useVehicleStore((s) => s.vehicles);
   const inventoryParts = useInventoryStore((s) => s.parts);
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
 
@@ -322,6 +330,19 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     [invoice, customers]
   );
 
+  const canApplyReferral = useMemo(
+    () =>
+      Boolean(
+        invoice &&
+          canApplyReferralOnInvoice({
+            customer: invoiceCustomer,
+            invoices,
+            currentInvoiceId: invoice.id,
+          })
+      ),
+    [invoice, invoiceCustomer, invoices]
+  );
+
   const membershipForInvoice = useMemo(() => {
     if (!invoice) return null;
     if (invoice.membershipId) {
@@ -353,14 +374,64 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     return membershipPackages.find((p) => p.id === membershipForInvoice.packageId)?.name;
   }, [invoice?.membershipPackageName, membershipForInvoice, membershipPackages]);
 
+  const membershipVehicle = useMemo(() => {
+    if (!invoice) return null;
+    const vehicleId = membershipForInvoice?.vehicleId ?? jobCard?.vehicleId;
+    if (vehicleId) {
+      const byId = vehicles.find((v) => v.id === vehicleId);
+      if (byId) return byId;
+    }
+    const reg = invoice.vehicleRegNumber?.trim();
+    if (!reg || reg === "—") return null;
+    return (
+      vehicles.find(
+        (v) => v.registrationNumber.replace(/\s+/g, "").toUpperCase() === reg.replace(/\s+/g, "").toUpperCase()
+      ) ?? null
+    );
+  }, [invoice, membershipForInvoice?.vehicleId, jobCard?.vehicleId, vehicles]);
+
+  const membershipDetails = useMemo(() => {
+    if (!invoice) return null;
+    return resolveMembershipInvoiceDetails({
+      invoice,
+      membership: membershipForInvoice,
+      packageName: membershipPackageName,
+      vehicle: membershipVehicle,
+    });
+  }, [invoice, membershipForInvoice, membershipPackageName, membershipVehicle]);
+
+  const resolvedVehicleMakeModel =
+    membershipDetails?.vehicleName ||
+    invoice?.vehicleMakeModel ||
+    jobCard?.vehicleMakeModel ||
+    vehicleMakeModelLabel(membershipVehicle) ||
+    "—";
+
   // Persist membership snapshot on older invoices so PDF / public share keep the ID.
   useEffect(() => {
-    if (!invoice || invoice.membershipId || !membershipForInvoice?.id) return;
-    void updateInvoice(invoice.id, {
-      membershipId: membershipForInvoice.id,
-      membershipPackageName,
-    });
-  }, [invoice, membershipForInvoice?.id, membershipPackageName, updateInvoice]);
+    if (!invoice) return;
+    const patch: Partial<Invoice> = {};
+    if (!invoice.membershipId && membershipForInvoice?.id) {
+      patch.membershipId = membershipForInvoice.id;
+      patch.membershipPackageName = membershipPackageName;
+    }
+    if (invoice.source === "MEMBERSHIP" && membershipDetails) {
+      if (!invoice.membershipPackageName && membershipDetails.packageName) {
+        patch.membershipPackageName = membershipDetails.packageName;
+      }
+      if (!invoice.membershipStartDate && membershipDetails.validFrom) {
+        patch.membershipStartDate = membershipDetails.validFrom;
+      }
+      if (!invoice.membershipEndDate && membershipDetails.validUntil) {
+        patch.membershipEndDate = membershipDetails.validUntil;
+      }
+      if (!invoice.vehicleMakeModel && membershipDetails.vehicleName) {
+        patch.vehicleMakeModel = membershipDetails.vehicleName;
+      }
+    }
+    if (Object.keys(patch).length === 0) return;
+    void updateInvoice(invoice.id, patch);
+  }, [invoice, membershipForInvoice?.id, membershipPackageName, membershipDetails, updateInvoice]);
 
   const payments = useMemo(() => invoice?.payments ?? [], [invoice]);
   const canEditInvoice =
@@ -411,7 +482,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
       // Exclusivity Priority: 1. Reward draft / Referral draft, 2. Flat draft / DB values
       const hasRewardDraft = draftReward !== null && Number(draftReward) > 0;
-      const hasReferralDraft = draftCode !== null && draftCode.trim() !== "";
+      const hasReferralDraft =
+        canApplyReferral && draftCode !== null && draftCode.trim() !== "";
 
       let finalFlat = "";
       let finalReward = "";
@@ -463,7 +535,34 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       );
       setReferralErrorMsg("");
     }
-  }, [invoice, availablePoints]);
+  }, [invoice, availablePoints, canApplyReferral]);
+
+  const clearPointsDraft = () => {
+    setPointsRedeemStr("");
+    if (invoice && typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-reward-${invoice.id}`, "");
+    }
+  };
+
+  const clearReferralDraft = () => {
+    setReferralCode("");
+    setAppliedReferrerId("");
+    setReferralDiscountApplied(0);
+    setReferralVerifiedMsg("");
+    setReferralErrorMsg("");
+    if (invoice && typeof window !== "undefined") {
+      sessionStorage.removeItem(`draft-code-${invoice.id}`);
+      sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
+      sessionStorage.removeItem(`draft-refdiscount-${invoice.id}`);
+    }
+  };
+
+  const clearFlatDraft = () => {
+    setFlatDiscountStr("");
+    if (invoice && typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-flat-${invoice.id}`, "");
+    }
+  };
 
   const handleFlatDiscountChange = (val: string) => {
     setFlatDiscountStr(val);
@@ -472,18 +571,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       sessionStorage.setItem(`draft-flat-${invoice.id}`, val);
       sessionStorage.setItem(`draft-flat-type-${invoice.id}`, flatDiscountType);
       if (Number(val) > 0) {
-        setPointsRedeemStr("");
-        sessionStorage.setItem(`draft-reward-${invoice.id}`, "");
-
-        // Also clear referral code draft
-        setReferralCode("");
-        setAppliedReferrerId("");
-        setReferralDiscountApplied(0);
-        setReferralVerifiedMsg("");
-        setReferralErrorMsg("");
-        sessionStorage.removeItem(`draft-code-${invoice.id}`);
-        sessionStorage.removeItem(`draft-advocate-${invoice.id}`);
-        sessionStorage.removeItem(`draft-refdiscount-${invoice.id}`);
+        clearPointsDraft();
+        clearReferralDraft();
       }
     }
   };
@@ -501,8 +590,21 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     if (typeof window !== "undefined") {
       sessionStorage.setItem(`draft-reward-${invoice.id}`, val);
       if (Number(val) > 0) {
-        setFlatDiscountStr("");
-        sessionStorage.setItem(`draft-flat-${invoice.id}`, "");
+        clearFlatDraft();
+        clearReferralDraft();
+      }
+    }
+  };
+
+  const handleReferralCodeChange = (val: string) => {
+    setReferralCode(val);
+    setReferralErrorMsg("");
+    if (!invoice) return;
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`draft-code-${invoice.id}`, val);
+      if (val.trim()) {
+        clearFlatDraft();
+        clearPointsDraft();
       }
     }
   };
@@ -523,9 +625,14 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const pointsRedeem = Number(pointsRedeemStr) || 0;
   const referralDiscount = referralDiscountApplied;
 
-  const isPointsDisabled = flatDiscount > 0;
-  const isFlatDisabled = pointsRedeem > 0 || referralDiscountApplied > 0;
-  const isReferralDisabled = flatDiscount > 0;
+  const hasFlatInput = (Number(flatDiscountStr) || 0) > 0;
+  const hasPointsInput = pointsRedeemStr.trim() !== "" && (Number(pointsRedeemStr) || 0) > 0;
+  const hasReferralInput =
+    referralCode.trim() !== "" || Boolean(appliedReferrerId) || referralDiscountApplied > 0;
+
+  const isFlatDisabled = hasPointsInput || hasReferralInput;
+  const isPointsDisabled = hasFlatInput || hasReferralInput;
+  const isReferralDisabled = hasFlatInput || hasPointsInput;
 
   const activeFlatDiscount = isFlatDisabled ? 0 : flatDiscount;
   const activeRewardDiscount = isPointsDisabled ? 0 : ((pointsRedeem > 200 || pointsRedeem > availablePoints) ? 0 : pointsRedeem);
@@ -560,8 +667,13 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     setReferralVerifiedMsg("");
     if (!invoice) return;
     
-    if (flatDiscount > 0) {
-      setReferralErrorMsg("Cannot apply referral code while direct discount is active.");
+    if (!canApplyReferral) {
+      setReferralErrorMsg(REFERRAL_EXISTING_CUSTOMER_MESSAGE);
+      return;
+    }
+
+    if (hasFlatInput || hasPointsInput) {
+      setReferralErrorMsg("Cannot apply referral code while another discount is active.");
       return;
     }
 
@@ -584,6 +696,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     }
 
     // Valid referral!
+    clearFlatDraft();
+    clearPointsDraft();
     setAppliedReferrerId(referrer.id);
     setReferralDiscountApplied(newCustomerDiscount);
     setReferralVerifiedMsg(`Applied! Referred by ${referrer.name}`);
@@ -621,12 +735,19 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
     setIsApplying(true);
     try {
+      const persistReferral = canApplyReferral || invoiceCarriesReferral(invoice);
       await updateInvoice(invoice.id, {
         discountAmount: activeFlatDiscount,
         rewardDiscount: activeRewardDiscount,
-        referralDiscount: activeReferralDiscount,
-        referralAdvocateId: activeReferralDiscount > 0 ? (appliedReferrerId || undefined) : undefined,
-        referralCodeUsed: activeReferralDiscount > 0 ? (referralCode.trim() || undefined) : undefined,
+        referralDiscount: persistReferral ? activeReferralDiscount : 0,
+        referralAdvocateId:
+          persistReferral && activeReferralDiscount > 0
+            ? appliedReferrerId || undefined
+            : undefined,
+        referralCodeUsed:
+          persistReferral && activeReferralDiscount > 0
+            ? referralCode.trim() || undefined
+            : undefined,
         taxAmount: taxAmount,
         grandTotal: grandTotalComputed,
       });
@@ -666,7 +787,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       customerPhone: invoice.customerPhone,
       customerEmail: invoiceCustomer?.email?.trim() ?? "",
       customerAddress: invoiceCustomer?.address ?? "",
-      vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
+      vehicleMakeModel: resolvedVehicleMakeModel,
       business: {
         businessName,
         businessTagline,
@@ -692,6 +813,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       newCustomerDiscount,
       membershipId: membershipForInvoice?.id,
       membershipPackageName,
+      membershipDetails: membershipDetails ?? undefined,
     };
   }, [
     invoice,
@@ -719,6 +841,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     newCustomerDiscount,
     membershipForInvoice?.id,
     membershipPackageName,
+    membershipDetails,
+    resolvedVehicleMakeModel,
   ]);
 
   useEffect(() => {
@@ -728,28 +852,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const previewHtml = useMemo(() => {
     if (!invoicePdfOpts) return "";
-    const o = invoicePdfOpts;
-    return buildTaxInvoicePrintHtml(
-      {
-        invoice: o.invoice,
-        jobCard: o.jobCard,
-        customerName: o.customerName,
-        customerPhone: o.customerPhone,
-        customerEmail: o.customerEmail,
-        customerAddress: o.customerAddress,
-        vehicleMakeModel: o.jobCard?.vehicleMakeModel ?? "—",
-        business: o.business,
-        payments: o.payments,
-        totalPaid: o.totalPaid,
-        remainingBalance: o.remainingBalance,
-        referralCode: o.referralCode,
-        referralRewardAmount: o.referralRewardAmount,
-        newCustomerDiscount: o.newCustomerDiscount,
-        membershipId: o.membershipId,
-        membershipPackageName: o.membershipPackageName,
-      },
-      { includePrintScript: false }
-    );
+    return buildTaxInvoicePrintHtml(invoicePdfOpts, { includePrintScript: false });
   }, [invoicePdfOpts]);
 
   const openEditInvoice = () => {
@@ -758,6 +861,27 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     setEditNotes(invoice.notes ?? "");
     setEditDialogOpen(true);
   };
+
+  const wantsEdit = searchParams.get("edit") === "1";
+  useEffect(() => {
+    if (!wantsEdit || !invoice) return;
+    if (
+      invoice.payments.length > 0 ||
+      (invoice.walletAmountUsed ?? 0) > 0 ||
+      invoice.status === "PAID" ||
+      invoice.status === "PARTIALLY_PAID"
+    ) {
+      toast.error("This invoice can no longer be edited", {
+        description: "Payments have already been recorded.",
+      });
+      return;
+    }
+    setEditLines(invoice.lineItems.map((li) => ({ ...li })));
+    setEditNotes(invoice.notes ?? "");
+    setEditDialogOpen(true);
+    // Open once when arriving from the billing list Edit action.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsEdit, invoice?.id]);
 
   const updateEditLine = (
     id: string,
@@ -909,46 +1033,13 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   };
 
   const handlePrint = () => {
-    if (!invoice) return;
+    if (!invoicePdfOpts) return;
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       window.print();
       return;
     }
-    const html = buildTaxInvoicePrintHtml({
-      invoice,
-      jobCard: jobCard ?? null,
-      customerName: invoice.customerName,
-      customerPhone: invoice.customerPhone,
-      customerEmail: invoiceCustomer?.email ?? "",
-      customerAddress: invoiceCustomer?.address ?? "",
-      vehicleMakeModel: jobCard?.vehicleMakeModel ?? "—",
-      business: {
-        businessName,
-        businessTagline,
-        businessAddress,
-        businessPhone,
-        businessWhatsApp,
-        businessEmail,
-        businessWebsite,
-        gstRegistrationStatus,
-        gstin,
-        companyPan,
-        bankName,
-        bankBranch,
-        bankAccountNumber,
-        bankIfsc,
-        bankUpi,
-      },
-      payments,
-      totalPaid,
-      remainingBalance,
-      referralCode: invoiceCustomer?.referralCode,
-      referralRewardAmount,
-      newCustomerDiscount,
-      membershipId: membershipForInvoice?.id,
-      membershipPackageName,
-    });
+    const html = buildTaxInvoicePrintHtml(invoicePdfOpts);
     printWindow.document.write(html);
     printWindow.document.close();
   };
@@ -1156,7 +1247,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
                   const businessNameVal = businessName || "Prime Detailers";
                   const invoiceNumber = invoice.invoiceNumber;
                   const totalAmount = invoice.grandTotal;
-                  const vehicleName = jobCard?.vehicleMakeModel ?? "Vehicle";
+                  const vehicleName = resolvedVehicleMakeModel !== "—" ? resolvedVehicleMakeModel : "Vehicle";
                   const vehicleNumber = invoice.vehicleRegNumber || jobCard?.vehicleRegNumber || "";
                   const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
                   const publicInvoiceUrl = `${appBaseUrl}/public-invoice/${invoice.id}`;
@@ -1227,7 +1318,7 @@ ${businessNameVal}`;
               </CardHeader>
               <CardContent className="space-y-4 pt-4 text-sm">
                 {/* Direct Discount — % or fixed ₹ */}
-                <div className="space-y-2">
+                <div className={cn("space-y-2", isFlatDisabled && "opacity-60")}>
                   <div className="flex items-center gap-2">
                     <Percent className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                     <Label className="font-medium text-foreground">Direct Discount</Label>
@@ -1291,7 +1382,7 @@ ${businessNameVal}`;
                 </div>
 
                 {/* Reward Points Input */}
-                <div className="space-y-1.5">
+                <div className={cn("space-y-1.5", isPointsDisabled && "opacity-60")}>
                   <Label htmlFor="reward-points" className="flex items-center justify-between gap-2 font-medium text-foreground w-full">
                     <span className="flex items-center gap-1.5">
                       <Coins className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1314,7 +1405,9 @@ ${businessNameVal}`;
                     className="[appearance:textfield]"
                   />
                   {isPointsDisabled && (
-                    <p className="text-[11px] text-amber-600">Disabled because direct discount is applied.</p>
+                    <p className="text-[11px] text-amber-600">
+                      Disabled because direct discount or referral is active.
+                    </p>
                   )}
                   {pointsErrorMsg ? (
                     <p className="text-[11px] text-destructive">{pointsErrorMsg}</p>
@@ -1323,8 +1416,9 @@ ${businessNameVal}`;
                   )}
                 </div>
 
-                {/* Referral Code Input */}
-                <div className="space-y-1.5">
+                {/* Referral Code Input — new customers only */}
+                {canApplyReferral ? (
+                <div className={cn("space-y-1.5", isReferralDisabled && "opacity-60")}>
                   <Label htmlFor="referral-code" className="flex items-center gap-1.5 font-medium text-foreground">
                     <Ticket className="w-3.5 h-3.5 text-muted-foreground" />
                     Referral Discount Code
@@ -1334,12 +1428,7 @@ ${businessNameVal}`;
                       id="referral-code"
                       placeholder="Enter friend's code"
                       value={referralCode}
-                      onChange={(e) => {
-                        setReferralCode(e.target.value);
-                        if (invoice && typeof window !== "undefined") {
-                          sessionStorage.setItem(`draft-code-${invoice.id}`, e.target.value);
-                        }
-                      }}
+                      onChange={(e) => handleReferralCodeChange(e.target.value)}
                       disabled={Boolean(appliedReferrerId) || isReferralDisabled}
                     />
                     {appliedReferrerId ? (
@@ -1358,7 +1447,9 @@ ${businessNameVal}`;
                     )}
                   </div>
                   {isReferralDisabled && (
-                    <p className="text-[11px] text-amber-600">Disabled because direct discount is active.</p>
+                    <p className="text-[11px] text-amber-600">
+                      Disabled because direct discount or reward points are active.
+                    </p>
                   )}
                   {referralVerifiedMsg && (
                     <p className="text-[11px] text-emerald-600 font-medium">{referralVerifiedMsg}</p>
@@ -1367,6 +1458,11 @@ ${businessNameVal}`;
                     <p className="text-[11px] text-destructive">{referralErrorMsg}</p>
                   )}
                 </div>
+                ) : invoice && invoiceCarriesReferral(invoice) ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Referral discount already applied on this invoice.
+                  </p>
+                ) : null}
 
                 <Separator />
 

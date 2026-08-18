@@ -18,7 +18,7 @@ export function normalizePartUsedIn(usedIn: PartUsedIn[] | undefined | null): Pa
 
 /** Job cards / service consumption. Legacy parts with no field stay available. */
 export function partUsedInServices(part: Pick<Part, "usedIn">): boolean {
-  if (!part.usedIn || part.usedIn.length === 0) return true;
+  if (part.usedIn == null) return true;
   return part.usedIn.includes("SERVICES");
 }
 
@@ -28,11 +28,10 @@ export function partUsedInDirectSale(part: Pick<Part, "usedIn">): boolean {
 }
 
 export function togglePartUsedIn(current: PartUsedIn[], id: PartUsedIn): PartUsedIn[] {
-  const set = new Set(normalizePartUsedIn(current));
+  const set = new Set(current);
   if (set.has(id)) set.delete(id);
   else set.add(id);
-  const next = PART_USED_IN_OPTIONS.map((o) => o.id).filter((x) => set.has(x));
-  return next.length > 0 ? next : [...DEFAULT_PART_USED_IN];
+  return PART_USED_IN_OPTIONS.map((o) => o.id).filter((x) => set.has(x));
 }
 
 export function filterCounterSaleParts(parts: Part[]): Part[] {

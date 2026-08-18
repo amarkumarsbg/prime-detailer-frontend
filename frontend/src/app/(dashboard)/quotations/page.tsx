@@ -62,6 +62,8 @@ import {
   isGstRegistered,
 } from "@/lib/gst-tax";
 import { sortByNewest } from "@/lib/sort-by-date";
+import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
+import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { buildQuotationWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
   sendCustomerWhatsApp,
@@ -166,6 +168,7 @@ export default function QuotationsPage() {
   const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
+  const findByReferralCode = useCustomerStore((s) => s.findByReferralCode);
   const getNextJobNumber = useJobCardStore((s) => s.getNextJobNumber);
   const quotationList = useQuotationStore((s) => s.quotations);
   const sortedQuotations = useMemo(
@@ -286,6 +289,7 @@ export default function QuotationsPage() {
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerReferralCode, setNewCustomerReferralCode] = useState("");
   const [newCustomerNameError, setNewCustomerNameError] = useState("");
   const [newCustomerPhoneError, setNewCustomerPhoneError] = useState("");
   const [newVehicleReg, setNewVehicleReg] = useState("");
@@ -395,6 +399,7 @@ export default function QuotationsPage() {
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
     setFormVehicleId(owned[0]?.id ?? "");
     setLookupPanelCustomers([]);
+    setNewCustomerReferralCode("");
     setNewCustomerNameError("");
     setNewCustomerPhoneError("");
   };
@@ -420,6 +425,7 @@ export default function QuotationsPage() {
     setNewCustomerName("");
     setNewCustomerPhone("");
     setNewCustomerEmail("");
+    setNewCustomerReferralCode("");
     setNewCustomerNameError("");
     setNewCustomerPhoneError("");
     setNewVehicleReg("");
@@ -620,6 +626,11 @@ export default function QuotationsPage() {
       if (hasCustomerErrors || hasVehicleErrors) {
         return;
       }
+      const referred = referredByFromOptionalInput(newCustomerReferralCode, findByReferralCode);
+      if (referred.error) {
+        toast.error(referred.error);
+        return;
+      }
       customerName = name;
       customerPhone =
         newCustomerPhone.replace(/\D/g, "").length >= 10 && newCustomerPhone.startsWith("+")
@@ -641,6 +652,7 @@ export default function QuotationsPage() {
             `noemail+${phoneDigits}@customers.placeholder`,
           address: "",
           referralCode: `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          referredBy: referred.referredBy,
           totalVisits: 0,
           rewardPoints: 0,
           walletBalance: 0,
@@ -1378,6 +1390,14 @@ export default function QuotationsPage() {
                           placeholder="Email address"
                           autoComplete="email"
                           className="h-9"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <NewCustomerReferralCodeField
+                          id="quot-new-referral"
+                          value={newCustomerReferralCode}
+                          onChange={setNewCustomerReferralCode}
+                          compact
                         />
                       </div>
                     </div>

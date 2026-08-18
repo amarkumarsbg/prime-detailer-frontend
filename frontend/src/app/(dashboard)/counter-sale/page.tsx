@@ -52,6 +52,8 @@ import {
   counterSaleLineTotal,
   type CounterSaleCartLine,
 } from "@/lib/counter-sale";
+import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
+import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { formatCurrency } from "@/lib/utils";
 import { normalizePhoneDigits } from "@/lib/phone";
 import type { Customer, PaymentMethod } from "@/types";
@@ -67,6 +69,7 @@ export default function CounterSalePage() {
   const recordStockAdjustment = useInventoryStore((s) => s.recordStockAdjustment);
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
+  const findByReferralCode = useCustomerStore((s) => s.findByReferralCode);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const addInvoice = useInvoiceStore((s) => s.addInvoice);
   const getNextInvoiceNumber = useInvoiceStore((s) => s.getNextInvoiceNumber);
@@ -89,6 +92,7 @@ export default function CounterSalePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerReferralCode, setNewCustomerReferralCode] = useState("");
   const [partSearch, setPartSearch] = useState("");
   const [cart, setCart] = useState<CounterSaleCartLine[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -174,6 +178,11 @@ export default function CounterSalePage() {
         toast.error("Enter a 10-digit phone number");
         return;
       }
+      const referred = referredByFromOptionalInput(newCustomerReferralCode, findByReferralCode);
+      if (referred.error) {
+        toast.error(referred.error);
+        return;
+      }
       try {
         const created = await addCustomer({
           name: customerName,
@@ -181,6 +190,7 @@ export default function CounterSalePage() {
           email: "",
           address: "",
           referralCode: `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          referredBy: referred.referredBy,
           totalVisits: 0,
           rewardPoints: 0,
           walletBalance: 0,
@@ -368,6 +378,7 @@ export default function CounterSalePage() {
                                 className="w-full rounded-md border border-transparent px-3 py-2 text-left hover:bg-muted/60"
                                 onClick={() => {
                                   setSelectedCustomer(c);
+                                  setNewCustomerReferralCode("");
                                   setLookupQuery("");
                                 }}
                               >
@@ -409,6 +420,14 @@ export default function CounterSalePage() {
                         placeholder="Phone number"
                         maxLength={10}
                         className="h-9"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <NewCustomerReferralCodeField
+                        id="cs-new-referral"
+                        value={newCustomerReferralCode}
+                        onChange={setNewCustomerReferralCode}
+                        compact
                       />
                     </div>
                   </div>
