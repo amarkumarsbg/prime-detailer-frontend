@@ -16,13 +16,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
+import { PurchaseExpandableTable } from "@/components/inventory/purchase-expandable-table";
 import {
-  derivePaymentStatus,
   purchaseAmountPaid,
   purchaseDue,
   purchaseGrandTotal,
 } from "@/lib/inventory/purchase-math";
-import { paymentStatusClass, paymentStatusLabel } from "@/lib/inventory/movement-labels";
 import {
   expensePaidAmount,
   expensePayableAmount,
@@ -162,71 +161,12 @@ export function VendorStatementDialog({
                 {vendor.purchases.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">No purchases yet.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                          <th className="px-3 py-2 font-medium">Purchase #</th>
-                          <th className="px-3 py-2 font-medium">Date</th>
-                          <th className="px-3 py-2 text-right font-medium">Total</th>
-                          <th className="px-3 py-2 text-right font-medium">Paid</th>
-                          <th className="px-3 py-2 text-right font-medium">Due</th>
-                          <th className="px-3 py-2 font-medium">Status</th>
-                          <th className="px-3 py-2 text-right font-medium">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...vendor.purchases]
-                          .sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime())
-                          .map((p) => {
-                            const st = derivePaymentStatus(p);
-                            const due = purchaseDue(p);
-                            return (
-                              <tr key={p.id} className="border-b border-border/60 last:border-0">
-                                <td className="px-3 py-2 font-medium">
-                                  {p.purchaseNumber ?? p.reference ?? p.id}
-                                </td>
-                                <td className="px-3 py-2 text-muted-foreground">{formatDate(p.purchasedAt)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums">
-                                  {formatCurrency(purchaseGrandTotal(p))}
-                                </td>
-                                <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
-                                  {formatCurrency(purchaseAmountPaid(p))}
-                                </td>
-                                <td className="px-3 py-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
-                                  {formatCurrency(due)}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <span
-                                    className={cn(
-                                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium",
-                                      paymentStatusClass(st)
-                                    )}
-                                  >
-                                    {paymentStatusLabel(st)}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  {due > 0.01 ? (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-8"
-                                      onClick={() => setPayTargetId(p.id)}
-                                    >
-                                      Pay
-                                    </Button>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PurchaseExpandableTable
+                    purchases={[...vendor.purchases].sort(
+                      (a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
+                    )}
+                    onPay={(p) => setPayTargetId(p.id)}
+                  />
                 )}
               </TabsContent>
 

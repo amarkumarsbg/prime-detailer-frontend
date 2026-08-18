@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { DataTable } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,16 +23,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import { resolveSessionBranchId } from "@/lib/all-branches";
 import { useBranchScope } from "@/lib/branch-scope";
-import { calcPurchaseLine, calcPurchaseTotals, derivePaymentStatus, purchaseDue, purchaseGrandTotal, purchaseAmountPaid } from "@/lib/inventory/purchase-math";
-import { paymentStatusClass, paymentStatusLabel } from "@/lib/inventory/movement-labels";
+import { calcPurchaseLine, calcPurchaseTotals, purchaseDue, purchaseGrandTotal, purchaseAmountPaid } from "@/lib/inventory/purchase-math";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
 import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-dialog";
+import { PurchaseExpandableTable } from "@/components/inventory/purchase-expandable-table";
 import { VendorFormDialog } from "@/components/expenses/vendor-form-dialog";
 import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
 import type { InventoryPurchaseLine, ProductPurchase } from "@/types";
@@ -232,89 +231,9 @@ export function InventoryPurchasesTab() {
         </Button>
       </div>
 
-      <DataTable
-        data={rows}
-        columns={[
-          {
-            key: "purchaseNumber",
-            label: "Purchase #",
-            render: (p) => p.purchaseNumber ?? p.reference ?? p.id,
-          },
-          { key: "vendorName", label: "Supplier" },
-          ...(hasMultipleBranches || !selectedBranchId
-            ? [
-                {
-                  key: "branchId" as const,
-                  label: "Branch",
-                  render: (p: ProductPurchase) => branchLabel(p.branchId),
-                },
-              ]
-            : []),
-          {
-            key: "purchasedAt",
-            label: "Date",
-            render: (p) => formatDate(p.purchasedAt),
-          },
-          {
-            key: "grandTotal",
-            label: "Amount",
-            render: (p) => <span className="tabular-nums">{formatCurrency(purchaseGrandTotal(p))}</span>,
-          },
-          {
-            key: "status",
-            label: "Status",
-            render: () => (
-              <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                Received
-              </span>
-            ),
-          },
-          {
-            key: "paymentStatus",
-            label: "Payment",
-            render: (p) => {
-              const st = derivePaymentStatus(p);
-              return (
-                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${paymentStatusClass(st)}`}>
-                  {paymentStatusLabel(st)}
-                </span>
-              );
-            },
-          },
-          {
-            key: "due",
-            label: "Due",
-            render: (p) => <span className="tabular-nums">{formatCurrency(purchaseDue(p))}</span>,
-          },
-          {
-            key: "actions",
-            label: "",
-            className: "text-right",
-            render: (p) =>
-              purchaseDue(p) > 0.01 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setPayTarget(p);
-                  }}
-                >
-                  Record payment
-                </Button>
-              ) : null,
-          },
-        ]}
-        searchPlaceholder="Search purchase #, supplier…"
-        searchKeys={["vendorName", "purchaseNumber", "reference", "supplierInvoiceNumber"]}
-        mobileCardBelow="lg"
-        renderMobileCard={(p) => (
-          <div className="space-y-1">
-            <p className="font-medium">{p.purchaseNumber ?? p.id}</p>
-            <p className="text-xs text-muted-foreground">{p.vendorName}</p>
-            <p className="text-sm tabular-nums">{formatCurrency(purchaseGrandTotal(p))}</p>
-          </div>
-        )}
+      <PurchaseExpandableTable
+        purchases={rows}
+        onPay={(p) => setPayTarget(p)}
       />
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>

@@ -48,6 +48,33 @@ const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: "Pair", label: "Pair" },
 ];
 
+const SECONDARY_UNIT_OPTIONS: { value: string; label: string }[] = [
+  { value: "PCS", label: "PCS" },
+  { value: "GM", label: "Grm" },
+  { value: "ML", label: "ML" },
+  { value: "Sq.ft", label: "Sq.ft" },
+];
+
+const DEFAULT_SECONDARY_BY_PRIMARY: Record<string, { unit: string; conversion: string }> = {
+  Kg: { unit: "GM", conversion: "1000" },
+  Litre: { unit: "ML", conversion: "1000" },
+  Box: { unit: "PCS", conversion: "100" },
+  Pack: { unit: "PCS", conversion: "100" },
+  Carton: { unit: "PCS", conversion: "100" },
+  Roll: { unit: "Sq.ft", conversion: "50" },
+};
+
+function normalizeSecondarySelectValue(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^(gm|grm|gram|grams)$/i.test(t)) return "GM";
+  if (/^ml$/i.test(t)) return "ML";
+  if (/^(pcs|pc|piece|pieces)$/i.test(t)) return "PCS";
+  if (/^sq\.?\s*ft$/i.test(t)) return "Sq.ft";
+  const match = SECONDARY_UNIT_OPTIONS.find((o) => o.value.toLowerCase() === t.toLowerCase());
+  return match?.value ?? t;
+}
+
 function focusMobileFormField(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
   if (typeof window === "undefined") return;
   if (!window.matchMedia("(max-width: 639px)").matches) return;
@@ -155,7 +182,7 @@ export function CatalogItemFormDialog({
         !!sec &&
         sec.toLowerCase() !== (part.primaryUnit || "").toLowerCase() &&
         part.conversionFactor > 1;
-      setSecondaryUnit(dual ? sec : "");
+      setSecondaryUnit(dual ? normalizeSecondarySelectValue(sec) : "");
       setConversionRate(dual ? String(part.conversionFactor) : "1");
       setQty(String(part.quantity ?? 0));
       setReorder(String(part.reorderLevel ?? ""));
@@ -205,7 +232,7 @@ export function CatalogItemFormDialog({
     const isBox = unit === "Box" || unit === "Pack" || unit === "Carton";
     const nextSecondaryUnit =
       secondaryUnit.trim() ||
-      (isLitre ? "ML" : isKg ? "Grams" : isRoll ? "Sq.ft" : isBox ? "PCS" : unit);
+      (isLitre ? "ML" : isKg ? "GM" : isRoll ? "Sq.ft" : isBox ? "PCS" : unit);
     const conversionRaw = Number(conversionRate);
     const conversionFactor =
       Number.isFinite(conversionRaw) && conversionRaw > 0
@@ -305,7 +332,10 @@ export function CatalogItemFormDialog({
       }}
     >
       <DialogContent
-        className={cn(dialogMobileSheetContentClasses, "z-[80] max-h-[min(92dvh,720px)]")}
+        className={cn(
+          dialogMobileSheetContentClasses,
+          "z-[80] max-h-[min(92dvh,880px)] sm:max-w-4xl"
+        )}
         overlayClassName="z-[80]"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => {
@@ -333,33 +363,20 @@ export function CatalogItemFormDialog({
         </DialogHeader>
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 [-webkit-overflow-scrolling:touch]">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-part-name">
-                    Part Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="catalog-part-name"
-                    placeholder="e.g. Brake Pad Set"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onFocus={focusMobileFormField}
-                    autoComplete="off"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-part-brand">Brand</Label>
-                  <Input
-                    id="catalog-part-brand"
-                    placeholder="e.g. Bosch"
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    onFocus={focusMobileFormField}
-                    autoComplete="off"
-                  />
-                </div>
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-name">
+                  Part Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="catalog-part-name"
+                  placeholder="e.g. Brake Pad Set"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onFocus={focusMobileFormField}
+                  autoComplete="off"
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-sku">
@@ -373,6 +390,17 @@ export function CatalogItemFormDialog({
                   onFocus={focusMobileFormField}
                   autoComplete="off"
                   required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-brand">Brand</Label>
+                <Input
+                  id="catalog-part-brand"
+                  placeholder="e.g. Bosch"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  onFocus={focusMobileFormField}
+                  autoComplete="off"
                 />
               </div>
               <div className="space-y-2">
@@ -392,16 +420,16 @@ export function CatalogItemFormDialog({
                 </Label>
                 <PartCategorySelect value={category} onChange={setCategory} />
               </div>
-              <PartUsedInFields value={usedIn} onChange={setUsedIn} />
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-unit">Primary unit</Label>
                 <Select
                   value={unit}
                   onValueChange={(nextUnit) => {
                     setUnit(nextUnit);
-                    if (nextUnit === "Litre") {
-                      if (!secondaryUnit.trim()) setSecondaryUnit("ML");
-                      if (!conversionRate.trim() || conversionRate === "1") setConversionRate("1000");
+                    const preset = DEFAULT_SECONDARY_BY_PRIMARY[nextUnit];
+                    if (preset) {
+                      setSecondaryUnit(preset.unit);
+                      setConversionRate(preset.conversion);
                     }
                   }}
                 >
@@ -419,13 +447,21 @@ export function CatalogItemFormDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-secondary-unit">Secondary unit (optional)</Label>
-                <Input
-                  id="catalog-part-secondary-unit"
-                  placeholder="e.g. PCS, GM, ML"
-                  value={secondaryUnit}
-                  onChange={(e) => setSecondaryUnit(e.target.value)}
-                  onFocus={focusMobileFormField}
-                />
+                <Select
+                  value={normalizeSecondarySelectValue(secondaryUnit) || undefined}
+                  onValueChange={setSecondaryUnit}
+                >
+                  <SelectTrigger id="catalog-part-secondary-unit">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECONDARY_UNIT_OPTIONS.map((u) => (
+                      <SelectItem key={u.value} value={u.value}>
+                        {u.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-conversion">Conversion (1 primary = ? secondary)</Label>
@@ -442,7 +478,11 @@ export function CatalogItemFormDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-qty">
-                  {editingPart ? `On-hand quantity (${unit})` : unit === "Litre" ? "Initial stock (litres)" : "Initial quantity"}
+                  {editingPart
+                    ? `On-hand quantity (${unit})`
+                    : unit === "Litre"
+                      ? "Initial stock (litres)"
+                      : "Initial quantity"}
                 </Label>
                 <Input
                   id="catalog-part-qty"
@@ -453,47 +493,6 @@ export function CatalogItemFormDialog({
                   value={qty}
                   onChange={(e) => setQty(e.target.value)}
                   required
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-part-cost">
-                    Cost price {editingPart ? "" : <span className="text-destructive">*</span>}
-                  </Label>
-                  <Input
-                    id="catalog-part-cost"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={cost}
-                    onChange={(e) => setCost(e.target.value)}
-                    required={!editingPart}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-part-price">Selling price (₹)</Label>
-                  <Input
-                    id="catalog-part-price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="e.g. 500 per BOX"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="catalog-part-secondary-price">Secondary unit price (₹, optional)</Label>
-                <Input
-                  id="catalog-part-secondary-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Auto from primary ÷ conversion"
-                  value={secondaryPrice}
-                  onChange={(e) => setSecondaryPrice(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -508,24 +507,43 @@ export function CatalogItemFormDialog({
                   onChange={(e) => setReorder(e.target.value)}
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="catalog-part-supplier">Supplier</Label>
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-cost">
+                  Cost price {editingPart ? "" : <span className="text-destructive">*</span>}
+                </Label>
                 <Input
-                  id="catalog-part-supplier"
-                  placeholder="e.g. Bosch India (optional)"
-                  value={supplier}
-                  onChange={(e) => setSupplier(e.target.value)}
-                  onFocus={focusMobileFormField}
-                  autoComplete="off"
+                  id="catalog-part-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  required={!editingPart}
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="catalog-part-description">Description</Label>
-                <Textarea
-                  id="catalog-part-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional notes about this part"
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-price">Selling price (₹)</Label>
+                <Input
+                  id="catalog-part-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g. 500 per BOX"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-secondary-price">Secondary unit price (₹, optional)</Label>
+                <Input
+                  id="catalog-part-secondary-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Auto from primary ÷ conversion"
+                  value={secondaryPrice}
+                  onChange={(e) => setSecondaryPrice(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -567,17 +585,41 @@ export function CatalogItemFormDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <Checkbox
-                  checked={gstApplicable}
-                  onCheckedChange={(v) => setGstApplicable(v === true)}
+              <PartUsedInFields value={usedIn} onChange={setUsedIn} />
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={gstApplicable}
+                    onCheckedChange={(v) => setGstApplicable(v === true)}
+                  />
+                  GST applicable
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={active} onCheckedChange={(v) => setActive(v === true)} />
+                  Active
+                </label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-supplier">Supplier</Label>
+                <Input
+                  id="catalog-part-supplier"
+                  placeholder="e.g. Bosch India (optional)"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  onFocus={focusMobileFormField}
+                  autoComplete="off"
                 />
-                GST applicable
-              </label>
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <Checkbox checked={active} onCheckedChange={(v) => setActive(v === true)} />
-                Active
-              </label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="catalog-part-description">Description</Label>
+                <Textarea
+                  id="catalog-part-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Optional notes about this part"
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-background px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
