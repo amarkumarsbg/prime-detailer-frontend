@@ -10,7 +10,7 @@ import type {
 } from "@/types";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
-import { useHighEndServiceStore } from "@/store/high-end-service-store";
+import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
 import { useMembershipStore } from "@/store/membership-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useSettingsStore } from "@/store/settings-store";
@@ -26,7 +26,7 @@ function highEndSubtotalExclGst(job: JobCard): number {
   let sum = 0;
   for (const hesId of job.highEndServiceIds ?? []) {
     const cfg = hesCatalog.find((h) => h.id === hesId);
-    sum += cfg?.estimateAmountInr ?? 0;
+    sum += cfg ? highEndPriceForSegment(cfg, job.vehicleSegment) : 0;
   }
   return sum;
 }
@@ -139,7 +139,7 @@ export function buildInvoiceFromJobCard(
   const programLines: InvoiceLineItem[] = [];
   for (const hesId of job.highEndServiceIds ?? []) {
     const cfg = hesCatalog.find((h) => h.id === hesId);
-    const amt = cfg?.estimateAmountInr ?? 0;
+    const amt = cfg ? highEndPriceForSegment(cfg, job.vehicleSegment) : 0;
     if (amt <= 0) continue;
     programLines.push({
       id: `li-${invoiceId}-hes-${hesId}`,
@@ -248,7 +248,7 @@ function jobHasInvoiceableLines(job: JobCard): boolean {
   const hesCatalog = useHighEndServiceStore.getState().services;
   for (const hesId of job.highEndServiceIds ?? []) {
     const cfg = hesCatalog.find((h) => h.id === hesId);
-    if ((cfg?.estimateAmountInr ?? 0) > 0) return true;
+    if (cfg && highEndPriceForSegment(cfg, job.vehicleSegment) > 0) return true;
   }
   return false;
 }

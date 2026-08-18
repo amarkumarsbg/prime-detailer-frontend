@@ -101,7 +101,7 @@ import { useBranchStore } from "@/store/branch-store";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
-import { useHighEndServiceStore } from "@/store/high-end-service-store";
+import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
@@ -1133,9 +1133,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const highEndSubtotalExclGst = useMemo(() => {
     return selectedHighEndIds.reduce((sum, hid) => {
       const h = highEndServices.find((x) => x.id === hid);
-      return sum + (h?.estimateAmountInr ?? 0);
+      return sum + (h ? highEndPriceForSegment(h, vehicleSegment || undefined) : 0);
     }, 0);
-  }, [selectedHighEndIds, highEndServices]);
+  }, [selectedHighEndIds, highEndServices, vehicleSegment]);
 
   const inventoryParts = useInventoryStore((s) => s.parts);
 
@@ -1223,10 +1223,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         .map((hid) => {
           const h = highEndServices.find((x) => x.id === hid);
           if (!h) return null;
-          return { id: hid, name: h.name, amount: h.estimateAmountInr ?? 0 };
+          return {
+            id: hid,
+            name: h.name,
+            amount: highEndPriceForSegment(h, vehicleSegment || undefined),
+          };
         })
         .filter((x): x is { id: string; name: string; amount: number } => x != null),
-    [selectedHighEndIds, highEndServices]
+    [selectedHighEndIds, highEndServices, vehicleSegment]
   );
 
   const discountAmount = useMemo(() => {
@@ -4439,7 +4443,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                               {hes.reminderIntervals.map((m) => formatHighEndIntervalMonths(m)).join(", ")}
                             </p>
                             <p className="text-[10px] font-medium text-amber-800 dark:text-amber-300 mt-0.5 tabular-nums">
-                              +{formatCurrency(hes.estimateAmountInr ?? 0)} est. (excl. GST)
+                              +{formatCurrency(highEndPriceForSegment(hes, vehicleSegment || undefined))} est. (excl. GST)
                             </p>
                           </div>
                         </button>

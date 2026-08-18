@@ -203,7 +203,7 @@ function ExpensesPageContent() {
   }, [branchScopedExpenses, dateFilter, categoryFilter, statusFilter]);
 
   const kpis = useMemo(() => {
-    const total = scoped.reduce((s, e) => s + e.amount, 0);
+    const total = scoped.reduce((s, e) => s + (e.purchaseId ? paidAmount(e) : e.amount), 0);
     const totalPaid = scoped.reduce((s, e) => s + paidAmount(e), 0);
     const payables = scoped.reduce((s, e) => s + payableAmount(e), 0);
     const partialCount = scoped.filter((e) => e.paymentStatus === "PARTIAL").length;

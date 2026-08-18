@@ -19,10 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  needsPaymentReceivedIn,
-  PaymentReceivedInField,
-} from "@/components/billing/payment-received-in-field";
 import { formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useCashBankStore } from "@/store/cash-bank-store";
@@ -59,62 +55,70 @@ export function VendorPurchasePaymentDialog({
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [receivedInAccountId, setReceivedInAccountId] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
-  const showReceivedIn = needsPaymentReceivedIn(method);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open || !purchase) return;
     setAmount(due > 0 ? String(due) : "");
     setMethod("CASH");
-    setReceivedInAccountId("");
+    setReceivedInAccountId(
+      cashBankAccounts.find((a) => a.type === "cash")?.id ?? cashBankAccounts[0]?.id ?? ""
+    );
     setReferenceNumber("");
-  }, [open, purchase, due]);
+  }, [open, purchase, due, cashBankAccounts]);
 
-  const submit = () => {
+  const submit = async () => {
     if (!purchase) return;
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) {
       toast.error("Enter a payment amount greater than zero.");
       return;
     }
-    if (showReceivedIn && !receivedInAccountId) {
-      toast.error("Select Payment Received In", {
-        description: "Choose the bank account for UPI or Card payments.",
+    if (!receivedInAccountId) {
+      toast.error("Select the Cash & Bank account this payment is paid from.");
+      return;
+    }
+    const account = cashBankAccounts.find((a) => a.id === receivedInAccountId);
+    setSaving(true);
+    try {
+      const result = recordPurchasePayment(purchase.id, {
+        amount: n,
+        method,
+        receivedInAccountId: account?.id,
+        receivedInAccountName: account?.displayName,
+        referenceNumber: referenceNumber.trim() || undefined,
       });
-      return;
-    }
-    const account = showReceivedIn
-      ? cashBankAccounts.find((a) => a.id === receivedInAccountId)
-      : undefined;
-    const result = recordPurchasePayment(purchase.id, {
-      amount: n,
-      method,
-      receivedInAccountId: account?.id,
-      receivedInAccountName: account?.displayName,
-      referenceNumber: referenceNumber.trim() || undefined,
-    });
-    if (!result.ok) {
-      toast.error(result.error ?? "Could not record payment.");
-      return;
-    }
-    const updated = useInventoryStore.getState().productPurchases.find((p) => p.id === purchase.id);
-    if (updated) {
-      void syncPurchaseToExpense(updated, {
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not record payment.");
+        return;
+      }
+      const updated =
+        useInventoryStore.getState().productPurchases.find((p) => p.id === purchase.id) ?? purchase;
+      await syncPurchaseToExpense(updated, {
         createdBy: user?.id ?? "unknown",
         createdByName: user?.name ?? user?.email ?? "staff",
       });
+      const posted = await postPurchasePaymentToCashBank({
+        amount: n,
+        method,
+        accountId: account?.id,
+        vendorName: purchase.vendorName,
+        purchaseNumber: purchase.purchaseNumber,
+        referenceNumber: referenceNumber.trim() || undefined,
+      });
+      toast.success(
+        posted
+          ? "Payment posted to Expenses and Cash & Bank."
+          : "Expense updated, but no Cash & Bank account was found."
+      );
+      onOpenChange(false);
+    } catch (err) {
+      toast.error("Could not post payment to Expenses / Accounting", {
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
     }
-    const posted = postPurchasePaymentToCashBank({
-      amount: n,
-      method,
-      accountId: account?.id,
-      vendorName: purchase.vendorName,
-      purchaseNumber: purchase.purchaseNumber,
-      referenceNumber: referenceNumber.trim() || undefined,
-    });
-    toast.success(
-      posted ? "Payment recorded in Expenses and Accounting." : "Payment recorded on the purchase."
-    );
-    onOpenChange(false);
   };
 
   return (
@@ -149,11 +153,7 @@ export function VendorPurchasePaymentDialog({
             <Label>Payment Method</Label>
             <Select
               value={method}
-              onValueChange={(v) => {
-                const next = v as PaymentMethod;
-                setMethod(next);
-                if (!needsPaymentReceivedIn(next)) setReceivedInAccountId("");
-              }}
+              onValueChange={(v) => setMethod(v as PaymentMethod)}
               disabled={!purchase}
             >
               <SelectTrigger>
@@ -168,14 +168,31 @@ export function VendorPurchasePaymentDialog({
               </SelectContent>
             </Select>
           </div>
-          {showReceivedIn ? (
-            <PaymentReceivedInField
-              value={receivedInAccountId}
-              onChange={setReceivedInAccountId}
-              disabled={!purchase}
-              id="vendor-pay-received-in"
-            />
-          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="vendor-pay-account">Paid from account</Label>
+            {cashBankAccounts.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                No Cash &amp; Bank accounts yet. Add one under Cash &amp; Bank so this payment posts to Accounting.
+              </p>
+            ) : (
+              <Select
+                value={receivedInAccountId || undefined}
+                onValueChange={setReceivedInAccountId}
+                disabled={!purchase}
+              >
+                <SelectTrigger id="vendor-pay-account">
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cashBankAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           <div className="space-y-2">
             <Label htmlFor="vendor-pay-ref">Reference Number (optional)</Label>
             <Input
@@ -193,10 +210,10 @@ export function VendorPurchasePaymentDialog({
           </Button>
           <Button
             type="button"
-            disabled={!purchase || (showReceivedIn && !receivedInAccountId)}
-            onClick={submit}
+            disabled={!purchase || saving || !receivedInAccountId}
+            onClick={() => void submit()}
           >
-            Record Payment
+            {saving ? "Posting…" : "Record Payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -31,7 +31,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
 import { useOrganizationStore } from "@/store/organization-store";
-import { useHighEndServiceStore } from "@/store/high-end-service-store";
+import { useHighEndServiceStore, buildHighEndSegmentPricing, highEndDefaultEstimate } from "@/store/high-end-service-store";
+import {
+  EMPTY_HIGH_END_PRICE_DRAFT,
+  HighEndSegmentPricingFields,
+} from "@/components/settings/high-end-segment-pricing-fields";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { BrandingThemePanel } from "@/components/settings/branding-theme-panel";
 import type { VehicleSegment } from "@/types";
@@ -166,11 +170,11 @@ export default function SettingsPage() {
   const [newHesName, setNewHesName] = useState("");
   const [newHesTotalYears, setNewHesTotalYears] = useState("5");
   const [newHesIntervalMonths, setNewHesIntervalMonths] = useState("6");
-  const [newHesEstimate, setNewHesEstimate] = useState("");
+  const [newHesPrices, setNewHesPrices] = useState({ ...EMPTY_HIGH_END_PRICE_DRAFT });
   const [addHesOpen, setAddHesOpen] = useState(false);
   const [editingHesId, setEditingHesId] = useState<string | null>(null);
   const [editHesName, setEditHesName] = useState("");
-  const [editHesEstimate, setEditHesEstimate] = useState("0");
+  const [editHesPrices, setEditHesPrices] = useState({ ...EMPTY_HIGH_END_PRICE_DRAFT });
   const [editHesIntervalMonths, setEditHesIntervalMonths] = useState("6");
   const [editHesTotalYears, setEditHesTotalYears] = useState("5");
 
@@ -200,7 +204,14 @@ export default function SettingsPage() {
   const startEditHighEndService = (svc: (typeof highEndStore.services)[number]) => {
     setEditingHesId(svc.id);
     setEditHesName(svc.name);
-    setEditHesEstimate(String(svc.estimateAmountInr ?? 0));
+    const sp = svc.segmentPricing;
+    const fallback = String(svc.estimateAmountInr ?? "");
+    setEditHesPrices({
+      HATCHBACK: sp?.HATCHBACK ? String(sp.HATCHBACK) : fallback,
+      SEDAN: sp?.SEDAN ? String(sp.SEDAN) : fallback,
+      SUV: sp?.SUV ? String(sp.SUV) : fallback,
+      BIKE: sp?.BIKE ? String(sp.BIKE) : fallback,
+    });
     setEditHesIntervalMonths(String(inferredIntervalMonths(svc.reminderIntervals)));
     setEditHesTotalYears(String(svc.totalYears));
   };
@@ -218,10 +229,21 @@ export default function SettingsPage() {
     }
     const totalYears = parseInt(editHesTotalYears, 10) || 5;
     const intervalMonths = parseInt(editHesIntervalMonths, 10) || 6;
-    const estimateAmountInr = Math.max(0, parseInt(editHesEstimate, 10) || 0);
+    const parsed = {
+      HATCHBACK: Math.max(0, parseFloat(editHesPrices.HATCHBACK) || 0),
+      SEDAN: Math.max(0, parseFloat(editHesPrices.SEDAN) || 0),
+      SUV: Math.max(0, parseFloat(editHesPrices.SUV) || 0),
+      BIKE: Math.max(0, parseFloat(editHesPrices.BIKE) || 0),
+    };
+    if (parsed.HATCHBACK === 0 && parsed.SEDAN === 0 && parsed.SUV === 0 && parsed.BIKE === 0) {
+      toast.error("Enter at least one vehicle type price");
+      return;
+    }
+    const segmentPricing = buildHighEndSegmentPricing(parsed);
     highEndStore.updateService(editingHesId, {
       name,
-      estimateAmountInr,
+      estimateAmountInr: highEndDefaultEstimate(segmentPricing),
+      segmentPricing,
       totalYears,
       reminderIntervals: buildReminderIntervals(intervalMonths, totalYears),
     });
@@ -233,7 +255,7 @@ export default function SettingsPage() {
     setNewHesName("");
     setNewHesTotalYears("5");
     setNewHesIntervalMonths("6");
-    setNewHesEstimate("");
+    setNewHesPrices({ ...EMPTY_HIGH_END_PRICE_DRAFT });
   };
 
   const openAddHighEndService = () => {
@@ -246,13 +268,24 @@ export default function SettingsPage() {
     const totalYears = parseInt(newHesTotalYears, 10) || 5;
     const intervalMonths = parseInt(newHesIntervalMonths, 10) || 6;
     const intervals = buildReminderIntervals(intervalMonths, totalYears);
-    const estimateAmountInr = Math.max(0, parseInt(newHesEstimate, 10) || 0);
+    const parsed = {
+      HATCHBACK: Math.max(0, parseFloat(newHesPrices.HATCHBACK) || 0),
+      SEDAN: Math.max(0, parseFloat(newHesPrices.SEDAN) || 0),
+      SUV: Math.max(0, parseFloat(newHesPrices.SUV) || 0),
+      BIKE: Math.max(0, parseFloat(newHesPrices.BIKE) || 0),
+    };
+    if (parsed.HATCHBACK === 0 && parsed.SEDAN === 0 && parsed.SUV === 0 && parsed.BIKE === 0) {
+      toast.error("Enter at least one vehicle type price");
+      return;
+    }
+    const segmentPricing = buildHighEndSegmentPricing(parsed);
     const name = newHesName.trim();
     highEndStore.addService({
       name,
       reminderIntervals: intervals,
       totalYears,
-      estimateAmountInr,
+      estimateAmountInr: highEndDefaultEstimate(segmentPricing),
+      segmentPricing,
     });
     resetAddHighEndForm();
     setAddHesOpen(false);
@@ -1043,21 +1076,13 @@ export default function SettingsPage() {
                       </div>
                       <div className="flex-1 min-w-0 space-y-3">
                         {isEditing ? (
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                            <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="space-y-1.5 sm:col-span-1">
                               <Label className="text-xs">Service name</Label>
                               <Input
                                 value={editHesName}
                                 onChange={(e) => setEditHesName(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Est. amount (₹ excl. GST)</Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={editHesEstimate}
-                                onChange={(e) => setEditHesEstimate(e.target.value)}
                               />
                             </div>
                             <div className="space-y-1.5">
@@ -1104,12 +1129,29 @@ export default function SettingsPage() {
                               </Select>
                             </div>
                           </div>
+                          <HighEndSegmentPricingFields
+                            values={editHesPrices}
+                            onChange={setEditHesPrices}
+                          />
+                          </div>
                         ) : (
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                               <p className="font-medium">{svc.name}</p>
                               <p className="text-sm text-muted-foreground tabular-nums">
-                                ₹{(svc.estimateAmountInr ?? 0).toLocaleString("en-IN")} excl. GST
+                                {(() => {
+                                  const sp = svc.segmentPricing;
+                                  const priced = sp
+                                    ? [sp.HATCHBACK, sp.SEDAN, sp.SUV, sp.BIKE].filter((n) => n > 0)
+                                    : [];
+                                  const min =
+                                    priced.length > 0
+                                      ? Math.min(...priced)
+                                      : svc.estimateAmountInr ?? 0;
+                                  return sp && priced.length > 1
+                                    ? `from ₹${min.toLocaleString("en-IN")} excl. GST`
+                                    : `₹${min.toLocaleString("en-IN")} excl. GST`;
+                                })()}
                               </p>
                             </div>
                             <p className="text-xs text-muted-foreground">
@@ -1205,7 +1247,7 @@ export default function SettingsPage() {
             }}
           >
             <DialogContent
-              className={cn(dialogMobileSheetContentClasses, "max-h-[min(90dvh,640px)] sm:max-w-md")}
+              className={cn(dialogMobileSheetContentClasses, "max-h-[min(90dvh,720px)] sm:max-w-xl")}
             >
               <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pr-12")}>
                 <DialogTitle className="flex items-center gap-2">
@@ -1215,7 +1257,7 @@ export default function SettingsPage() {
                   Add high-end service
                 </DialogTitle>
                 <DialogDescription>
-                  Set the estimate and reminder schedule used on job cards.
+                  Set prices by vehicle type and the reminder schedule used on job cards.
                 </DialogDescription>
               </DialogHeader>
 
@@ -1230,18 +1272,10 @@ export default function SettingsPage() {
                     autoFocus
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hes-estimate">Estimated amount (₹ excl. GST)</Label>
-                  <Input
-                    id="hes-estimate"
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    placeholder="e.g. 45000"
-                    value={newHesEstimate}
-                    onChange={(e) => setNewHesEstimate(e.target.value)}
-                  />
-                </div>
+                <HighEndSegmentPricingFields
+                  values={newHesPrices}
+                  onChange={setNewHesPrices}
+                />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Reminder interval</Label>

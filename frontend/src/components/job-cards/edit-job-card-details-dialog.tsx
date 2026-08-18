@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus } from "lucide-react";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
-import { useHighEndServiceStore } from "@/store/high-end-service-store";
+import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { jobCardIsEditable, canEditJobCardPricing } from "@/lib/job-card-edit-policy";
 import { jobCardPartsSubtotal } from "@/components/job-cards/job-card-parts-picker";
@@ -162,7 +162,7 @@ export function EditJobCardDetailsDialog({
     let hesTotal = 0;
     for (const hesId of jobCard.highEndServiceIds ?? []) {
       const cfg = highEndServices.find((h) => h.id === hesId);
-      hesTotal += cfg?.estimateAmountInr ?? 0;
+      hesTotal += cfg ? highEndPriceForSegment(cfg, jobCard.vehicleSegment) : 0;
     }
     return Math.round((servicesTotal + partsTotal + hesTotal) * 100) / 100;
   }, [jobCard, servicesPreview, highEndServices]);
@@ -201,7 +201,7 @@ export function EditJobCardDetailsDialog({
     let hesTotal = 0;
     for (const hesId of jobCard.highEndServiceIds ?? []) {
       const cfg = highEndServices.find((h) => h.id === hesId);
-      hesTotal += cfg?.estimateAmountInr ?? 0;
+      hesTotal += cfg ? highEndPriceForSegment(cfg, jobCard.vehicleSegment) : 0;
     }
     const estimatedAmount = Math.round((servicesTotal + partsTotal + hesTotal) * 100) / 100;
     const incentiveAmount =

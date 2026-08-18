@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { KPICard } from "@/components/shared/kpi-card";
@@ -32,6 +32,7 @@ import { useBranchStore } from "@/store/branch-store";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
 import {
+  backfillPurchaseExpenses,
   postPurchasePaymentToCashBank,
   syncPurchaseToExpense,
 } from "@/lib/inventory/sync-purchase-expense";
@@ -81,6 +82,14 @@ export function InventoryPurchasesTab() {
   const [amountPaid, setAmountPaid] = useState("0");
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [payTarget, setPayTarget] = useState<ProductPurchase | null>(null);
+
+  useEffect(() => {
+    if (purchases.length === 0) return;
+    void backfillPurchaseExpenses(purchases, {
+      createdBy: user?.id ?? "unknown",
+      createdByName: user?.name ?? user?.email ?? "staff",
+    });
+  }, [purchases, user?.id, user?.name, user?.email]);
 
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
   const hasMultipleBranches = activeBranches.length > 1;
@@ -160,7 +169,7 @@ export function InventoryPurchasesTab() {
     return true;
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supplierName.trim()) {
       toast.error("Supplier is required.");
@@ -196,18 +205,27 @@ export function InventoryPurchasesTab() {
       toast.error(result.error);
       return;
     }
-    void syncPurchaseToExpense(result.purchase, {
-      createdBy: user?.id ?? "unknown",
-      createdByName: user?.name ?? user?.email ?? "staff",
-    });
-    const paidNow = Number(amountPaid) || 0;
-    if (paidNow > 0.01) {
-      postPurchasePaymentToCashBank({
-        amount: paidNow,
-        method: "CASH",
-        vendorName: result.purchase.vendorName,
-        purchaseNumber: result.purchase.purchaseNumber,
+    try {
+      await syncPurchaseToExpense(result.purchase, {
+        createdBy: user?.id ?? "unknown",
+        createdByName: user?.name ?? user?.email ?? "staff",
       });
+      const paidNow = Number(amountPaid) || 0;
+      if (paidNow > 0.01) {
+        await postPurchasePaymentToCashBank({
+          amount: paidNow,
+          method: "CASH",
+          vendorName: result.purchase.vendorName,
+          purchaseNumber: result.purchase.purchaseNumber,
+        });
+      }
+    } catch (err) {
+      toast.error("Purchase saved, but Expenses / Accounting sync failed", {
+        description: err instanceof Error ? err.message : "Open Expenses and retry payment.",
+      });
+      setOpen(false);
+      reset();
+      return;
     }
     toast.success(
       `Purchase ${result.purchase.purchaseNumber} saved. Stock updated${

@@ -2,13 +2,67 @@
 
 import { create } from "zustand";
 import { putSingletonDocument } from "@/lib/collection-sync";
+import type { SegmentPricing, VehicleSegment } from "@/types";
 
 export interface HighEndServiceConfig {
   id: string;
   name: string;
   reminderIntervals: number[];
   totalYears: number;
+  /** Fallback list price when segment pricing is missing. */
   estimateAmountInr?: number;
+  /** List price by vehicle type (excl. GST). */
+  segmentPricing?: SegmentPricing;
+}
+
+export const HIGH_END_PRICE_SEGMENTS: {
+  key: keyof Pick<SegmentPricing, "HATCHBACK" | "SEDAN" | "SUV" | "BIKE">;
+  label: string;
+  hint: string;
+  icon: string;
+}[] = [
+  { key: "HATCHBACK", label: "Hatchback", hint: "Small cars", icon: "🚗" },
+  { key: "SEDAN", label: "Sedan", hint: "Mid-size", icon: "🚙" },
+  { key: "SUV", label: "SUV", hint: "Large", icon: "🚐" },
+  { key: "BIKE", label: "Bike", hint: "Two-wheeler", icon: "🏍️" },
+];
+
+export function buildHighEndSegmentPricing(input: {
+  HATCHBACK: number;
+  SEDAN: number;
+  SUV: number;
+  BIKE: number;
+}): SegmentPricing {
+  const h = Math.max(0, input.HATCHBACK);
+  const s = Math.max(0, input.SEDAN);
+  const u = Math.max(0, input.SUV);
+  const bike = Math.max(0, input.BIKE);
+  return {
+    HATCHBACK: h,
+    SEDAN: s,
+    SUV: u,
+    LUXURY: Math.round(Math.max(s * 1.35, u * 1.1)),
+    MUV: Math.round((s + u) / 2),
+    COMPACT_SUV: Math.round((h + u) / 2),
+    BIKE: bike,
+  };
+}
+
+export function highEndDefaultEstimate(pricing: SegmentPricing): number {
+  const vals = [pricing.HATCHBACK, pricing.SEDAN, pricing.SUV, pricing.BIKE].filter((n) => n > 0);
+  if (vals.length === 0) return 0;
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
+export function highEndPriceForSegment(
+  svc: HighEndServiceConfig,
+  segment?: VehicleSegment | "" | null
+): number {
+  if (segment && svc.segmentPricing) {
+    const p = svc.segmentPricing[segment];
+    if (typeof p === "number" && Number.isFinite(p) && p > 0) return p;
+  }
+  return svc.estimateAmountInr ?? 0;
 }
 
 export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [

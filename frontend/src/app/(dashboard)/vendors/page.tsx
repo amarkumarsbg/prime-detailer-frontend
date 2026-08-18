@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { KPICard } from "@/components/shared/kpi-card";
@@ -19,7 +19,9 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency, formatDate, formatDateTime, cn } from "@/lib/utils";
 import { buildVendorSummaries, type VendorSummary } from "@/lib/vendors/vendor-metrics";
+import { backfillPurchaseExpenses } from "@/lib/inventory/sync-purchase-expense";
 import { totalReceivables } from "@/lib/accounting/dashboard-metrics";
+import { useAuthStore } from "@/store/auth-store";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
@@ -56,6 +58,15 @@ export default function VendorsPage() {
   const invoices = useInvoiceStore((s) => s.invoices);
   const cashAccounts = useCashBankStore((s) => s.accounts);
   const cashTransactions = useCashBankStore((s) => s.transactions);
+  const user = useAuthStore((s) => s.user);
+
+  useEffect(() => {
+    if (purchases.length === 0) return;
+    void backfillPurchaseExpenses(purchases, {
+      createdBy: user?.id ?? "unknown",
+      createdByName: user?.name ?? user?.email ?? "staff",
+    });
+  }, [purchases, user?.id, user?.name, user?.email]);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");

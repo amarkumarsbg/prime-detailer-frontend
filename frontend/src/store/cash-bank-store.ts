@@ -46,7 +46,7 @@ export interface CashBankTransaction {
 }
 
 function persist(accounts: CashBankAccount[], transactions: CashBankTransaction[]) {
-  void putSingletonDocument("cashBank", { accounts, transactions }).catch((err) => {
+  return putSingletonDocument("cashBank", { accounts, transactions }).catch((err) => {
     if (process.env.NODE_ENV !== "production") console.error(err);
   });
 }
@@ -76,7 +76,7 @@ export interface CashBankStore {
     party?: string;
     mode?: string;
     notes?: string;
-  }) => boolean;
+  }) => Promise<boolean>;
   transfer: (input: {
     fromId: string;
     toId: string;
@@ -161,7 +161,7 @@ export const useCashBankStore = create<CashBankStore>((set, get) => ({
     });
   },
 
-  recordOutgoing: ({ accountId, amount, dateIso, party, mode, notes }) => {
+  recordOutgoing: async ({ accountId, amount, dateIso, party, mode, notes }) => {
     if (!(amount > 0)) return false;
     const acc = get().accounts.find((a) => a.id === accountId);
     if (!acc) return false;
@@ -177,12 +177,10 @@ export const useCashBankStore = create<CashBankStore>((set, get) => ({
       balanceAfter: newBal,
       notes,
     };
-    set((s) => {
-      const accounts = s.accounts.map((a) => (a.id === accountId ? { ...a, balance: newBal } : a));
-      const transactions = [t, ...s.transactions];
-      persist(accounts, transactions);
-      return { accounts, transactions };
-    });
+    const accounts = get().accounts.map((a) => (a.id === accountId ? { ...a, balance: newBal } : a));
+    const transactions = [t, ...get().transactions];
+    set({ accounts, transactions });
+    await persist(accounts, transactions);
     return true;
   },
 

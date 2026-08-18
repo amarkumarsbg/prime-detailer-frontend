@@ -58,11 +58,22 @@ const CASH_EXPENSE: ExpensePaymentMethod[] = ["CASH"];
 const ONLINE_EXPENSE: ExpensePaymentMethod[] = ["CARD", "UPI", "BANK_TRANSFER", "OTHER"];
 
 export function expenseAmountForMethod(e: Expense): number {
+  if (e.purchaseId) return recognizedExpenseAmount(e);
   if (e.paymentStatus === "PENDING" || e.paymentStatus === "OVERDUE") {
     return e.amount;
   }
   if (e.paymentStatus === "PARTIAL") {
     return e.amountPaid ?? 0;
+  }
+  return e.amount;
+}
+
+/** P&L / Total Expenses: vendor purchase bills count only when money is paid. */
+export function recognizedExpenseAmount(e: Expense): number {
+  if (e.purchaseId) {
+    if (e.paymentStatus === "PAID") return e.amount;
+    if (e.paymentStatus === "PARTIAL") return e.amountPaid ?? 0;
+    return 0;
   }
   return e.amount;
 }
@@ -98,7 +109,7 @@ export function totalInvoiceRevenue(invoices: Invoice[]): number {
 }
 
 export function totalExpenseAmount(expenses: Expense[]): number {
-  return Math.round(expenses.reduce((s, e) => s + e.amount, 0) * 100) / 100;
+  return Math.round(expenses.reduce((s, e) => s + recognizedExpenseAmount(e), 0) * 100) / 100;
 }
 
 export function totalReceivables(invoices: Invoice[]): number {
@@ -200,7 +211,7 @@ export function totalIncomeReceipts(args: {
 export function expensesByCategory(expenses: Expense[]): { category: string; amount: number }[] {
   const map = new Map<string, number>();
   for (const e of expenses) {
-    map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    map.set(e.category, (map.get(e.category) ?? 0) + recognizedExpenseAmount(e));
   }
   return [...map.entries()]
     .map(([category, amount]) => ({ category, amount: Math.round(amount * 100) / 100 }))
@@ -335,7 +346,7 @@ export function buildIncomeExpenseTrend(
   for (const e of expenses) {
     const { key, sort } = keyFor(e.date);
     const prev = map.get(key) ?? { income: 0, expense: 0, sort };
-    prev.expense += e.amount;
+    prev.expense += recognizedExpenseAmount(e);
     map.set(key, prev);
   }
 

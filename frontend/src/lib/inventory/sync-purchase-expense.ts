@@ -1,4 +1,6 @@
-import type { ExpensePaymentMethod, ExpensePaymentStatus, PaymentMethod, ProductPurchase } from "@/types";
+import type { Expense, ExpensePaymentMethod, ExpensePaymentStatus, PaymentMethod, ProductPurchase } from "@/types";
+import { apiGet } from "@/lib/api-client";
+import { purchaseGrandTotal } from "@/lib/inventory/purchase-math";
 import { useCashBankStore } from "@/store/cash-bank-store";
 import { useExpenseStore } from "@/store/expense-store";
 
@@ -10,10 +12,21 @@ function mapPaymentMethod(method?: PaymentMethod): ExpensePaymentMethod {
 
 function expenseStatusFromPurchase(purchase: ProductPurchase): ExpensePaymentStatus {
   const paid = purchase.amountPaid ?? 0;
-  const total = purchase.grandTotal ?? 0;
+  const total = purchaseGrandTotal(purchase);
   if (paid <= 0.01) return "PENDING";
   if (total - paid <= 0.01) return "PAID";
   return "PARTIAL";
+}
+
+async function hydrateExpensesIfEmpty() {
+  if (useExpenseStore.getState().expenses.length > 0) return;
+  try {
+    const data = await apiGet<{ items?: Expense[] }>("/api/collections/expenses");
+    const items = Array.isArray(data?.items) ? data.items : [];
+    if (items.length > 0) useExpenseStore.setState({ expenses: items });
+  } catch {
+    /* keep local */
+  }
 }
 
 /** Create or update the Expenses bill that Accounting uses for this purchase. */
@@ -21,8 +34,11 @@ export async function syncPurchaseToExpense(
   purchase: ProductPurchase,
   actor: { createdBy: string; createdByName: string }
 ): Promise<void> {
-  const total = purchase.grandTotal ?? 0;
-  if (!(total > 0)) return;
+  const total = purchaseGrandTotal(purchase);
+  if (!(total > 0)) {
+    throw new Error("Purchase total is missing; cannot post to Expenses.");
+  }
+  await hydrateExpensesIfEmpty();
   const status = expenseStatusFromPurchase(purchase);
   const paid = purchase.amountPaid ?? 0;
   const lastMethod = purchase.payments?.[purchase.payments.length - 1]?.method;
@@ -33,20 +49,24 @@ export async function syncPurchaseToExpense(
     `Inventory purchase from ${purchase.vendorName}${
       purchase.supplierInvoiceNumber ? ` · ${purchase.supplierInvoiceNumber}` : ""
     }`;
+  const purchaseDay = (purchase.purchasedAt || new Date().toISOString()).slice(0, 10);
+  const lastPayDay = purchase.payments?.[purchase.payments.length - 1]?.paidAt?.slice(0, 10);
+  const date = paid > 0.01 ? lastPayDay || new Date().toISOString().slice(0, 10) : purchaseDay;
 
   const existing = useExpenseStore.getState().expenses.find((e) => e.purchaseId === purchase.id);
   if (existing) {
-    await useExpenseStore.getState().updateExpense(existing.id, {
+    const ok = await useExpenseStore.getState().updateExpense(existing.id, {
       title,
       amount: total,
       amountPaid: status === "PARTIAL" ? paid : status === "PAID" ? total : 0,
       paymentStatus: status,
       paymentMethod,
       vendorName: purchase.vendorName,
-      date: purchase.purchasedAt.slice(0, 10),
+      date,
       branchId: purchase.branchId || existing.branchId,
       description,
     });
+    if (!ok) throw new Error("Could not update the linked expense.");
     return;
   }
 
@@ -56,7 +76,7 @@ export async function syncPurchaseToExpense(
     description,
     amount: total,
     amountPaid: status === "PARTIAL" ? paid : undefined,
-    date: purchase.purchasedAt.slice(0, 10),
+    date,
     vendorName: purchase.vendorName,
     paymentStatus: status,
     paymentMethod,
@@ -68,19 +88,20 @@ export async function syncPurchaseToExpense(
 }
 
 /** Post a vendor payout to Cash & Bank so Accounting cashbook moves. */
-export function postPurchasePaymentToCashBank(input: {
+export async function postPurchasePaymentToCashBank(input: {
   amount: number;
   method: PaymentMethod;
   accountId?: string;
   vendorName: string;
   purchaseNumber?: string;
   referenceNumber?: string;
-}): boolean {
+}): Promise<boolean> {
   if (!(input.amount > 0)) return false;
   const cash = useCashBankStore.getState();
   const accountId =
     input.accountId ||
     cash.accounts.find((a) => a.type === "cash")?.id ||
+    cash.accounts.find((a) => a.type === "bank")?.id ||
     cash.accounts[0]?.id;
   if (!accountId) return false;
   const notes = [
@@ -97,4 +118,24 @@ export function postPurchasePaymentToCashBank(input: {
     mode: input.method,
     notes,
   });
+}
+
+/** Ensure every purchase has an expense bill (for purchases made before linking). */
+export async function backfillPurchaseExpenses(
+  purchases: ProductPurchase[],
+  actor: { createdBy: string; createdByName: string }
+): Promise<void> {
+  await hydrateExpensesIfEmpty();
+  const linked = new Set(
+    useExpenseStore
+      .getState()
+      .expenses.map((e) => e.purchaseId)
+      .filter((id): id is string => Boolean(id))
+  );
+  for (const purchase of purchases) {
+    if (linked.has(purchase.id)) continue;
+    if (purchaseGrandTotal(purchase) <= 0) continue;
+    await syncPurchaseToExpense(purchase, actor);
+    linked.add(purchase.id);
+  }
 }
