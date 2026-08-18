@@ -1247,7 +1247,7 @@ export default function SettingsPage() {
             }}
           >
             <DialogContent
-              className={cn(dialogMobileSheetContentClasses, "max-h-[min(90dvh,720px)] sm:max-w-xl")}
+              className={cn(dialogMobileSheetContentClasses, "max-h-[min(90dvh,780px)] sm:max-w-2xl")}
             >
               <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pr-12")}>
                 <DialogTitle className="flex items-center gap-2">
