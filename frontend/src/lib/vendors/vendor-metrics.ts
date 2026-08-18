@@ -98,6 +98,7 @@ export function buildVendorSummaries(
   }
 
   for (const e of expenses) {
+    if (e.purchaseId) continue;
     const name = e.vendorName?.trim();
     if (!name) continue;
     const row = ensure(name, null, `expense:${name.toLowerCase()}`);

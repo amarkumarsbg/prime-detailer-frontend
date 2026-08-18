@@ -68,6 +68,15 @@ export interface CashBankStore {
     dateIso: string;
     remarks?: string;
   }) => void;
+  /** Debit an account (vendor payout, expense). */
+  recordOutgoing: (input: {
+    accountId: string;
+    amount: number;
+    dateIso: string;
+    party?: string;
+    mode?: string;
+    notes?: string;
+  }) => boolean;
   transfer: (input: {
     fromId: string;
     toId: string;
@@ -150,6 +159,31 @@ export const useCashBankStore = create<CashBankStore>((set, get) => ({
       persist(accounts, transactions);
       return { accounts, transactions };
     });
+  },
+
+  recordOutgoing: ({ accountId, amount, dateIso, party, mode, notes }) => {
+    if (!(amount > 0)) return false;
+    const acc = get().accounts.find((a) => a.id === accountId);
+    if (!acc) return false;
+    const newBal = Math.round((acc.balance - amount) * 100) / 100;
+    const t: CashBankTransaction = {
+      id: `txn-${Date.now()}`,
+      accountId,
+      date: dateIso,
+      rowType: "ADJUST_REDUCE",
+      party: party ?? "Vendor payment",
+      mode: mode ?? "Payment",
+      paid: amount,
+      balanceAfter: newBal,
+      notes,
+    };
+    set((s) => {
+      const accounts = s.accounts.map((a) => (a.id === accountId ? { ...a, balance: newBal } : a));
+      const transactions = [t, ...s.transactions];
+      persist(accounts, transactions);
+      return { accounts, transactions };
+    });
+    return true;
   },
 
   transfer: ({ fromId, toId, amount, dateIso, remarks }) => {

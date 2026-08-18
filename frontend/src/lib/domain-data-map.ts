@@ -127,6 +127,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "partCategories",
       "serviceCatalog",
       "expenseMeta",
+      "expenses",
       "staffDirectory",
       "cashBank",
     ],

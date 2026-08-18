@@ -23,6 +23,8 @@ export type AddExpenseInput = {
   createdBy: string;
   createdByName: string;
   branchId: string;
+  /** When set, this expense is the AP bill for an inventory purchase. */
+  purchaseId?: string;
 };
 
 export type AddVendorDirectoryInput = Omit<ExpenseVendorProfile, "id">;
@@ -280,6 +282,7 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
       createdByName: input.createdByName,
       branchId: input.branchId,
       createdAt: now,
+      purchaseId: input.purchaseId,
     };
     set((state) => ({
       expenses: [expense, ...state.expenses],

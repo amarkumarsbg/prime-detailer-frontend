@@ -31,6 +31,10 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  postPurchasePaymentToCashBank,
+  syncPurchaseToExpense,
+} from "@/lib/inventory/sync-purchase-expense";
 import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-dialog";
 import { PurchaseExpandableTable } from "@/components/inventory/purchase-expandable-table";
 import { VendorFormDialog } from "@/components/expenses/vendor-form-dialog";
@@ -191,6 +195,19 @@ export function InventoryPurchasesTab() {
     if (!result.ok) {
       toast.error(result.error);
       return;
+    }
+    void syncPurchaseToExpense(result.purchase, {
+      createdBy: user?.id ?? "unknown",
+      createdByName: user?.name ?? user?.email ?? "staff",
+    });
+    const paidNow = Number(amountPaid) || 0;
+    if (paidNow > 0.01) {
+      postPurchasePaymentToCashBank({
+        amount: paidNow,
+        method: "CASH",
+        vendorName: result.purchase.vendorName,
+        purchaseNumber: result.purchase.purchaseNumber,
+      });
     }
     toast.success(
       `Purchase ${result.purchase.purchaseNumber} saved. Stock updated${

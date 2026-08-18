@@ -48,4 +48,6 @@ export interface Expense {
   createdByName: string;
   branchId: string;
   createdAt: string;
+  /** Inventory purchase this expense represents (vendor bill). */
+  purchaseId?: string;
 }

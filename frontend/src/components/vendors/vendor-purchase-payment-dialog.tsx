@@ -24,10 +24,15 @@ import {
   PaymentReceivedInField,
 } from "@/components/billing/payment-received-in-field";
 import { formatCurrency } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth-store";
 import { useCashBankStore } from "@/store/cash-bank-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import type { PaymentMethod, ProductPurchase } from "@/types";
 import { purchaseDue } from "@/lib/inventory/purchase-math";
+import {
+  postPurchasePaymentToCashBank,
+  syncPurchaseToExpense,
+} from "@/lib/inventory/sync-purchase-expense";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "CASH", label: "Cash" },
@@ -48,6 +53,7 @@ export function VendorPurchasePaymentDialog({
 }: VendorPurchasePaymentDialogProps) {
   const recordPurchasePayment = useInventoryStore((s) => s.recordPurchasePayment);
   const cashBankAccounts = useCashBankStore((s) => s.accounts);
+  const user = useAuthStore((s) => s.user);
   const due = purchase ? purchaseDue(purchase) : 0;
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("CASH");
@@ -90,7 +96,24 @@ export function VendorPurchasePaymentDialog({
       toast.error(result.error ?? "Could not record payment.");
       return;
     }
-    toast.success("Payment recorded.");
+    const updated = useInventoryStore.getState().productPurchases.find((p) => p.id === purchase.id);
+    if (updated) {
+      void syncPurchaseToExpense(updated, {
+        createdBy: user?.id ?? "unknown",
+        createdByName: user?.name ?? user?.email ?? "staff",
+      });
+    }
+    const posted = postPurchasePaymentToCashBank({
+      amount: n,
+      method,
+      accountId: account?.id,
+      vendorName: purchase.vendorName,
+      purchaseNumber: purchase.purchaseNumber,
+      referenceNumber: referenceNumber.trim() || undefined,
+    });
+    toast.success(
+      posted ? "Payment recorded in Expenses and Accounting." : "Payment recorded on the purchase."
+    );
     onOpenChange(false);
   };
 
