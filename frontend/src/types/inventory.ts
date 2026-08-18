@@ -13,18 +13,6 @@ export const BUILTIN_PART_CATEGORIES = [
   "Detailing",
   "Other",
 ] as const;
-  "Engine",
-  "Brakes",
-  "Electrical",
-  "Filters",
-  "Suspension",
-  "AC",
-  "Body",
-  "Lubricants",
-  "Tires",
-  "Detailing",
-  "Other",
-] as const;
 
 /** Builtin or a custom name created from the catalog form. */
 export type PartCategory = string;
