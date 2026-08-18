@@ -18,6 +18,7 @@ type PublicLedgerLine = {
   balance: number;
   isSummary: boolean;
   dueLabel: string | null;
+  invoiceDue: number | null;
 };
 
 type PublicLedgerData = {
@@ -278,8 +279,15 @@ export default function PublicLedgerPage() {
                     <td className="border border-neutral-300 px-2 py-2 text-right font-medium tabular-nums">
                       {formatAmt(row.balance)}
                     </td>
-                    <td className={cn("border border-neutral-300 px-2 py-2", dueClass(row.dueLabel))}>
-                      {row.dueLabel ?? (opening || closing ? "—" : "")}
+                    <td className="border border-neutral-300 px-2 py-2">
+                      <div className={dueClass(row.dueLabel)}>
+                        {row.dueLabel ?? (opening || closing ? "—" : "")}
+                      </div>
+                      {row.invoiceDue != null && row.invoiceDue > 0.01 ? (
+                        <div className="mt-0.5 font-semibold tabular-nums text-red-600">
+                          Invoice Due: {formatRupee(row.invoiceDue)}
+                        </div>
+                      ) : null}
                     </td>
                   </tr>
                 );

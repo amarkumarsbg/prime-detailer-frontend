@@ -321,6 +321,7 @@ export function buildPublicCustomerStatement(
       credit: credit > 0.01 ? credit : undefined,
       debit,
       balance,
+      invoiceDue: credit > 0.01 && outstanding > 0.01 ? outstanding : undefined,
       dueLabel: publicDueLabel(inv.createdAt, outstanding, credit, party.creditPeriodDays),
     });
   }

@@ -73,6 +73,8 @@ export type PartyStatementLine = {
   credit?: number;
   debit?: number;
   balance: number;
+  /** Invoice-level outstanding (debit − credit) when the invoice is partially paid. */
+  invoiceDue?: number;
   dueLabel?: string;
   isSummary?: boolean;
 };

@@ -118,6 +118,7 @@ export async function getPublicCustomerLedger(customerId: string, period = "last
       balance: line.balance,
       isSummary: Boolean(line.isSummary),
       dueLabel: line.dueLabel ?? null,
+      invoiceDue: line.invoiceDue ?? null,
     })),
     business,
   };

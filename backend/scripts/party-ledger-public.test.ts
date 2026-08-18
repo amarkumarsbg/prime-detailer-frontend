@@ -92,6 +92,34 @@ describe("buildPublicCustomerStatement", () => {
     assert.equal(opening?.debit, 0);
   });
 
+  it("exposes invoice-level due on a partially paid invoice without changing running balance", () => {
+    const invoices: Invoice[] = [
+      invoice({
+        id: "0341",
+        invoiceNumber: "INV-2026-0341",
+        grandTotal: 1710,
+        createdAt: "2026-08-18T10:00:00.000Z",
+        status: "PARTIALLY_PAID",
+        payments: [
+          {
+            id: "p-partial",
+            invoiceId: "0341",
+            amount: 1000,
+            method: "CASH",
+            paidAt: "2026-08-18T12:00:00.000Z",
+          },
+        ],
+      }),
+    ];
+    const lines = buildPublicCustomerStatement(party(), invoices, "all");
+    const row = lines.find((l) => l.serialNo === "INV-2026-0341");
+    assert.equal(row?.debit, 1710);
+    assert.equal(row?.credit, 1000);
+    assert.equal(row?.invoiceDue, 710);
+    assert.equal(row?.balance, 710);
+    assert.match(row?.dueLabel ?? "", /Partially Paid/);
+  });
+
   it("does not emit separate Payment In rows", () => {
     const invoices: Invoice[] = [
       invoice({
