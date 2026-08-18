@@ -13,6 +13,9 @@ function purchaseTaxableAndTax(gross: number, rate = DEFAULT_GST_RATE) {
 }
 
 function purchaseGrossAmount(p: ProductPurchase, part?: Part): number {
+  if (p.grandTotal != null && Number.isFinite(p.grandTotal)) {
+    return Math.round(p.grandTotal * 100) / 100;
+  }
   const litres = p.quantityMl / 1000;
   const unitCost = p.unitCost ?? part?.unitPrice ?? 0;
   return Math.round(litres * unitCost * 100) / 100;

@@ -21,6 +21,9 @@ export type DomainResource =
   | "parts"
   | "stockMovements"
   | "productPurchases"
+  | "branchStocks"
+  | "stockTransfers"
+  | "partCategories"
   | "followUps"
   | "serviceCategories"
   | "notifications"
@@ -115,14 +118,24 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   { prefix: "/follow-ups", resources: ["followUps", "jobCards", "notifications"] },
   {
     prefix: "/inventory",
-    resources: ["parts", "stockMovements", "productPurchases", "serviceCatalog"],
+    resources: [
+      "parts",
+      "stockMovements",
+      "productPurchases",
+      "branchStocks",
+      "stockTransfers",
+      "partCategories",
+      "serviceCatalog",
+      "expenseMeta",
+      "staffDirectory",
+    ],
   },
   {
     prefix: "/services",
     resources: ["serviceCatalog", "serviceCategories", "highEndServices", "parts"],
   },
   { prefix: "/expenses", resources: ["expenses", "expenseMeta"] },
-  { prefix: "/vendors", resources: ["expenses", "expenseMeta", "productPurchases", "parts"] },
+  { prefix: "/vendors", resources: ["expenses", "expenseMeta", "productPurchases", "parts", "invoices", "cashBank"] },
   {
     prefix: "/billing",
     resources: ["invoices", "jobCards", "customers", "appSettings", "notifications", "cashBank"],

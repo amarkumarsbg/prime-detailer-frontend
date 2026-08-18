@@ -3,10 +3,9 @@ import { AppError } from "../../lib/app-error.js";
 import { SINGLETON_ENTITY_ID } from "../../constants/json-collections.js";
 import { formatPeriodRangeLabel } from "../../lib/report-period.js";
 import {
-  buildPartyStatement,
+  buildPublicCustomerStatement,
   buildPartySummary,
   invoiceOutstanding,
-  invoicePaidTotal,
 } from "../../lib/party-ledger.js";
 import type { Party } from "../../types/party.js";
 import { loadFinanceDocuments } from "./party.service.js";
@@ -84,7 +83,7 @@ export async function getPublicCustomerLedger(customerId: string, period = "last
   };
 
   const { invoices, expenses } = await loadFinanceDocuments(customer.organizationId);
-  const statement = buildPartyStatement(party, invoices, expenses, period);
+  const statement = buildPublicCustomerStatement(party, invoices, period);
   const summary = buildPartySummary(party, invoices, expenses, period);
   const business = await loadPublicBusinessProfile();
 
@@ -108,27 +107,18 @@ export async function getPublicCustomerLedger(customerId: string, period = "last
       totalReceivedOrPaid: summary.totalReceivedOrPaid,
       totalOutstanding: outstanding > 0.01 ? outstanding : summary.totalReceivableOrPayable,
     },
-    statement: statement.map((line) => {
-      const invId = line.id.startsWith("inv-") ? line.id.slice(4) : null;
-      const inv = invId ? customerInvoices.find((i) => i.id === invId) : undefined;
-      let dueLabel = line.dueLabel ?? null;
-      if (inv && invoiceOutstanding(inv) > 0.01) {
-        const paid = invoicePaidTotal(inv);
-        dueLabel = paid > 0.01 ? "Partially Paid" : dueLabel;
-      }
-      return {
-        id: line.id,
-        date: line.date,
-        voucher: line.voucher === "Sales Invoices" ? "Sales Invoice" : line.voucher,
-        serialNo: line.serialNo,
-        paymentMode: line.paymentMode,
-        credit: line.credit ?? null,
-        debit: line.debit ?? null,
-        balance: line.balance,
-        isSummary: Boolean(line.isSummary),
-        dueLabel,
-      };
-    }),
+    statement: statement.map((line) => ({
+      id: line.id,
+      date: line.date,
+      voucher: line.voucher,
+      serialNo: line.serialNo,
+      paymentMode: line.paymentMode,
+      credit: line.credit ?? null,
+      debit: line.debit ?? null,
+      balance: line.balance,
+      isSummary: Boolean(line.isSummary),
+      dueLabel: line.dueLabel ?? null,
+    })),
     business,
   };
 }

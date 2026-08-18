@@ -41,7 +41,7 @@ type PublicLedgerData = {
 };
 
 function formatAmt(n: number | null | undefined): string {
-  if (n == null) return "—";
+  if (n == null) return "";
   return n.toLocaleString("en-IN", {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
@@ -56,6 +56,13 @@ function dash(v: string | null | undefined): string {
   const t = (v ?? "").trim();
   if (!t || t === "—") return "—";
   return t;
+}
+
+function dueClass(label: string | null): string {
+  if (!label) return "text-neutral-500";
+  if (label === "Paid") return "font-medium text-emerald-600";
+  if (label.includes("Partially")) return "font-medium text-amber-700";
+  return "font-medium text-red-600";
 }
 
 export default function PublicLedgerPage() {
@@ -118,14 +125,20 @@ export default function PublicLedgerPage() {
   }
 
   const outstanding = data.summary.totalOutstanding;
+  const initials = (data.business.businessName || "P")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
       <style jsx global>{`
         @media print {
           @page {
-            size: A4;
-            margin: 12mm;
+            size: A4 landscape;
+            margin: 10mm;
           }
           body {
             background: white !important;
@@ -133,54 +146,23 @@ export default function PublicLedgerPage() {
           .no-print {
             display: none !important;
           }
-          .print-only {
-            display: revert !important;
-          }
-          th.print-only,
-          td.print-only {
-            display: table-cell !important;
-          }
-          .screen-only {
-            display: none !important;
-          }
           .ledger-sheet {
             padding: 0 !important;
             max-width: none !important;
           }
         }
-        .print-only {
-          display: none;
-        }
       `}</style>
 
-      <div className="ledger-sheet mx-auto max-w-3xl px-4 pb-28 pt-5 sm:px-6 sm:pt-8">
-        {/* Header — screen (MyBillBook web) */}
-        <header className="screen-only mb-5 flex items-start justify-between gap-3 border-b border-neutral-200 pb-4">
-          <div className="min-w-0">
-            <p className="text-base font-bold uppercase tracking-wide text-neutral-900">
-              {data.business.businessName}
-            </p>
-            {data.business.businessPhone ? (
-              <p className="mt-0.5 text-sm text-neutral-600">{data.business.businessPhone}</p>
-            ) : null}
-          </div>
-          <p className="shrink-0 text-sm font-semibold text-neutral-800">Party Ledger</p>
-        </header>
-
-        {/* Header — print (MyBillBook PDF) */}
-        <header className="print-only mb-5 border-b border-neutral-300 pb-4">
+      <div className="ledger-sheet mx-auto max-w-5xl px-4 pb-28 pt-5 sm:px-6 sm:pt-8">
+        <header className="mb-5 border-b border-neutral-300 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-start gap-3">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={logoUrl}
-                  alt=""
-                  className="h-12 w-12 rounded object-contain"
-                />
+                <img src={logoUrl} alt="" className="h-12 w-12 rounded object-contain" />
               ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded bg-neutral-900 text-xs font-bold text-white">
-                  {(data.business.businessName || "P").slice(0, 1).toUpperCase()}
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-sky-700 text-xs font-bold text-white">
+                  {initials || "P"}
                 </div>
               )}
               <div className="min-w-0">
@@ -203,35 +185,19 @@ export default function PublicLedgerPage() {
           </div>
         </header>
 
-        {/* To + summary */}
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm text-neutral-600">
               To, <span className="font-semibold text-neutral-900">{data.customer.name}</span>
             </p>
             {data.customer.phone ? (
-              <p className="mt-0.5 text-sm text-neutral-600">
-                <span className="print-only">Phone No: </span>
-                {data.customer.phone}
-              </p>
+              <p className="mt-0.5 text-sm text-neutral-600">Phone No: {data.customer.phone}</p>
             ) : null}
           </div>
 
-          {/* Screen summary box — Total Receivable only */}
-          <div className="screen-only w-full shrink-0 rounded border border-neutral-300 px-3 py-2 sm:w-56">
-            <p className="text-xs text-neutral-600">{data.dateRangeLabel}</p>
-            <div className="mt-1 flex items-baseline justify-between gap-2">
-              <span className="text-sm text-neutral-700">Total Receivable</span>
-              <span className="text-sm font-semibold tabular-nums">
-                {formatRupee(data.summary.totalReceivableOrPayable)}
-              </span>
-            </div>
-          </div>
-
-          {/* Print summary box — full metrics */}
-          <div className="print-only w-56 shrink-0 border border-neutral-400 text-xs">
+          <div className="w-full shrink-0 border border-neutral-400 text-xs sm:w-64">
             <div className="border-b border-neutral-300 px-2 py-1.5 text-neutral-700">
-              {data.dateRangeLabel.replace(" - ", " - ")}
+              {data.dateRangeLabel}
             </div>
             {(
               [
@@ -252,42 +218,32 @@ export default function PublicLedgerPage() {
           </div>
         </div>
 
-        {/* Ledger table */}
-        <div className="overflow-x-auto rounded border border-neutral-200 sm:rounded-none sm:border-0">
-          <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="bg-neutral-100 text-neutral-800">
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap">
+                <th className="border border-neutral-300 px-2 py-2 font-semibold whitespace-nowrap">
                   Date
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap">
+                <th className="border border-neutral-300 px-2 py-2 font-semibold whitespace-nowrap">
                   Voucher
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap">
+                <th className="border border-neutral-300 px-2 py-2 font-semibold whitespace-nowrap">
                   Sr No
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap screen-only">
-                  Credit Debit
-                </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap print-only">
+                <th className="border border-neutral-300 px-2 py-2 font-semibold whitespace-nowrap">
                   Payment Mode
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold text-right whitespace-nowrap print-only">
+                <th className="border border-neutral-300 px-2 py-2 text-right font-semibold whitespace-nowrap">
                   Credit
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold text-right whitespace-nowrap print-only">
+                <th className="border border-neutral-300 px-2 py-2 text-right font-semibold whitespace-nowrap">
                   Debit
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap screen-only">
-                  Original Invoice No
-                </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap screen-only">
-                  Payment Mode
-                </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold text-right whitespace-nowrap">
+                <th className="border border-neutral-300 px-2 py-2 text-right font-semibold whitespace-nowrap">
                   Balance
                 </th>
-                <th className="border border-neutral-200 px-2 py-2 font-semibold whitespace-nowrap print-only">
+                <th className="border border-neutral-300 px-2 py-2 font-semibold whitespace-nowrap">
                   Due Date (overdue by)
                 </th>
               </tr>
@@ -299,98 +255,54 @@ export default function PublicLedgerPage() {
                 return (
                   <tr
                     key={row.id}
-                    className={cn(
-                      closing && "bg-neutral-100 font-medium",
-                      opening && "bg-white"
-                    )}
+                    className={cn(closing && "bg-neutral-100 font-medium", opening && "bg-white")}
                   >
-                    <td className="border border-neutral-200 px-2 py-2 whitespace-nowrap tabular-nums">
+                    <td className="border border-neutral-300 px-2 py-2 whitespace-nowrap tabular-nums">
                       {dash(row.date)}
                     </td>
-                    <td className="border border-neutral-200 px-2 py-2 whitespace-nowrap">
+                    <td className="border border-neutral-300 px-2 py-2 whitespace-nowrap">
                       {row.voucher}
                     </td>
-                    <td className="border border-neutral-200 px-2 py-2 whitespace-nowrap">
+                    <td className="border border-neutral-300 px-2 py-2 whitespace-nowrap">
                       {dash(row.serialNo)}
                     </td>
-                    {/* Screen: combined credit/debit */}
-                    <td className="border border-neutral-200 px-2 py-2 text-right tabular-nums screen-only">
-                      <span className="inline-flex flex-col items-end leading-tight">
-                        {row.credit != null ? (
-                          <span>{formatAmt(row.credit)}</span>
-                        ) : null}
-                        {row.debit != null ? (
-                          <span>{formatAmt(row.debit)}</span>
-                        ) : null}
-                        {row.credit == null && row.debit == null ? (
-                          <span>{opening || closing ? formatAmt(closing ? row.balance : 0) : "—"}</span>
-                        ) : null}
-                      </span>
-                    </td>
-                    <td className="border border-neutral-200 px-2 py-2 print-only whitespace-nowrap">
+                    <td className="border border-neutral-300 px-2 py-2 whitespace-nowrap">
                       {dash(row.paymentMode)}
                     </td>
-                    <td className="border border-neutral-200 px-2 py-2 text-right tabular-nums print-only">
-                      {row.credit != null
-                        ? formatAmt(row.credit)
-                        : opening || closing
-                          ? "—"
-                          : "—"}
+                    <td className="border border-neutral-300 px-2 py-2 text-right tabular-nums">
+                      {row.credit != null ? formatAmt(row.credit) : ""}
                     </td>
-                    <td className="border border-neutral-200 px-2 py-2 text-right tabular-nums print-only">
-                      {row.debit != null
-                        ? formatAmt(row.debit)
-                        : closing
-                          ? formatAmt(row.balance)
-                          : opening
-                            ? formatAmt(0)
-                            : "—"}
+                    <td className="border border-neutral-300 px-2 py-2 text-right tabular-nums">
+                      {row.debit != null ? formatAmt(row.debit) : ""}
                     </td>
-                    <td className="border border-neutral-200 px-2 py-2 screen-only whitespace-nowrap">
-                      —
-                    </td>
-                    <td className="border border-neutral-200 px-2 py-2 screen-only whitespace-nowrap">
-                      {dash(row.paymentMode)}
-                    </td>
-                    <td className="border border-neutral-200 px-2 py-2 text-right tabular-nums font-medium">
+                    <td className="border border-neutral-300 px-2 py-2 text-right font-medium tabular-nums">
                       {formatAmt(row.balance)}
                     </td>
-                    <td className="border border-neutral-200 px-2 py-2 print-only">
-                      {row.dueLabel === "Partially Paid" ? (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
-                          Partially Paid
-                        </span>
-                      ) : row.dueLabel ? (
-                        <span className="text-red-600">{row.dueLabel}</span>
-                      ) : (
-                        "—"
-                      )}
+                    <td className={cn("border border-neutral-300 px-2 py-2", dueClass(row.dueLabel))}>
+                      {row.dueLabel ?? (opening || closing ? "—" : "")}
                     </td>
                   </tr>
                 );
               })}
-              {/* Print totals row */}
-              <tr className="print-only font-medium">
-                <td className="border border-neutral-200 px-2 py-2" colSpan={3}>
+              <tr className="font-medium">
+                <td className="border border-neutral-300 px-2 py-2" colSpan={4}>
                   Total
                 </td>
-                <td className="border border-neutral-200 px-2 py-2" />
-                <td className="border border-neutral-200 px-2 py-2 text-right tabular-nums">
+                <td className="border border-neutral-300 px-2 py-2 text-right tabular-nums">
                   {formatAmt(creditTotal)}
                 </td>
-                <td className="border border-neutral-200 px-2 py-2 text-right tabular-nums">
+                <td className="border border-neutral-300 px-2 py-2 text-right tabular-nums">
                   {formatAmt(debitTotal)}
                 </td>
-                <td className="border border-neutral-200 px-2 py-2" colSpan={2} />
+                <td className="border border-neutral-300 px-2 py-2" colSpan={2} />
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Sticky footer — MyBillBook web */}
       <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/90">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div>
             <p className="text-xs text-neutral-500">Total Outstanding</p>
             <p className="text-xl font-bold tabular-nums tracking-tight text-neutral-900">

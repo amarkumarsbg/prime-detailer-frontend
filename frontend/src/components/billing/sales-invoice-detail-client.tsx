@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Printer,
   CreditCard,
@@ -17,6 +18,7 @@ import {
   Pencil,
   Plus,
   Percent,
+  BookMarked,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1114,6 +1116,14 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
           <InvoiceStatusBadge status={invoice.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link
+              href={`/billing?view=ledger&customerId=${encodeURIComponent(invoice.customerId)}`}
+            >
+              <BookMarked className="mr-1.5 h-4 w-4" />
+              Ledger
+            </Link>
+          </Button>
           {canEditInvoice && (
             <Button variant="outline" size="sm" onClick={openEditInvoice}>
               <Pencil className="mr-1.5 h-4 w-4" />

@@ -39,7 +39,7 @@ const tags = [
   },
   { name: "Pickup/Drop", description: "pickupDropRequests collection" },
   { name: "Services", description: "serviceCatalog / categories / highEndServices collections" },
-  { name: "Inventory", description: "parts / stockMovements / productPurchases collections" },
+  { name: "Inventory", description: "parts / stockMovements / productPurchases / branchStocks / stockTransfers / partCategories collections" },
   { name: "Reports", description: "reportSchedules and reporting-related collections" },
   { name: "Settings", description: "appSettings + logo upload" },
   { name: "Collections", description: "LEGACY gateway: generic AppJsonRow list/upsert/snapshot/delete. Prefer module docs; see backend/docs/ADR-001-api-architecture.md" },

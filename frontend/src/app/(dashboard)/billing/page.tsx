@@ -29,7 +29,7 @@ import { BookMarked, Eye, IndianRupee, TrendingUp, FileText, Receipt } from "luc
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
-import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
+import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import {
   buildPaymentPendingReminderWhatsAppMessage,
   isWhatsAppNonClickableShareUrl,
@@ -195,12 +195,10 @@ export default function BillingPage() {
   );
   const showingPendingCustomers = activeFilter === DASHBOARD_FILTER.PENDING_PAYMENT;
 
-  const openCustomerLedger = useCallback(
-    (customerId: string) => {
-      router.push(customerLedgerHref(customerId));
-    },
-    [router]
-  );
+  const openCustomerLedger = useCallback((customerId: string) => {
+    setLedgerFocusCustomerId(customerId);
+    setBillingView("ledger");
+  }, []);
 
   const sharePendingCustomerLedger = (customerId: string, phoneHint?: string) => {
     const row = pendingCustomers.find((c) => c.customerId === customerId);
@@ -431,7 +429,7 @@ export default function BillingPage() {
               }}
             >
               <Eye className="h-3.5 w-3.5 shrink-0" />
-              View
+              Ledger
             </Button>
             <Button
               type="button"
@@ -508,7 +506,7 @@ export default function BillingPage() {
               }}
             >
               <Eye className="h-3.5 w-3.5 shrink-0" />
-              View Ledger
+              Ledger
             </Button>
             <Button
               type="button"
@@ -674,7 +672,7 @@ export default function BillingPage() {
                             }}
                           >
                             <Eye className="h-3 w-3" />
-                            View Ledger
+                            Ledger
                           </Button>
                           <Button
                             type="button"
@@ -790,7 +788,7 @@ export default function BillingPage() {
                                 }}
                               >
                                 <Eye className="h-3 w-3" />
-                                View ledger
+                                Ledger
                               </Button>
                               <Button
                                 type="button"

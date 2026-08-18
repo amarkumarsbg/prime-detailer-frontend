@@ -25,7 +25,8 @@ import {
   partMatchesInventorySearch,
   validateStockConsumption,
 } from "@/lib/inventory/multi-unit";
-import type { Part, PartCategory, JobCardPartItem } from "@/types";
+import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
+import type { Part, JobCardPartItem } from "@/types";
 
 export type SelectedPartLine = {
   partId: string;
@@ -68,21 +69,6 @@ export function jobCardPartsSubtotal(parts: JobCardPartItem[]): number {
   return parts.reduce((sum, p) => sum + p.lineTotal, 0);
 }
 
-const PART_CATEGORIES: (PartCategory | "ALL")[] = [
-  "ALL",
-  "Engine",
-  "Brakes",
-  "Electrical",
-  "Filters",
-  "Suspension",
-  "AC",
-  "Body",
-  "Lubricants",
-  "Tires",
-  "Detailing",
-  "Other",
-];
-
 export function JobCardPartsPicker({
   selectedLines,
   onSelectedLinesChange,
@@ -97,12 +83,17 @@ export function JobCardPartsPicker({
   collapseSelected?: boolean;
 }) {
   const parts = useInventoryStore((s) => s.parts);
+  const savedPartCategories = useInventoryStore((s) => s.partCategories);
   const [partSearch, setPartSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [selectedExpanded, setSelectedExpanded] = useState(!collapseSelected);
   /** Lets users clear/retype qty without snapping back to 1 mid-edit. */
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
 
+  const categoryOptions = useMemo(
+    () => ["ALL", ...mergePartCategoryNames(parts, savedPartCategories)],
+    [parts, savedPartCategories]
+  );
   const partsById = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
 
   const filteredParts = useMemo(() => {
@@ -401,7 +392,7 @@ export function JobCardPartsPicker({
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
-            {PART_CATEGORIES.map((c) => (
+            {categoryOptions.map((c) => (
               <SelectItem key={c} value={c}>
                 {c === "ALL" ? "All Categories" : c}
               </SelectItem>

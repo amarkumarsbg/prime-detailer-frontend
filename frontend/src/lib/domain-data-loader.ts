@@ -23,6 +23,7 @@ import type {
   SalaryAdvance,
   SalaryAdvanceRecovery,
   ProductPurchase,
+  BranchStock,
   PickupDropRequest,
   Quotation,
   SalaryStructure,
@@ -30,6 +31,8 @@ import type {
   ServiceCategoryRecord,
   ServiceReminder,
   StockMovement,
+  StockTransfer,
+  PartCategoryRecord,
   User,
   Vehicle,
   WalletTransaction,
@@ -270,6 +273,21 @@ async function loadOne(resource: DomainResource): Promise<void> {
     case "productPurchases": {
       const productPurchases = await getCollectionItems<ProductPurchase>("productPurchases");
       useInventoryStore.setState({ productPurchases });
+      return;
+    }
+    case "branchStocks": {
+      const branchStocks = await getCollectionItems<BranchStock>("branchStocks");
+      useInventoryStore.setState({ branchStocks });
+      return;
+    }
+    case "stockTransfers": {
+      const stockTransfers = await getCollectionItems<StockTransfer>("stockTransfers");
+      useInventoryStore.setState({ stockTransfers });
+      return;
+    }
+    case "partCategories": {
+      const partCategories = await getCollectionItems<PartCategoryRecord>("partCategories");
+      useInventoryStore.setState({ partCategories });
       return;
     }
     case "followUps": {

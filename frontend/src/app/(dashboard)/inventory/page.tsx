@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, formatDateTime, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import {
   formatMlAndLitres,
   formatPartStockQuantity,
@@ -19,6 +19,7 @@ import {
   stockStatusShortLabel,
 } from "@/lib/inventory-units";
 import { formatDualUnitStockEquivalent } from "@/lib/inventory/multi-unit";
+import { purchaseDue } from "@/lib/inventory/purchase-math";
 import {
   Dialog,
   DialogContent,
@@ -44,12 +45,34 @@ import {
   AlertTriangle,
   TrendingDown,
   TrendingUp,
-  ArrowDownCircle,
-  ArrowUpCircle,
   Trash2,
   Pencil,
+  History,
+  ArrowLeftRight,
+  Warehouse,
+  BookMarked,
+  ShoppingCart,
 } from "lucide-react";
 import type { Part, PartCategory } from "@/types";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { InventoryBranchStockTab } from "@/components/inventory/inventory-branch-stock-tab";
+import { InventoryTransfersTab } from "@/components/inventory/inventory-transfers-tab";
+import { InventoryTransferLedgerTab } from "@/components/inventory/inventory-transfer-ledger-tab";
+import { InventoryPurchasesTab } from "@/components/inventory/inventory-purchases-tab";
+import { InventoryHistoryTab } from "@/components/inventory/inventory-history-tab";
+import { InventoryPartHistoryDialog } from "@/components/inventory/inventory-part-history-dialog";
+import { PartCategorySelect } from "@/components/inventory/part-category-select";
+import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
+import { toast } from "sonner";
+import { useInventoryStore, parseLitresInput } from "@/store/inventory-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { carsPossibleForPartAndService } from "@/lib/inventory/consumption";
+import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
+import { isLowStockPart } from "@/lib/dashboard-filters";
+import { FilterBanner } from "@/components/shared/filter-banner";
+import { useAuthStore } from "@/store/auth-store";
+import { useBranchStore } from "@/store/branch-store";
 
 /** Primary units for stock; Litre uses ml-backed quantity like existing fluid parts. */
 const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
@@ -62,27 +85,6 @@ const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: "Pack", label: "Pack" },
   { value: "Carton", label: "Carton" },
   { value: "Pair", label: "Pair" },
-];
-import { toast } from "sonner";
-import { useInventoryStore, parseLitresInput } from "@/store/inventory-store";
-import { useServiceCatalogStore } from "@/store/service-catalog-store";
-import { carsPossibleForPartAndService } from "@/lib/inventory/consumption";
-import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
-import { isLowStockPart } from "@/lib/dashboard-filters";
-import { FilterBanner } from "@/components/shared/filter-banner";
-
-const allCategories: PartCategory[] = [
-  "Engine",
-  "Brakes",
-  "Electrical",
-  "Filters",
-  "Suspension",
-  "AC",
-  "Body",
-  "Lubricants",
-  "Tires",
-  "Detailing",
-  "Other",
 ];
 
 type StockTableFilter = "all" | "low" | "out";
@@ -99,9 +101,13 @@ function focusMobileFormField(e: React.FocusEvent<HTMLInputElement | HTMLTextAre
 
 export default function InventoryPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
+  const user = useAuthStore((s) => s.user);
+  const branches = useBranchStore((s) => s.branches);
+  const performedBy = user?.id ?? "unknown";
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const parts = useInventoryStore((s) => s.parts);
+  const savedPartCategories = useInventoryStore((s) => s.partCategories);
   const addPart = useInventoryStore((s) => s.addPart);
   const updatePart = useInventoryStore((s) => s.updatePart);
   const removePart = useInventoryStore((s) => s.removePart);
@@ -121,6 +127,15 @@ export default function InventoryPage() {
   const [addPartSecondaryUnit, setAddPartSecondaryUnit] = useState("");
   const [addPartConversionRate, setAddPartConversionRate] = useState("1");
   const [addPartSecondaryPrice, setAddPartSecondaryPrice] = useState("");
+  const [addPartDescription, setAddPartDescription] = useState("");
+  const [addPartCost, setAddPartCost] = useState("");
+  const [addPartGstRate, setAddPartGstRate] = useState("18");
+  const [addPartHsn, setAddPartHsn] = useState("");
+  const [addPartGstApplicable, setAddPartGstApplicable] = useState(true);
+  const [addPartActive, setAddPartActive] = useState(true);
+  const [addPartBranchScope, setAddPartBranchScope] = useState("GLOBAL");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [historyPartId, setHistoryPartId] = useState<string | null>(null);
 
   const resetAddPartForm = () => {
     setAddPartName("");
@@ -136,6 +151,13 @@ export default function InventoryPage() {
     setAddPartSecondaryUnit("");
     setAddPartConversionRate("1");
     setAddPartSecondaryPrice("");
+    setAddPartDescription("");
+    setAddPartCost("");
+    setAddPartGstRate("18");
+    setAddPartHsn("");
+    setAddPartGstApplicable(true);
+    setAddPartActive(true);
+    setAddPartBranchScope("GLOBAL");
     setEditingPartId(null);
   };
 
@@ -152,6 +174,13 @@ export default function InventoryPage() {
     setAddPartSecondaryPrice(
       part.unitPriceSecondary != null ? String(part.unitPriceSecondary) : ""
     );
+    setAddPartDescription(part.description ?? "");
+    setAddPartCost(part.costPrice != null ? String(part.costPrice) : "");
+    setAddPartGstRate(part.gstRate != null ? String(part.gstRate) : "18");
+    setAddPartHsn(part.hsnCode ?? "");
+    setAddPartGstApplicable(part.gstApplicable !== false);
+    setAddPartActive(part.isActive !== false);
+    setAddPartBranchScope(part.branchScope ?? "GLOBAL");
     if (isMlTrackedPart(part)) {
       setAddPartUnit("Litre");
       setAddPartSecondaryUnit("ML");
@@ -184,10 +213,17 @@ export default function InventoryPage() {
     } else if (stockTableFilter === "out") {
       list = list.filter((p) => getStockStatus(p).label === "Out of Stock");
     }
+    if (categoryFilter !== "all") {
+      list = list.filter((p) => p.category === categoryFilter);
+    }
     return list;
-  }, [parts, activeFilter, stockTableFilter]);
-  const stockMovements = useInventoryStore((s) => s.stockMovements);
+  }, [parts, activeFilter, stockTableFilter, categoryFilter]);
+  const catalogCategories = useMemo(
+    () => mergePartCategoryNames(parts, savedPartCategories),
+    [parts, savedPartCategories]
+  );
   const productPurchases = useInventoryStore((s) => s.productPurchases);
+  const stockTransfers = useInventoryStore((s) => s.stockTransfers);
   const addPurchase = useInventoryStore((s) => s.addPurchase);
   const recordStockAdjustment = useInventoryStore((s) => s.recordStockAdjustment);
 
@@ -208,6 +244,7 @@ export default function InventoryPage() {
   const [deletingPart, setDeletingPart] = useState(false);
 
   const totalParts = parts.length;
+  const totalStockItems = parts.reduce((sum, p) => sum + (p.quantity > 0 || (p.stockQuantityMl ?? 0) > 0 ? 1 : 0), 0);
   const totalValue = parts.reduce((sum, p) => sum + partStockValueInr(p), 0);
   const lowStockCount = parts.filter((p) => {
     const s = getStockStatus(p);
@@ -217,6 +254,10 @@ export default function InventoryPage() {
     const s = getStockStatus(p);
     return s.label === "Out of Stock";
   }).length;
+  const pendingTransfers = stockTransfers.filter(
+    (t) => t.status === "PENDING" || t.status === "APPROVED" || t.status === "IN_TRANSIT"
+  ).length;
+  const outstandingPurchases = productPurchases.reduce((sum, p) => sum + purchaseDue(p), 0);
 
   const partsById = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
 
@@ -336,11 +377,55 @@ export default function InventoryPage() {
     },
     {
       key: "unitPrice",
-      label: "Unit Price",
+      label: "Selling",
       sortable: true,
       className: "whitespace-nowrap text-right",
       render: (item: Part) => (
         <span className="tabular-nums">{formatCurrency(item.unitPrice)}</span>
+      ),
+    },
+    {
+      key: "costPrice",
+      label: "Cost",
+      className: "hidden md:table-cell whitespace-nowrap text-right",
+      render: (item: Part) => (
+        <span className="tabular-nums text-muted-foreground">
+          {item.costPrice != null ? formatCurrency(item.costPrice) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "gstRate",
+      label: "GST",
+      className: "hidden xl:table-cell",
+      render: (item: Part) =>
+        item.gstApplicable === false ? "—" : `${item.gstRate ?? 0}%`,
+    },
+    {
+      key: "branchScope",
+      label: "Scope",
+      className: "hidden xl:table-cell",
+      render: (item: Part) => {
+        const scope = item.branchScope ?? "GLOBAL";
+        const label =
+          scope === "GLOBAL" ? "All branches" : branches.find((b) => b.id === scope)?.name ?? scope;
+        return <span className="text-xs text-muted-foreground">{label}</span>;
+      },
+    },
+    {
+      key: "isActive",
+      label: "Status",
+      className: "hidden lg:table-cell",
+      render: (item: Part) => (
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            item.isActive === false
+              ? "bg-muted text-muted-foreground"
+              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+          }`}
+        >
+          {item.isActive === false ? "Inactive" : "Active"}
+        </span>
       ),
     },
     {
@@ -363,9 +448,35 @@ export default function InventoryPage() {
     {
       key: "actions",
       label: "",
-      className: "w-[5.5rem] text-right",
+      className: "w-[8.5rem] text-right",
       render: (item: Part) => (
         <div className="inline-flex items-center justify-end gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label={`History for ${item.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setHistoryPartId(item.id);
+            }}
+          >
+            <History className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-xs text-muted-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              updatePart(item.id, { isActive: item.isActive === false });
+              toast.success(item.isActive === false ? "Part activated" : "Part deactivated");
+            }}
+          >
+            {item.isActive === false ? "Activate" : "Deactivate"}
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -396,11 +507,7 @@ export default function InventoryPage() {
       ),
     },
   ],
-    [openDeletePart, openEditPart]
-  );
-
-  const recentMovements = [...stockMovements].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    [openDeletePart, openEditPart, branches, updatePart]
   );
 
   const mlPartsForPurchase = parts.filter((p) => isMlTrackedPart(p));
@@ -418,7 +525,7 @@ export default function InventoryPage() {
       quantityMl: ml,
       reference: purchaseRef.trim() || undefined,
       purchasedAt: new Date().toISOString(),
-      recordedBy: "usr-001",
+      recordedBy: performedBy,
     });
     toast.success("Purchase recorded and stock updated.");
     setPurchaseDialogOpen(false);
@@ -438,21 +545,29 @@ export default function InventoryPage() {
       return;
     }
     if (isMlTrackedPart(p)) {
-      recordStockAdjustment({
+      const result = recordStockAdjustment({
         partId: adjustPartId,
         direction: adjustDirection,
         amountMl: n,
         reason: "Manual adjustment",
-        performedBy: "usr-001",
+        performedBy,
       });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not adjust stock.");
+        return;
+      }
     } else {
-      recordStockAdjustment({
+      const result = recordStockAdjustment({
         partId: adjustPartId,
         direction: adjustDirection,
         amountCount: Math.round(n),
         reason: "Manual adjustment",
-        performedBy: "usr-001",
+        performedBy,
       });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not adjust stock.");
+        return;
+      }
     }
     toast.success("Stock adjusted.");
     setAdjustDialogOpen(false);
@@ -471,7 +586,12 @@ export default function InventoryPage() {
     }
     const price = Number(addPartPrice);
     if (Number.isNaN(price) || price < 0) {
-      toast.error("Enter a valid unit price");
+      toast.error("Enter a valid selling price");
+      return;
+    }
+    const costPrice = Number(addPartCost);
+    if (!editingPartId && (Number.isNaN(costPrice) || addPartCost.trim() === "" || costPrice < 0)) {
+      toast.error("Cost price is required");
       return;
     }
     const qtyInput = Number(addPartQty);
@@ -505,6 +625,13 @@ export default function InventoryPage() {
         stockQuantityMl: litresToMl(qtyInput),
         reorderLevelMl: litresToMl(reorderLitres),
         lastRestocked: existing?.lastRestocked ?? now,
+        description: addPartDescription.trim() || undefined,
+        costPrice: Number.isFinite(costPrice) && addPartCost.trim() !== "" ? costPrice : existing?.costPrice,
+        gstRate: Number(addPartGstRate) || 0,
+        hsnCode: addPartHsn.trim() || undefined,
+        gstApplicable: addPartGstApplicable,
+        isActive: addPartActive,
+        branchScope: addPartBranchScope,
       };
     } else {
       const qty = Math.round(qtyInput);
@@ -551,6 +678,13 @@ export default function InventoryPage() {
         reorderLevel: reorder,
         supplier,
         lastRestocked: existing?.lastRestocked ?? now,
+        description: addPartDescription.trim() || undefined,
+        costPrice: Number.isFinite(costPrice) && addPartCost.trim() !== "" ? costPrice : existing?.costPrice,
+        gstRate: Number(addPartGstRate) || 0,
+        hsnCode: addPartHsn.trim() || undefined,
+        gstApplicable: addPartGstApplicable,
+        isActive: addPartActive,
+        branchScope: addPartBranchScope,
       };
     }
 
@@ -569,7 +703,7 @@ export default function InventoryPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title="Inventory"
-        description="Spare parts, on-hand levels, and fluid tracking (stored in ml, displayed in litres)"
+        description="Parts catalog, branch stock, transfers, purchases, and movement history"
         actions={
           <div className="flex flex-wrap gap-2">
             <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
@@ -742,7 +876,9 @@ export default function InventoryPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-3">
                       <div className="space-y-2">
-                        <Label htmlFor="add-part-name">Part Name</Label>
+                        <Label htmlFor="add-part-name">
+                          Part Name <span className="text-destructive">*</span>
+                        </Label>
                         <Input
                           id="add-part-name"
                           placeholder="e.g. Brake Pad Set"
@@ -766,7 +902,9 @@ export default function InventoryPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="add-part-sku">SKU / Part number</Label>
+                      <Label htmlFor="add-part-sku">
+                        SKU / Part number <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         id="add-part-sku"
                         placeholder="e.g. BRK-PAD-001"
@@ -789,22 +927,13 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Category</Label>
-                      <Select
+                      <Label>
+                        Category <span className="text-destructive">*</span>
+                      </Label>
+                      <PartCategorySelect
                         value={addPartCategory}
-                        onValueChange={(v) => setAddPartCategory(v as PartCategory)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allCategories.map((c) => (
-                            <SelectItem key={c} value={c}>
-                              {c}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={setAddPartCategory}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="add-part-unit">Primary unit</Label>
@@ -870,7 +999,7 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="add-part-price">Primary unit price (₹)</Label>
+                      <Label htmlFor="add-part-price">Selling price (₹)</Label>
                       <Input
                         id="add-part-price"
                         type="number"
@@ -921,6 +1050,80 @@ export default function InventoryPage() {
                         autoComplete="off"
                       />
                     </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="add-part-description">Description</Label>
+                      <Textarea
+                        id="add-part-description"
+                        value={addPartDescription}
+                        onChange={(e) => setAddPartDescription(e.target.value)}
+                        placeholder="Optional notes about this part"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-part-cost">
+                        Cost price {editingPartId ? "" : <span className="text-destructive">*</span>}
+                      </Label>
+                      <Input
+                        id="add-part-cost"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={addPartCost}
+                        onChange={(e) => setAddPartCost(e.target.value)}
+                        required={!editingPartId}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-part-gst">GST rate %</Label>
+                      <Input
+                        id="add-part-gst"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={addPartGstRate}
+                        onChange={(e) => setAddPartGstRate(e.target.value)}
+                        disabled={!addPartGstApplicable}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-part-hsn">HSN code</Label>
+                      <Input
+                        id="add-part-hsn"
+                        value={addPartHsn}
+                        onChange={(e) => setAddPartHsn(e.target.value)}
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Branch scope</Label>
+                      <Select value={addPartBranchScope} onValueChange={setAddPartBranchScope}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="GLOBAL">All branches</SelectItem>
+                          {branches.filter((b) => b.isActive).map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                      <Checkbox
+                        checked={addPartGstApplicable}
+                        onCheckedChange={(v) => setAddPartGstApplicable(v === true)}
+                      />
+                      GST applicable
+                    </label>
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                      <Checkbox
+                        checked={addPartActive}
+                        onCheckedChange={(v) => setAddPartActive(v === true)}
+                      />
+                      Active
+                    </label>
                   </div>
                   </div>
                   <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-background px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -964,6 +1167,17 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+              <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{totalStockItems}</p>
+              <p className="text-sm text-muted-foreground">Lines in stock</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
             <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30">
               <TrendingUp className="w-6 h-6 text-violet-600 dark:text-violet-400" />
             </div>
@@ -995,28 +1209,56 @@ export default function InventoryPage() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-sky-100 dark:bg-sky-900/30">
+              <ArrowLeftRight className="w-6 h-6 text-sky-600 dark:text-sky-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{pendingTransfers}</p>
+              <p className="text-sm text-muted-foreground">Open transfers</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30">
+              <AlertTriangle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{formatCurrency(outstandingPurchases)}</p>
+              <p className="text-sm text-muted-foreground">Purchase dues</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Tabs defaultValue="parts">
-        <TabsList className="bg-muted/60">
-          <TabsTrigger
-            value="parts"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-          >
-            Catalog
-          </TabsTrigger>
-          <TabsTrigger
-            value="movements"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-          >
-            Activity
-          </TabsTrigger>
-          <TabsTrigger
-            value="purchases"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
-          >
-            Intake
-          </TabsTrigger>
+      <Tabs defaultValue="parts" className="space-y-4">
+        <TabsList className="h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 flex-nowrap scrollbar-none">
+          {(
+            [
+              ["parts", "Parts catalog", Package],
+              ["branch-stock", "Branch stock", Warehouse],
+              ["transfers", "Transfers", ArrowLeftRight],
+              ["ledger", "Transfer ledger", BookMarked],
+              ["purchases", "Purchases", ShoppingCart],
+              ["history", "History", History],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className={cn(
+                "rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm font-medium shadow-none gap-1.5 text-muted-foreground sm:px-4",
+                "hover:text-foreground",
+                "data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground",
+                "data-[state=active]:shadow-none"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0 opacity-70" />
+              {label}
+            </TabsTrigger>
+          ))}
         </TabsList>
         <TabsContent value="parts" className="mt-4 space-y-4">
           <div className="flex items-center gap-2">
@@ -1027,6 +1269,23 @@ export default function InventoryPage() {
             <Label htmlFor="inventory-stock-filter" className="text-muted-foreground shrink-0">
               Availability
             </Label>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Select
+              value={categoryFilter}
+              onValueChange={setCategoryFilter}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {catalogCategories.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={stockTableFilter}
               onValueChange={(v) => setStockTableFilter(v as StockTableFilter)}
@@ -1040,6 +1299,7 @@ export default function InventoryPage() {
                 <SelectItem value="out">None on hand</SelectItem>
               </SelectContent>
             </Select>
+            </div>
           </div>
           <DataTable
             data={partsForTable}
@@ -1111,105 +1371,20 @@ export default function InventoryPage() {
             }}
           />
         </TabsContent>
-        <TabsContent value="movements" className="mt-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="w-1 h-7 shrink-0 rounded-full bg-primary" aria-hidden />
-            <h2 className="text-base font-semibold tracking-tight">Recent stock activity</h2>
-          </div>
-          <Card>
-            <CardContent className="!p-0">
-              <div className="divide-y divide-border">
-                {recentMovements.map((m) => {
-                  const part = parts.find((p) => p.id === m.partId);
-                  const displayQty = m.displayQuantity ?? m.quantity;
-                  const displayUnit = m.displayUnit ?? m.unit;
-                  const qtyLabel =
-                    displayUnit === "ML"
-                      ? `${displayQty.toLocaleString("en-IN")} ml`
-                      : `${displayQty.toLocaleString("en-IN")} ${displayUnit}`;
-                  const stockUnit =
-                    part && isMlTrackedPart(part)
-                      ? "ml"
-                      : part?.secondaryUnit ?? part?.primaryUnit ?? displayUnit;
-                  const before = m.stockBeforeSecondary;
-                  const after = m.stockAfterSecondary;
-                  const stockAudit =
-                    before != null && after != null
-                      ? `Stock: ${before.toLocaleString("en-IN")} → ${after.toLocaleString("en-IN")} ${stockUnit}`
-                      : null;
-                  return (
-                    <div key={m.id} className="flex items-center gap-4 p-4">
-                      <div
-                        className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                          m.type === "IN"
-                            ? "bg-violet-100 dark:bg-violet-900/30"
-                            : "bg-red-100 dark:bg-red-900/30"
-                        }`}
-                      >
-                        {m.type === "IN" ? (
-                          <ArrowDownCircle className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                        ) : (
-                          <ArrowUpCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">
-                          {m.type === "IN" ? "+" : "-"}
-                          {qtyLabel} · {part?.name ?? m.partId}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{m.reason}</p>
-                        {stockAudit ? (
-                          <p className="text-xs text-muted-foreground mt-0.5">{stockAudit}</p>
-                        ) : null}
-                      </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                        {formatDateTime(m.createdAt)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="branch-stock" className="mt-4 space-y-4">
+          <InventoryBranchStockTab />
         </TabsContent>
-        <TabsContent value="purchases" className="mt-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="w-1 h-7 shrink-0 rounded-full bg-primary" aria-hidden />
-            <h2 className="text-base font-semibold tracking-tight">Fluid purchases</h2>
-          </div>
-          <Card>
-            <CardContent className="!p-0">
-              <div className="divide-y divide-border">
-                {productPurchases.length === 0 ? (
-                  <p className="p-6 text-sm text-muted-foreground">No intake logged yet.</p>
-                ) : (
-                  [...productPurchases]
-                    .sort(
-                      (a, b) =>
-                        new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
-                    )
-                    .map((pp) => {
-                      const part = parts.find((p) => p.id === pp.partId);
-                      return (
-                        <div key={pp.id} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="font-medium text-sm">{part?.name ?? pp.partId}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {pp.vendorName}
-                              {pp.reference ? ` · ${pp.reference}` : ""}
-                            </p>
-                          </div>
-                          <div className="text-sm text-right">
-                            <p className="font-medium">{formatMlAndLitres(pp.quantityMl)}</p>
-                            <p className="text-xs text-muted-foreground">{formatDate(pp.purchasedAt)}</p>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="transfers" className="mt-4 space-y-4">
+          <InventoryTransfersTab />
+        </TabsContent>
+        <TabsContent value="ledger" className="mt-4 space-y-4">
+          <InventoryTransferLedgerTab />
+        </TabsContent>
+        <TabsContent value="purchases" className="mt-4 space-y-4">
+          <InventoryPurchasesTab />
+        </TabsContent>
+        <TabsContent value="history" className="mt-4 space-y-4">
+          <InventoryHistoryTab />
         </TabsContent>
       </Tabs>
 
@@ -1272,6 +1447,7 @@ export default function InventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <InventoryPartHistoryDialog partId={historyPartId} onClose={() => setHistoryPartId(null)} />
     </div>
   );
 }

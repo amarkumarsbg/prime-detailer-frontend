@@ -21,6 +21,10 @@ export interface ExpenseVendorProfile {
   gstNumber?: string;
   panNumber?: string;
   notes?: string;
+  /** Default true when omitted (legacy directory rows). */
+  isActive?: boolean;
+  /** Optional home branch for display; vendors remain usable org-wide. */
+  branchId?: string;
 }
 
 export interface Expense {

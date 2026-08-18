@@ -52,6 +52,17 @@ describe("data-scope payload branch filter", () => {
     assert.equal(isPayloadInBranchScope({ branchId: "br-b" }, ["br-a"]), false);
     assert.equal(isPayloadInBranchScope({ branchId: "br-a" }, ["br-a"]), true);
   });
+
+  it("keeps stock transfers that involve an allowed branch", () => {
+    assert.equal(
+      isPayloadInBranchScope({ fromBranchId: "br-a", toBranchId: "br-b" }, ["br-a"]),
+      true
+    );
+    assert.equal(
+      isPayloadInBranchScope({ fromBranchId: "br-b", toBranchId: "br-c" }, ["br-a"]),
+      false
+    );
+  });
 });
 
 describe("data-scope nested singletons", () => {

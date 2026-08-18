@@ -257,9 +257,9 @@ export function publicCustomerLedgerShareUrl(customerId: string): string {
  * Payment reminder — WhatsApp composer (MyBillBook-style pending dues).
  *
  * Modes:
- * - `customerTotal` (default): amount = total outstanding across invoices; optional
- *   invoice link is labeled with that invoice's own due so it is not confused with the total.
- * - `singleInvoice`: amount and invoice link both refer to the same invoice.
+ * - `customerTotal` (default): pendingAmount = total outstanding. One unpaid invoice →
+ *   invoice + ledger links; multiple unpaid → ledger link only.
+ * - `singleInvoice`: amount and invoice link both refer to the same invoice (+ ledger).
  */
 export function buildPaymentPendingReminderWhatsAppMessage(opts: {
   pendingAmount: number;
@@ -301,30 +301,31 @@ export function buildPaymentPendingReminderWhatsAppMessage(opts: {
     return lines.join("\n");
   }
 
-  // customerTotal — never imply the invoice link equals the total pending amount
-  lines.push(
-    `*Total pending amount:* ${formatWhatsAppInr(opts.pendingAmount)}`,
-    `(Sum of all unpaid invoices on your account.)`,
-    ``
-  );
-
+  // customerTotal — multiple unpaid: ledger only; single unpaid: invoice + ledger
   if (opts.invoiceUrl) {
+    // Exactly one unpaid invoice — amount matches the invoice; include both links.
     const invNo = opts.invoiceNumber ? ` ${opts.invoiceNumber}` : "";
-    const invDue =
-      opts.invoiceOutstandingAmount != null
-        ? ` — due on this invoice: ${formatWhatsAppInr(opts.invoiceOutstandingAmount)}`
-        : "";
     lines.push(
-      `View invoice${invNo}${invDue}:`,
+      `Your payment of ${formatWhatsAppInr(opts.pendingAmount)} is pending.`,
+      ``,
+      `View invoice${invNo}:`,
       opts.invoiceUrl,
       ``,
-      `Note: The invoice above is one unpaid bill. Your total pending is ${formatWhatsAppInr(opts.pendingAmount)}.`,
-      ``
+      `View full ledger statement:`,
+      opts.statementUrl,
+      `Please clear the payment as soon as possible.`,
+      ``,
+      `Thank you,`,
+      opts.businessName
     );
+    return lines.join("\n");
   }
 
   lines.push(
-    `View full ledger statement (all invoices):`,
+    `*Total pending amount:* ${formatWhatsAppInr(opts.pendingAmount)}`,
+    `(Sum of all unpaid invoices on your account.)`,
+    ``,
+    `View full ledger statement:`,
     opts.statementUrl,
     `Please clear the payment as soon as possible.`,
     ``,
@@ -394,19 +395,16 @@ export function buildCustomerLedgerWhatsAppMessage(
     opts.statementUrl ||
     (customer.id ? publicCustomerLedgerShareUrl(customer.id) : publicAppBaseUrl());
 
-  // Oldest outstanding invoice — linked separately with its own due amount.
-  const primary =
-    open.length > 0
-      ? [...open].sort((a, b) => a.inv.createdAt.localeCompare(b.inv.createdAt))[0]
-      : undefined;
+  // Single unpaid invoice → invoice + ledger; multiple unpaid → ledger only.
+  const sole = open.length === 1 ? open[0] : undefined;
 
   return buildPaymentPendingReminderWhatsAppMessage({
     mode: "customerTotal",
     pendingAmount: totalDue,
     statementUrl,
-    invoiceUrl: primary ? publicInvoiceShareUrl(primary.inv.id) : undefined,
-    invoiceOutstandingAmount: primary?.due,
-    invoiceNumber: primary?.inv.invoiceNumber,
+    invoiceUrl: sole ? publicInvoiceShareUrl(sole.inv.id) : undefined,
+    invoiceOutstandingAmount: sole?.due,
+    invoiceNumber: sole?.inv.invoiceNumber,
     businessName: opts.businessName,
   });
 }

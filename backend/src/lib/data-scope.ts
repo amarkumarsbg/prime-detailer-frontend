@@ -54,8 +54,18 @@ export function isPayloadInBranchScope(
 ): boolean {
   if (allowedBranchIds === null) return true;
   const branchId = payloadBranchId(payload);
-  if (!branchId) return true;
-  return allowedBranchIds.includes(branchId);
+  if (branchId) return allowedBranchIds.includes(branchId);
+  if (!payload || typeof payload !== "object") return true;
+  const rec = payload as { fromBranchId?: unknown; toBranchId?: unknown };
+  const from = typeof rec.fromBranchId === "string" ? rec.fromBranchId : undefined;
+  const to = typeof rec.toBranchId === "string" ? rec.toBranchId : undefined;
+  if (from || to) {
+    return (
+      (from != null && allowedBranchIds.includes(from)) ||
+      (to != null && allowedBranchIds.includes(to))
+    );
+  }
+  return true;
 }
 
 export function filterPayloadsByBranch(

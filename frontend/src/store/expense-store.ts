@@ -155,6 +155,8 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
       gstNumber: input.gstNumber?.trim() || undefined,
       panNumber: input.panNumber?.trim() || undefined,
       notes: input.notes?.trim() || undefined,
+      isActive: input.isActive !== false,
+      branchId: input.branchId?.trim() || undefined,
     };
     set((s) => ({
       vendorDirectory: [...s.vendorDirectory, entry],
@@ -196,6 +198,9 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
           ? updates.panNumber.trim() || undefined
           : prev.panNumber,
       notes: updates.notes !== undefined ? updates.notes.trim() || undefined : prev.notes,
+      isActive: updates.isActive !== undefined ? updates.isActive : prev.isActive,
+      branchId:
+        updates.branchId !== undefined ? updates.branchId.trim() || undefined : prev.branchId,
     };
 
     const renamed = prev.name !== nextName;

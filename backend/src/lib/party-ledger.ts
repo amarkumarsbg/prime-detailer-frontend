@@ -11,7 +11,7 @@ import { paymentInDetailPath, salesInvoiceDetailPath } from "./payment-paths.js"
 import { dateInPreset } from "./report-period.js";
 
 export function invoicePaidTotal(inv: Invoice): number {
-  return inv.payments.reduce((s, p) => s + p.amount, 0);
+  return inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
 }
 
 export function invoiceOutstanding(inv: Invoice): number {
@@ -266,6 +266,92 @@ export function buildPartyStatement(
   });
 
   return lines;
+}
+
+/**
+ * Public share/PDF ledger: one row per sales invoice with Credit + Debit on the same line
+ * (MyBillBook Party Ledger Report). Does not emit separate Payment In rows.
+ */
+export function buildPublicCustomerStatement(
+  party: Party,
+  invoices: Invoice[],
+  period: string
+): PartyStatementLine[] {
+  const { invoices: invs } = partyDocumentsForParty(party, invoices, []);
+  const lines: PartyStatementLine[] = [];
+  let balance = signedOpeningBalance(party);
+
+  lines.push({
+    id: "opening",
+    date: "—",
+    voucher: "Opening Balance",
+    serialNo: "—",
+    paymentMode: "—",
+    debit: 0,
+    balance,
+    isSummary: true,
+  });
+
+  const inPeriod = invs
+    .filter((inv) => dateInPreset(inv.createdAt, period))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  for (const inv of inPeriod) {
+    const debit = Math.round(inv.grandTotal * 100) / 100;
+    const collected = invoicePaidTotal(inv);
+    const credit = collected > 0.01 ? collected : 0;
+    const outstanding = invoiceOutstanding(inv);
+    balance = Math.round((balance + debit - credit) * 100) / 100;
+
+    const methods = [
+      ...new Set(
+        inv.payments
+          .map((p) => paymentModeLabel(p.method))
+          .filter((m) => m && m !== "—")
+      ),
+    ];
+    if ((inv.walletAmountUsed || 0) > 0.01) methods.push("WALLET");
+
+    lines.push({
+      id: `inv-${inv.id}`,
+      date: formatLedgerDate(inv.createdAt),
+      voucher: "Sales Invoice",
+      serialNo: inv.invoiceNumber,
+      paymentMode: methods[0] ?? "—",
+      credit: credit > 0.01 ? credit : undefined,
+      debit,
+      balance,
+      dueLabel: publicDueLabel(inv.createdAt, outstanding, credit, party.creditPeriodDays),
+    });
+  }
+
+  lines.push({
+    id: "closing",
+    date: "—",
+    voucher: "Closing Balance",
+    serialNo: "—",
+    paymentMode: "—",
+    debit: balance,
+    balance,
+    isSummary: true,
+  });
+
+  return lines;
+}
+
+function publicDueLabel(
+  createdAt: string,
+  outstanding: number,
+  credit: number,
+  creditPeriodDays?: number
+): string {
+  if (outstanding < 0.01) return "Paid";
+  const due = new Date(createdAt);
+  const days = Number.isFinite(creditPeriodDays) ? Math.max(0, creditPeriodDays ?? 0) : 0;
+  due.setDate(due.getDate() + days);
+  const dateStr = formatLedgerDate(due.toISOString());
+  if (credit > 0.01) return `${dateStr} Partially Paid`;
+  return `${dateStr} Unpaid`;
 }
 
 export function buildPartySummary(

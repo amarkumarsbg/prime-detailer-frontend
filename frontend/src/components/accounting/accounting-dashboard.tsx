@@ -512,7 +512,6 @@ export function AccountingDashboard() {
               iconWrap="bg-emerald-500 text-white"
               headerBg="bg-emerald-50/90 dark:bg-emerald-950/30"
               delta={incomeDelta}
-              defaultOpen
               breakdownTitle="Calculation Breakdown"
               breakdownNote="Total Income = Sum of all actual receipts (invoice payments, pre-invoice advances, and memberships) collected during this period. Customer wallet usage is excluded."
               breakdown={[

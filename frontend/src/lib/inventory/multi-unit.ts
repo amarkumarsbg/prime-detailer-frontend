@@ -239,12 +239,33 @@ export function validateStockConsumption(
   return { ok: true };
 }
 
+export function addCanonicalSecondary(part: Part, amount: number): Part {
+  if (amount <= 0) return part;
+  if (isMlTrackedPart(part)) {
+    return {
+      ...part,
+      stockQuantityMl: (part.stockQuantityMl ?? 0) + amount,
+    };
+  }
+  if (!hasDualUnitPart(part)) {
+    return { ...part, quantity: part.quantity + amount };
+  }
+  const current = getCanonicalStockSecondary(part);
+  return syncPrimaryQuantityFromCanonical({
+    ...part,
+    stockQuantitySecondary: current + amount,
+  });
+}
+
 export function deductCanonicalSecondary(part: Part, amount: number): Part {
   if (isMlTrackedPart(part)) {
     return {
       ...part,
       stockQuantityMl: Math.max(0, (part.stockQuantityMl ?? 0) - amount),
     };
+  }
+  if (!hasDualUnitPart(part)) {
+    return { ...part, quantity: Math.max(0, part.quantity - amount) };
   }
   const current = getCanonicalStockSecondary(part);
   const next = Math.max(0, current - amount);

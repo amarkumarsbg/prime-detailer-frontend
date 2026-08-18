@@ -22,6 +22,7 @@
     "test:plan-catalog": "tsx --test scripts/plan-catalog.test.ts",
     "test:data-scope": "tsx --test scripts/data-scope.test.ts",
     "test:gst-settings": "tsx --test scripts/gst-settings.test.ts",
+    "test:party-ledger": "tsx --test scripts/party-ledger-public.test.ts",
     "test:bootstrap-thin": "tsx scripts/check-bootstrap-thin.ts",
     "test:list-scope": "tsx scripts/check-list-scope.ts",
     "test:tenant-org": "tsx scripts/check-tenant-org-columns.ts",
