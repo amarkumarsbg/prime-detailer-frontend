@@ -41,7 +41,7 @@ export interface Invoice {
   status: InvoiceStatus;
   payments: InvoicePayment[];
   createdAt: string;
-  source?: "COUNTER_SALE";
+  source?: "COUNTER_SALE" | "MEMBERSHIP";
   branchId?: string;
 }
 

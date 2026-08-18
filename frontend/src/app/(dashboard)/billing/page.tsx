@@ -29,6 +29,7 @@ import { BookMarked, Eye, IndianRupee, TrendingUp, FileText, Receipt } from "luc
 import { Button } from "@/components/ui/button";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
+import { invoiceSourceColumnLabel } from "@/lib/invoice-source";
 import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import {
   buildPaymentPendingReminderWhatsAppMessage,
@@ -365,7 +366,7 @@ export default function BillingPage() {
       label: "Job #",
       render: (item: Record<string, unknown>) => (
         <span className="font-mono text-sm text-muted-foreground">
-          {item.source === "COUNTER_SALE" ? "Counter Sale" : (item.jobNumber as string)}
+          {invoiceSourceColumnLabel(item as Pick<Invoice, "source" | "jobNumber">)}
         </span>
       ),
       sortable: true,
@@ -767,7 +768,7 @@ export default function BillingPage() {
                               <span className="font-mono">{String(item.vehicleRegNumber)}</span>
                               <span aria-hidden> · </span>
                               <span className="font-mono">
-                                {item.source === "COUNTER_SALE" ? "Counter Sale" : String(item.jobNumber)}
+                                {invoiceSourceColumnLabel(item as Pick<Invoice, "source" | "jobNumber">)}
                               </span>
                             </p>
                             <div className="mt-1.5 flex items-baseline justify-between gap-2">

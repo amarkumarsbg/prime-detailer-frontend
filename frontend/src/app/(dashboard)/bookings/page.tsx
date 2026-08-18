@@ -217,7 +217,10 @@ export default function BookingsPage() {
 
   const invoiceByJobId = useMemo(() => {
     const map: Record<string, Invoice> = {};
-    for (const inv of invoices) map[inv.jobCardId] = inv;
+    for (const inv of invoices) {
+      if (!inv.jobCardId) continue;
+      map[inv.jobCardId] = inv;
+    }
     return map;
   }, [invoices]);
 

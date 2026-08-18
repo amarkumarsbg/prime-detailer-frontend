@@ -15,6 +15,7 @@ import {
   requestCameraStream,
 } from "@/components/job-cards/multi-photo-camera-capture";
 import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { createInvoiceForMembershipActivation } from "@/lib/membership-invoice";
 import { getNextBookingId } from "@/lib/appointment-ids";
 import {
   getBookingConfirmationBusiness,
@@ -1505,10 +1506,32 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         return;
       }
       const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
-      toast.success("Membership activated", { description: pkg?.name ?? "Membership" });
-
       const subRow = useMembershipStore.getState().subscriptions.find((s) => s.id === memRes.id);
       if (pkg && subRow) {
+        try {
+          const invRes = await createInvoiceForMembershipActivation({
+            membershipId: subRow.id,
+            pkg,
+            customerId: custId,
+            customerName: customerName.trim(),
+            customerPhone,
+            vehicleRegNumber: regStored,
+            branchId,
+          });
+          if (invRes.ok) {
+            toast.success("Membership activated", {
+              description: `${pkg.name} · Invoice ${invRes.invoiceNumber}`,
+            });
+          } else {
+            toast.success("Membership activated", { description: pkg.name });
+            toast.error("Membership invoice was not created", { description: invRes.error });
+          }
+        } catch (e) {
+          toast.success("Membership activated", { description: pkg.name });
+          toast.error("Membership invoice was not created", {
+            description: e instanceof Error ? e.message : "Please try again.",
+          });
+        }
         const names = pkg.includedServiceIds
           .map((sid) => serviceCatalog.find((c) => c.id === sid)?.name)
           .filter((n): n is string => Boolean(n));
@@ -1523,6 +1546,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           vehicleReg: regStored,
           includedServiceNames: names,
         });
+      } else {
+        toast.success("Membership activated", { description: pkg?.name ?? "Membership" });
       }
     }
 

@@ -109,7 +109,7 @@ export interface Invoice {
   /** Snapshot of membership subscription id at invoice time (Bill To). */
   membershipId?: string;
   membershipPackageName?: string;
-  /** Counter Sale invoices have no job card. */
-  source?: "COUNTER_SALE";
+  /** Counter Sale / Membership invoices have no job card. */
+  source?: "COUNTER_SALE" | "MEMBERSHIP";
   branchId?: string;
 }

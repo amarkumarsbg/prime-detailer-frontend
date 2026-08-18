@@ -45,6 +45,7 @@ import {
 } from "@/store/membership-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { formatCurrency, formatDate, formatInrFull, getInitials, cn } from "@/lib/utils";
+import { salesInvoiceDetailPath } from "@/lib/billing/payment-helpers";
 import {
   sendCustomerWhatsApp,
   openWhatsAppComposer,
@@ -1245,6 +1246,14 @@ export default function CustomerDetailPage() {
                       <div className="mt-3">
                         <p className="text-xs text-muted-foreground mb-1">List price</p>
                         <p className="text-sm font-medium tabular-nums">{formatInrFull(pkg.price)}</p>
+                        {sub.invoiceId ? (
+                          <Link
+                            href={salesInvoiceDetailPath(sub.invoiceId)}
+                            className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+                          >
+                            View membership invoice
+                          </Link>
+                        ) : null}
                       </div>
                       <div className="mt-3">
                         <p className="text-sm font-medium mb-2">Included services</p>

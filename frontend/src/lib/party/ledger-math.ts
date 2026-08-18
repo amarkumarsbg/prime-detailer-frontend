@@ -13,6 +13,7 @@ import {
   salesInvoiceDetailPath,
 } from "@/lib/billing/payment-helpers";
 import { dateInPreset } from "@/lib/reports/report-period-presets";
+import { invoiceSourceLedgerLabel } from "@/lib/invoice-source";
 
 export function invoicePaidTotal(inv: Invoice): number {
   return inv.payments.reduce((s, p) => s + p.amount, 0) + (inv.walletAmountUsed || 0);
@@ -117,7 +118,7 @@ export function buildPartyTransactions(
         rows.push({
           id: inv.id,
           at: inv.createdAt,
-          typeLabel: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoices",
+          typeLabel: invoiceSourceLedgerLabel(inv),
           reference: inv.invoiceNumber,
           amount: inv.grandTotal,
           unpaidAmount: out > 0.01 ? out : undefined,
@@ -214,7 +215,7 @@ export function buildPartyStatement(
         line: {
           id: `inv-${inv.id}`,
           date: formatLedgerDate(inv.createdAt),
-          voucher: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoices",
+          voucher: invoiceSourceLedgerLabel(inv),
           serialNo: inv.invoiceNumber,
           paymentMode: "—",
           debit: inv.grandTotal,

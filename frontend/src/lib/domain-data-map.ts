@@ -112,7 +112,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   },
   { prefix: "/messages", resources: ["communications", "customers"] },
   { prefix: "/activity", resources: ["activityLogs", "jobCards", "invoices", "expenses"] },
-  { prefix: "/membership", resources: ["membership", "customers", "serviceCatalog"] },
+  { prefix: "/membership", resources: ["membership", "customers", "vehicles", "serviceCatalog", "invoices", "appSettings"] },
   { prefix: "/referrals", resources: ["referralProgram", "walletTransactions", "customers"] },
   { prefix: "/reminders", resources: ["serviceReminders", "notifications", "appSettings"] },
   { prefix: "/follow-ups", resources: ["followUps", "jobCards", "notifications"] },

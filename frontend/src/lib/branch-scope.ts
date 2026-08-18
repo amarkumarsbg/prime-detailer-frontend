@@ -113,6 +113,8 @@ export function invoiceBranchId(
   invoice: Invoice,
   jobBranch: Map<string, string>
 ): string | undefined {
+  if (invoice.branchId) return invoice.branchId;
+  if (!invoice.jobCardId) return undefined;
   return jobBranch.get(invoice.jobCardId);
 }
 
@@ -124,7 +126,7 @@ export function applyInvoiceBranchFilters(
   pageBranchFilter: string
 ): Invoice[] {
   const jobBranch = buildJobBranchMap(jobCards);
-  const withBranch = invoices.filter((inv) => jobBranch.has(inv.jobCardId));
+  const withBranch = invoices.filter((inv) => Boolean(invoiceBranchId(inv, jobBranch)));
   return applyBranchFilters(
     withBranch,
     (inv) => invoiceBranchId(inv, jobBranch),
@@ -141,7 +143,7 @@ export function filterInvoicesByBranch(
 ): Invoice[] {
   if (!branchId) return invoices;
   const jobBranch = buildJobBranchMap(jobCards);
-  return invoices.filter((inv) => jobBranch.get(inv.jobCardId) === branchId);
+  return invoices.filter((inv) => invoiceBranchId(inv, jobBranch) === branchId);
 }
 
 export function filterAppointmentsByBranch(
@@ -208,7 +210,7 @@ export function filterActivityByBranch(
         return jobBranch.get(log.entityId) === branchId;
       case "INVOICE": {
         const inv = invoiceById.get(log.entityId);
-        return inv ? jobBranch.get(inv.jobCardId) === branchId : false;
+        return inv ? invoiceBranchId(inv, jobBranch) === branchId : false;
       }
       case "EXPENSE":
         return expenseById.get(log.entityId)?.branchId === branchId;
@@ -245,7 +247,7 @@ export function computeBranchScopedDashboardStats(
   const jobs = filterByBranchId(jobCards, (j) => j.branchId, branchId);
   const jobBranch = buildJobBranchMap(jobCards);
   const scopedInvoices = branchId
-    ? invoices.filter((inv) => jobBranch.get(inv.jobCardId) === branchId)
+    ? invoices.filter((inv) => invoiceBranchId(inv, jobBranch) === branchId)
     : invoices;
   const scopedExpenses = filterByBranchId(expenses, (e) => e.branchId, branchId);
   const today = startOfToday();

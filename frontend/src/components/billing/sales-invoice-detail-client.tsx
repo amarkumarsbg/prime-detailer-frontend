@@ -83,6 +83,7 @@ import {
   type InvoicePdfOpts,
 } from "@/lib/invoice-pdf";
 import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
+import { invoiceSourceTitle } from "@/lib/invoice-source";
 import { DEFAULT_GST_RATE, isGstRegistered } from "@/lib/gst-tax";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
@@ -1113,7 +1114,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
         <div className="flex flex-wrap items-center gap-2">
           <DetailBackButton fallbackHref="/billing" />
           <h1 className="text-lg font-semibold">
-            {invoice.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoice"} #{invoice.invoiceNumber}
+            {invoiceSourceTitle(invoice)} #{invoice.invoiceNumber}
           </h1>
           <InvoiceStatusBadge status={invoice.status} />
         </div>

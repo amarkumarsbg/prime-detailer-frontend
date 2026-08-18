@@ -150,6 +150,7 @@ interface MembershipState {
   ) => number;
   getUsedIncludedServiceIds: (sub: CustomerMembership) => Set<string>;
   subscriptionEffectiveStatus: (sub: CustomerMembership) => CustomerMembershipStatus;
+  linkMembershipInvoice: (subscriptionId: string, invoiceId: string) => void;
 }
 
 function genId(prefix: string) {
@@ -418,5 +419,16 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
     if (sub.status === "CANCELLED") return "CANCELLED";
     if (new Date(sub.endDate).getTime() < Date.now()) return "EXPIRED";
     return sub.status;
+  },
+
+  linkMembershipInvoice: (subscriptionId, invoiceId) => {
+    if (!subscriptionId || !invoiceId) return;
+    set((s) => {
+      const subscriptions = s.subscriptions.map((sub) =>
+        sub.id === subscriptionId ? { ...sub, invoiceId } : sub
+      );
+      persistMembership(s.packages, subscriptions);
+      return { subscriptions };
+    });
   },
 }));

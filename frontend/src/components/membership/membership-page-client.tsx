@@ -52,6 +52,9 @@ import { AddServicePackageDialog } from "@/components/services/add-service-packa
 import { ServiceSearchInput } from "@/components/services/searchable-service-select";
 import { toast } from "sonner";
 import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { createInvoiceForMembershipActivation } from "@/lib/membership-invoice";
+import { salesInvoiceDetailPath } from "@/lib/billing/payment-helpers";
+import { useAuthStore } from "@/store/auth-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { computeCustomerLookupMatches } from "@/lib/customer-vehicle-lookup";
 import {
@@ -216,6 +219,7 @@ export function MembershipPageClient() {
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const businessName = useSettingsStore((s) => s.businessName);
+  const currentBranch = useAuthStore((s) => s.currentBranch);
 
   const activeServices = useMemo(
     () => [...catalog].filter((s) => s.isActive).sort((a, b) => a.name.localeCompare(b.name)),
@@ -452,8 +456,10 @@ export function MembershipPageClient() {
   };
 
   const activePackages = useMemo(() => packages.filter((p) => p.isActive), [packages]);
+  const [assigning, setAssigning] = useState(false);
 
-  const onAssign = () => {
+  const onAssign = async () => {
+    if (assigning) return;
     if (!assignCustomerId) {
       toast.error("Select a customer.");
       return;
@@ -469,6 +475,8 @@ export function MembershipPageClient() {
     const start = assignStartDate
       ? new Date(assignStartDate + "T12:00:00").toISOString()
       : undefined;
+    setAssigning(true);
+    try {
     const res = assignMembership({
       customerId: assignCustomerId,
       packageId: assignPackageId,
@@ -498,12 +506,46 @@ export function MembershipPageClient() {
         vehicleReg: veh?.registrationNumber,
         includedServiceNames: names,
       });
+      try {
+        const invRes = await createInvoiceForMembershipActivation({
+          membershipId: subRow.id,
+          pkg,
+          customerId: cust.id,
+          customerName: cust.name,
+          customerPhone: cust.phone,
+          vehicleRegNumber: veh?.registrationNumber,
+          branchId: currentBranch?.id,
+        });
+        if (!invRes.ok) {
+          toast.error("Membership activated, but invoice was not created", {
+            description: invRes.error,
+          });
+        } else {
+          toast.success("Membership activated", {
+            description: `Invoice ${invRes.invoiceNumber} created for ${pkg.name}.`,
+          });
+          router.push(salesInvoiceDetailPath(invRes.invoiceId));
+          setAssignCustomerId("");
+          setAssignVehicleId("");
+          setAssignPackageId("");
+          setAssignStartDate("");
+          return;
+        }
+      } catch (e) {
+        toast.error("Membership activated, but invoice was not created", {
+          description: e instanceof Error ? e.message : "Please try again.",
+        });
+      }
+    } else {
+      toast.success("Membership activated.");
     }
-    toast.success("Membership activated.");
     setAssignCustomerId("");
     setAssignVehicleId("");
     setAssignPackageId("");
     setAssignStartDate("");
+    } finally {
+      setAssigning(false);
+    }
   };
 
   const subsWithLabels = useMemo(() => {
@@ -833,8 +875,13 @@ export function MembershipPageClient() {
                     onChange={(e) => setAssignStartDate(e.target.value)}
                   />
                 </div>
-                <Button type="button" className="bg-violet-600 hover:bg-violet-700" onClick={onAssign}>
-                  Activate membership
+                <Button
+                  type="button"
+                  className="bg-violet-600 hover:bg-violet-700"
+                  onClick={() => void onAssign()}
+                  disabled={assigning}
+                >
+                  {assigning ? "Activating…" : "Activate membership"}
                 </Button>
               </CardContent>
             </Card>

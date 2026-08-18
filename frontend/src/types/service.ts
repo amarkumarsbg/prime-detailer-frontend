@@ -94,4 +94,6 @@ export interface CustomerMembership {
   vehicleId?: string;
   /** Redemptions of included services during this subscription window. */
   usageHistory?: MembershipServiceUsage[];
+  /** Invoice created when this membership was activated. */
+  invoiceId?: string;
 }

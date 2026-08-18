@@ -18,6 +18,12 @@ export function invoiceOutstanding(inv: Invoice): number {
   return Math.max(0, Math.round((inv.grandTotal - invoicePaidTotal(inv)) * 100) / 100);
 }
 
+function invoiceSourceLedgerLabel(inv: Pick<Invoice, "source">): string {
+  if (inv.source === "COUNTER_SALE") return "Counter Sale";
+  if (inv.source === "MEMBERSHIP") return "Membership";
+  return "Sales Invoices";
+}
+
 export function expenseOutstanding(e: Expense): number {
   if (e.paymentStatus === "PAID") return 0;
   const paid = e.amountPaid ?? 0;
@@ -95,7 +101,7 @@ export function buildPartyTransactions(
         rows.push({
           id: inv.id,
           at: inv.createdAt,
-          typeLabel: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoices",
+          typeLabel: invoiceSourceLedgerLabel(inv),
           reference: inv.invoiceNumber,
           amount: inv.grandTotal,
           unpaidAmount: out > 0.01 ? out : undefined,
@@ -192,7 +198,7 @@ export function buildPartyStatement(
         line: {
           id: `inv-${inv.id}`,
           date: formatLedgerDate(inv.createdAt),
-          voucher: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoices",
+          voucher: invoiceSourceLedgerLabel(inv),
           serialNo: inv.invoiceNumber,
           paymentMode: "—",
           debit: inv.grandTotal,
@@ -315,7 +321,7 @@ export function buildPublicCustomerStatement(
     lines.push({
       id: `inv-${inv.id}`,
       date: formatLedgerDate(inv.createdAt),
-      voucher: inv.source === "COUNTER_SALE" ? "Counter Sale" : "Sales Invoice",
+      voucher: inv.source === "COUNTER_SALE" ? "Counter Sale" : inv.source === "MEMBERSHIP" ? "Membership" : "Sales Invoice",
       serialNo: inv.invoiceNumber,
       paymentMode: methods[0] ?? "—",
       credit: credit > 0.01 ? credit : undefined,
