@@ -213,7 +213,7 @@ export function CatalogItemFormDialog({
     const qtyInput = Number(qty);
     const reorderInput = Number(reorder);
     if (Number.isNaN(qtyInput) || qtyInput < 0) {
-      toast.error("Enter a valid initial quantity");
+      toast.error("Enter a valid opening stock");
       return;
     }
     const now = new Date().toISOString();
@@ -481,8 +481,8 @@ export function CatalogItemFormDialog({
                   {editingPart
                     ? `On-hand quantity (${unit})`
                     : unit === "Litre"
-                      ? "Initial stock (litres)"
-                      : "Initial quantity"}
+                      ? "Opening stock (litres)"
+                      : "Opening stock"}
                 </Label>
                 <Input
                   id="catalog-part-qty"
