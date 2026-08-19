@@ -176,7 +176,7 @@ export function getUnitPrice(part: Part, unit: string): number {
   if (unitsMatch(unit, part.primaryUnit)) {
     return part.unitPrice;
   }
-  if (part.unitPriceSecondary != null && Number.isFinite(part.unitPriceSecondary)) {
+  if (part.unitPriceSecondary != null && Number.isFinite(part.unitPriceSecondary) && part.unitPriceSecondary > 0) {
     return part.unitPriceSecondary;
   }
   const cf = part.conversionFactor;

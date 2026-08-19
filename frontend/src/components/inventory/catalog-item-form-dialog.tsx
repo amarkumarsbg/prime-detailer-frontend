@@ -246,7 +246,7 @@ export function CatalogItemFormDialog({
               : isBox
                 ? 100
                 : 1;
-    const secondaryPriceRaw = Number(secondaryPrice);
+    const secondaryPriceRaw = secondaryPrice.trim() !== "" ? Number(secondaryPrice) : NaN;
     const unitPriceSecondary =
       Number.isFinite(secondaryPriceRaw) && secondaryPriceRaw >= 0
         ? secondaryPriceRaw

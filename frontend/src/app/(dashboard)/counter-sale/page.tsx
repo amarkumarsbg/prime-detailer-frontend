@@ -38,11 +38,13 @@ import { useCashBankStore } from "@/store/cash-bank-store";
 import { getBranchCanonicalQty } from "@/lib/inventory/branch-stock";
 import { isMlTrackedPart } from "@/lib/inventory-units";
 import {
+  canonicalSecondaryToUnitQty,
   formatAvailableStock,
   getSelectableUnits,
   getUnitPrice,
   partMatchesInventorySearch,
   quantityToCanonicalSecondary,
+  validateStockConsumption,
 } from "@/lib/inventory/multi-unit";
 import {
   buildCounterSaleInvoice,
@@ -122,11 +124,27 @@ export default function CounterSalePage() {
   const due = Math.max(0, Math.round((grandTotal - (leavePending ? 0 : Math.min(paid, grandTotal))) * 100) / 100);
   const showReceivedIn = !leavePending && needsPaymentReceivedIn(paymentMethod);
 
+  const checkBranchStockAvailable = (part: Part, neededQty: number, unit: string): boolean => {
+    const needed = quantityToCanonicalSecondary(part, neededQty, unit);
+    const available = getBranchCanonicalQty(branchStocks, part, branchId);
+    return needed <= available + 1e-9;
+  };
+
   const addPartToCart = (partId: string, chosenUnit?: string) => {
     const part = parts.find((p) => p.id === partId);
     if (!part) return;
     const unit = chosenUnit ?? getSelectableUnits(part)[0] ?? part.primaryUnit;
     const existing = cart.find((l) => l.partId === partId && l.unit === unit);
+    const nextQty = existing ? existing.quantity + 1 : 1;
+    if (!checkBranchStockAvailable(part, nextQty, unit)) {
+      const canonical = getBranchCanonicalQty(branchStocks, part, branchId);
+      const qtyVal = canonicalSecondaryToUnitQty(part, canonical, unit);
+      const formatted = Number.isInteger(qtyVal) ? qtyVal.toLocaleString("en-IN") : qtyVal.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+      toast.error(`Insufficient stock for ${part.name}`, {
+        description: `Only ${formatted} ${unit} available in ${viewingLabel || "branch"}`
+      });
+      return;
+    }
     if (existing) {
       setCart(
         cart.map((l) =>
@@ -517,14 +535,76 @@ export default function CounterSalePage() {
                                     </SelectContent>
                                   </Select>
                                 )}
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => addPartToCart(part.id, selected)}
-                                >
-                                  Add
-                                </Button>
+                                {(() => {
+                                  const cartItem = cart.find((l) => l.partId === part.id && l.unit === selected);
+                                  if (cartItem) {
+                                    return (
+                                      <div className="flex items-center gap-1.5 border rounded-md px-1 py-0.5 bg-card">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0"
+                                          onClick={() => {
+                                            if (cartItem.quantity === 1) {
+                                              setCart(cart.filter((l) => !(l.partId === part.id && l.unit === selected)));
+                                            } else {
+                                              setCart(
+                                                cart.map((l) =>
+                                                  l.partId === part.id && l.unit === selected
+                                                    ? { ...l, quantity: l.quantity - 1 }
+                                                    : l
+                                                )
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          <Minus className="h-2.5 w-2.5" />
+                                        </Button>
+                                        <span className="w-6 text-center text-xs font-semibold tabular-nums">
+                                          {cartItem.quantity}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0"
+                                          onClick={() => {
+                                            const nextQty = cartItem.quantity + 1;
+                                            if (!checkBranchStockAvailable(part, nextQty, selected)) {
+                                              const canonical = getBranchCanonicalQty(branchStocks, part, branchId);
+                                              const qtyVal = canonicalSecondaryToUnitQty(part, canonical, selected);
+                                              const formatted = Number.isInteger(qtyVal) ? qtyVal.toLocaleString("en-IN") : qtyVal.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+                                              toast.error(`Insufficient stock for ${part.name}`, {
+                                                description: `Only ${formatted} ${selected} available in ${viewingLabel || "branch"}`
+                                              });
+                                              return;
+                                            }
+                                            setCart(
+                                              cart.map((l) =>
+                                                l.partId === part.id && l.unit === selected
+                                                  ? { ...l, quantity: l.quantity + 1 }
+                                                  : l
+                                              )
+                                            );
+                                          }}
+                                        >
+                                          <Plus className="h-2.5 w-2.5" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => addPartToCart(part.id, selected)}
+                                    >
+                                      Add
+                                    </Button>
+                                  );
+                                })()}
                               </div>
                             );
                           })()}
@@ -556,7 +636,7 @@ export default function CounterSalePage() {
               ) : (
                 <ul className="space-y-3">
                   {cart.map((line) => (
-                    <li key={`${line.partId}-${line.unit}`} className="rounded-md border p-2.5 space-y-2">
+                    <li key={`${line.partId}-${line.unit}`} className="rounded-md border p-2.5 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-medium leading-tight">{line.name}</p>
@@ -566,93 +646,17 @@ export default function CounterSalePage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
                           onClick={() => setCart(cart.filter((l) => !(l.partId === line.partId && l.unit === line.unit)))}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 shrink-0"
-                          onClick={() =>
-                            setCart(
-                              cart.map((l) =>
-                                l.partId === line.partId && l.unit === line.unit
-                                  ? { ...l, quantity: Math.max(1, l.quantity - 1) }
-                                  : l
-                              )
-                            )
-                          }
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center text-sm tabular-nums shrink-0">{line.quantity}</span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 shrink-0"
-                          onClick={() =>
-                            setCart(
-                              cart.map((l) =>
-                                l.partId === line.partId && l.unit === line.unit ? { ...l, quantity: l.quantity + 1 } : l
-                              )
-                            )
-                          }
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        {(() => {
-                          const part = parts.find((p) => p.id === line.partId);
-                          const units = part ? getSelectableUnits(part) : [line.unit];
-                          if (units.length <= 1) {
-                            return <span className="text-xs text-muted-foreground ml-1">{line.unit}</span>;
-                          }
-                          return (
-                            <Select
-                              value={line.unit}
-                              onValueChange={(unit) => {
-                                if (!part) return;
-                                const other = cart.find((l) => l.partId === line.partId && l.unit === unit);
-                                if (other) {
-                                  setCart(
-                                    cart
-                                      .map((l) =>
-                                        l.partId === line.partId && l.unit === unit
-                                          ? { ...l, quantity: l.quantity + line.quantity }
-                                          : l
-                                      )
-                                      .filter((l) => !(l.partId === line.partId && l.unit === line.unit))
-                                  );
-                                } else {
-                                  setCart(
-                                    cart.map((l) =>
-                                      l.partId === line.partId && l.unit === line.unit
-                                        ? { ...l, unit, unitPrice: getUnitPrice(part, unit) }
-                                        : l
-                                    )
-                                  );
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-7 w-[4.5rem] text-[11px] px-1.5 focus:ring-0 ml-1">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {units.map((u) => (
-                                  <SelectItem key={u} value={u} className="text-xs">
-                                    {u}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          );
-                        })()}
-                        <span className="ml-auto text-sm font-medium tabular-nums">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          Qty: <span className="text-foreground font-semibold tabular-nums">{line.quantity}</span> {line.unit}
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatCurrency(counterSaleLineTotal(line))}
                         </span>
                       </div>
