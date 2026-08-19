@@ -390,8 +390,8 @@ export function InventoryBranchStockTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="IN">Increase</SelectItem>
-                    <SelectItem value="OUT">Decrease</SelectItem>
+                    <SelectItem value="IN">Stock In</SelectItem>
+                    <SelectItem value="OUT">Stock Out</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

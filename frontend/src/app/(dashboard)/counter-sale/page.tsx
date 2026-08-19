@@ -95,6 +95,7 @@ export default function CounterSalePage() {
   const [newCustomerReferralCode, setNewCustomerReferralCode] = useState("");
   const [partSearch, setPartSearch] = useState("");
   const [cart, setCart] = useState<CounterSaleCartLine[]>([]);
+  const [catalogueUnits, setCatalogueUnits] = useState<Record<string, string>>({});
   const [discountAmount, setDiscountAmount] = useState(0);
   const [leavePending, setLeavePending] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -121,15 +122,15 @@ export default function CounterSalePage() {
   const due = Math.max(0, Math.round((grandTotal - (leavePending ? 0 : Math.min(paid, grandTotal))) * 100) / 100);
   const showReceivedIn = !leavePending && needsPaymentReceivedIn(paymentMethod);
 
-  const addPartToCart = (partId: string) => {
+  const addPartToCart = (partId: string, chosenUnit?: string) => {
     const part = parts.find((p) => p.id === partId);
     if (!part) return;
-    const unit = getSelectableUnits(part)[0] ?? part.primaryUnit;
-    const existing = cart.find((l) => l.partId === partId);
+    const unit = chosenUnit ?? getSelectableUnits(part)[0] ?? part.primaryUnit;
+    const existing = cart.find((l) => l.partId === partId && l.unit === unit);
     if (existing) {
       setCart(
         cart.map((l) =>
-          l.partId === partId ? { ...l, quantity: l.quantity + 1 } : l
+          l.partId === partId && l.unit === unit ? { ...l, quantity: l.quantity + 1 } : l
         )
       );
       return;
@@ -488,14 +489,45 @@ export default function CounterSalePage() {
                               {part.sku} · {formatAvailableStock(part)}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-sm font-medium tabular-nums">
-                              {formatCurrency(part.unitPrice)}
-                            </span>
-                            <Button type="button" size="sm" variant="outline" onClick={() => addPartToCart(part.id)}>
-                              Add
-                            </Button>
-                          </div>
+                           {(() => {
+                            const units = getSelectableUnits(part);
+                            const selected = catalogueUnits[part.id] ?? units[0] ?? part.primaryUnit;
+                            const price = getUnitPrice(part, selected);
+                            return (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-sm font-medium tabular-nums">
+                                  {formatCurrency(price)}
+                                </span>
+                                {units.length > 1 && (
+                                  <Select
+                                    value={selected}
+                                    onValueChange={(unit) =>
+                                      setCatalogueUnits((prev) => ({ ...prev, [part.id]: unit }))
+                                    }
+                                  >
+                                    <SelectTrigger className="h-7 w-[4.5rem] text-[11px] px-1.5 focus:ring-0">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {units.map((u) => (
+                                        <SelectItem key={u} value={u} className="text-xs">
+                                          {u}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addPartToCart(part.id, selected)}
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                            );
+                          })()}
                         </li>
                       ))}
                     </ul>
@@ -524,7 +556,7 @@ export default function CounterSalePage() {
               ) : (
                 <ul className="space-y-3">
                   {cart.map((line) => (
-                    <li key={line.partId} className="rounded-md border p-2.5 space-y-2">
+                    <li key={`${line.partId}-${line.unit}`} className="rounded-md border p-2.5 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-medium leading-tight">{line.name}</p>
@@ -535,7 +567,7 @@ export default function CounterSalePage() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => setCart(cart.filter((l) => l.partId !== line.partId))}
+                          onClick={() => setCart(cart.filter((l) => !(l.partId === line.partId && l.unit === line.unit)))}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -545,11 +577,11 @@ export default function CounterSalePage() {
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-7 w-7 shrink-0"
                           onClick={() =>
                             setCart(
                               cart.map((l) =>
-                                l.partId === line.partId
+                                l.partId === line.partId && l.unit === line.unit
                                   ? { ...l, quantity: Math.max(1, l.quantity - 1) }
                                   : l
                               )
@@ -558,22 +590,68 @@ export default function CounterSalePage() {
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="w-8 text-center text-sm tabular-nums">{line.quantity}</span>
+                        <span className="w-8 text-center text-sm tabular-nums shrink-0">{line.quantity}</span>
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-7 w-7 shrink-0"
                           onClick={() =>
                             setCart(
                               cart.map((l) =>
-                                l.partId === line.partId ? { ...l, quantity: l.quantity + 1 } : l
+                                l.partId === line.partId && l.unit === line.unit ? { ...l, quantity: l.quantity + 1 } : l
                               )
                             )
                           }
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
+                        {(() => {
+                          const part = parts.find((p) => p.id === line.partId);
+                          const units = part ? getSelectableUnits(part) : [line.unit];
+                          if (units.length <= 1) {
+                            return <span className="text-xs text-muted-foreground ml-1">{line.unit}</span>;
+                          }
+                          return (
+                            <Select
+                              value={line.unit}
+                              onValueChange={(unit) => {
+                                if (!part) return;
+                                const other = cart.find((l) => l.partId === line.partId && l.unit === unit);
+                                if (other) {
+                                  setCart(
+                                    cart
+                                      .map((l) =>
+                                        l.partId === line.partId && l.unit === unit
+                                          ? { ...l, quantity: l.quantity + line.quantity }
+                                          : l
+                                      )
+                                      .filter((l) => !(l.partId === line.partId && l.unit === line.unit))
+                                  );
+                                } else {
+                                  setCart(
+                                    cart.map((l) =>
+                                      l.partId === line.partId && l.unit === line.unit
+                                        ? { ...l, unit, unitPrice: getUnitPrice(part, unit) }
+                                        : l
+                                    )
+                                  );
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-7 w-[4.5rem] text-[11px] px-1.5 focus:ring-0 ml-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {units.map((u) => (
+                                  <SelectItem key={u} value={u} className="text-xs">
+                                    {u}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        })()}
                         <span className="ml-auto text-sm font-medium tabular-nums">
                           {formatCurrency(counterSaleLineTotal(line))}
                         </span>
