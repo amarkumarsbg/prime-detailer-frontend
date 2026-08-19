@@ -2,6 +2,8 @@ import type { Invoice, Expense, ProductPurchase, Part } from "@/types";
 import type { CashBankAccount, CashBankTransaction } from "@/store/cash-bank-store";
 import { dateInPreset } from "@/lib/reports/report-period-presets";
 import { invoicePaidTotal } from "@/lib/party/ledger-math";
+import { purchaseGrandTotal } from "@/lib/inventory/purchase-math";
+import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
 
 export type BillWiseProfitRow = {
   date: string;
@@ -173,9 +175,7 @@ export function buildPurchaseSummaryRows(
     .filter((p) => dateInPreset(p.purchasedAt, period))
     .map((p) => {
       const part = parts.find((x) => x.id === p.partId);
-      const litres = p.quantityMl / 1000;
-      const unitCost = p.unitCost ?? part?.unitPrice ?? 0;
-      const amount = Math.round(litres * unitCost * 100) / 100;
+      const amount = purchaseGrandTotal(p);
       return {
         purchaseNo: p.reference ?? p.id,
         originalInvoiceNo: "—",
@@ -289,7 +289,7 @@ export function buildExpenseCategoryRows(expenses: Expense[], period: string): E
   for (const e of expenses) {
     if (!dateInPreset(e.date, period)) continue;
     const key = expenseCategoryLabel(e.category);
-    map.set(key, (map.get(key) ?? 0) + e.amount);
+    map.set(key, (map.get(key) ?? 0) + recognizedExpenseAmount(e));
   }
   return [...map.entries()]
     .map(([category, totalAmount]) => ({
@@ -331,7 +331,7 @@ export function buildExpenseTransactionRows(
       expenseNumber: e.id,
       category: expenseCategoryLabel(e.category),
       paymentMode: e.paymentMethod.replace(/_/g, " "),
-      totalAmount: e.amount,
+      totalAmount: recognizedExpenseAmount(e),
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
 }

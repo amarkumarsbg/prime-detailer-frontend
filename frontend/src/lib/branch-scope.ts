@@ -16,6 +16,7 @@ import type {
   ServiceReminder,
 } from "@/types";
 import { isInactiveCustomer, isPendingPaymentInvoice, isTodaysBookingsJob } from "@/lib/dashboard-filters";
+import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
 
 /** Header branch selector: null = org-wide (all branches). */
 export function useBranchScope() {
@@ -283,7 +284,7 @@ export function computeBranchScopedDashboardStats(
 
   const totalExpensesToday = scopedExpenses
     .filter((e) => isSameCalendarDay(e.date, today))
-    .reduce((s, e) => s + e.amount, 0);
+    .reduce((s, e) => s + recognizedExpenseAmount(e), 0);
 
   const pendingPayments = new Set(
     scopedInvoices.filter(isPendingPaymentInvoice).map((inv) => inv.customerId)

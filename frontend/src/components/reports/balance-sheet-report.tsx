@@ -34,6 +34,8 @@ import {
 } from "@/store/balance-sheet-ledger-store";
 import { useScopedExpenses, useScopedInvoices } from "@/hooks/use-scoped-data";
 import type { Invoice } from "@/types";
+import { invoiceOutstanding } from "@/lib/party/ledger-math";
+import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
 import { formatDateTime, formatInrFull } from "@/lib/utils";
 import { ArrowLeft, FileSpreadsheet, Info, Mail, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -65,10 +67,10 @@ type BalanceSheetModalMode =
   | "loansAdvance";
 
 function sumOutstanding(invoices: Invoice[]) {
+  const activeInvoices = invoices.filter((inv) => inv.status !== "DRAFT");
   let s = 0;
-  for (const inv of invoices) {
-    const paid = (inv.payments ?? []).reduce((p, x) => p + x.amount, 0);
-    s += Math.max(0, (inv.grandTotal ?? 0) - paid);
+  for (const inv of activeInvoices) {
+    s += invoiceOutstanding(inv);
   }
   return Math.round(s * 100) / 100;
 }
@@ -176,11 +178,11 @@ export function BalanceSheetReport() {
   const [formAmount, setFormAmount] = useState("");
 
   const revenue = useMemo(
-    () => invoices.reduce((s, i) => s + (i.grandTotal ?? 0), 0),
+    () => invoices.filter((i) => i.status !== "DRAFT").reduce((s, i) => s + (i.grandTotal ?? 0), 0),
     [invoices]
   );
   const expenseTotal = useMemo(
-    () => expenses.reduce((s, e) => s + (e.amount ?? 0), 0),
+    () => expenses.reduce((s, e) => s + recognizedExpenseAmount(e), 0),
     [expenses]
   );
   const netIncome = Math.round((revenue - expenseTotal) * 100) / 100;

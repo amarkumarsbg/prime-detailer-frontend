@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { writeFavouriteFlag } from "@/lib/reports/report-favourites";
 import { useReportFavouritesStore } from "@/store/report-favourites-store";
 import { getReportHrefForFavouriteKey } from "@/lib/reports/report-favourites-keys";
+import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
 
 const FAV_KEY = "prime-detailer-pl-favourite";
 
@@ -64,10 +65,12 @@ export function ProfitLossReport() {
   };
 
   const { saleTotal, expenseTotal, netSimplified } = useMemo(() => {
-    const scopedInvoices = invoices.filter((i) => dateInPreset(i.createdAt, period));
+    const scopedInvoices = invoices.filter(
+      (i) => i.status !== "DRAFT" && dateInPreset(i.createdAt, period)
+    );
     const scopedExpenses = expenses.filter((e) => dateInPreset(e.date, period));
     const sale = scopedInvoices.reduce((s, i) => s + (i.grandTotal ?? 0), 0);
-    const exp = scopedExpenses.reduce((s, e) => s + (e.amount ?? 0), 0);
+    const exp = scopedExpenses.reduce((s, e) => s + recognizedExpenseAmount(e), 0);
     return {
       saleTotal: Math.round(sale * 100) / 100,
       expenseTotal: Math.round(exp * 100) / 100,
