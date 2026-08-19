@@ -90,8 +90,13 @@ export function buildServiceReminderWhatsAppMessage(reminder: ServiceReminder): 
 
 export function buildQuotationWhatsAppMessage(q: Quotation): string {
   const first = q.customerName.trim().split(/\s+/)[0] ?? q.customerName;
+  const hasServices = q.services.length > 0;
+  const hasParts = (q.parts ?? []).length > 0;
   const serviceLines = q.services
     .map((s) => `• ${s.name}: ${formatCurrency(s.price)}`)
+    .join("\n");
+  const partLines = (q.parts ?? [])
+    .map((p) => `• ${p.name} × ${p.quantity} ${p.unit}: ${formatCurrency(p.lineTotal)}`)
     .join("\n");
   const valid = q.validUntil
     ? format(parseISO(q.validUntil), "EEE, dd-MMM-yyyy")
@@ -102,9 +107,9 @@ export function buildQuotationWhatsAppMessage(q: Quotation): string {
     ``,
     `Please find your estimate *${q.quotationNumber}* from *Prime Detailers*.`,
     ``,
-    `*Vehicle:* ${q.vehicleMakeModel} (${q.vehicleRegNumber})`,
-    `*Services:*`,
-    serviceLines,
+    hasServices ? `*Vehicle:* ${q.vehicleMakeModel} (${q.vehicleRegNumber})` : hasParts ? `*Type:* Counter Sale` : "",
+    hasServices ? `*Services:*\n${serviceLines}` : "",
+    hasParts ? `*Counter Sale:*\n${partLines}` : "",
     ``,
     `Subtotal: ${formatCurrency(q.subtotal)}`,
     q.taxAmount > 0 ? `GST: ${formatCurrency(q.taxAmount)}` : "",

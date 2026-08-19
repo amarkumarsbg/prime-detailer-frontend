@@ -1700,6 +1700,46 @@ ${businessNameVal}`;
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
+                        {(() => {
+                          const matchedPart = rawParts.find((p) =>
+                            li.description.toLowerCase().startsWith(p.name.toLowerCase())
+                          );
+                          if (!matchedPart) return null;
+                          const units = getSelectableUnits(matchedPart);
+                          if (units.length <= 1) return null;
+                          const currentUnit = units.find((u) => li.description.includes(u)) ?? units[0];
+                          return (
+                            <Select
+                              value={currentUnit}
+                              onValueChange={(unit) => {
+                                const newPrice = getUnitPrice(matchedPart, unit);
+                                const oldUnitStr = `— 1 ${currentUnit}`;
+                                const newUnitStr = `— 1 ${unit}`;
+                                let nextDesc = li.description;
+                                if (nextDesc.includes(oldUnitStr)) {
+                                  nextDesc = nextDesc.replace(oldUnitStr, newUnitStr);
+                                } else {
+                                  nextDesc = `${matchedPart.name} — 1 ${unit}`;
+                                }
+                                updateEditLine(li.id, {
+                                  description: nextDesc,
+                                  unitPrice: newPrice,
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-9 w-[4.5rem] text-xs px-1.5 focus:ring-0 shrink-0 bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {units.map((u) => (
+                                  <SelectItem key={u} value={u} className="text-xs">
+                                    {u}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="space-y-1.5">

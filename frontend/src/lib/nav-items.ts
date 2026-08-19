@@ -67,6 +67,26 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
     ],
   },
   {
+    label: "Workshop",
+    items: [
+      { label: "Services", href: "/services", icon: Wrench, roles: ["ADMIN", "MANAGER"], permissionKey: "SERVICES" },
+      {
+        label: "Inventory Hub",
+        href: "/inventory",
+        icon: Package,
+        roles: ["ADMIN", "MANAGER"],
+        permissionKey: "INVENTORY",
+      },
+      {
+        label: "Vendors",
+        href: "/vendors",
+        icon: Store,
+        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
+        permissionKey: "VENDORS",
+      },
+    ],
+  },
+  {
     label: "Finance",
     items: [
       {
@@ -120,26 +140,6 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
       { label: "Users & Staff", href: "/staff", icon: UserCog, roles: ["ADMIN", "MANAGER"], permissionKey: "STAFF" },
       { label: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"], permissionKey: "ATTENDANCE" },
       { label: "Salary & Payroll", href: "/payroll", icon: Wallet, roles: ["ADMIN", "MANAGER"], permissionKey: "PAYROLL" },
-    ],
-  },
-  {
-    label: "Workshop",
-    items: [
-      { label: "Services", href: "/services", icon: Wrench, roles: ["ADMIN", "MANAGER"], permissionKey: "SERVICES" },
-      {
-        label: "Inventory Hub",
-        href: "/inventory",
-        icon: Package,
-        roles: ["ADMIN", "MANAGER"],
-        permissionKey: "INVENTORY",
-      },
-      {
-        label: "Vendors",
-        href: "/vendors",
-        icon: Store,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
-        permissionKey: "VENDORS",
-      },
     ],
   },
   {

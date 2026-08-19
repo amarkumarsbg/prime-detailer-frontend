@@ -15,7 +15,11 @@ import {
 import { useInventoryStore } from "@/store/inventory-store";
 import { formatCurrency, cn } from "@/lib/utils";
 import { getStockStatus, stockStatusShortLabel } from "@/lib/inventory-units";
+import { useBranchScope } from "@/lib/branch-scope";
+import { getBranchCanonicalQty } from "@/lib/inventory/branch-stock";
+import { toast } from "sonner";
 import {
+  canonicalSecondaryToUnitQty,
   formatAvailableStock,
   formatDualUnitStock,
   formatDualUnitStockEquivalent,
@@ -23,6 +27,7 @@ import {
   getUnitPrice,
   hasDualUnitPart,
   partMatchesInventorySearch,
+  quantityToCanonicalSecondary,
   validateStockConsumption,
 } from "@/lib/inventory/multi-unit";
 import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
@@ -85,6 +90,10 @@ export function JobCardPartsPicker({
 }) {
   const parts = useInventoryStore((s) => s.parts);
   const savedPartCategories = useInventoryStore((s) => s.partCategories);
+  const branchStocks = useInventoryStore((s) => s.branchStocks);
+  const { selectedBranchId, viewingLabel } = useBranchScope();
+  const branchId = selectedBranchId ?? "";
+
   const [partSearch, setPartSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [selectedExpanded, setSelectedExpanded] = useState(!collapseSelected);
@@ -96,6 +105,12 @@ export function JobCardPartsPicker({
     [parts, savedPartCategories]
   );
   const partsById = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
+
+  const checkBranchStockAvailable = (part: Part, neededQty: number, unit: string): boolean => {
+    const needed = quantityToCanonicalSecondary(part, neededQty, unit);
+    const available = getBranchCanonicalQty(branchStocks, part, branchId);
+    return needed <= available + 1e-9;
+  };
 
   const filteredParts = useMemo(() => {
     return parts.filter((part) => {
@@ -124,11 +139,36 @@ export function JobCardPartsPicker({
       return;
     }
     const part = partsById.get(partId);
-    const unit = part ? getSelectableUnits(part)[0] : "Piece";
+    if (!part) return;
+    const unit = getSelectableUnits(part)[0] || part.primaryUnit || "Piece";
+    if (!checkBranchStockAvailable(part, 1, unit)) {
+      const canonical = getBranchCanonicalQty(branchStocks, part, branchId);
+      const qtyVal = canonicalSecondaryToUnitQty(part, canonical, unit);
+      const formatted = Number.isInteger(qtyVal) ? qtyVal.toLocaleString("en-IN") : qtyVal.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+      toast.error(`Insufficient stock for ${part.name}`, {
+        description: `Only ${formatted} ${unit} available in ${viewingLabel || "branch"}`
+      });
+      return;
+    }
     onSelectedLinesChange([...selectedLines, { partId, quantity: 1, unit }]);
   };
 
   const updateLine = (partId: string, patch: Partial<SelectedPartLine>) => {
+    const part = partsById.get(partId);
+    if (!part) return;
+    const currentLine = selectedLines.find((l) => l.partId === partId);
+    if (!currentLine) return;
+    const qty = patch.quantity ?? currentLine.quantity;
+    const unit = patch.unit ?? currentLine.unit;
+    if (!checkBranchStockAvailable(part, qty, unit)) {
+      const canonical = getBranchCanonicalQty(branchStocks, part, branchId);
+      const qtyVal = canonicalSecondaryToUnitQty(part, canonical, unit);
+      const formatted = Number.isInteger(qtyVal) ? qtyVal.toLocaleString("en-IN") : qtyVal.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+      toast.error(`Insufficient stock for ${part.name}`, {
+        description: `Only ${formatted} ${unit} available in ${viewingLabel || "branch"}`
+      });
+      return;
+    }
     if (patch.unit != null) {
       setQtyDrafts((prev) => {
         const next = { ...prev };

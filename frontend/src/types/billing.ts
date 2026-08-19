@@ -4,7 +4,19 @@ export type InvoiceStatus = "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID";
 
 export type QuotationStatus = "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | "CONVERTED";
 
+export type QuotationSource = "SERVICE" | "COUNTER_SALE" | "MIXED";
+
 export type PaymentMethod = "CASH" | "UPI" | "CARD" | "WALLET";
+
+export interface QuotationPartLine {
+  partId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+}
 
 export interface Quotation {
   id: string;
@@ -16,6 +28,8 @@ export interface Quotation {
   vehicleRegNumber: string;
   vehicleMakeModel: string;
   vehicleSegment: VehicleSegment;
+  /** Defaults to service quotation when omitted (legacy rows). */
+  source?: QuotationSource;
   services: {
     serviceCatalogId: string;
     name: string;
@@ -24,6 +38,8 @@ export interface Quotation {
     isCustomPrice?: boolean;
     priceSource?: "CATALOG" | "CUSTOM" | "MEMBERSHIP";
   }[];
+  /** Counter Sale parts on the estimate (can be combined with services). */
+  parts?: QuotationPartLine[];
   subtotal: number;
   taxRate: number;
   taxAmount: number;
