@@ -1,17 +1,8 @@
 import { purchaseAmountPaid, purchaseDue, purchaseGrandTotal } from "@/lib/inventory/purchase-math";
+import { expensePaidAmount, expenseOutstanding } from "@/lib/party/ledger-math";
 import type { Expense, ExpenseVendorProfile, ProductPurchase } from "@/types";
 
-export function expensePaidAmount(e: Expense): number {
-  if (e.paymentStatus === "PAID") return e.amount;
-  if (e.paymentStatus === "PARTIAL") return e.amountPaid ?? 0;
-  return 0;
-}
-
-export function expensePayableAmount(e: Expense): number {
-  if (e.paymentStatus === "PAID") return 0;
-  if (e.paymentStatus === "PARTIAL") return Math.max(0, e.amount - (e.amountPaid ?? 0));
-  return e.amount;
-}
+export { expensePaidAmount, expenseOutstanding as expensePayableAmount } from "@/lib/party/ledger-math";
 
 export function isVendorActive(profile: ExpenseVendorProfile | null): boolean {
   if (!profile) return true;
@@ -31,7 +22,10 @@ export type VendorSummary = {
   vendorName: string;
   profile: ExpenseVendorProfile | null;
   purchases: ProductPurchase[];
+  /** Direct expenses (not linked to a purchase). */
   expenses: Expense[];
+  /** Accounting expenses synced from this vendor's purchases. */
+  purchaseLinkedExpenses: Expense[];
   purchaseCount: number;
   expenseCount: number;
   orderCount: number;
@@ -69,6 +63,7 @@ export function buildVendorSummaries(
       profile,
       purchases: [],
       expenses: [],
+      purchaseLinkedExpenses: [],
       purchaseCount: 0,
       expenseCount: 0,
       orderCount: 0,
@@ -106,6 +101,11 @@ export function buildVendorSummaries(
   }
 
   for (const row of byKey.values()) {
+    const purchaseIds = new Set(row.purchases.map((p) => p.id));
+    row.purchaseLinkedExpenses = expenses.filter(
+      (e) => e.purchaseId && purchaseIds.has(e.purchaseId)
+    );
+
     row.purchaseCount = row.purchases.length;
     row.expenseCount = row.expenses.length;
     row.orderCount = row.purchaseCount + row.expenseCount;
@@ -117,7 +117,7 @@ export function buildVendorSummaries(
       row.expenses.reduce((s, e) => s + expensePaidAmount(e), 0);
     row.outstanding =
       row.purchases.reduce((s, p) => s + purchaseDue(p), 0) +
-      row.expenses.reduce((s, e) => s + expensePayableAmount(e), 0);
+      row.expenses.reduce((s, e) => s + expenseOutstanding(e), 0);
     row.overdue = row.purchases.some(isPurchaseOverdue);
     row.isActive = isVendorActive(row.profile);
 

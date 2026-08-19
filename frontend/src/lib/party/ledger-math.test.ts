@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   customerHasPendingInvoiceDues,
   expenseOutstanding,
+  expensePaidAmount,
   invoiceOutstanding,
   invoicePaidTotal,
 } from "@/lib/party/ledger-math";
@@ -59,6 +60,7 @@ describe("expenseOutstanding", () => {
       paymentStatus: "PAID",
     } as Expense;
     expect(expenseOutstanding(e)).toBe(0);
+    expect(expensePaidAmount(e)).toBe(500);
   });
 
   it("uses amountPaid for pending/partial", () => {

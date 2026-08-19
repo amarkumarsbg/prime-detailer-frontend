@@ -87,6 +87,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useMembershipStore } from "@/store/membership-store";
 import { usePayrollStore } from "@/store/payroll-store";
+import { useInventoryStore } from "@/store/inventory-store";
 import type { Expense, Invoice } from "@/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -113,6 +114,7 @@ export function AccountingDashboard() {
   const user = useAuthStore((s) => s.user);
   const invoices = useInvoiceStore((s) => s.invoices);
   const expenses = useExpenseStore((s) => s.expenses);
+  const productPurchases = useInventoryStore((s) => s.productPurchases);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const branches = useBranchStore((s) => s.branches);
   const payrollRecords = usePayrollStore((s) => s.payrollRecords);
@@ -170,6 +172,18 @@ export function AccountingDashboard() {
         branchFilter
       ),
     [expenses, selectedBranchId, showBranchPicker, branchFilter]
+  );
+
+  const branchPurchases = useMemo(
+    () =>
+      applyBranchFilters(
+        productPurchases,
+        (p) => p.branchId ?? "",
+        selectedBranchId,
+        showBranchPicker,
+        branchFilter
+      ),
+    [productPurchases, selectedBranchId, showBranchPicker, branchFilter]
   );
 
   const branchJobs = useMemo(
@@ -269,8 +283,8 @@ export function AccountingDashboard() {
     : null;
 
   const payments = useMemo(
-    () => paymentMethodBreakdownForPeriod(branchInvoices, periodExpenses, dateFilter),
-    [branchInvoices, periodExpenses, dateFilter]
+    () => paymentMethodBreakdownForPeriod(branchInvoices, periodExpenses, dateFilter, branchPurchases),
+    [branchInvoices, periodExpenses, dateFilter, branchPurchases]
   );
 
   const trend = useMemo(

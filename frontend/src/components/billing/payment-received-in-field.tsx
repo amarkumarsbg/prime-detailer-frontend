@@ -23,6 +23,20 @@ export function bankAccountsForPaymentIn(
   return accounts.filter((a) => a.type === "bank");
 }
 
+/** Cash-on-hand accounts for vendor payouts / cash expenses. */
+export function cashAccountsForPaymentOut(accounts: CashBankAccount[]): CashBankAccount[] {
+  return accounts.filter((a) => a.type === "cash");
+}
+
+export function accountsForVendorPayment(
+  accounts: CashBankAccount[],
+  method: PaymentMethod
+): CashBankAccount[] {
+  if (method === "CASH") return cashAccountsForPaymentOut(accounts);
+  if (method === "UPI" || method === "CARD") return bankAccountsForPaymentIn(accounts);
+  return accounts;
+}
+
 export function paymentReceivedInLabel(
   accounts: CashBankAccount[],
   accountId?: string,

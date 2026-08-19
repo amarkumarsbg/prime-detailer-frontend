@@ -38,6 +38,13 @@ export function VendorStatementDialog({
 }) {
   const [payTargetId, setPayTargetId] = useState<string | null>(null);
 
+  const accountingExpenses = useMemo(() => {
+    if (!vendor) return [];
+    return [...vendor.expenses, ...vendor.purchaseLinkedExpenses].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [vendor]);
+
   const ledger = useMemo(() => {
     if (!vendor) return [];
     const purchaseRows = vendor.purchases.map((p) => ({
@@ -211,7 +218,7 @@ export function VendorStatementDialog({
               </TabsContent>
 
               <TabsContent value="expenses" className="mt-4">
-                {vendor.expenses.length === 0 ? (
+                {accountingExpenses.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">No expenses for this vendor.</p>
                 ) : (
                   <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
@@ -221,6 +228,7 @@ export function VendorStatementDialog({
                         <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
                           <th className="whitespace-nowrap px-3 py-2 font-medium">Date</th>
                           <th className="whitespace-nowrap px-3 py-2 font-medium">Title</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Source</th>
                           <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Amount</th>
                           <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Paid</th>
                           <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Due</th>
@@ -228,12 +236,13 @@ export function VendorStatementDialog({
                         </tr>
                       </thead>
                       <tbody>
-                        {[...vendor.expenses]
-                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                          .map((e) => (
+                        {accountingExpenses.map((e) => (
                             <tr key={e.id} className="border-b border-border/60 last:border-0">
                               <td className="px-3 py-2 text-muted-foreground">{formatDate(e.date)}</td>
                               <td className="px-3 py-2 font-medium">{e.title}</td>
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {e.purchaseId ? "Purchase" : "Direct"}
+                              </td>
                               <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(e.amount)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
                                 {formatCurrency(expensePaidAmount(e))}

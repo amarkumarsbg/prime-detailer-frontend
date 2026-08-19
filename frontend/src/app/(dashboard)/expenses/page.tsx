@@ -31,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
+import { expensePaidAmount, expenseOutstanding } from "@/lib/party/ledger-math";
 import { useExpenseStore } from "@/store/expense-store";
 import { useBranchStore } from "@/store/branch-store";
 import { applyBranchFilters, useBranchScope } from "@/lib/branch-scope";
@@ -81,18 +83,6 @@ function statusBadgeVariant(
     default:
       return "secondary";
   }
-}
-
-function paidAmount(e: Expense): number {
-  if (e.paymentStatus === "PAID") return e.amount;
-  if (e.paymentStatus === "PARTIAL") return e.amountPaid ?? 0;
-  return 0;
-}
-
-function payableAmount(e: Expense): number {
-  if (e.paymentStatus === "PAID") return 0;
-  if (e.paymentStatus === "PARTIAL") return Math.max(0, e.amount - (e.amountPaid ?? 0));
-  return e.amount;
 }
 
 function exportCsv(rows: Expense[]) {
@@ -203,9 +193,9 @@ function ExpensesPageContent() {
   }, [branchScopedExpenses, dateFilter, categoryFilter, statusFilter]);
 
   const kpis = useMemo(() => {
-    const total = scoped.reduce((s, e) => s + (e.purchaseId ? paidAmount(e) : e.amount), 0);
-    const totalPaid = scoped.reduce((s, e) => s + paidAmount(e), 0);
-    const payables = scoped.reduce((s, e) => s + payableAmount(e), 0);
+    const total = scoped.reduce((s, e) => s + recognizedExpenseAmount(e), 0);
+    const totalPaid = scoped.reduce((s, e) => s + expensePaidAmount(e), 0);
+    const payables = scoped.reduce((s, e) => s + expenseOutstanding(e), 0);
     const partialCount = scoped.filter((e) => e.paymentStatus === "PARTIAL").length;
     return {
       total,

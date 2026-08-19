@@ -50,8 +50,7 @@ export async function syncPurchaseToExpense(
       purchase.supplierInvoiceNumber ? ` · ${purchase.supplierInvoiceNumber}` : ""
     }`;
   const purchaseDay = (purchase.purchasedAt || new Date().toISOString()).slice(0, 10);
-  const lastPayDay = purchase.payments?.[purchase.payments.length - 1]?.paidAt?.slice(0, 10);
-  const date = paid > 0.01 ? lastPayDay || new Date().toISOString().slice(0, 10) : purchaseDay;
+  const date = purchaseDay;
 
   const existing = useExpenseStore.getState().expenses.find((e) => e.purchaseId === purchase.id);
   if (existing) {

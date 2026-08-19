@@ -2282,7 +2282,7 @@
         {
           "id": "acc-001",
           "type": "cash",
-          "displayName": "Petty cash",
+          "displayName": "Cash",
           "balance": 65000,
           "openingBalanceDate": "2026-01-16"
         },

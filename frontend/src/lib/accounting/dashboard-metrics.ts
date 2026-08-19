@@ -11,7 +11,7 @@ import {
 } from "date-fns";
 import type { ExpenseDateFilter } from "@/components/expenses/expense-date-range-picker";
 import { matchesExpenseDate } from "@/components/expenses/expense-date-range-picker";
-import { expenseOutstanding, invoiceOutstanding } from "@/lib/party/ledger-math";
+import { expenseOutstanding, expensePaidAmount, invoiceOutstanding } from "@/lib/party/ledger-math";
 import type {
   CustomerMembership,
   Expense,
@@ -21,6 +21,7 @@ import type {
   MembershipPackage,
   PaymentMethod,
   PayrollRecord,
+  ProductPurchase,
 } from "@/types";
 
 export function sumInvoicePayments(
@@ -58,23 +59,11 @@ const CASH_EXPENSE: ExpensePaymentMethod[] = ["CASH"];
 const ONLINE_EXPENSE: ExpensePaymentMethod[] = ["CARD", "UPI", "BANK_TRANSFER", "OTHER"];
 
 export function expenseAmountForMethod(e: Expense): number {
-  if (e.purchaseId) return recognizedExpenseAmount(e);
-  if (e.paymentStatus === "PENDING" || e.paymentStatus === "OVERDUE") {
-    return e.amount;
-  }
-  if (e.paymentStatus === "PARTIAL") {
-    return e.amountPaid ?? 0;
-  }
-  return e.amount;
+  return expensePaidAmount(e);
 }
 
-/** P&L / Total Expenses: vendor purchase bills count only when money is paid. */
+/** P&L / Total Expenses: full bill amount when the expense is recognized (accrual). */
 export function recognizedExpenseAmount(e: Expense): number {
-  if (e.purchaseId) {
-    if (e.paymentStatus === "PAID") return e.amount;
-    if (e.paymentStatus === "PARTIAL") return e.amountPaid ?? 0;
-    return 0;
-  }
   return e.amount;
 }
 
@@ -85,7 +74,82 @@ export function sumExpensesByMethods(
   const set = new Set(methods);
   let s = 0;
   for (const e of expenses) {
-    if (set.has(e.paymentMethod)) s += expenseAmountForMethod(e);
+    if (e.purchaseId) continue;
+    if (set.has(e.paymentMethod)) s += expensePaidAmount(e);
+  }
+  return Math.round(s * 100) / 100;
+}
+
+type CashFlowMethodScope = "cash" | "online" | "all";
+
+function purchasePaymentMatchesScope(method: PaymentMethod, scope: CashFlowMethodScope): boolean {
+  if (scope === "all") return true;
+  if (scope === "cash") return method === "CASH";
+  return method === "UPI" || method === "CARD" || method === "WALLET";
+}
+
+/** Actual vendor purchase payouts (by payment date). */
+export function sumPurchasePaymentsInPeriod(
+  purchases: ProductPurchase[],
+  filter: ExpenseDateFilter,
+  scope: CashFlowMethodScope = "all"
+): number {
+  let s = 0;
+  for (const purchase of purchases) {
+    for (const payment of purchase.payments ?? []) {
+      if (!matchesExpenseDate(payment.paidAt, filter)) continue;
+      if (!purchasePaymentMatchesScope(payment.method, scope)) continue;
+      s += payment.amount;
+    }
+  }
+  return Math.round(s * 100) / 100;
+}
+
+export function sumPurchasePayments(
+  purchases: ProductPurchase[],
+  scope: CashFlowMethodScope = "all"
+): number {
+  let s = 0;
+  for (const purchase of purchases) {
+    for (const payment of purchase.payments ?? []) {
+      if (!purchasePaymentMatchesScope(payment.method, scope)) continue;
+      s += payment.amount;
+    }
+  }
+  return Math.round(s * 100) / 100;
+}
+
+/** Direct (non-purchase) expense cash out in a period — keyed on expense date. */
+export function sumStandaloneExpenseCashOutInPeriod(
+  expenses: Expense[],
+  filter: ExpenseDateFilter,
+  methods: ExpensePaymentMethod[] | "all" = "all"
+): number {
+  const set = methods === "all" ? null : new Set(methods);
+  let s = 0;
+  for (const e of expenses) {
+    if (e.purchaseId) continue;
+    if (!matchesExpenseDate(e.date, filter)) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    if (set && !set.has(e.paymentMethod)) continue;
+    s += paid;
+  }
+  return Math.round(s * 100) / 100;
+}
+
+function sumStandaloneExpenseCashOut(
+  expenses: Expense[],
+  methods: ExpensePaymentMethod[] | "all" = "all"
+): number {
+  const set = methods === "all" ? null : new Set(methods);
+  let s = 0;
+  for (const e of expenses) {
+    if (e.purchaseId) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    if (set && !set.has(e.paymentMethod)) continue;
+    s += paid;
   }
   return Math.round(s * 100) / 100;
 }
@@ -370,11 +434,17 @@ export function buildIncomeExpenseTrend(
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
-export function paymentMethodBreakdown(invoices: Invoice[], expenses: Expense[]) {
+export function paymentMethodBreakdown(
+  invoices: Invoice[],
+  expenses: Expense[],
+  purchases: ProductPurchase[] = []
+) {
   const cashIncome = sumInvoicePayments(invoices, ["CASH"]);
   const onlineIncome = sumInvoicePayments(invoices, ONLINE_INCOME);
-  const cashExpenses = sumExpensesByMethods(expenses, CASH_EXPENSE);
-  const onlineExpenses = sumExpensesByMethods(expenses, ONLINE_EXPENSE);
+  const cashExpenses =
+    sumPurchasePayments(purchases, "cash") + sumStandaloneExpenseCashOut(expenses, CASH_EXPENSE);
+  const onlineExpenses =
+    sumPurchasePayments(purchases, "online") + sumStandaloneExpenseCashOut(expenses, ONLINE_EXPENSE);
   return {
     cashIncome,
     onlineIncome,
@@ -385,16 +455,21 @@ export function paymentMethodBreakdown(invoices: Invoice[], expenses: Expense[])
   };
 }
 
-/** Period-aware payment breakdown using payment paidAt for income. */
+/** Period-aware payment breakdown using payment paidAt for income and vendor payouts. */
 export function paymentMethodBreakdownForPeriod(
   invoices: Invoice[],
   expenses: Expense[],
-  filter: ExpenseDateFilter
+  filter: ExpenseDateFilter,
+  purchases: ProductPurchase[] = []
 ) {
   const cashIncome = sumInvoicePaymentsInPeriod(invoices, filter, ["CASH"]);
   const onlineIncome = sumInvoicePaymentsInPeriod(invoices, filter, ONLINE_INCOME);
-  const cashExpenses = sumExpensesByMethods(expenses, CASH_EXPENSE);
-  const onlineExpenses = sumExpensesByMethods(expenses, ONLINE_EXPENSE);
+  const cashExpenses =
+    sumPurchasePaymentsInPeriod(purchases, filter, "cash") +
+    sumStandaloneExpenseCashOutInPeriod(expenses, filter, CASH_EXPENSE);
+  const onlineExpenses =
+    sumPurchasePaymentsInPeriod(purchases, filter, "online") +
+    sumStandaloneExpenseCashOutInPeriod(expenses, filter, ONLINE_EXPENSE);
   return {
     cashIncome,
     onlineIncome,

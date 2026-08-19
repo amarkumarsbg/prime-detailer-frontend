@@ -36,6 +36,13 @@ export function expenseOutstanding(e: Expense): number {
   return Math.max(0, Math.round((e.amount - paid) * 100) / 100);
 }
 
+/** Cumulative cash paid against an expense bill (not P&L recognition). */
+export function expensePaidAmount(e: Expense): number {
+  if (e.paymentStatus === "PAID") return e.amount;
+  if (e.paymentStatus === "PARTIAL") return e.amountPaid ?? 0;
+  return 0;
+}
+
 export function partyDocumentsForParty(
   party: Party,
   invoices: Invoice[],

@@ -1,7 +1,7 @@
 import type { Invoice, Expense, ProductPurchase, Part } from "@/types";
 import type { CashBankAccount, CashBankTransaction } from "@/store/cash-bank-store";
 import { dateInPreset } from "@/lib/reports/report-period-presets";
-import { invoicePaidTotal } from "@/lib/party/ledger-math";
+import { invoicePaidTotal, expensePaidAmount } from "@/lib/party/ledger-math";
 import { purchaseGrandTotal } from "@/lib/inventory/purchase-math";
 import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
 
@@ -101,9 +101,9 @@ export function buildDaybookRows(
   }
 
   for (const e of expenses) {
+    if (e.purchaseId) continue;
     if (!dateInPreset(e.date, period)) continue;
-    const paid =
-      e.paymentStatus === "PAID" ? e.amount : e.paymentStatus === "PARTIAL" ? (e.amountPaid ?? 0) : 0;
+    const paid = expensePaidAmount(e);
     if (paid > 0) {
       entries.push({
         at: `${e.date}T12:00:00.000Z`,

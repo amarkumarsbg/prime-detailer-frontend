@@ -576,7 +576,7 @@ const cashBank = {
   accounts: [1, 2, 3, 4, 5].map((n) => ({
     id: `acc-00${n}`,
     type: n === 1 ? "cash" : "bank",
-    displayName: n === 1 ? "Petty cash" : `Bank account ${n}`,
+    displayName: n === 1 ? "Cash" : `Bank account ${n}`,
     balance: 50000 + n * 15000,
     openingBalanceDate: day(-90),
     ...(n > 1

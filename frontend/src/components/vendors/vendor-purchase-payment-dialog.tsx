@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  accountsForVendorPayment,
+  cashAccountsForPaymentOut,
+  needsPaymentReceivedIn,
+} from "@/components/billing/payment-received-in-field";
 import { formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useCashBankStore } from "@/store/cash-bank-store";
@@ -53,19 +58,33 @@ export function VendorPurchasePaymentDialog({
   const due = purchase ? purchaseDue(purchase) : 0;
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("CASH");
-  const [receivedInAccountId, setReceivedInAccountId] = useState("");
+  const [paidFromAccountId, setPaidFromAccountId] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const isCashPayment = method === "CASH";
+  const cashAccount = useMemo(() => cashAccountsForPaymentOut(cashBankAccounts)[0] ?? null, [cashBankAccounts]);
+  const bankAccounts = useMemo(
+    () => (isCashPayment ? [] : accountsForVendorPayment(cashBankAccounts, method)),
+    [cashBankAccounts, method, isCashPayment]
+  );
+  const resolvedAccountId = isCashPayment ? cashAccount?.id ?? "" : paidFromAccountId;
 
   useEffect(() => {
     if (!open || !purchase) return;
     setAmount(due > 0 ? String(due) : "");
     setMethod("CASH");
-    setReceivedInAccountId(
-      cashBankAccounts.find((a) => a.type === "cash")?.id ?? cashBankAccounts[0]?.id ?? ""
-    );
+    setPaidFromAccountId("");
     setReferenceNumber("");
-  }, [open, purchase, due, cashBankAccounts]);
+  }, [open, purchase, due]);
+
+  useEffect(() => {
+    if (!open || isCashPayment) return;
+    const stillValid = bankAccounts.some((a) => a.id === paidFromAccountId);
+    if (!stillValid) {
+      setPaidFromAccountId(bankAccounts[0]?.id ?? "");
+    }
+  }, [open, isCashPayment, bankAccounts, paidFromAccountId]);
 
   const submit = async () => {
     if (!purchase) return;
@@ -74,11 +93,15 @@ export function VendorPurchasePaymentDialog({
       toast.error("Enter a payment amount greater than zero.");
       return;
     }
-    if (!receivedInAccountId) {
-      toast.error("Select the Cash & Bank account this payment is paid from.");
+    if (!resolvedAccountId) {
+      toast.error(
+        isCashPayment
+          ? "No cash account found. Add one under Cash & Bank."
+          : "Select the bank account this payment is paid from."
+      );
       return;
     }
-    const account = cashBankAccounts.find((a) => a.id === receivedInAccountId);
+    const account = cashBankAccounts.find((a) => a.id === resolvedAccountId);
     setSaving(true);
     try {
       const result = recordPurchasePayment(purchase.id, {
@@ -120,6 +143,10 @@ export function VendorPurchasePaymentDialog({
       setSaving(false);
     }
   };
+
+  const paidFromHint = isCashPayment
+    ? null
+    : "Select the bank account debited for this payment.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -168,31 +195,45 @@ export function VendorPurchasePaymentDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="vendor-pay-account">Paid from account</Label>
-            {cashBankAccounts.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                No Cash &amp; Bank accounts yet. Add one under Cash &amp; Bank so this payment posts to Accounting.
-              </p>
-            ) : (
-              <Select
-                value={receivedInAccountId || undefined}
-                onValueChange={setReceivedInAccountId}
-                disabled={!purchase}
-              >
-                <SelectTrigger id="vendor-pay-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashBankAccounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          {!isCashPayment && (
+            <div className="space-y-2">
+              <Label htmlFor="vendor-pay-account">Paid from account</Label>
+              {bankAccounts.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  No bank account yet. Add one under Cash &amp; Bank.
+                </p>
+              ) : (
+                <Select
+                  value={paidFromAccountId || undefined}
+                  onValueChange={setPaidFromAccountId}
+                  disabled={!purchase}
+                >
+                  <SelectTrigger id="vendor-pay-account">
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bankAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.displayName}
+                        {needsPaymentReceivedIn(method) &&
+                        (a.accountNumberDisplay || a.bankMeta?.accountNumber)
+                          ? ` · ${a.accountNumberDisplay || a.bankMeta?.accountNumber?.slice(-4)}`
+                          : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {paidFromHint ? (
+                <p className="text-xs text-muted-foreground">{paidFromHint}</p>
+              ) : null}
+            </div>
+          )}
+          {isCashPayment && !cashAccount ? (
+            <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              No cash account yet. Add one under Cash &amp; Bank.
+            </p>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="vendor-pay-ref">Reference Number (optional)</Label>
             <Input
@@ -210,7 +251,7 @@ export function VendorPurchasePaymentDialog({
           </Button>
           <Button
             type="button"
-            disabled={!purchase || saving || !receivedInAccountId}
+            disabled={!purchase || saving || !resolvedAccountId}
             onClick={() => void submit()}
           >
             {saving ? "Posting…" : "Record Payment"}
