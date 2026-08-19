@@ -13,7 +13,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
 import { PurchaseExpandableTable } from "@/components/inventory/purchase-expandable-table";
@@ -109,7 +108,7 @@ export function VendorStatementDialog({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="space-y-4 px-6 py-4">
             {vendor.outstanding > 0.01 ? (
               <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-900/50 dark:bg-orange-950/30">
@@ -161,12 +160,14 @@ export function VendorStatementDialog({
                 {vendor.purchases.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">No purchases yet.</p>
                 ) : (
-                  <PurchaseExpandableTable
-                    purchases={[...vendor.purchases].sort(
-                      (a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
-                    )}
-                    onPay={(p) => setPayTargetId(p.id)}
-                  />
+                  <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+                    <PurchaseExpandableTable
+                      purchases={[...vendor.purchases].sort(
+                        (a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
+                      )}
+                      onPay={(p) => setPayTargetId(p.id)}
+                    />
+                  </div>
                 )}
               </TabsContent>
 
@@ -174,16 +175,17 @@ export function VendorStatementDialog({
                 {ledger.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">No ledger entries yet.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
+                  <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+                    <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full min-w-[640px] text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                          <th className="px-3 py-2 font-medium">Date</th>
-                          <th className="px-3 py-2 font-medium">Type</th>
-                          <th className="px-3 py-2 font-medium">Reference</th>
-                          <th className="px-3 py-2 text-right font-medium">Total</th>
-                          <th className="px-3 py-2 text-right font-medium">Paid</th>
-                          <th className="px-3 py-2 text-right font-medium">Due</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Date</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Type</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Reference</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Total</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Paid</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Due</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -203,6 +205,7 @@ export function VendorStatementDialog({
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )}
               </TabsContent>
@@ -211,16 +214,17 @@ export function VendorStatementDialog({
                 {vendor.expenses.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">No expenses for this vendor.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
+                  <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+                    <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full min-w-[720px] text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                          <th className="px-3 py-2 font-medium">Date</th>
-                          <th className="px-3 py-2 font-medium">Title</th>
-                          <th className="px-3 py-2 text-right font-medium">Amount</th>
-                          <th className="px-3 py-2 text-right font-medium">Paid</th>
-                          <th className="px-3 py-2 text-right font-medium">Due</th>
-                          <th className="px-3 py-2 font-medium">Status</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Date</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Title</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Amount</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Paid</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Due</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -242,12 +246,13 @@ export function VendorStatementDialog({
                           ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )}
               </TabsContent>
             </Tabs>
           </div>
-        </ScrollArea>
+        </div>
         <div className="flex shrink-0 justify-end gap-2 border-t border-border px-6 py-3">
           <Button type="button" variant="outline" onClick={onEdit}>
             Edit vendor

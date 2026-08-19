@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterCounterSaleParts,
+  partAvailableInJobCard,
   partUsedInDirectSale,
   partUsedInServices,
   togglePartUsedIn,
@@ -41,6 +42,18 @@ describe("part usedIn", () => {
     const saleOnly = { ...base, id: "c", usedIn: ["DIRECT_SALE"] as const };
     const ids = filterCounterSaleParts([both, servicesOnly, saleOnly, base]).map((p) => p.id);
     expect(ids).toEqual(["a", "c"]);
+  });
+
+  it("includes Services, Direct Sale, or both in job card picker", () => {
+    const both = { ...base, id: "a", usedIn: ["SERVICES", "DIRECT_SALE"] as const };
+    const servicesOnly = { ...base, id: "b", usedIn: ["SERVICES"] as const };
+    const saleOnly = { ...base, id: "c", usedIn: ["DIRECT_SALE"] as const };
+    const none = { ...base, id: "d", usedIn: [] as const };
+    expect(partAvailableInJobCard(both)).toBe(true);
+    expect(partAvailableInJobCard(servicesOnly)).toBe(true);
+    expect(partAvailableInJobCard(saleOnly)).toBe(true);
+    expect(partAvailableInJobCard(base)).toBe(true);
+    expect(partAvailableInJobCard(none)).toBe(false);
   });
 
   it("toggles Services and Direct Sale independently, including none selected", () => {

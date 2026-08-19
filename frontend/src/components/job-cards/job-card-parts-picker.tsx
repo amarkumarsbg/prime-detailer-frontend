@@ -26,7 +26,7 @@ import {
   validateStockConsumption,
 } from "@/lib/inventory/multi-unit";
 import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
-import { partUsedInServices } from "@/lib/inventory/part-used-in";
+import { partAvailableInJobCard } from "@/lib/inventory/part-used-in";
 import type { Part, JobCardPartItem } from "@/types";
 
 export type SelectedPartLine = {
@@ -99,7 +99,7 @@ export function JobCardPartsPicker({
 
   const filteredParts = useMemo(() => {
     return parts.filter((part) => {
-      if (!partUsedInServices(part)) return false;
+      if (!partAvailableInJobCard(part)) return false;
       if (categoryFilter !== "ALL" && part.category !== categoryFilter) return false;
       return partMatchesInventorySearch(part, partSearch);
     });
