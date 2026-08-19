@@ -58,7 +58,7 @@ import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { formatCurrency } from "@/lib/utils";
 import { normalizePhoneDigits } from "@/lib/phone";
-import type { Customer, PaymentMethod } from "@/types";
+import type { Customer, PaymentMethod, Part } from "@/types";
 
 export default function CounterSalePage() {
   const storesReady = useDashboardStoresReady();

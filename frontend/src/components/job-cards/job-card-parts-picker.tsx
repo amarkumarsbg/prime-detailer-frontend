@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Package, X, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Package, X, AlertTriangle, ChevronDown, ChevronUp, Minus, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -244,14 +244,25 @@ export function JobCardPartsPicker({
               </Select>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground shrink-0" htmlFor={`part-qty-${part.id}`}>
-              Qty
-            </label>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground shrink-0">Qty</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0 bg-background"
+              onClick={() => {
+                const current = line.quantity || 0;
+                updateLine(part.id, { quantity: Math.max(1, current - 1) });
+              }}
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
             <Input
               id={`part-qty-${part.id}`}
               type="text"
               inputMode="decimal"
+              className="h-8 w-16 text-center text-sm tabular-nums"
               value={qtyValue}
               onChange={(e) => setQtyDraft(part.id, e.target.value)}
               onBlur={(e) => commitQty(part.id, e.target.value)}
@@ -262,10 +273,21 @@ export function JobCardPartsPicker({
                   (e.target as HTMLInputElement).blur();
                 }
               }}
-              className="h-8 w-20 text-sm tabular-nums"
             />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0 bg-background"
+              onClick={() => {
+                const current = line.quantity || 0;
+                updateLine(part.id, { quantity: current + 1 });
+              }}
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
             {units.length === 1 ? (
-              <span className="text-xs text-muted-foreground">{line.unit}</span>
+              <span className="text-xs text-muted-foreground ml-1">{line.unit}</span>
             ) : null}
           </div>
           <div className="ml-auto text-right">
@@ -466,6 +488,72 @@ export function JobCardPartsPicker({
                     )}
                   </div>
                 </div>
+                {on && (
+                  <div
+                    className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {(() => {
+                      const units = getSelectableUnits(part);
+                      const line = selectedLines.find((l) => l.partId === part.id);
+                      if (!line || units.length <= 1) return null;
+                      return (
+                        <Select
+                          value={line.unit}
+                          onValueChange={(unit) => updateLine(part.id, { unit })}
+                        >
+                          <SelectTrigger className="h-7 w-[4.5rem] text-[11px] px-1.5 focus:ring-0 bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {units.map((u) => (
+                              <SelectItem key={u} value={u} className="text-xs">
+                                {u}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      );
+                    })()}
+                    {(() => {
+                      const line = selectedLines.find((l) => l.partId === part.id);
+                      if (!line) return null;
+                      return (
+                        <div className="flex items-center gap-1 ml-auto">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 bg-background"
+                            onClick={() => {
+                              if (line.quantity === 1) {
+                                togglePart(part.id);
+                              } else {
+                                updateLine(part.id, { quantity: line.quantity - 1 });
+                              }
+                            }}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-6 text-center text-xs font-semibold tabular-nums">
+                            {line.quantity}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 bg-background"
+                            onClick={() => {
+                              updateLine(part.id, { quantity: line.quantity + 1 });
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -17,6 +17,7 @@ import {
   Trash2,
   Pencil,
   Plus,
+  Minus,
   Percent,
   BookMarked,
 } from "lucide-react";
@@ -60,7 +61,8 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { formatCurrency } from "@/lib/utils";
-import { getSelectableUnits, getUnitPrice, partMatchesInventorySearch } from "@/lib/inventory/multi-unit";
+import { filterCounterSaleParts } from "@/lib/inventory/part-used-in";
+import { formatAvailableStock, getSelectableUnits, getUnitPrice, partMatchesInventorySearch } from "@/lib/inventory/multi-unit";
 import { ServiceSearchInput } from "@/components/services/searchable-service-select";
 import { buildInvoiceWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
 import {
@@ -140,17 +142,38 @@ function InvoicePartPickSelect({
             No parts match
           </div>
         ) : (
-          filtered.map((p) => (
-            <SelectItem key={p.id} value={p.id}>
-              <span className="flex flex-col gap-0.5 py-0.5 text-left">
-                <span className="text-sm leading-snug">{p.name}</span>
-                <span className="text-[11px] text-muted-foreground font-mono">
-                  SKU {p.sku} · {formatCurrency(getUnitPrice(p, getSelectableUnits(p)[0]))}/
-                  {getSelectableUnits(p)[0]}
-                </span>
-              </span>
-            </SelectItem>
-          ))
+          filtered.map((p) => {
+            const units = getSelectableUnits(p);
+            const primaryUnit = units[0] ?? p.primaryUnit;
+            const primaryPrice = getUnitPrice(p, primaryUnit);
+            const secondaryUnit = p.secondaryUnit;
+            const secondaryPrice = secondaryUnit ? getUnitPrice(p, secondaryUnit) : null;
+            const stockStr = formatAvailableStock(p);
+            
+            return (
+              <SelectItem key={p.id} value={p.id}>
+                <div className="flex flex-col gap-0.5 py-0.5 text-left w-[360px] sm:w-[480px]">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-medium leading-snug">{p.name}</span>
+                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                      {stockStr}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground font-mono flex flex-wrap gap-x-2">
+                    <span>SKU: {p.sku}</span>
+                    <span>·</span>
+                    <span>{formatCurrency(primaryPrice)}/{primaryUnit}</span>
+                    {secondaryUnit && secondaryPrice != null && (
+                      <>
+                        <span>·</span>
+                        <span>{formatCurrency(secondaryPrice)}/{secondaryUnit}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </SelectItem>
+            );
+          })
         )}
       </SelectContent>
     </Select>
@@ -291,7 +314,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const membershipPackages = useMembershipStore((s) => s.packages);
   const membershipSubscriptions = useMembershipStore((s) => s.subscriptions);
   const vehicles = useVehicleStore((s) => s.vehicles);
-  const inventoryParts = useInventoryStore((s) => s.parts);
+  const rawParts = useInventoryStore((s) => s.parts);
+  const inventoryParts = useMemo(() => filterCounterSaleParts(rawParts), [rawParts]);
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
 
   const invoice = useMemo(
@@ -1635,17 +1659,48 @@ ${businessNameVal}`;
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <div className="space-y-1.5">
                       <Label htmlFor={`edit-qty-${li.id}`}>Qty</Label>
-                      <Input
-                        id={`edit-qty-${li.id}`}
-                        type="text"
-                        inputMode="decimal"
-                        value={String(li.quantity)}
-                        onChange={(e) =>
-                          updateEditLine(li.id, {
-                            quantity: Number(e.target.value.replace(/,/g, "")) || 0,
-                          })
-                        }
-                      />
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => {
+                            const current = li.quantity || 0;
+                            updateEditLine(li.id, {
+                              quantity: Math.max(1, current - 1),
+                            });
+                          }}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          id={`edit-qty-${li.id}`}
+                          type="text"
+                          inputMode="decimal"
+                          className="text-center w-full min-w-0"
+                          value={String(li.quantity)}
+                          onChange={(e) =>
+                            updateEditLine(li.id, {
+                              quantity: Number(e.target.value.replace(/,/g, "")) || 0,
+                            })
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => {
+                            const current = li.quantity || 0;
+                            updateEditLine(li.id, {
+                              quantity: current + 1,
+                            });
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor={`edit-rate-${li.id}`}>Rate (₹)</Label>
@@ -1686,7 +1741,7 @@ ${businessNameVal}`;
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>From inventory / catalog</Label>
+                    <Label>From counter sale</Label>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <InvoicePartPickSelect
                         parts={inventoryParts}
