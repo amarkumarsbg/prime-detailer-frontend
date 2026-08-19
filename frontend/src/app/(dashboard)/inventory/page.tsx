@@ -16,7 +16,9 @@ import {
   partStockValueInr,
   stockStatusShortLabel,
 } from "@/lib/inventory-units";
-import { formatDualUnitStockEquivalent } from "@/lib/inventory/multi-unit";
+import { formatDualUnitStockEquivalent, hasDualUnitPart } from "@/lib/inventory/multi-unit";
+import { getBranchCanonicalQty } from "@/lib/inventory/branch-stock";
+import { useBranchScope } from "@/lib/branch-scope";
 import { purchaseDue } from "@/lib/inventory/purchase-math";
 import {
   Dialog,
@@ -80,9 +82,29 @@ export default function InventoryPage() {
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const parts = useInventoryStore((s) => s.parts);
+  const branchStocks = useInventoryStore((s) => s.branchStocks);
   const savedPartCategories = useInventoryStore((s) => s.partCategories);
   const updatePart = useInventoryStore((s) => s.updatePart);
   const removePart = useInventoryStore((s) => s.removePart);
+
+  const { selectedBranchId } = useBranchScope();
+
+  const getBranchScopedPart = useCallback((part: Part, branchId: string | null): Part => {
+    if (!branchId) return part;
+    const branchSecondaryQty = getBranchCanonicalQty(branchStocks, part, branchId);
+    const cloned = { ...part };
+    if (isMlTrackedPart(part)) {
+      cloned.stockQuantityMl = branchSecondaryQty;
+    } else {
+      const cf = hasDualUnitPart(part) ? part.conversionFactor : 1;
+      cloned.quantity = branchSecondaryQty / cf;
+    }
+    return cloned;
+  }, [branchStocks]);
+
+  const scopedParts = useMemo(() => {
+    return parts.map((p) => getBranchScopedPart(p, selectedBranchId));
+  }, [parts, selectedBranchId, getBranchScopedPart]);
 
   const [stockTableFilter, setStockTableFilter] = useState<StockTableFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -96,7 +118,7 @@ export default function InventoryPage() {
   }, []);
 
   const partsForTable = useMemo(() => {
-    let list = parts;
+    let list = scopedParts;
     if (activeFilter === DASHBOARD_FILTER.LOW_STOCK) {
       list = list.filter(isLowStockPart);
     }
@@ -109,7 +131,7 @@ export default function InventoryPage() {
       list = list.filter((p) => p.category === categoryFilter);
     }
     return list;
-  }, [parts, activeFilter, stockTableFilter, categoryFilter]);
+  }, [scopedParts, activeFilter, stockTableFilter, categoryFilter]);
   const catalogCategories = useMemo(
     () => mergePartCategoryNames(parts, savedPartCategories),
     [parts, savedPartCategories]
@@ -127,13 +149,13 @@ export default function InventoryPage() {
   const [deletingPart, setDeletingPart] = useState(false);
 
   const totalParts = parts.length;
-  const totalStockItems = parts.reduce((sum, p) => sum + (p.quantity > 0 || (p.stockQuantityMl ?? 0) > 0 ? 1 : 0), 0);
-  const totalValue = parts.reduce((sum, p) => sum + partStockValueInr(p), 0);
-  const lowStockCount = parts.filter((p) => {
+  const totalStockItems = scopedParts.reduce((sum, p) => sum + (p.quantity > 0 || (p.stockQuantityMl ?? 0) > 0 ? 1 : 0), 0);
+  const totalValue = scopedParts.reduce((sum, p) => sum + partStockValueInr(p), 0);
+  const lowStockCount = scopedParts.filter((p) => {
     const s = getStockStatus(p);
     return s.label === "Low Stock";
   }).length;
-  const outOfStockCount = parts.filter((p) => {
+  const outOfStockCount = scopedParts.filter((p) => {
     const s = getStockStatus(p);
     return s.label === "Out of Stock";
   }).length;
@@ -142,7 +164,7 @@ export default function InventoryPage() {
   ).length;
   const outstandingPurchases = productPurchases.reduce((sum, p) => sum + purchaseDue(p), 0);
 
-  const partsById = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
+  const partsById = useMemo(() => new Map(scopedParts.map((p) => [p.id, p])), [scopedParts]);
 
   const openDeletePart = useCallback((part: Part) => {
     setDeleteTarget(part);
@@ -408,6 +430,7 @@ export default function InventoryPage() {
         amountMl: n,
         reason: "Manual adjustment",
         performedBy,
+        branchId: selectedBranchId ?? undefined,
       });
       if (!result.ok) {
         toast.error(result.error ?? "Could not adjust stock.");
@@ -420,6 +443,7 @@ export default function InventoryPage() {
         amountCount: Math.round(n),
         reason: "Manual adjustment",
         performedBy,
+        branchId: selectedBranchId ?? undefined,
       });
       if (!result.ok) {
         toast.error(result.error ?? "Could not adjust stock.");

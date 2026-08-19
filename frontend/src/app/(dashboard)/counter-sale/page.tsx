@@ -256,6 +256,21 @@ export default function CounterSalePage() {
     setSubmitting(true);
     try {
       await addInvoice(invoice);
+      if (collected > 0.01) {
+        const cashAcc = cashBankAccounts.find((a) => a.type === "cash") ?? cashBankAccounts[0];
+        const accountId = needsPaymentReceivedIn(paymentMethod) ? receivedInAccountId : cashAcc?.id;
+        if (accountId) {
+          useCashBankStore.getState().adjustBalance({
+            accountId,
+            amount: collected,
+            add: true,
+            dateIso: now.slice(0, 10),
+            remarks: `Counter Sale ${invoice.invoiceNumber}`,
+            party: customerName,
+            mode: paymentMethod.replace(/_/g, " "),
+          });
+        }
+      }
       for (const line of cart) {
         const part = parts.find((p) => p.id === line.partId)!;
         const canonical = quantityToCanonicalSecondary(part, line.quantity, line.unit);

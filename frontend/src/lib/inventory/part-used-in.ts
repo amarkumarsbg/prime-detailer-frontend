@@ -27,9 +27,9 @@ export function partUsedInDirectSale(part: Pick<Part, "usedIn">): boolean {
   return (part.usedIn ?? []).includes("DIRECT_SALE");
 }
 
-/** Job card / booking parts picker — Services and/or Direct Sale parts. */
+/** Job card / booking parts picker — only Direct Sale (Counter Sale) parts. */
 export function partAvailableInJobCard(part: Pick<Part, "usedIn">): boolean {
-  return partUsedInServices(part) || partUsedInDirectSale(part);
+  return partUsedInDirectSale(part);
 }
 
 export function togglePartUsedIn(current: PartUsedIn[], id: PartUsedIn): PartUsedIn[] {

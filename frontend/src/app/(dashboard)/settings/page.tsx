@@ -1158,6 +1158,17 @@ export default function SettingsPage() {
                               {formatIntervalLabel(intervalMonths)} · {svc.totalYears} year
                               {svc.totalYears !== 1 ? "s" : ""}
                             </p>
+                            {svc.segmentPricing && (
+                              <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground bg-muted/40 p-2 rounded-md border border-border/30">
+                                <span>Hatchback: <strong className="text-foreground font-semibold">₹{(svc.segmentPricing.HATCHBACK ?? 0).toLocaleString("en-IN")}</strong></span>
+                                <span className="opacity-40">|</span>
+                                <span>Sedan: <strong className="text-foreground font-semibold">₹{(svc.segmentPricing.SEDAN ?? 0).toLocaleString("en-IN")}</strong></span>
+                                <span className="opacity-40">|</span>
+                                <span>SUV: <strong className="text-foreground font-semibold">₹{(svc.segmentPricing.SUV ?? 0).toLocaleString("en-IN")}</strong></span>
+                                <span className="opacity-40">|</span>
+                                <span>Bike: <strong className="text-foreground font-semibold">₹{(svc.segmentPricing.BIKE ?? 0).toLocaleString("en-IN")}</strong></span>
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className="flex flex-wrap gap-1">

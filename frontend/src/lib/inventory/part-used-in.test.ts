@@ -44,15 +44,15 @@ describe("part usedIn", () => {
     expect(ids).toEqual(["a", "c"]);
   });
 
-  it("includes Services, Direct Sale, or both in job card picker", () => {
+  it("includes Direct Sale in job card picker", () => {
     const both = { ...base, id: "a", usedIn: ["SERVICES", "DIRECT_SALE"] as const };
     const servicesOnly = { ...base, id: "b", usedIn: ["SERVICES"] as const };
     const saleOnly = { ...base, id: "c", usedIn: ["DIRECT_SALE"] as const };
     const none = { ...base, id: "d", usedIn: [] as const };
     expect(partAvailableInJobCard(both)).toBe(true);
-    expect(partAvailableInJobCard(servicesOnly)).toBe(true);
+    expect(partAvailableInJobCard(servicesOnly)).toBe(false);
     expect(partAvailableInJobCard(saleOnly)).toBe(true);
-    expect(partAvailableInJobCard(base)).toBe(true);
+    expect(partAvailableInJobCard(base)).toBe(false);
     expect(partAvailableInJobCard(none)).toBe(false);
   });
 

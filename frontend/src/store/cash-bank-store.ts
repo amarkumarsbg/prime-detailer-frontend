@@ -67,6 +67,8 @@ export interface CashBankStore {
     add: boolean;
     dateIso: string;
     remarks?: string;
+    party?: string;
+    mode?: string;
   }) => void;
   /** Debit an account (vendor payout, expense). */
   recordOutgoing: (input: {
@@ -132,7 +134,7 @@ export const useCashBankStore = create<CashBankStore>((set, get) => ({
     });
   },
 
-  adjustBalance: ({ accountId, amount, add, dateIso, remarks }) => {
+  adjustBalance: ({ accountId, amount, add, dateIso, remarks, party, mode }) => {
     if (amount <= 0) return;
     const state = get();
     const acc = state.accounts.find((a) => a.id === accountId);
@@ -146,8 +148,8 @@ export const useCashBankStore = create<CashBankStore>((set, get) => ({
       accountId,
       date: dateIso,
       rowType,
-      party: "Balance adjustment",
-      mode: "Manual",
+      party: party ?? "Balance adjustment",
+      mode: mode ?? "Manual",
       paid: add ? undefined : amount,
       received: add ? amount : undefined,
       balanceAfter: newBal,

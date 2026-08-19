@@ -72,6 +72,12 @@ export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
     reminderIntervals: [6, 12, 18, 24, 30, 36, 42, 48, 54, 60],
     totalYears: 5,
     estimateAmountInr: 45_000,
+    segmentPricing: buildHighEndSegmentPricing({
+      HATCHBACK: 40_000,
+      SEDAN: 45_000,
+      SUV: 50_000,
+      BIKE: 15_000,
+    }),
   },
   {
     id: "hes-002",
@@ -79,6 +85,12 @@ export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
     reminderIntervals: [6, 12, 18, 24, 30, 36, 42, 48, 54, 60],
     totalYears: 5,
     estimateAmountInr: 35_000,
+    segmentPricing: buildHighEndSegmentPricing({
+      HATCHBACK: 30_000,
+      SEDAN: 35_000,
+      SUV: 40_000,
+      BIKE: 10_000,
+    }),
   },
   {
     id: "hes-003",
@@ -86,6 +98,12 @@ export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
     reminderIntervals: [6, 12, 24, 36, 48, 60],
     totalYears: 5,
     estimateAmountInr: 40_000,
+    segmentPricing: buildHighEndSegmentPricing({
+      HATCHBACK: 35_000,
+      SEDAN: 40_000,
+      SUV: 45_000,
+      BIKE: 12_000,
+    }),
   },
   {
     id: "hes-004",
@@ -93,6 +111,12 @@ export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
     reminderIntervals: [12, 24, 36, 48, 60],
     totalYears: 5,
     estimateAmountInr: 8_000,
+    segmentPricing: buildHighEndSegmentPricing({
+      HATCHBACK: 6_000,
+      SEDAN: 8_000,
+      SUV: 10_000,
+      BIKE: 2_000,
+    }),
   },
   {
     id: "hes-005",
@@ -100,6 +124,12 @@ export const DEFAULT_HIGH_END_SERVICES: HighEndServiceConfig[] = [
     reminderIntervals: [12, 24, 36],
     totalYears: 3,
     estimateAmountInr: 15_000,
+    segmentPricing: buildHighEndSegmentPricing({
+      HATCHBACK: 12_000,
+      SEDAN: 15_000,
+      SUV: 18_000,
+      BIKE: 5_000,
+    }),
   },
 ];
 

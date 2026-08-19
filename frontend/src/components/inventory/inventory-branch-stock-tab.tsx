@@ -25,11 +25,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getStockStatus, isMlTrackedPart } from "@/lib/inventory-units";
-import { getCanonicalStockSecondary } from "@/lib/inventory/multi-unit";
+import { getStockStatus, isMlTrackedPart, formatPartStockQuantity } from "@/lib/inventory-units";
+import { getCanonicalStockSecondary, hasDualUnitPart, formatDualUnitStockEquivalent } from "@/lib/inventory/multi-unit";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
+import type { Part } from "@/types";
 
 type StockStatusFilter = "all" | "In Stock" | "Low Stock" | "Out of Stock";
 
@@ -64,6 +65,7 @@ type BranchStockRow = {
   minStock: number;
   location: string;
   status: string;
+  part: Part;
 };
 
 export function InventoryBranchStockTab() {
@@ -108,6 +110,7 @@ export function InventoryBranchStockTab() {
           minStock: part.reorderLevelMl ?? part.reorderLevel ?? 0,
           location: "—",
           status: catalogStatus,
+          part,
         });
         continue;
       }
@@ -115,6 +118,13 @@ export function InventoryBranchStockTab() {
         const branch = branches.find((b) => b.id === stock.branchId);
         const min = stock.minStock ?? part.reorderLevelMl ?? part.reorderLevel ?? 0;
         const status = branchStockStatus(stock.quantity, min);
+        const scopedPart = { ...part };
+        if (isMlTrackedPart(part)) {
+          scopedPart.stockQuantityMl = stock.quantity;
+        } else {
+          const cf = hasDualUnitPart(part) ? part.conversionFactor : 1;
+          scopedPart.quantity = stock.quantity / cf;
+        }
         list.push({
           id: stock.id,
           partId: part.id,
@@ -127,6 +137,7 @@ export function InventoryBranchStockTab() {
           minStock: min,
           location: stock.location ?? "—",
           status: status.label,
+          part: scopedPart,
         });
       }
     }
@@ -247,11 +258,21 @@ export function InventoryBranchStockTab() {
           {
             key: "quantity",
             label: "Quantity",
-            render: (item) => (
-              <span className="tabular-nums font-medium">
-                {item.quantity.toLocaleString("en-IN")} {item.unit}
-              </span>
-            ),
+            render: (item) => {
+              const equivalent = formatDualUnitStockEquivalent(item.part);
+              return (
+                <div className="flex flex-col gap-0.5">
+                  <span className="tabular-nums font-medium whitespace-nowrap">
+                    {formatPartStockQuantity(item.part)}
+                  </span>
+                  {equivalent && (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap leading-none mt-0.5">
+                      = {equivalent}
+                    </span>
+                  )}
+                </div>
+              );
+            },
           },
           {
             key: "minStock",
@@ -270,10 +291,10 @@ export function InventoryBranchStockTab() {
             key: "status",
             label: "Status",
             render: (item) => {
-              const s = branchStockStatus(item.quantity, item.minStock);
+              const s = getStockStatus(item.part);
               return (
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${s.className}`}>
-                  {item.status}
+                  {s.label}
                 </span>
               );
             },
@@ -305,9 +326,19 @@ export function InventoryBranchStockTab() {
                 <p className="text-xs text-muted-foreground font-mono">{item.sku}</p>
                 <p className="text-xs text-muted-foreground mt-1">{item.branchName}</p>
               </div>
-              <span className="text-sm font-semibold tabular-nums">
-                {item.quantity.toLocaleString("en-IN")} {item.unit}
-              </span>
+              <div className="text-right shrink-0">
+                <span className="text-sm font-semibold tabular-nums leading-none">
+                  {formatPartStockQuantity(item.part)}
+                </span>
+                {(() => {
+                  const eq = formatDualUnitStockEquivalent(item.part);
+                  return eq ? (
+                    <p className="text-[10px] text-muted-foreground leading-none mt-0.5 whitespace-nowrap">
+                      = {eq}
+                    </p>
+                  ) : null;
+                })()}
+              </div>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => openAdjust(item)}>
               Adjust stock

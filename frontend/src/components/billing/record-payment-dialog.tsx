@@ -162,8 +162,22 @@ export function RecordPaymentDialog({
         });
         return;
       }
-
       toast.success("Payment recorded");
+
+      // Post to Cash & Bank
+      const cashAcc = cashBankAccounts.find((a) => a.type === "cash") ?? cashBankAccounts[0];
+      const targetAccountId = paymentMethod === "CASH" ? cashAcc?.id : receivedInAccountId;
+      if (targetAccountId) {
+        useCashBankStore.getState().adjustBalance({
+          accountId: targetAccountId,
+          amount: amount,
+          add: true,
+          dateIso: paidAt.slice(0, 10),
+          remarks: `Payment received for ${invoice.invoiceNumber}`,
+          party: invoice.customerName,
+          mode: paymentMethod.replace(/_/g, " "),
+        });
+      }
 
       try {
         await useCustomerStore.getState().fetchCustomers();
