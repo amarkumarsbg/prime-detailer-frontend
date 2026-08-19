@@ -21,6 +21,8 @@ import {
   partMatchesInventorySearch,
 } from "@/lib/inventory/multi-unit";
 import type { QuotationPartLine } from "@/types";
+import { MAX_QUOTATION_PART_QTY } from "@/lib/quotation-limits";
+import { toast } from "sonner";
 
 export function quotationPartLineTotal(line: Pick<QuotationPartLine, "quantity" | "unitPrice">): number {
   return Math.round(line.quantity * line.unitPrice * 100) / 100;
@@ -55,6 +57,10 @@ export function QuotationCounterSalePartsPicker({
     const unitPrice = getUnitPrice(part, unit);
     const existing = lines.find((line) => line.partId === partId && line.unit === unit);
     if (existing) {
+      if (existing.quantity >= MAX_QUOTATION_PART_QTY) {
+        toast.error(`Maximum ${MAX_QUOTATION_PART_QTY} per part on a quotation`);
+        return;
+      }
       onLinesChange(
         lines.map((line) =>
           line.partId === partId && line.unit === unit
@@ -83,6 +89,12 @@ export function QuotationCounterSalePartsPicker({
   };
 
   const updateQuantity = (index: number, nextQty: number) => {
+    const line = lines[index];
+    if (!line) return;
+    if (nextQty > MAX_QUOTATION_PART_QTY) {
+      toast.error(`Maximum ${MAX_QUOTATION_PART_QTY} per part on a quotation`);
+      return;
+    }
     const qty = Math.max(1, nextQty);
     onLinesChange(
       lines.map((line, i) =>
@@ -106,7 +118,7 @@ export function QuotationCounterSalePartsPicker({
       <div className="space-y-1">
         <Label className="text-sm font-semibold">{title}</Label>
         <p className="text-xs text-muted-foreground">
-          Optional. Add Direct Sale parts to include in this estimate.
+          Optional. Add Direct Sale parts to include in this estimate (max {MAX_QUOTATION_PART_QTY} per part).
         </p>
       </div>
       <div className="space-y-2">
@@ -130,6 +142,10 @@ export function QuotationCounterSalePartsPicker({
               const units = getSelectableUnits(part);
               const selectedUnit = catalogueUnits[part.id] ?? units[0] ?? part.primaryUnit;
               const price = getUnitPrice(part, selectedUnit);
+              const existingLine = lines.find(
+                (line) => line.partId === part.id && line.unit === selectedUnit
+              );
+              const atQtyLimit = (existingLine?.quantity ?? 0) >= MAX_QUOTATION_PART_QTY;
               return (
                 <div key={part.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
@@ -157,7 +173,14 @@ export function QuotationCounterSalePartsPicker({
                         </SelectContent>
                       </Select>
                     )}
-                    <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => addPart(part.id)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      disabled={atQtyLimit}
+                      onClick={() => addPart(part.id)}
+                    >
                       Add
                     </Button>
                   </div>
@@ -196,6 +219,7 @@ export function QuotationCounterSalePartsPicker({
                     variant="outline"
                     size="icon"
                     className="h-7 w-7"
+                    disabled={line.quantity >= MAX_QUOTATION_PART_QTY}
                     onClick={() => updateQuantity(index, line.quantity + 1)}
                   >
                     <Plus className="h-3.5 w-3.5" />

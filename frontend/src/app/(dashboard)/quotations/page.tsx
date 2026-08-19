@@ -102,6 +102,7 @@ import {
   QuotationCounterSalePartsPicker,
   quotationPartsSubtotal,
 } from "@/components/quotations/quotation-counter-sale-parts-picker";
+import { MAX_QUOTATION_PART_QTY, MAX_QUOTATION_SERVICES } from "@/lib/quotation-limits";
 import {
   Plus,
   FileText,
@@ -581,6 +582,14 @@ export default function QuotationsPage() {
       toast.error("Add at least one service or counter sale item");
       return;
     }
+    if (formServiceIds.size > MAX_QUOTATION_SERVICES) {
+      toast.error(`You can select up to ${MAX_QUOTATION_SERVICES} services per quotation`);
+      return;
+    }
+    if (formPartLines.some((line) => line.quantity > MAX_QUOTATION_PART_QTY)) {
+      toast.error(`Counter sale parts are limited to ${MAX_QUOTATION_PART_QTY} each`);
+      return;
+    }
 
     let customerId: string;
     let customerName: string;
@@ -1033,6 +1042,10 @@ export default function QuotationsPage() {
           return rest;
         });
       } else {
+        if (next.size >= MAX_QUOTATION_SERVICES) {
+          toast.error(`You can select up to ${MAX_QUOTATION_SERVICES} services per quotation`);
+          return prev;
+        }
         next.add(serviceId);
       }
       return next;
@@ -1951,7 +1964,13 @@ export default function QuotationsPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <Label>Services</Label>
+                    <div>
+                      <Label>Services</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Select up to {MAX_QUOTATION_SERVICES} services
+                        {formServiceIds.size > 0 ? ` · ${formServiceIds.size}/${MAX_QUOTATION_SERVICES}` : ""}
+                      </p>
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
@@ -1977,6 +1996,7 @@ export default function QuotationsPage() {
                       const catalogPrice = getServicePrice(catalog, svc.id, effectiveSegment);
                       const custom = formCustomPrices[svc.id];
                       const selected = formServiceIds.has(svc.id);
+                      const atServiceLimit = !selected && formServiceIds.size >= MAX_QUOTATION_SERVICES;
                       const displayPrice = custom != null ? custom : catalogPrice;
                       return (
                         <div
@@ -1988,7 +2008,7 @@ export default function QuotationsPage() {
                               id={`svc-${svc.id}`}
                               checked={selected}
                               onCheckedChange={() => toggleService(svc.id)}
-                              disabled={!canSelectServices}
+                              disabled={!canSelectServices || atServiceLimit}
                               className="mt-0.5"
                             />
                             <div className="min-w-0 flex-1 space-y-1">
@@ -2030,6 +2050,10 @@ export default function QuotationsPage() {
                     open={addServiceOpen}
                     onOpenChange={setAddServiceOpen}
                     onCreated={(item) => {
+                      if (formServiceIds.size >= MAX_QUOTATION_SERVICES) {
+                        toast.error(`You can select up to ${MAX_QUOTATION_SERVICES} services per quotation`);
+                        return;
+                      }
                       setFormServiceIds((prev) => new Set(prev).add(item.id));
                       setServiceSearch("");
                     }}
