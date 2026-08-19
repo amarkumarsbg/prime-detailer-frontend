@@ -1118,7 +1118,7 @@ export default function DashboardPage() {
 
       {/* ——— Desktop layout (unchanged classic dashboard) ——— */}
       <div className="hidden md:block space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-muted-foreground flex items-center gap-1.5">
               <Building2 className="w-3.5 h-3.5 shrink-0" />
@@ -1132,29 +1132,41 @@ export default function DashboardPage() {
               </time>
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             <Link href="/quotations?new=true">
-              <Button variant="outline" className="bg-amber-50/50 border-amber-300 text-amber-700 hover:bg-amber-100/80 hover:text-amber-800 hover:border-amber-400 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/30">
-                <FileText className="w-4 h-4 mr-1" />
-                New Quotation
+              <Button
+                variant="ghost"
+                className="h-10 inline-flex items-center justify-center bg-gradient-to-r from-amber-500/[0.04] to-amber-600/[0.06] border border-amber-200/80 text-amber-700 hover:bg-amber-100/50 hover:text-amber-800 hover:border-amber-400 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/30 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(245,158,11,0.08)] rounded-lg font-semibold px-4 py-2"
+              >
+                <FileText className="w-4 h-4 mr-1.5 text-amber-500 shrink-0" />
+                <span className="leading-none">New Quotation</span>
               </Button>
             </Link>
             <Link href="/bookings/walk-in">
-              <Button variant="outline" className="bg-violet-50/50 border-violet-300 text-violet-700 hover:bg-violet-100/80 hover:text-violet-800 hover:border-violet-400 dark:bg-violet-950/20 dark:border-violet-900 dark:text-violet-400 dark:hover:bg-violet-950/30">
-                <CalendarCheck className="w-4 h-4 mr-1" />
-                New Booking
+              <Button
+                variant="ghost"
+                className="h-10 inline-flex items-center justify-center bg-gradient-to-r from-violet-500/[0.04] to-violet-600/[0.06] border border-violet-200/80 text-violet-700 hover:bg-violet-100/50 hover:text-violet-800 hover:border-violet-400 dark:bg-violet-950/20 dark:border-violet-900 dark:text-violet-400 dark:hover:bg-violet-950/30 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(139,92,246,0.08)] rounded-lg font-semibold px-4 py-2"
+              >
+                <CalendarCheck className="w-4 h-4 mr-1.5 text-violet-500 shrink-0" />
+                <span className="leading-none">New Booking</span>
               </Button>
             </Link>
             <Link href="/appointments?new=true">
-              <Button variant="outline" className="bg-emerald-50/50 border-emerald-300 text-emerald-700 hover:bg-emerald-100/80 hover:text-emerald-800 hover:border-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/30">
-                <Calendar className="w-4 h-4 mr-1" />
-                New Appointment
+              <Button
+                variant="ghost"
+                className="h-10 inline-flex items-center justify-center bg-gradient-to-r from-emerald-500/[0.04] to-emerald-600/[0.06] border border-emerald-200/80 text-emerald-700 hover:bg-emerald-100/50 hover:text-emerald-800 hover:border-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/30 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.08)] rounded-lg font-semibold px-4 py-2"
+              >
+                <Calendar className="w-4 h-4 mr-1.5 text-emerald-500 shrink-0" />
+                <span className="leading-none">New Appointment</span>
               </Button>
             </Link>
             <Link href="/job-cards/new">
-              <Button variant="outline" className="bg-blue-50/50 border-blue-300 text-blue-700 hover:bg-blue-100/80 hover:text-blue-800 hover:border-blue-400 dark:bg-blue-950/20 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950/30">
-                <Plus className="w-4 h-4 mr-1" />
-                New Job Card
+              <Button
+                variant="default"
+                className="h-10 inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-500 border border-blue-600 hover:from-blue-700 hover:to-blue-600 text-white transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(59,130,246,0.25)] rounded-lg font-semibold px-4 py-2"
+              >
+                <Plus className="w-4 h-4 mr-1 shrink-0" />
+                <span className="leading-none">New Job Card</span>
               </Button>
             </Link>
           </div>
