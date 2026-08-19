@@ -83,13 +83,6 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
         roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
         permissionKey: "EXPENSES",
       },
-      {
-        label: "Vendors",
-        href: "/vendors",
-        icon: Store,
-        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
-        permissionKey: "VENDORS",
-      },
       { label: "Billing", href: "/billing", icon: Receipt, permissionKey: "BILLING" },
       {
         label: "Reports",
@@ -139,6 +132,13 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
         icon: Package,
         roles: ["ADMIN", "MANAGER"],
         permissionKey: "INVENTORY",
+      },
+      {
+        label: "Vendors",
+        href: "/vendors",
+        icon: Store,
+        roles: ["SUPER_ADMIN", "ADMIN", "BRANCH_MANAGER", "MANAGER"],
+        permissionKey: "VENDORS",
       },
     ],
   },
