@@ -102,7 +102,6 @@ import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
-import { useWalletStore } from "@/store/wallet-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
 import { useInvoiceStore } from "@/store/invoice-store";
@@ -255,10 +254,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const { addJobCard, getNextJobNumber, updateJobCard } = useJobCardStore();
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const { services: highEndServices } = useHighEndServiceStore();
-  const { addTransaction } = useWalletStore();
   const {
-    referralRewardAmount,
-    newCustomerDiscount,
     businessName,
     businessAddress,
     businessPhone,
@@ -276,7 +272,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     findByPhone,
     findByEmail,
     findByReferralCode,
-    creditWallet,
     customers,
   } = useCustomerStore();
   const membershipPackagesAll = useMembershipStore((s) => s.packages);
@@ -539,6 +534,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
   useEffect(() => {
     setWizardMembershipPackageId(null);
+  }, [existingCustomerId]);
+
+  useEffect(() => {
+    if (!existingCustomerId) return;
+    setReferralCode("");
+    setReferrerInfo(null);
+    setReferralError(false);
   }, [existingCustomerId]);
 
   useEffect(() => {
@@ -1539,26 +1541,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
       custId = createdWalkIn.id;
       if (isJobCard && referrerInfo) {
-        try {
-          await creditWallet(referrerInfo.id, referralRewardAmount);
-        } catch {
-          toast.error("Customer saved but referral wallet credit failed.");
-          return;
-        }
-        addTransaction({
-          id: `wt-ref-${Date.now()}`,
-          customerId: referrerInfo.id,
-          customerName: referrerInfo.name,
-          type: "CREDIT",
-          amount: referralRewardAmount,
-          source: "REFERRAL_REWARD",
-          referenceId: custId,
-          description: `Referral reward — ${customerName.trim()} used your code`,
-          balanceAfter: 0,
-          createdAt: now,
-        });
-        toast.success("Referral applied!", {
-          description: `${referrerInfo.name} earned ${formatCurrency(referralRewardAmount)} wallet credit`,
+        toast.success("Referral code saved", {
+          description:
+            "Wallet rewards for both customers apply on the first qualifying invoice (Referrals rules).",
         });
       }
     } else {
@@ -3125,8 +3110,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         {referrerInfo && (
                           <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 mt-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            Referred by <span className="font-medium">{referrerInfo.name}</span> —{" "}
-                            {formatCurrency(newCustomerDiscount)} discount will be applied
+                            Referred by <span className="font-medium">{referrerInfo.name}</span> — wallet
+                            rewards follow Referrals rules on first invoice
                           </p>
                         )}
                         {referralError && referralCode.trim() && (

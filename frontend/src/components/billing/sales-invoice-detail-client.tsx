@@ -93,6 +93,10 @@ import {
   invoiceCarriesReferral,
   REFERRAL_EXISTING_CUSTOMER_MESSAGE,
 } from "@/lib/referral-eligibility";
+import { creditReferralWalletsForInvoice } from "@/lib/referral-wallet-credits";
+import { resolveReferralProgramRewards } from "@/lib/referral-program-rewards";
+import { useWalletStore } from "@/store/wallet-store";
+import { useReferralSettingsStore } from "@/store/referral-settings-store";
 import { DEFAULT_GST_RATE, isGstRegistered } from "@/lib/gst-tax";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
@@ -329,10 +333,9 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   );
 
   const { customers } = useCustomerStore();
+  const addWalletTransaction = useWalletStore((s) => s.addTransaction);
   const {
     gstRegistrationStatus,
-    referralRewardAmount,
-    newCustomerDiscount,
     businessName,
     businessTagline,
     businessPhone,
@@ -349,6 +352,26 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     bankUpi,
   } = useSettingsStore();
 
+  const referralProgram = useReferralSettingsStore();
+  const referralRewards = useMemo(
+    () =>
+      resolveReferralProgramRewards({
+        program: referralProgram,
+        jobSubtotalInr: invoice?.subtotal ?? 0,
+      }),
+    [
+      invoice?.subtotal,
+      referralProgram.programEnabled,
+      referralProgram.advocateRewardMode,
+      referralProgram.advocateAmount,
+      referralProgram.newCustomerRewardMode,
+      referralProgram.newCustomerAmount,
+      referralProgram.minJobAmountInr,
+    ]
+  );
+  const referralBuyerAmount = referralRewards.buyerAmount;
+  const referralAdvocateAmount = referralRewards.advocateAmount;
+
   const invoiceCustomer = useMemo(
     () => (invoice ? customers.find((c) => c.id === invoice.customerId) : null),
     [invoice, customers]
@@ -357,14 +380,17 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const canApplyReferral = useMemo(
     () =>
       Boolean(
-        invoice &&
+        referralProgram.programEnabled &&
+          invoice &&
           canApplyReferralOnInvoice({
             customer: invoiceCustomer,
             invoices,
             currentInvoiceId: invoice.id,
+            jobCards,
+            currentJobCardId: invoice.jobCardId,
           })
       ),
-    [invoice, invoiceCustomer, invoices]
+    [invoice, invoiceCustomer, invoices, jobCards, referralProgram.programEnabled]
   );
 
   const membershipForInvoice = useMemo(() => {
@@ -573,10 +599,16 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       setPointsRedeemStr(finalReward);
       setReferralCode(finalCode);
       setAppliedReferrerId(finalAdvocate);
-      setReferralDiscountApplied(finalRefDiscount);
+      setReferralDiscountApplied(hasReferralDraft ? 0 : finalRefDiscount);
       setReferralVerifiedMsg(
         finalCode
-          ? (hasReferralDraft ? "Referral code applied (unsaved draft)" : "Referral code applied")
+          ? hasReferralDraft
+            ? `Referral verified (unsaved) — wallets credit on apply`
+            : (invoice.referralDiscount || 0) > 0
+              ? "Referral discount applied"
+              : invoice.referralCodeUsed
+                ? "Referral applied (wallet credits)"
+                : "Referral code applied"
           : ""
       );
       setReferralErrorMsg("");
@@ -696,8 +728,15 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   })();
 
   const discountTotal = activeFlatDiscount + activeRewardDiscount + activeReferralDiscount;
+  const hasReferralPending =
+    Boolean(appliedReferrerId) &&
+    referralCode.trim() !== "" &&
+    !isReferralDisabled;
   const hasDiscountToApply =
-    activeFlatDiscount > 0 || activeRewardDiscount > 0 || activeReferralDiscount > 0;
+    activeFlatDiscount > 0 ||
+    activeRewardDiscount > 0 ||
+    activeReferralDiscount > 0 ||
+    hasReferralPending;
   const taxableSubtotal = Math.max(0, subtotal - discountTotal);
   const taxRate = !isGstRegistered(gstRegistrationStatus)
     ? 0
@@ -714,7 +753,16 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     if (!invoice) return;
     
     if (!canApplyReferral) {
-      setReferralErrorMsg(REFERRAL_EXISTING_CUSTOMER_MESSAGE);
+      setReferralErrorMsg(
+        !referralProgram.programEnabled
+          ? "Referral program is paused. Enable it on the Referrals page."
+          : REFERRAL_EXISTING_CUSTOMER_MESSAGE
+      );
+      return;
+    }
+
+    if (!referralRewards.ok) {
+      setReferralErrorMsg(referralRewards.reason);
       return;
     }
 
@@ -741,18 +789,20 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       return;
     }
 
-    // Valid referral!
+    // Valid referral — wallet credits on "Apply to Invoice" (not an invoice line discount)
     clearFlatDraft();
     clearPointsDraft();
     setAppliedReferrerId(referrer.id);
-    setReferralDiscountApplied(newCustomerDiscount);
-    setReferralVerifiedMsg(`Applied! Referred by ${referrer.name}`);
+    setReferralDiscountApplied(0);
+    setReferralVerifiedMsg(
+      `Verified (${referrer.name}). On apply: customer +${formatCurrency(referralBuyerAmount)} wallet, referrer +${formatCurrency(referralAdvocateAmount)} wallet.`
+    );
     toast.success(`Referral code verified: Referred by ${referrer.name}`);
 
     if (typeof window !== "undefined") {
       sessionStorage.setItem(`draft-code-${invoice.id}`, trimmed);
       sessionStorage.setItem(`draft-advocate-${invoice.id}`, referrer.id);
-      sessionStorage.setItem(`draft-refdiscount-${invoice.id}`, String(newCustomerDiscount));
+      sessionStorage.setItem(`draft-refdiscount-${invoice.id}`, "0");
     }
   };
 
@@ -782,21 +832,76 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     setIsApplying(true);
     try {
       const persistReferral = canApplyReferral || invoiceCarriesReferral(invoice);
+      const codeTrimmed = referralCode.trim();
+      const shouldCreditReferralWallets =
+        persistReferral && Boolean(appliedReferrerId) && codeTrimmed !== "";
+
+      // Referral is wallet credit for both parties — do not reduce invoice totals.
+      const savedReferralDiscount = 0;
+
       await updateInvoice(invoice.id, {
         discountAmount: activeFlatDiscount,
         rewardDiscount: activeRewardDiscount,
-        referralDiscount: persistReferral ? activeReferralDiscount : 0,
-        referralAdvocateId:
-          persistReferral && activeReferralDiscount > 0
+        referralDiscount: shouldCreditReferralWallets
+          ? savedReferralDiscount
+          : persistReferral
+            ? activeReferralDiscount
+            : 0,
+        referralAdvocateId: shouldCreditReferralWallets
+          ? appliedReferrerId || undefined
+          : persistReferral && activeReferralDiscount > 0
             ? appliedReferrerId || undefined
             : undefined,
-        referralCodeUsed:
-          persistReferral && activeReferralDiscount > 0
-            ? referralCode.trim() || undefined
+        referralCodeUsed: shouldCreditReferralWallets
+          ? codeTrimmed || undefined
+          : persistReferral && activeReferralDiscount > 0
+            ? codeTrimmed || undefined
             : undefined,
         taxAmount: taxAmount,
         grandTotal: grandTotalComputed,
       });
+
+      if (shouldCreditReferralWallets && invoiceCustomer) {
+        if (!referralRewards.ok) {
+          toast.error(referralRewards.reason);
+          return;
+        }
+        const { findByReferralCode, creditWallet, updateCustomer } =
+          useCustomerStore.getState();
+        const advocate =
+          customers.find((c) => c.id === appliedReferrerId) ||
+          findByReferralCode(codeTrimmed);
+        if (advocate) {
+          const { buyerCredited, advocateCredited } = await creditReferralWalletsForInvoice({
+            invoiceId: invoice.id,
+            buyer: invoiceCustomer,
+            advocate,
+            buyerAmount: referralBuyerAmount,
+            advocateAmount: referralAdvocateAmount,
+            referralCode: codeTrimmed,
+            transactions: useWalletStore.getState().transactions,
+            creditWallet,
+            addTransaction: addWalletTransaction,
+            getCustomer: (id) => useCustomerStore.getState().customers.find((c) => c.id === id),
+            updateCustomer,
+          });
+          if (buyerCredited || advocateCredited) {
+            toast.success("Referral wallet credits applied", {
+              description: [
+                buyerCredited
+                  ? `Customer +${formatCurrency(referralBuyerAmount)}`
+                  : null,
+                advocateCredited
+                  ? `Referrer +${formatCurrency(referralAdvocateAmount)}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            });
+          }
+        }
+      }
+
       toast.success("Invoice discounts applied successfully");
 
       if (typeof window !== "undefined") {
@@ -857,8 +962,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       totalPaid,
       remainingBalance,
       referralCode: invoiceCustomer?.referralCode,
-      referralRewardAmount,
-      newCustomerDiscount,
+      referralRewardAmount: referralAdvocateAmount,
+      newCustomerDiscount: referralBuyerAmount,
       membershipId: membershipForInvoice?.id,
       membershipPackageName,
       membershipDetails: membershipDetails ?? undefined,
@@ -885,8 +990,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     bankAccountNumber,
     bankIfsc,
     bankUpi,
-    referralRewardAmount,
-    newCustomerDiscount,
+    referralAdvocateAmount,
+    referralBuyerAmount,
     membershipForInvoice?.id,
     membershipPackageName,
     membershipDetails,
@@ -1471,7 +1576,7 @@ ${businessNameVal}`;
                 <div className={cn("space-y-1.5", isReferralDisabled && "opacity-60")}>
                   <Label htmlFor="referral-code" className="flex items-center gap-1.5 font-medium text-foreground">
                     <Ticket className="w-3.5 h-3.5 text-muted-foreground" />
-                    Referral Discount Code
+                    Referral Code
                   </Label>
                   <div className="flex gap-2">
                     <Input
@@ -1510,9 +1615,13 @@ ${businessNameVal}`;
                 </div>
                 ) : invoice && invoiceCarriesReferral(invoice) ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Referral discount already applied on this invoice.
+                    Referral already applied on this invoice (wallet credits).
                   </p>
-                ) : null}
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    {REFERRAL_EXISTING_CUSTOMER_MESSAGE}
+                  </p>
+                )}
 
                 <Separator />
 
@@ -1545,6 +1654,26 @@ ${businessNameVal}`;
                       <span>Referral Discount</span>
                       <span className="font-mono">-{formatCurrency(activeReferralDiscount)}</span>
                     </div>
+                  )}
+                  {hasReferralPending && activeReferralDiscount <= 0 && (
+                    <div className="space-y-1 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-2 text-emerald-700 dark:text-emerald-400">
+                      <div className="flex justify-between font-medium">
+                        <span>Customer wallet (referral)</span>
+                        <span className="font-mono">+{formatCurrency(referralBuyerAmount)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium">
+                        <span>Referrer wallet</span>
+                        <span className="font-mono">+{formatCurrency(referralAdvocateAmount)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {invoice &&
+                    invoiceCarriesReferral(invoice) &&
+                    !hasReferralPending &&
+                    (invoice.referralDiscount || 0) <= 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Referral wallet credits are linked to this invoice.
+                    </p>
                   )}
                   {isGstRegistered(gstRegistrationStatus) ? (
                     <>

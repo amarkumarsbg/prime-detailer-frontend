@@ -354,7 +354,7 @@ export function buildTaxInvoicePrintHtml(
       ? `<div class="referral-box">
   <p class="ref-title">YOUR REFERRAL CODE</p>
   <p class="ref-code">${escapeHtml(referralTrim)}</p>
-  <p class="ref-note">Share this code with friends. When they book their <strong>first service</strong> using your code, they save <span class="ref-save">${formatCurrency(newCustomerDiscount)}</span> and you receive <span class="ref-earn">${formatCurrency(referralRewardAmount)}</span> in your wallet.</p>
+  <p class="ref-note">Share this code with friends. When they book their <strong>first service</strong> using your code, they receive <span class="ref-save">${formatCurrency(newCustomerDiscount)}</span> and you receive <span class="ref-earn">${formatCurrency(referralRewardAmount)}</span> in your wallets.</p>
 </div>`
       : "";
 

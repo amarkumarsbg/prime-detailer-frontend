@@ -27,6 +27,8 @@ import {
   useReferralSettingsStore,
   type ReferralRewardMode,
 } from "@/store/referral-settings-store";
+import { useCustomerStore } from "@/store/customer-store";
+import { useWalletStore } from "@/store/wallet-store";
 import {
   Gift,
   IndianRupee,
@@ -129,6 +131,22 @@ export default function ReferralsPage() {
   const setMinJobAmountInr = useReferralSettingsStore((s) => s.setMinJobAmountInr);
   const resetToDefaults = useReferralSettingsStore((s) => s.resetToDefaults);
 
+  const customers = useCustomerStore((s) => s.customers);
+  const walletTransactions = useWalletStore((s) => s.transactions);
+
+  const kpi = useMemo(() => {
+    const referralsTracked = customers.filter((c) => Boolean(c.referredBy?.trim())).length;
+    const activeCodes = customers.filter((c) => Boolean(c.referralCode?.trim())).length;
+    const bonusesPaid = walletTransactions
+      .filter((t) => t.source === "REFERRAL_REWARD" && t.type === "CREDIT")
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    return {
+      referralsTracked,
+      activeCodes,
+      bonusesPaid: Math.round(bonusesPaid * 100) / 100,
+    };
+  }, [customers, walletTransactions]);
+
   const advocatePreview = useMemo(() => {
     if (advocateRewardMode === "fixed_inr") {
       const n = Number(advocateAmount);
@@ -167,7 +185,7 @@ export default function ReferralsPage() {
         <KPICard
           size="compact"
           title="Referrals tracked"
-          value={0}
+          value={kpi.referralsTracked}
           icon={Users}
           tone="violet"
           titleClassName="leading-tight"
@@ -175,7 +193,7 @@ export default function ReferralsPage() {
         <KPICard
           size="compact"
           title="Active codes"
-          value={0}
+          value={kpi.activeCodes}
           icon={Gift}
           tone="blue"
           titleClassName="leading-tight"
@@ -183,7 +201,7 @@ export default function ReferralsPage() {
         <KPICard
           size="compact"
           title="Bonuses paid out"
-          value={formatCurrency(0)}
+          value={formatCurrency(kpi.bonusesPaid)}
           icon={IndianRupee}
           tone="slate"
           className="col-span-2 lg:col-span-1"
@@ -389,9 +407,11 @@ export default function ReferralsPage() {
                 {[
                   "Referral codes are issued after a customer’s first completed visit",
                   "New customers can enter a referral code during signup or first booking",
-                  "Wallet credits post when the referred customer’s first qualifying job completes",
-                  "Percentage rewards use the qualifying invoice subtotal before tax",
+                  "Wallet credits post when staff applies the referral on the first qualifying pre-invoice (or on full payment)",
+                  "Flat or % rewards and minimum job total follow the rules on this page",
+                  "Percentage rewards use the invoice subtotal before tax",
                   "Wallet balance can offset future services at checkout",
+                  "Pausing the program blocks new referral applications until re-enabled",
                 ].map((line) => (
                   <li key={line} className="flex gap-2 sm:gap-2.5">
                     <span

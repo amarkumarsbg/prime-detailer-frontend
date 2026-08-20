@@ -33,6 +33,9 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useWalletStore } from "@/store/wallet-store";
+import { useReferralSettingsStore } from "@/store/referral-settings-store";
+import { creditReferralWalletsForInvoice } from "@/lib/referral-wallet-credits";
+import { resolveReferralProgramRewards } from "@/lib/referral-program-rewards";
 import type { PaymentMethod } from "@/types";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -64,7 +67,6 @@ export function RecordPaymentDialog({
   const customers = useCustomerStore((s) => s.customers);
   const user = useAuthStore((s) => s.user);
   const businessName = useSettingsStore((s) => s.businessName);
-  const referralRewardAmount = useSettingsStore((s) => s.referralRewardAmount);
 
   const invoice = useMemo(
     () => (invoiceId ? invoices.find((i) => i.id === invoiceId) ?? null : null),
@@ -216,18 +218,59 @@ export function RecordPaymentDialog({
           );
         }
 
-        if (latestInvoice.referralAdvocateId) {
-          const advocate = useCustomerStore
-            .getState()
-            .customers.find((c) => c.id === latestInvoice.referralAdvocateId);
-          if (advocate) {
-            const nextAdvocatePoints = (advocate.rewardPoints || 0) + referralRewardAmount;
-            await useCustomerStore.getState().updateCustomer(advocate.id, {
-              rewardPoints: nextAdvocatePoints,
+        if (latestInvoice.referralAdvocateId || latestInvoice.referralCodeUsed) {
+          const advocate = latestInvoice.referralAdvocateId
+            ? useCustomerStore
+                .getState()
+                .customers.find((c) => c.id === latestInvoice.referralAdvocateId)
+            : latestInvoice.referralCodeUsed
+              ? useCustomerStore.getState().findByReferralCode(latestInvoice.referralCodeUsed)
+              : undefined;
+          const buyer =
+            useCustomerStore.getState().customers.find((c) => c.id === latestInvoice.customerId) ||
+            customer;
+          if (advocate && buyer) {
+            const program = useReferralSettingsStore.getState();
+            const resolved = resolveReferralProgramRewards({
+              program,
+              jobSubtotalInr: latestInvoice.subtotal,
             });
-            toast.success(
-              `Referrer credited: ${advocate.name} received ${referralRewardAmount} referral reward points.`
-            );
+            if (!resolved.ok) {
+              if (program.programEnabled) {
+                toast.message("Referral rewards skipped", { description: resolved.reason });
+              }
+            } else {
+              const { creditWallet, updateCustomer } = useCustomerStore.getState();
+              const { addTransaction } = useWalletStore.getState();
+              const { buyerCredited, advocateCredited } = await creditReferralWalletsForInvoice({
+                invoiceId: latestInvoice.id,
+                buyer,
+                advocate,
+                buyerAmount: resolved.buyerAmount,
+                advocateAmount: resolved.advocateAmount,
+                referralCode: latestInvoice.referralCodeUsed || advocate.referralCode,
+                transactions: useWalletStore.getState().transactions,
+                creditWallet,
+                addTransaction,
+                getCustomer: (id) =>
+                  useCustomerStore.getState().customers.find((c) => c.id === id),
+                updateCustomer,
+              });
+              if (buyerCredited || advocateCredited) {
+                toast.success("Referral wallet credits applied", {
+                  description: [
+                    buyerCredited
+                      ? `Customer +${formatCurrency(resolved.buyerAmount)}`
+                      : null,
+                    advocateCredited
+                      ? `Referrer +${formatCurrency(resolved.advocateAmount)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                });
+              }
+            }
           }
         }
       }

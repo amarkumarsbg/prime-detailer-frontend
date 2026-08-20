@@ -49,6 +49,7 @@ async function applyInvoiceReferralGuard(
   }
 
   const invoiceId = typeof next.id === "string" ? next.id : "";
+  const jobCardId = typeof next.jobCardId === "string" ? next.jobCardId : "";
   const invoices = await listCollectionItems("invoices", { organizationId });
   const otherInvoiceCount = invoices.filter((row) => {
     if (!row || typeof row !== "object") return false;
@@ -58,11 +59,21 @@ async function applyInvoiceReferralGuard(
     return true;
   }).length;
 
+  const jobCards = await listCollectionItems("jobCards", { organizationId });
+  const otherJobCardCount = jobCards.filter((row) => {
+    if (!row || typeof row !== "object") return false;
+    const job = row as { id?: string; customerId?: string };
+    if (job.customerId !== customerId) return false;
+    if (jobCardId && job.id === jobCardId) return false;
+    return true;
+  }).length;
+
   const isNewCustomer = isNewCustomerForReferral({
     createdAt: customer.createdAt,
     totalVisits: customer.totalVisits,
     referredBy: customer.referredBy,
     otherInvoiceCount,
+    otherJobCardCount,
   });
   if (!isNewCustomer) {
     throw AppError.validation(REFERRAL_EXISTING_CUSTOMER_MESSAGE);

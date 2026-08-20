@@ -32,7 +32,7 @@ export function NewCustomerReferralCodeField({
         autoComplete="off"
       />
       <p className="text-xs text-muted-foreground">
-        New customers only. Existing customers cannot use a referral code.
+        New customers only — existing customers cannot use a referral code.
       </p>
     </div>
   );

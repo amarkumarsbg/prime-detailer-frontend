@@ -55,6 +55,19 @@ describe("isNewCustomerForReferral", () => {
     ).toBe(false);
   });
 
+  it("blocks anyone who already has another job card (existing customer)", () => {
+    expect(
+      isNewCustomerForReferral({
+        createdAt: "2026-08-18T11:00:00.000Z",
+        totalVisits: 1,
+        referredBy: "REF-AB12",
+        otherInvoiceCount: 0,
+        otherJobCardCount: 1,
+        nowMs: now,
+      })
+    ).toBe(false);
+  });
+
   it("blocks repeat visitors", () => {
     expect(
       isNewCustomerForReferral({
@@ -103,6 +116,22 @@ describe("canApplyReferralOnInvoice", () => {
           { id: "inv-2", customerId: "cust-new" },
         ],
         currentInvoiceId: "inv-2",
+        nowMs: now,
+      })
+    ).toBe(false);
+  });
+
+  it("blocks when the customer already has another job card", () => {
+    expect(
+      canApplyReferralOnInvoice({
+        customer: newCustomer,
+        invoices: [{ id: "inv-1", customerId: "cust-new" }],
+        currentInvoiceId: "inv-1",
+        jobCards: [
+          { id: "jc-old", customerId: "cust-new" },
+          { id: "jc-current", customerId: "cust-new" },
+        ],
+        currentJobCardId: "jc-current",
         nowMs: now,
       })
     ).toBe(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -158,8 +159,6 @@ export default function SettingsPage() {
   const [mechanicIncentivePercent, setMechanicIncentivePercent] = useState("5");
   const [highEndIncentivePercent, setHighEndIncentivePercent] = useState("10");
   const [incentiveCapPerJob, setIncentiveCapPerJob] = useState("5000");
-  const [referralRewardAmount, setReferralRewardAmountLocal] = useState(String(settings.referralRewardAmount));
-  const [newCustomerDiscount, setNewCustomerDiscountLocal] = useState(String(settings.newCustomerDiscount));
 
   const [reminderGeneralService, setReminderGeneralService] = useState("monthly");
   const [reminderOilChange, setReminderOilChange] = useState("3months");
@@ -682,31 +681,19 @@ export default function SettingsPage() {
                     onChange={(e) => setIncentiveCapPerJob(e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5"><Gift className="w-3.5 h-3.5" />Referral Reward Amount (₹)</Label>
-                    <Input
-                      type="number"
-                      value={referralRewardAmount}
-                      onChange={(e) => {
-                        setReferralRewardAmountLocal(e.target.value);
-                        const num = Number(e.target.value);
-                        if (!isNaN(num) && num >= 0) settings.setReferralRewardAmount(num);
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5"><IndianRupee className="w-3.5 h-3.5" />New Customer Discount (₹)</Label>
-                    <Input
-                      type="number"
-                      value={newCustomerDiscount}
-                      onChange={(e) => {
-                        setNewCustomerDiscountLocal(e.target.value);
-                        const num = Number(e.target.value);
-                        if (!isNaN(num) && num >= 0) settings.setNewCustomerDiscount(num);
-                      }}
-                    />
-                  </div>
+                <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-3 space-y-1.5 sm:col-span-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Gift className="w-3.5 h-3.5" />
+                    Referral wallet rewards
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Referrer and new-customer wallet amounts, % of job, minimum job total, and
+                    program on/off are configured on the{" "}
+                    <Link href="/referrals" className="font-medium text-primary underline-offset-2 hover:underline">
+                      Referrals
+                    </Link>{" "}
+                    page. Changes there apply immediately to pre-invoice and payment credits.
+                  </p>
                 </div>
                 <Separator />
                 <Button onClick={() => handleSave("Incentive settings")}>

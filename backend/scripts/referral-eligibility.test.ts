@@ -32,6 +32,20 @@ describe("isNewCustomerForReferral", () => {
       false
     );
   });
+
+  it("blocks when the customer already has another job card", () => {
+    assert.equal(
+      isNewCustomerForReferral({
+        createdAt: "2026-08-18T11:00:00.000Z",
+        totalVisits: 1,
+        referredBy: "REF-AB12",
+        otherInvoiceCount: 0,
+        otherJobCardCount: 1,
+        nowMs: now,
+      }),
+      false
+    );
+  });
 });
 
 describe("invoiceCarriesReferral", () => {
