@@ -202,6 +202,7 @@ export default function QuotationsPage() {
 
   // New quotation form state
   const [currentStep, setCurrentStep] = useState<"customer" | "vehicle" | "details">("customer");
+  const [quotationType, setQuotationType] = useState<"SERVICE" | "COUNTER_SALE" | "MIXED">("SERVICE");
 
   const validateCustomerStep = () => {
     if (formCustomerId) return true;
@@ -319,9 +320,9 @@ export default function QuotationsPage() {
   const [formPartLines, setFormPartLines] = useState<QuotationPartLine[]>([]);
 
   const formStepIndex =
-    currentStep === "customer" ? 1 : currentStep === "vehicle" ? 2 : 3;
+    currentStep === "customer" ? 1 : (currentStep === "vehicle" ? 2 : (quotationType === "COUNTER_SALE" ? 2 : 3));
   const formStepProgress =
-    currentStep === "customer" ? 33 : currentStep === "vehicle" ? 66 : 100;
+    currentStep === "customer" ? (quotationType === "COUNTER_SALE" ? 50 : 33) : (currentStep === "vehicle" ? 66 : 100);
   const formStepTitle =
     currentStep === "customer"
       ? "Customer Information"
@@ -444,6 +445,7 @@ export default function QuotationsPage() {
   const resetForm = () => {
     setEditingQuotation(null);
     setCurrentStep("customer");
+    setQuotationType("SERVICE");
     setLookupQuery("");
     setLookupPanelCustomers([]);
     setFormCustomerId("");
@@ -474,6 +476,16 @@ export default function QuotationsPage() {
     setFormPartLines([]);
   };
 
+  const handleQuotationTypeChange = (type: "SERVICE" | "COUNTER_SALE" | "MIXED") => {
+    setQuotationType(type);
+    if (type === "SERVICE") {
+      setFormPartLines([]);
+    } else if (type === "COUNTER_SALE") {
+      setFormServiceIds(new Set());
+      setFormCustomPrices({});
+    }
+  };
+
   const openEditQuotation = (q: Quotation, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!quotationIsEditable(q)) {
@@ -482,6 +494,7 @@ export default function QuotationsPage() {
     }
     resetForm();
     setEditingQuotation(q);
+    setQuotationType(q.source ?? "SERVICE");
     setFormCustomerId(q.customerId);
     setFormVehicleId(q.vehicleId);
     setFormSegment(q.vehicleSegment);
@@ -600,20 +613,28 @@ export default function QuotationsPage() {
     let vehicleSegment: VehicleSegment;
 
     if (hasExistingCustomer) {
-      if (!formCustomerId || !formVehicleId) {
+      if (!formCustomerId || (!formVehicleId && quotationType !== "COUNTER_SALE")) {
         toast.error("Please select customer and vehicle");
         return;
       }
       const customer = customers.find((c) => c.id === formCustomerId);
       const vehicle = vehicles.find((v) => v.id === formVehicleId);
-      if (!customer || !vehicle) return;
+      if (!customer) return;
       customerId = customer.id;
       customerName = customer.name;
       customerPhone = customer.phone;
-      vehicleId = vehicle.id;
-      vehicleRegNumber = vehicle.registrationNumber;
-      vehicleMakeModel = `${vehicle.make} ${vehicle.model}`;
-      vehicleSegment = vehicle.segment;
+      if (quotationType === "COUNTER_SALE") {
+        vehicleId = "counter-sale-placeholder";
+        vehicleRegNumber = "COUNTER";
+        vehicleMakeModel = "Counter Sale";
+        vehicleSegment = "HATCHBACK";
+      } else {
+        if (!vehicle) return;
+        vehicleId = vehicle.id;
+        vehicleRegNumber = vehicle.registrationNumber;
+        vehicleMakeModel = `${vehicle.make} ${vehicle.model}`;
+        vehicleSegment = vehicle.segment;
+      }
     } else {
       const name = newCustomerName.trim();
       const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
@@ -635,34 +656,36 @@ export default function QuotationsPage() {
         setNewCustomerPhoneError("");
       }
       let hasVehicleErrors = false;
-      if (!reg) {
-        setNewVehicleRegError("Registration is required");
-        hasVehicleErrors = true;
-      } else if (!isValidIndianVehicleRegistration(reg)) {
-        setNewVehicleRegError("Enter a valid vehicle registration");
-        hasVehicleErrors = true;
-      } else {
-        setNewVehicleRegError("");
-      }
-      if (!make) {
-        setNewVehicleMakeError("Make is required");
-        hasVehicleErrors = true;
-      } else {
-        setNewVehicleMakeError("");
-      }
-      if (!model) {
-        setNewVehicleModelError("Model is required");
-        hasVehicleErrors = true;
-      } else {
-        setNewVehicleModelError("");
-      }
-      if (!hasVehicleErrors) {
-        const regTaken = findVehicleByNormalizedReg(vehicles, reg);
-        if (regTaken) {
-          setNewVehicleRegError(
-            `${regTaken.registrationNumber} is already in the system. Select an existing customer and vehicle or use ownership transfer.`
-          );
+      if (quotationType !== "COUNTER_SALE") {
+        if (!reg) {
+          setNewVehicleRegError("Registration is required");
           hasVehicleErrors = true;
+        } else if (!isValidIndianVehicleRegistration(reg)) {
+          setNewVehicleRegError("Enter a valid vehicle registration");
+          hasVehicleErrors = true;
+        } else {
+          setNewVehicleRegError("");
+        }
+        if (!make) {
+          setNewVehicleMakeError("Make is required");
+          hasVehicleErrors = true;
+        } else {
+          setNewVehicleMakeError("");
+        }
+        if (!model) {
+          setNewVehicleModelError("Model is required");
+          hasVehicleErrors = true;
+        } else {
+          setNewVehicleModelError("");
+        }
+        if (!hasVehicleErrors) {
+          const regTaken = findVehicleByNormalizedReg(vehicles, reg);
+          if (regTaken) {
+            setNewVehicleRegError(
+              `${regTaken.registrationNumber} is already in the system. Select an existing customer and vehicle or use ownership transfer.`
+            );
+            hasVehicleErrors = true;
+          }
         }
       }
       if (hasCustomerErrors || hasVehicleErrors) {
@@ -678,11 +701,19 @@ export default function QuotationsPage() {
         newCustomerPhone.replace(/\D/g, "").length >= 10 && newCustomerPhone.startsWith("+")
           ? newCustomerPhone.trim()
           : `+91-${phoneDigits}`;
-      const vehicleIdNew = `veh-quot-${Date.now()}`;
-      vehicleId = vehicleIdNew;
-      vehicleRegNumber = reg;
-      vehicleMakeModel = `${make} ${model}`.trim();
-      vehicleSegment = formSegment;
+
+      if (quotationType === "COUNTER_SALE") {
+        vehicleId = "counter-sale-placeholder";
+        vehicleRegNumber = "COUNTER";
+        vehicleMakeModel = "Counter Sale";
+        vehicleSegment = "HATCHBACK";
+      } else {
+        const vehicleIdNew = `veh-quot-${Date.now()}`;
+        vehicleId = vehicleIdNew;
+        vehicleRegNumber = reg;
+        vehicleMakeModel = `${make} ${model}`.trim();
+        vehicleSegment = formSegment;
+      }
 
       let createdCustomer;
       try {
@@ -713,21 +744,23 @@ export default function QuotationsPage() {
       }
       customerId = createdCustomer.id;
 
-      setVehicles((prev) => [
-        ...prev,
-        {
-          id: vehicleIdNew,
-          customerId,
-          customerName,
-          registrationNumber: vehicleRegNumber,
-          make,
-          model,
-          segment: formSegment,
-          fuelType: "PETROL",
-          color: "—",
-          year: new Date().getFullYear(),
-        },
-      ]);
+      if (quotationType !== "COUNTER_SALE") {
+        setVehicles((prev) => [
+          ...prev,
+          {
+            id: vehicleId,
+            customerId,
+            customerName,
+            registrationNumber: vehicleRegNumber,
+            make,
+            model,
+            segment: formSegment,
+            fuelType: "PETROL",
+            color: "—",
+            year: new Date().getFullYear(),
+          },
+        ]);
+      }
     }
 
     const services = Array.from(formServiceIds).map((sid) => {
@@ -1312,7 +1345,7 @@ export default function QuotationsPage() {
             <div className="space-y-2 border-b pb-4 mb-4">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                  Step {formStepIndex} of 3 — {formStepTitle}
+                  Step {formStepIndex} of {quotationType === "COUNTER_SALE" ? 2 : 3} — {formStepTitle}
                 </p>
                 <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
@@ -1330,11 +1363,15 @@ export default function QuotationsPage() {
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground leading-snug">
                 <span className={cn("font-medium", currentStep === "customer" && "text-primary font-semibold")}>Customer</span>
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className={cn("font-medium", currentStep === "vehicle" && "text-primary font-semibold")}>Vehicle details</span>
+                {quotationType !== "COUNTER_SALE" && (
+                  <>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className={cn("font-medium", currentStep === "vehicle" && "text-primary font-semibold")}>Vehicle details</span>
+                  </>
+                )}
                 <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className={cn("font-medium", currentStep === "details" && "text-primary font-semibold")}>
-                  Review &amp; details
+                  Quotation details
                 </span>
               </div>
             </div>
@@ -1342,6 +1379,23 @@ export default function QuotationsPage() {
             {/* STEP 1: Customer Information */}
             {currentStep === "customer" && (
               <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="quot-type" className="text-sm font-semibold">Estimate Type</Label>
+                  <Select
+                    value={quotationType}
+                    onValueChange={(value) => handleQuotationTypeChange(value as any)}
+                  >
+                    <SelectTrigger id="quot-type" className="h-9">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SERVICE">Services Estimate</SelectItem>
+                      <SelectItem value="COUNTER_SALE">Counter Sale Estimate (Parts Only)</SelectItem>
+                      <SelectItem value="MIXED">Mixed Estimate (Services + Parts)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="quot-customer-lookup" className="text-sm font-medium">Search Existing Customer</Label>
                   <div className="relative">
@@ -1485,7 +1539,11 @@ export default function QuotationsPage() {
                     type="button"
                     onClick={() => {
                       if (validateCustomerStep()) {
-                        setCurrentStep("vehicle");
+                        if (quotationType === "COUNTER_SALE") {
+                          setCurrentStep("details");
+                        } else {
+                          setCurrentStep("vehicle");
+                        }
                       }
                     }}
                   >
@@ -1962,108 +2020,112 @@ export default function QuotationsPage() {
             {/* STEP 3: Services & Details */}
             {currentStep === "details" && (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <Label>Services</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Select up to {MAX_QUOTATION_SERVICES} services
-                        {formServiceIds.size > 0 ? ` · ${formServiceIds.size}/${MAX_QUOTATION_SERVICES}` : ""}
-                      </p>
+                {(quotationType === "SERVICE" || quotationType === "MIXED") && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <Label>Services</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Select up to {MAX_QUOTATION_SERVICES} services
+                          {formServiceIds.size > 0 ? ` · ${formServiceIds.size}/${MAX_QUOTATION_SERVICES}` : ""}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        onClick={() => setAddServiceOpen(true)}
+                      >
+                        <Plus className="mr-1 h-3.5 w-3.5" />
+                        Add services
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => setAddServiceOpen(true)}
-                    >
-                      <Plus className="mr-1 h-3.5 w-3.5" />
-                      Add services
-                    </Button>
-                  </div>
-                  <ServiceSearchInput
-                    value={serviceSearch}
-                    onChange={setServiceSearch}
-                  />
-                  <div className="rounded-lg border border-border p-3 max-h-48 overflow-y-auto space-y-2 bg-background">
-                    {filteredQuotationServices.length === 0 ? (
-                      <p className="py-3 text-center text-sm text-muted-foreground">
-                        No services match
-                      </p>
-                    ) : (
-                      filteredQuotationServices.map((svc) => {
-                      const catalogPrice = getServicePrice(catalog, svc.id, effectiveSegment);
-                      const custom = formCustomPrices[svc.id];
-                      const selected = formServiceIds.has(svc.id);
-                      const atServiceLimit = !selected && formServiceIds.size >= MAX_QUOTATION_SERVICES;
-                      const displayPrice = custom != null ? custom : catalogPrice;
-                      return (
-                        <div
-                          key={svc.id}
-                          className="rounded-md border border-transparent px-1 py-1.5 hover:bg-muted/40"
-                        >
-                          <div className="flex items-start gap-2">
-                            <Checkbox
-                              id={`svc-${svc.id}`}
-                              checked={selected}
-                              onCheckedChange={() => toggleService(svc.id)}
-                              disabled={!canSelectServices || atServiceLimit}
-                              className="mt-0.5"
-                            />
-                            <div className="min-w-0 flex-1 space-y-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <label
-                                  htmlFor={`svc-${svc.id}`}
-                                  className="text-sm font-medium leading-snug cursor-pointer text-foreground"
-                                >
-                                  {svc.name}
-                                </label>
-                                <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">
-                                  {formatCurrency(displayPrice)}
-                                </span>
+                    <ServiceSearchInput
+                      value={serviceSearch}
+                      onChange={setServiceSearch}
+                    />
+                    <div className="rounded-lg border border-border p-3 max-h-48 overflow-y-auto space-y-2 bg-background">
+                      {filteredQuotationServices.length === 0 ? (
+                        <p className="py-3 text-center text-sm text-muted-foreground">
+                          No services match
+                        </p>
+                      ) : (
+                        filteredQuotationServices.map((svc) => {
+                        const catalogPrice = getServicePrice(catalog, svc.id, effectiveSegment);
+                        const custom = formCustomPrices[svc.id];
+                        const selected = formServiceIds.has(svc.id);
+                        const atServiceLimit = !selected && formServiceIds.size >= MAX_QUOTATION_SERVICES;
+                        const displayPrice = custom != null ? custom : catalogPrice;
+                        return (
+                          <div
+                            key={svc.id}
+                            className="rounded-md border border-transparent px-1 py-1.5 hover:bg-muted/40"
+                          >
+                            <div className="flex items-start gap-2">
+                              <Checkbox
+                                id={`svc-${svc.id}`}
+                                checked={selected}
+                                onCheckedChange={() => toggleService(svc.id)}
+                                disabled={!canSelectServices || atServiceLimit}
+                                className="mt-0.5"
+                              />
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <label
+                                    htmlFor={`svc-${svc.id}`}
+                                    className="text-sm font-medium leading-snug cursor-pointer text-foreground"
+                                  >
+                                    {svc.name}
+                                  </label>
+                                  <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">
+                                    {formatCurrency(displayPrice)}
+                                  </span>
+                                </div>
+                                {selected && canSelectServices && (
+                                  <ServiceCustomPriceControl
+                                    dense
+                                    catalogPrice={catalogPrice}
+                                    customPrice={custom ?? null}
+                                    onChange={(next) => {
+                                      setFormCustomPrices((prev) => {
+                                        if (next == null) {
+                                          const { [svc.id]: _, ...rest } = prev;
+                                          return rest;
+                                        }
+                                        return { ...prev, [svc.id]: next };
+                                      });
+                                    }}
+                                  />
+                                )}
                               </div>
-                              {selected && canSelectServices && (
-                                <ServiceCustomPriceControl
-                                  dense
-                                  catalogPrice={catalogPrice}
-                                  customPrice={custom ?? null}
-                                  onChange={(next) => {
-                                    setFormCustomPrices((prev) => {
-                                      if (next == null) {
-                                        const { [svc.id]: _, ...rest } = prev;
-                                        return rest;
-                                      }
-                                      return { ...prev, [svc.id]: next };
-                                    });
-                                  }}
-                                />
-                              )}
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
-                    )}
+                        );
+                      })
+                      )}
+                    </div>
+                    <AddServicePackageDialog
+                      open={addServiceOpen}
+                      onOpenChange={setAddServiceOpen}
+                      onCreated={(item) => {
+                        if (formServiceIds.size >= MAX_QUOTATION_SERVICES) {
+                          toast.error(`You can select up to ${MAX_QUOTATION_SERVICES} services per quotation`);
+                          return;
+                        }
+                        setFormServiceIds((prev) => new Set(prev).add(item.id));
+                        setServiceSearch("");
+                      }}
+                    />
                   </div>
-                  <AddServicePackageDialog
-                    open={addServiceOpen}
-                    onOpenChange={setAddServiceOpen}
-                    onCreated={(item) => {
-                      if (formServiceIds.size >= MAX_QUOTATION_SERVICES) {
-                        toast.error(`You can select up to ${MAX_QUOTATION_SERVICES} services per quotation`);
-                        return;
-                      }
-                      setFormServiceIds((prev) => new Set(prev).add(item.id));
-                      setServiceSearch("");
-                    }}
-                  />
-                </div>
+                )}
 
-                <QuotationCounterSalePartsPicker
-                  lines={formPartLines}
-                  onLinesChange={setFormPartLines}
-                />
+                {(quotationType === "COUNTER_SALE" || quotationType === "MIXED") && (
+                  <QuotationCounterSalePartsPicker
+                    lines={formPartLines}
+                    onLinesChange={setFormPartLines}
+                  />
+                )}
 
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
                   <div className="flex justify-between text-sm">
@@ -2109,10 +2171,10 @@ export default function QuotationsPage() {
                 </div>
 
                 <div className="flex justify-between pt-3 border-t">
-                  <Button
+                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setCurrentStep("vehicle")}
+                    onClick={() => setCurrentStep(quotationType === "COUNTER_SALE" ? "customer" : "vehicle")}
                   >
                     Back
                   </Button>
