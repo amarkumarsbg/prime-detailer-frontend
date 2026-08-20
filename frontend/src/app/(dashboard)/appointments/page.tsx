@@ -238,6 +238,7 @@ export default function AppointmentsPage() {
   const [newVehicleMake, setNewVehicleMake] = useState("");
   const [newVehicleModel, setNewVehicleModel] = useState("");
   const [newVehicleSegment, setNewVehicleSegment] = useState<VehicleSegment>("HATCHBACK");
+  const [odometerReading, setOdometerReading] = useState("");
   const [formCustomerId, setFormCustomerId] = useState("");
   const [formVehicleId, setFormVehicleId] = useState("");
   const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
@@ -308,6 +309,7 @@ export default function AppointmentsPage() {
       .filter((v) => v.customerId === c.id)
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
     setFormVehicleId(owned[0]?.id ?? "");
+    setOdometerReading("");
     setLookupPanelCustomers([]);
     setNewCustomerReferralCode("");
   };
@@ -315,6 +317,7 @@ export default function AppointmentsPage() {
   const clearSelectedCustomer = () => {
     setFormCustomerId("");
     setFormVehicleId("");
+    setOdometerReading("");
   };
 
   const resetAppointmentForm = () => {
@@ -330,6 +333,7 @@ export default function AppointmentsPage() {
     setNewVehicleMake("");
     setNewVehicleModel("");
     setNewVehicleSegment("HATCHBACK");
+    setOdometerReading("");
     setFormCustomerId("");
     setFormVehicleId("");
     setAddVehicleForExistingCustomerDialogOpen(false);
@@ -452,6 +456,9 @@ export default function AppointmentsPage() {
       }
       const custId = createdCustomer.id;
       const vehId = `veh-apt-${Date.now()}`;
+      const odoParsed = odometerReading.trim()
+        ? Number.parseInt(odometerReading, 10)
+        : NaN;
       const newVehicle: Vehicle = {
         id: vehId,
         customerId: custId,
@@ -463,6 +470,7 @@ export default function AppointmentsPage() {
         fuelType: "PETROL",
         color: "—",
         year: new Date().getFullYear(),
+        ...(Number.isFinite(odoParsed) && odoParsed > 0 ? { odometer: odoParsed } : {}),
       };
       setVehicles((prev) => [newVehicle, ...prev]);
       customerId = custId;
@@ -472,6 +480,20 @@ export default function AppointmentsPage() {
       vehicleRegNumber = reg;
       vehicleMakeModel = `${make} ${model}`;
       customerFirstName = name.split(/\s+/)[0];
+    }
+
+    const odoParsedVisit = odometerReading.trim()
+      ? Number.parseInt(odometerReading, 10)
+      : NaN;
+    if (
+      hasExistingCustomer &&
+      Number.isFinite(odoParsedVisit) &&
+      odoParsedVisit > 0 &&
+      formVehicleId
+    ) {
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === formVehicleId ? { ...v, odometer: odoParsedVisit } : v))
+      );
     }
 
     const mechanic = formMechanicId ? staff.find((s) => s.id === formMechanicId) : undefined;
@@ -495,6 +517,9 @@ export default function AppointmentsPage() {
       vehicleId,
       vehicleRegNumber,
       vehicleMakeModel,
+      odometerReading: odometerReading.trim()
+        ? Number.parseInt(odometerReading, 10) || undefined
+        : undefined,
       serviceType: service.name,
       mechanicId: mechanic?.id,
       mechanicName: mechanic?.name,
@@ -904,6 +929,7 @@ export default function AppointmentsPage() {
                                   type="button"
                                   onClick={() => {
                                     setFormVehicleId(v.id);
+                                    setOdometerReading("");
                                   }}
                                   className={cn(
                                     "rounded-xl border-2 p-3 text-left transition-all flex flex-col justify-between h-28",
@@ -920,7 +946,7 @@ export default function AppointmentsPage() {
                                           {v.make} {v.model}
                                         </p>
                                         <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                          Reg: {v.registrationNumber}
+                                          {v.vinNumber ? "VIN" : "Reg"}: {v.registrationNumber}
                                         </p>
                                       </div>
                                     </div>
@@ -944,6 +970,23 @@ export default function AppointmentsPage() {
                             <p className="text-xs text-muted-foreground mt-1">Click Add New Vehicle above to register one.</p>
                           </div>
                         )}
+
+                        {formVehicleId && vehiclesForCustomer.length > 0 && (
+                          <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 space-y-1.5">
+                            <Label htmlFor="apt-garage-odometer" className="text-sm font-medium">
+                              Odometer for this visit (km)
+                            </Label>
+                            <Input
+                              id="apt-garage-odometer"
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="e.g. 45200"
+                              value={odometerReading}
+                              onChange={(e) => setOdometerReading(e.target.value)}
+                              className="h-9 max-w-xs border-input"
+                            />
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
@@ -960,6 +1003,20 @@ export default function AppointmentsPage() {
                               className="font-mono uppercase h-9"
                             />
                             <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                          </div>
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="apt-new-odometer" className="text-xs">
+                              Odometer (km)
+                            </Label>
+                            <Input
+                              id="apt-new-odometer"
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="e.g. 45200"
+                              value={odometerReading}
+                              onChange={(e) => setOdometerReading(e.target.value)}
+                              className="h-9 max-w-xs border-input"
+                            />
                           </div>
                           <div className="space-y-1.5">
                             <Label htmlFor="apt-new-seg" className="text-xs">Type</Label>
@@ -1036,6 +1093,7 @@ export default function AppointmentsPage() {
                       title="Add New Vehicle"
                       onCreated={(vehicle) => {
                         setFormVehicleId(vehicle.id);
+                        setOdometerReading("");
                       }}
                     />
 

@@ -266,6 +266,7 @@ export default function QuotationsPage() {
   const [formCustomerId, setFormCustomerId] = useState<string>("");
   const [formVehicleId, setFormVehicleId] = useState<string>("");
   const [formSegment, setFormSegment] = useState<VehicleSegment>("HATCHBACK");
+  const [odometerReading, setOdometerReading] = useState("");
   const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
 
   const brandNames = useMemo(() => getBrandNames(), [getBrandNames]);
@@ -402,6 +403,7 @@ export default function QuotationsPage() {
       .filter((v) => v.customerId === c.id)
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
     setFormVehicleId(owned[0]?.id ?? "");
+    setOdometerReading("");
     setLookupPanelCustomers([]);
     setNewCustomerReferralCode("");
     setNewCustomerNameError("");
@@ -411,6 +413,7 @@ export default function QuotationsPage() {
   const clearSelectedCustomer = () => {
     setFormCustomerId("");
     setFormVehicleId("");
+    setOdometerReading("");
   };
 
   const resetForm = () => {
@@ -422,6 +425,7 @@ export default function QuotationsPage() {
     setFormCustomerId("");
     setFormVehicleId("");
     setFormSegment("HATCHBACK");
+    setOdometerReading("");
     setAddVehicleForExistingCustomerDialogOpen(false);
     setNewCustomerName("");
     setNewCustomerPhone("");
@@ -465,6 +469,11 @@ export default function QuotationsPage() {
     setFormCustomerId(q.customerId);
     setFormVehicleId(q.vehicleId);
     setFormSegment(q.vehicleSegment);
+    setOdometerReading(
+      q.odometerReading != null && Number.isFinite(q.odometerReading)
+        ? String(q.odometerReading)
+        : ""
+    );
     setFormPartLines(q.parts ?? []);
     setFormServiceIds(new Set(q.services.map((s) => s.serviceCatalogId)));
     const customs: Record<string, number> = {};
@@ -637,6 +646,9 @@ export default function QuotationsPage() {
       customerId = createdCustomer.id;
 
       if (quotationType !== "COUNTER_SALE") {
+        const odoParsedNew = odometerReading.trim()
+          ? Number.parseInt(odometerReading, 10)
+          : NaN;
         setVehicles((prev) => [
           ...prev,
           {
@@ -650,9 +662,29 @@ export default function QuotationsPage() {
             fuelType: "PETROL",
             color: "—",
             year: new Date().getFullYear(),
+            ...(Number.isFinite(odoParsedNew) && odoParsedNew > 0
+              ? { odometer: odoParsedNew }
+              : {}),
           },
         ]);
       }
+    }
+
+    const odoParsedVisit = odometerReading.trim()
+      ? Number.parseInt(odometerReading, 10)
+      : NaN;
+    const odometerValue =
+      Number.isFinite(odoParsedVisit) && odoParsedVisit > 0 ? odoParsedVisit : undefined;
+
+    if (
+      quotationType !== "COUNTER_SALE" &&
+      odometerValue != null &&
+      hasExistingCustomer &&
+      formVehicleId
+    ) {
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === formVehicleId ? { ...v, odometer: odometerValue } : v))
+      );
     }
 
     const services = Array.from(formServiceIds).map((sid) => {
@@ -691,6 +723,7 @@ export default function QuotationsPage() {
         vehicleRegNumber,
         vehicleMakeModel,
         vehicleSegment,
+        odometerReading: quotationType === "COUNTER_SALE" ? undefined : odometerValue,
         services,
         parts,
         subtotal: formCalculations.subtotal,
@@ -737,6 +770,7 @@ export default function QuotationsPage() {
       vehicleRegNumber,
       vehicleMakeModel,
       vehicleSegment,
+      odometerReading: quotationType === "COUNTER_SALE" ? undefined : odometerValue,
       services,
       parts,
       subtotal: formCalculations.subtotal,
@@ -880,6 +914,7 @@ export default function QuotationsPage() {
       vehicleRegNumber: q.vehicleRegNumber,
       vehicleMakeModel: q.vehicleMakeModel,
       vehicleSegment: q.vehicleSegment,
+      odometerReading: q.odometerReading,
       status: "RECEIVED",
       reportedIssues: `Converted from quotation ${q.quotationNumber}`,
       expectedDelivery: new Date(Date.now() + 86400000).toISOString(),
@@ -1474,6 +1509,7 @@ export default function QuotationsPage() {
                               onClick={() => {
                                 setFormVehicleId(v.id);
                                 setFormSegment(v.segment);
+                                setOdometerReading("");
                               }}
                               className={cn(
                                 "rounded-xl border-2 p-3 text-left transition-all flex flex-col justify-between h-28",
@@ -1490,7 +1526,7 @@ export default function QuotationsPage() {
                                       {v.make} {v.model}
                                     </p>
                                     <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                      Reg: {v.registrationNumber}
+                                      {v.vinNumber ? "VIN" : "Reg"}: {v.registrationNumber}
                                     </p>
                                   </div>
                                 </div>
@@ -1512,6 +1548,23 @@ export default function QuotationsPage() {
                         <Car className="w-8 h-8 mx-auto text-muted-foreground/60 mb-2" />
                         <p className="text-sm font-medium">No vehicles registered for this customer</p>
                         <p className="text-xs text-muted-foreground mt-1">Click Add New Vehicle above to register one.</p>
+                      </div>
+                    )}
+
+                    {formVehicleId && customerVehicles.length > 0 && (
+                      <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 space-y-1.5">
+                        <Label htmlFor="quot-garage-odometer" className="text-sm font-medium">
+                          Odometer for this visit (km)
+                        </Label>
+                        <Input
+                          id="quot-garage-odometer"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="e.g. 45200"
+                          value={odometerReading}
+                          onChange={(e) => setOdometerReading(e.target.value)}
+                          className="h-9 max-w-xs border-input"
+                        />
                       </div>
                     )}
                   </div>
@@ -1539,6 +1592,20 @@ export default function QuotationsPage() {
                         ) : (
                           <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
                         )}
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="quot-new-odometer" className="text-xs">
+                          Odometer (km)
+                        </Label>
+                        <Input
+                          id="quot-new-odometer"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="e.g. 45200"
+                          value={odometerReading}
+                          onChange={(e) => setOdometerReading(e.target.value)}
+                          className="h-9 max-w-xs border-input"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="quot-new-make" className="text-xs">Make *</Label>
@@ -1645,6 +1712,7 @@ export default function QuotationsPage() {
                   onCreated={(vehicle) => {
                     setFormVehicleId(vehicle.id);
                     setFormSegment(vehicle.segment);
+                    setOdometerReading("");
                   }}
                 />
 

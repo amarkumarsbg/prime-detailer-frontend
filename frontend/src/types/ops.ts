@@ -81,6 +81,8 @@ export interface PickupDropRequest {
   /** Copied from job when known; used in customer WhatsApp. */
   vehicleMakeModel?: string;
   vehicleRegNumber?: string;
+  /** Odometer at pickup/drop create time (km), optional. */
+  odometerReading?: number;
   /** For WhatsApp; optional for legacy persisted rows (phone may appear in notes). */
   customerPhone?: string;
   address: string;

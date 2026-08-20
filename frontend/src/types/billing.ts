@@ -28,6 +28,8 @@ export interface Quotation {
   vehicleRegNumber: string;
   vehicleMakeModel: string;
   vehicleSegment: VehicleSegment;
+  /** Odometer at quotation create time (km), optional. */
+  odometerReading?: number;
   /** Defaults to service quotation when omitted (legacy rows). */
   source?: QuotationSource;
   services: {

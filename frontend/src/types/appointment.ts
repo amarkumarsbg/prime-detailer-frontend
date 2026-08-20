@@ -23,6 +23,8 @@ export interface Appointment {
   vehicleId: string;
   vehicleRegNumber: string;
   vehicleMakeModel: string;
+  /** Odometer at appointment create time (km), optional. */
+  odometerReading?: number;
   serviceType: string;
   mechanicId?: string;
   mechanicName?: string;

@@ -112,6 +112,7 @@ export function buildJobCardFromAppointment(params: {
     vehicleRegNumber: apt.vehicleRegNumber,
     vehicleMakeModel: apt.vehicleMakeModel,
     vehicleSegment,
+    odometerReading: apt.odometerReading,
     mechanicId: apt.mechanicId,
     mechanicName: apt.mechanicName,
     status: "RECEIVED",

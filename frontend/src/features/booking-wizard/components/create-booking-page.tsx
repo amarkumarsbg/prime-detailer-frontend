@@ -3216,17 +3216,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     }}
                     className="h-9 max-w-xs"
                   />
-                  {selectedVehicleObj?.odometer != null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Last recorded: {selectedVehicleObj.odometer.toLocaleString("en-IN")} km — enter
-                      the current reading for this job.
-                    </p>
-                  )}
-                  {selectedVehicleObj?.odometer == null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Optional. Saved on this job card and updates the vehicle record.
-                    </p>
-                  )}
                 </div>
               )}
 

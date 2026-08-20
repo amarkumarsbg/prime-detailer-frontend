@@ -158,6 +158,7 @@ export default function PickupDropPage() {
   const [vehicleMake, setVehicleMake] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment>("HATCHBACK");
+  const [odometerReading, setOdometerReading] = useState("");
 
   const [extraBrands, setExtraBrands] = useState<string[]>([]);
   const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
@@ -407,12 +408,14 @@ export default function PickupDropPage() {
       .filter((v) => v.customerId === c.id)
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
     setSelectedVehicleId(owned[0]?.id ?? "");
+    setOdometerReading("");
     setLookupPanelCustomers([]);
   };
 
   const clearSelectedCustomer = () => {
     setExistingCustomerId(null);
     setSelectedVehicleId(null);
+    setOdometerReading("");
   };
 
   const scopedRequests = useMemo(
@@ -466,6 +469,7 @@ export default function PickupDropPage() {
     setVehicleMake("");
     setVehicleModel("");
     setVehicleSegment("HATCHBACK");
+    setOdometerReading("");
     setExtraBrands([]);
     setExtraModelsByBrand({});
     setNewBrandOpen(false);
@@ -568,7 +572,30 @@ export default function PickupDropPage() {
       notes: combinedNotes || undefined,
       vehicleMakeModel: vehicleMakeModelStr || undefined,
       vehicleRegNumber: vehicleRegNumberStr || undefined,
+      odometerReading: odometerReading.trim()
+        ? Number.parseInt(odometerReading, 10) || undefined
+        : undefined,
     };
+
+    // Persist visit odometer on the selected / matched vehicle when provided
+    const odoParsed = odometerReading.trim()
+      ? Number.parseInt(odometerReading, 10)
+      : NaN;
+    if (Number.isFinite(odoParsed) && odoParsed > 0) {
+      if (hasExistingCustomer && selectedVehicleId) {
+        setVehicles((prev) =>
+          prev.map((v) => (v.id === selectedVehicleId ? { ...v, odometer: odoParsed } : v))
+        );
+      } else if (regStored) {
+        setVehicles((prev) =>
+          prev.map((v) =>
+            normalizeRegistrationNumber(v.registrationNumber) === regStored
+              ? { ...v, odometer: odoParsed }
+              : v
+          )
+        );
+      }
+    }
 
     const pickupDriver =
       pickupDriverId !== "unassigned" ? staff.find((d) => d.id === pickupDriverId) : undefined;
@@ -1025,6 +1052,7 @@ export default function PickupDropPage() {
                               type="button"
                               onClick={() => {
                                 setSelectedVehicleId(v.id);
+                                setOdometerReading("");
                               }}
                               className={cn(
                                 "rounded-xl border-2 p-3 text-left transition-all flex flex-col justify-between h-28",
@@ -1041,7 +1069,7 @@ export default function PickupDropPage() {
                                       {v.make} {v.model}
                                     </p>
                                     <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                      Reg: {v.registrationNumber}
+                                      {v.vinNumber ? "VIN" : "Reg"}: {v.registrationNumber}
                                     </p>
                                   </div>
                                 </div>
@@ -1065,6 +1093,23 @@ export default function PickupDropPage() {
                         <p className="text-xs text-muted-foreground mt-1">Click Add New Vehicle above to register one.</p>
                       </div>
                     )}
+
+                    {selectedVehicleId && vehiclesForCustomer.length > 0 && (
+                      <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 space-y-1.5">
+                        <Label htmlFor="pd-garage-odometer" className="text-sm font-medium">
+                          Odometer for this visit (km)
+                        </Label>
+                        <Input
+                          id="pd-garage-odometer"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="e.g. 45200"
+                          value={odometerReading}
+                          onChange={(e) => setOdometerReading(e.target.value)}
+                          className="h-9 max-w-xs border-input"
+                        />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
@@ -1081,6 +1126,20 @@ export default function PickupDropPage() {
                           className="font-mono uppercase h-9 border-input"
                         />
                         <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="pd-new-odometer" className="text-xs">
+                          Odometer (km)
+                        </Label>
+                        <Input
+                          id="pd-new-odometer"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="e.g. 45200"
+                          value={odometerReading}
+                          onChange={(e) => setOdometerReading(e.target.value)}
+                          className="h-9 max-w-xs border-input"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="pd-new-seg" className="text-xs">Type</Label>
@@ -1473,6 +1532,7 @@ export default function PickupDropPage() {
         title="Add New Vehicle"
         onCreated={(vehicle) => {
           setSelectedVehicleId(vehicle.id);
+          setOdometerReading("");
         }}
       />
 
