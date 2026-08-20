@@ -74,6 +74,7 @@ interface AddVehicleFormData {
   year: number;
   customerId: string;
   notes?: string;
+  odometer?: number;
 }
 
 function formatFuelLabel(fuel: FuelType): string {
@@ -162,6 +163,7 @@ export default function VehiclesPage() {
       color: data.color,
       year: data.year,
       notes: data.notes || undefined,
+      odometer: data.odometer ? Number(data.odometer) : undefined,
     };
     setVehicles((prev) => [newVehicle, ...prev]);
     reset();
@@ -410,21 +412,31 @@ export default function VehiclesPage() {
           >
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-3 sm:space-y-4 sm:py-4">
               <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="registrationNumber">Registration Number</Label>
-                  <Input
-                    id="registrationNumber"
-                    placeholder="KA-01-AB-1234"
-                    maxLength={16}
-                    {...register("registrationNumber", {
-                      required: "Required",
-                      validate: (v) =>
-                        isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_ERROR_SHORT,
-                    })}
-                  />
-                  {errors.registrationNumber && (
-                    <p className="text-xs text-destructive">{errors.registrationNumber.message}</p>
-                  )}
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="registrationNumber">Registration Number</Label>
+                    <Input
+                      id="registrationNumber"
+                      placeholder="KA-01-AB-1234"
+                      maxLength={16}
+                      {...register("registrationNumber", {
+                        required: "Required",
+                        validate: (v) =>
+                          isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_ERROR_SHORT,
+                      })}
+                    />
+                    {errors.registrationNumber && (
+                      <p className="text-xs text-destructive">{errors.registrationNumber.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="odometer">Odometer (km)</Label>
+                    <Input id="odometer" type="number" placeholder="e.g. 25000" {...register("odometer")} />
+                    {errors.odometer && (
+                      <p className="text-xs text-destructive">{errors.odometer.message}</p>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="customerId">Customer</Label>
@@ -575,6 +587,7 @@ export default function VehiclesPage() {
                       <p className="text-xs text-destructive">{errors.year.message}</p>
                     )}
                   </div>
+
                 </div>
               </div>
 

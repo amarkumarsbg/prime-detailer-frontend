@@ -138,6 +138,7 @@ import type {
   Customer,
   Vehicle,
   VehicleSegment,
+  FuelType,
   ServiceCatalogItem,
   InspectionPhoto,
   MembershipTier,
@@ -309,6 +310,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment | "">("");
+  const [vehicleVariant, setVehicleVariant] = useState("");
+  const [vehicleFuelType, setVehicleFuelType] = useState<FuelType>("PETROL");
+  const [vehicleColor, setVehicleColor] = useState("");
+  const [vehicleYear, setVehicleYear] = useState(() => String(new Date().getFullYear()));
+  const [vehicleNotes, setVehicleNotes] = useState("");
+  const [vehicleOdometer, setVehicleOdometer] = useState("");
   const [bookingWhen, setBookingWhen] = useState(() =>
     isWalkIn ? datetimeLocalValue(new Date()) : ""
   );
@@ -784,6 +791,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleBrand("");
     setVehicleModel("");
     setVehicleSegment("");
+    setVehicleVariant("");
+    setVehicleFuelType("PETROL");
+    setVehicleColor("");
+    setVehicleYear(String(new Date().getFullYear()));
+    setVehicleNotes("");
+    setVehicleOdometer("");
   };
 
   const doneAddVehiclePopup = () => {
@@ -816,7 +829,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
     const cust = customers.find((c) => c.id === existingCustomerId);
     const inferredSeg = getModelSegment(vehicleBrand, vehicleModel);
-    const seg: VehicleSegment = inferredSeg ?? "HATCHBACK";
+    const seg: VehicleSegment = (vehicleSegment || inferredSeg || "HATCHBACK") as VehicleSegment;
     const rb = brandNames.find((b) => b.toLowerCase() === brandTrim.toLowerCase()) ?? brandTrim;
     const newId = `veh-${Date.now()}`;
     const newVehicle: Vehicle = {
@@ -826,10 +839,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       registrationNumber: regStored,
       make: rb,
       model: modelTrim,
+      variant: vehicleVariant.trim() || undefined,
       segment: seg,
-      fuelType: "PETROL",
-      color: "—",
-      year: new Date().getFullYear(),
+      fuelType: vehicleFuelType,
+      color: vehicleColor.trim() || "—",
+      year: Number(vehicleYear) || new Date().getFullYear(),
+      notes: vehicleNotes.trim() || undefined,
+      odometer: vehicleOdometer.trim() ? Number(vehicleOdometer) : undefined,
     };
     setVehicles((prev) => [newVehicle, ...prev]);
     setVehicleBrand(rb);
@@ -840,6 +856,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setAddingNewVehicle(false);
     skipAddVehicleCancelOnCloseRef.current = true;
     setAddVehiclePopupOpen(false);
+    
+    if (vehicleOdometer.trim()) {
+      setOdometerReading(vehicleOdometer.trim());
+    }
+
+    // Clear state
+    setVehicleVariant("");
+    setVehicleFuelType("PETROL");
+    setVehicleColor("");
+    setVehicleYear(String(new Date().getFullYear()));
+    setVehicleNotes("");
+    setVehicleOdometer("");
+    
     toast.success("Vehicle saved", { description: "It appears in your garage above." });
   };
 
@@ -3256,27 +3285,40 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,720px)]")}>
               <DialogHeader className={dialogMobileSheetHeaderClasses}>
                 <DialogTitle>Add New Vehicle</DialogTitle>
-                <DialogDescription>
-                  Enter registration, brand, and model. Use + New if a brand or model is not in the list.
-                </DialogDescription>
               </DialogHeader>
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
                 <div className="space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicle-reg-popup" className="text-foreground">
-                      Registration Number
-                    </Label>
-                    <Input
-                      id="vehicle-reg-popup"
-                      value={vehicleNumber}
-                      onChange={(e) => setVehicleNumber(sanitizeVehicleRegistrationInput(e.target.value))}
-                      placeholder="e.g. KA01AB1234"
-                      maxLength={16}
-                      className="h-10 rounded-md"
-                      required
-                      autoCapitalize="characters"
-                    />
-                    <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-reg-popup" className="text-foreground">
+                        Registration Number <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="vehicle-reg-popup"
+                        value={vehicleNumber}
+                        onChange={(e) => setVehicleNumber(sanitizeVehicleRegistrationInput(e.target.value))}
+                        placeholder="e.g. KA01AB1234"
+                        maxLength={16}
+                        className="h-10 rounded-md"
+                        required
+                        autoCapitalize="characters"
+                      />
+                      <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-odometer-popup" className="text-foreground">
+                        Odometer (km)
+                      </Label>
+                      <Input
+                        id="vehicle-odometer-popup"
+                        type="number"
+                        value={vehicleOdometer}
+                        onChange={(e) => setVehicleOdometer(e.target.value)}
+                        placeholder="e.g. 25000"
+                        className="h-10 rounded-md"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
@@ -3376,6 +3418,114 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  {/* Variant */}
+                  <div className="space-y-2">
+                    <Label htmlFor="vehicle-variant-popup" className="text-foreground">
+                      Variant (optional)
+                    </Label>
+                    <Input
+                      id="vehicle-variant-popup"
+                      value={vehicleVariant}
+                      onChange={(e) => setVehicleVariant(e.target.value)}
+                      placeholder="e.g. VXI"
+                      className="h-10 rounded-md"
+                    />
+                  </div>
+
+                  {/* Fuel Type & Segment */}
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-fuel-popup" className="text-foreground">
+                        Fuel Type <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={vehicleFuelType}
+                        onValueChange={(v) => setVehicleFuelType(v as any)}
+                        required
+                      >
+                        <SelectTrigger id="vehicle-fuel-popup" className="h-10 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PETROL">PETROL</SelectItem>
+                          <SelectItem value="DIESEL">DIESEL</SelectItem>
+                          <SelectItem value="ELECTRIC">ELECTRIC</SelectItem>
+                          <SelectItem value="CNG">CNG</SelectItem>
+                          <SelectItem value="HYBRID">HYBRID</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-segment-popup" className="text-foreground">
+                        Segment <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={vehicleSegment}
+                        onValueChange={(v) => setVehicleSegment(v as any)}
+                        required
+                      >
+                        <SelectTrigger id="vehicle-segment-popup" className="h-10 w-full">
+                          <SelectValue placeholder="Select segment" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="HATCHBACK">HATCHBACK</SelectItem>
+                          <SelectItem value="SEDAN">SEDAN</SelectItem>
+                          <SelectItem value="SUV">SUV</SelectItem>
+                          <SelectItem value="MUV">MUV</SelectItem>
+                          <SelectItem value="LUXURY">LUXURY</SelectItem>
+                          <SelectItem value="BIKE">BIKE</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Color & Year */}
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-color-popup" className="text-foreground">
+                        Color
+                      </Label>
+                      <Input
+                        id="vehicle-color-popup"
+                        value={vehicleColor}
+                        onChange={(e) => setVehicleColor(e.target.value)}
+                        placeholder="e.g. White"
+                        className="h-10 rounded-md"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-year-popup" className="text-foreground">
+                        Year
+                      </Label>
+                      <Input
+                        id="vehicle-year-popup"
+                        type="number"
+                        value={vehicleYear}
+                        onChange={(e) => setVehicleYear(e.target.value)}
+                        className="h-10 rounded-md"
+                      />
+                    </div>
+                  </div>
+
+
+
+                  {/* Notes */}
+                  <div className="space-y-2">
+                    <Label htmlFor="vehicle-notes-popup" className="text-foreground">
+                      Notes (optional)
+                    </Label>
+                    <Textarea
+                      id="vehicle-notes-popup"
+                      value={vehicleNotes}
+                      onChange={(e) => setVehicleNotes(e.target.value)}
+                      placeholder="Additional notes..."
+                      rows={3}
+                      className="rounded-md resize-none"
+                    />
                   </div>
                 </div>
               </div>

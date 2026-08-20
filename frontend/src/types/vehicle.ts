@@ -22,6 +22,7 @@ export interface Vehicle {
   color: string;
   year: number;
   notes?: string;
+  odometer?: number;
   /** Outgoing owners in chronological order (matches ownership_transfers from_customer chain). */
   previousOwners?: {
     customerId: string;

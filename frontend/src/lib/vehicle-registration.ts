@@ -21,7 +21,7 @@ export const INDIAN_VEHICLE_REG_ERROR_SHORT =
 
 /** Longer hint for toasts / helper text. */
 export const INDIAN_VEHICLE_REG_HINT =
-  "Indian registration: state code + district + series + number (e.g. KA-01-AB-1234), or Bharat series 22BH5678KA. Only A–Z, 0–9, and hyphens.";
+  "Format: KA-01-AB-1234 or 22BH1234AA (letters, numbers, hyphens only)";
 
 /** Strips invalid characters while typing; caps length for typical plates. */
 export function sanitizeVehicleRegistrationInput(raw: string): string {
