@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -33,9 +34,10 @@ import { buildOwnershipTimeline } from "@/lib/ownership-transfers";
 import type { OwnershipTimelineItem } from "@/lib/ownership-transfers";
 import { toast } from "sonner";
 import { pushActivityLog } from "@/lib/activity-log-helper";
-import { ArrowLeft, Bell, AlertTriangle, Clock, Calendar, Wrench, Droplets, Disc3, Snowflake, Battery, Shield, FileCheck, UserPlus } from "lucide-react";
+import { ArrowLeft, Bell, AlertTriangle, Clock, Calendar, Wrench, Droplets, Disc3, Snowflake, Battery, Shield, FileCheck, UserPlus, Edit, Trash2 } from "lucide-react";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import type { JobCard, Vehicle } from "@/types";
+import { EditVehicleDialog } from "../page";
 
 function normalizeJobCardStatus(status: string): JobCard["status"] {
   const map: Record<string, string> = {};
@@ -62,6 +64,12 @@ export default function VehicleDetailPage() {
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicleList = useVehicleStore((s) => s.setVehicles);
   const storeJobCards = useJobCardStore((s) => s.jobCards);
+  const customers = useCustomerStore((s) => s.customers);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [extraBrands, setExtraBrands] = useState<string[]>([]);
+  const [extraModels, setExtraModels] = useState<Record<string, Array<{ name: string }>>>({});
 
   const vehicle = useMemo(
     () => vehicleList.find((v) => v.id === vehicleId) ?? null,
@@ -113,19 +121,40 @@ export default function VehicleDetailPage() {
                 {vehicle.variant && ` ${vehicle.variant}`}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {vehicle.segment && (
-                <Badge variant="outline">{vehicle.segment.replace(/_/g, " ")}</Badge>
-              )}
-              <Badge variant="secondary">{vehicle.fuelType}</Badge>
-              <span className="text-sm text-muted-foreground">{vehicle.year}</span>
-              <span className="flex items-center gap-1.5 text-sm">
-                <span
-                  className="size-4 rounded-full shrink-0 border border-border"
-                  style={{ backgroundColor: hex }}
-                />
-                {vehicle.color}
-              </span>
+            <div className="flex flex-col sm:items-end gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {vehicle.segment && (
+                  <Badge variant="outline">{vehicle.segment.replace(/_/g, " ")}</Badge>
+                )}
+                <Badge variant="secondary">{vehicle.fuelType}</Badge>
+                <span className="text-sm text-muted-foreground">{vehicle.year}</span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <span
+                    className="size-4 rounded-full shrink-0 border border-border"
+                    style={{ backgroundColor: hex }}
+                  />
+                  {vehicle.color}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 sm:pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Edit className="mr-1.5 h-4 w-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  Delete
+                </Button>
+              </div>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-4 text-sm">
@@ -201,6 +230,60 @@ export default function VehicleDetailPage() {
           </div>
         )}
       </div>
+
+      {editOpen && (
+        <EditVehicleDialog
+          vehicle={vehicle}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          customers={customers}
+          extraBrands={extraBrands}
+          setExtraBrands={setExtraBrands}
+          extraModels={extraModels}
+          setExtraModels={setExtraModels}
+          onSave={(updated) => {
+            setVehicleList((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
+            setEditOpen(false);
+            toast.success("Vehicle updated", { description: `${updated.registrationNumber} has been updated.` });
+          }}
+        />
+      )}
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete vehicle?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete vehicle{" "}
+              <span className="font-semibold text-foreground">
+                {vehicle.registrationNumber}
+              </span>{" "}
+              ({vehicle.make} {vehicle.model})? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                setVehicleList((prev) => prev.filter((v) => v.id !== vehicle.id));
+                setDeleteOpen(false);
+                toast.success("Vehicle deleted");
+                router.push("/vehicles");
+              }}
+            >
+              Delete vehicle
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -506,6 +589,7 @@ function VehicleReminders({ vehicleId }: { vehicleId: string }) {
           );
         })}
       </div>
+
     </div>
   );
 }

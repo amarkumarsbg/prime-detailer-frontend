@@ -322,6 +322,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleInsuranceDueDate, setVehicleInsuranceDueDate] = useState("");
   const [vehicleIdentifierType, setVehicleIdentifierType] = useState<"REG" | "VIN">("REG");
   const [vehicleIdentifierValue, setVehicleIdentifierValue] = useState("");
+  const [showMoreVehicleDetails, setShowMoreVehicleDetails] = useState(true);
 
   useEffect(() => {
     if (vehicleIdentifierType === "VIN") {
@@ -1761,10 +1762,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           registrationNumber: regStored,
           make: vehicleBrand.trim(),
           model: vehicleModel.trim() || "—",
+          variant: vehicleVariant.trim() || undefined,
           segment: seg,
-          fuelType: "PETROL",
-          color: "—",
-          year: new Date().getFullYear(),
+          fuelType: vehicleFuelType,
+          color: vehicleColor.trim() || "—",
+          year: Number(vehicleYear) || new Date().getFullYear(),
+          notes: vehicleNotes.trim() || undefined,
+          insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
+          insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
+          insuranceDueDate: vehicleInsuranceDueDate || undefined,
+          vinNumber: vehicleIdentifierType === "VIN" ? regStored : undefined,
         },
         ...prev,
       ]);
@@ -3169,20 +3176,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
               {showInlineVehicleDetailsForm && (
                 <div className="space-y-5">
-                  <div className="flex gap-3 rounded-lg border border-sky-200 bg-sky-50/90 px-4 py-3.5 dark:border-sky-800 dark:bg-sky-950/40">
-                    <div
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-500 text-white shadow-sm"
-                      aria-hidden
-                    >
-                      <Plus className="h-5 w-5 stroke-[2.5]" />
-                    </div>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="font-semibold text-sky-950 dark:text-sky-50">Adding New Vehicle</p>
-                      <p className="text-sm text-sky-800/90 dark:text-sky-200/90">
-                        Fill in the vehicle details below
-                      </p>
-                    </div>
-                  </div>
 
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
                     <div className="space-y-2">
@@ -3335,6 +3328,159 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       </Select>
                     </div>
                   </div>
+
+
+                      {/* Variant */}
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-variant-inline" className="text-foreground">
+                          Variant (optional)
+                        </Label>
+                        <Input
+                          id="vehicle-variant-inline"
+                          value={vehicleVariant}
+                          onChange={(e) => setVehicleVariant(e.target.value)}
+                          placeholder="e.g. VXI"
+                          className="h-10 rounded-md"
+                        />
+                      </div>
+
+                      {/* Fuel Type & Segment */}
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="vehicle-fuel-inline" className="text-foreground">
+                            Fuel Type <span className="text-destructive">*</span>
+                          </Label>
+                          <Select
+                            value={vehicleFuelType}
+                            onValueChange={(v) => setVehicleFuelType(v as any)}
+                            required
+                          >
+                            <SelectTrigger id="vehicle-fuel-inline" className="h-10 w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PETROL">PETROL</SelectItem>
+                              <SelectItem value="DIESEL">DIESEL</SelectItem>
+                              <SelectItem value="ELECTRIC">ELECTRIC</SelectItem>
+                              <SelectItem value="CNG">CNG</SelectItem>
+                              <SelectItem value="HYBRID">HYBRID</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="vehicle-segment-inline" className="text-foreground">
+                            Segment <span className="text-destructive">*</span>
+                          </Label>
+                          <Select
+                            value={vehicleSegment}
+                            onValueChange={(v) => setVehicleSegment(v as any)}
+                            required
+                          >
+                            <SelectTrigger id="vehicle-segment-inline" className="h-10 w-full">
+                              <SelectValue placeholder="Select segment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="HATCHBACK">HATCHBACK</SelectItem>
+                              <SelectItem value="SEDAN">SEDAN</SelectItem>
+                              <SelectItem value="SUV">SUV</SelectItem>
+                              <SelectItem value="MUV">MUV</SelectItem>
+                              <SelectItem value="LUXURY">LUXURY</SelectItem>
+                              <SelectItem value="BIKE">BIKE</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Color & Year */}
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="vehicle-color-inline" className="text-foreground">
+                            Color
+                          </Label>
+                          <Input
+                            id="vehicle-color-inline"
+                            value={vehicleColor}
+                            onChange={(e) => setVehicleColor(e.target.value)}
+                            placeholder="e.g. White"
+                            className="h-10 rounded-md"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="vehicle-year-inline" className="text-foreground">
+                            Year
+                          </Label>
+                          <Input
+                            id="vehicle-year-inline"
+                            type="number"
+                            value={vehicleYear}
+                            onChange={(e) => setVehicleYear(e.target.value)}
+                            className="h-10 rounded-md"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Insurance details */}
+                      <div className="space-y-3 pt-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Insurance details
+                        </p>
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="vehicle-insurance-provider-inline" className="text-foreground">
+                              Insurance Provider
+                            </Label>
+                            <Input
+                              id="vehicle-insurance-provider-inline"
+                              value={vehicleInsuranceProvider}
+                              onChange={(e) => setVehicleInsuranceProvider(e.target.value)}
+                              placeholder="e.g. HDFC Ergo"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="vehicle-insurance-policy-inline" className="text-foreground">
+                              Policy Number
+                            </Label>
+                            <Input
+                              id="vehicle-insurance-policy-inline"
+                              value={vehicleInsurancePolicyNumber}
+                              onChange={(e) => setVehicleInsurancePolicyNumber(e.target.value)}
+                              placeholder="e.g. POL123456"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="vehicle-insurance-due-inline" className="text-foreground">
+                            Insurance Due Date
+                          </Label>
+                          <Input
+                            id="vehicle-insurance-due-inline"
+                            type="date"
+                            value={vehicleInsuranceDueDate}
+                            onChange={(e) => setVehicleInsuranceDueDate(e.target.value)}
+                            className="h-10 rounded-md w-full date-input-icon-end pr-9"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Notes */}
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-notes-inline" className="text-foreground">
+                          Notes (optional)
+                        </Label>
+                        <Textarea
+                          id="vehicle-notes-inline"
+                          value={vehicleNotes}
+                          onChange={(e) => setVehicleNotes(e.target.value)}
+                          placeholder="Additional notes..."
+                          rows={3}
+                          className="rounded-md resize-none"
+                        />
+                      </div>
                 </div>
               )}
 
