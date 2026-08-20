@@ -38,6 +38,7 @@ import {
   PaymentReceivedInField,
 } from "@/components/billing/payment-received-in-field";
 import { useCashBankStore } from "@/store/cash-bank-store";
+import { maxWalletRedeemForPayment, MAX_WALLET_REDEEM_INR } from "@/lib/wallet-redeem";
 import type { Invoice, PaymentMethod } from "@/types";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -141,7 +142,11 @@ export function CustomerCreditCheckDialog({
     const maxPay = balanceDue(targetInvoice);
 
     const walletAmountUsed = useWallet
-      ? Math.min(invoiceCustomer?.walletBalance || 0, maxPay)
+      ? maxWalletRedeemForPayment({
+          walletBalance: invoiceCustomer?.walletBalance || 0,
+          amountDue: maxPay,
+          walletAlreadyUsedOnInvoice: targetInvoice.walletAmountUsed || 0,
+        })
       : 0;
 
     const remainingPayable = maxPay - walletAmountUsed;
@@ -331,6 +336,20 @@ export function CustomerCreditCheckDialog({
               const invoiceCustomer = useCustomerStore.getState().customers.find((c) => c.id === targetInvoice.customerId);
               if (invoiceCustomer && invoiceCustomer.walletBalance > 0) {
                 const remainingBalance = balanceDue(targetInvoice);
+                const walletRedeemable = maxWalletRedeemForPayment({
+                  walletBalance: invoiceCustomer.walletBalance,
+                  amountDue: remainingBalance,
+                  walletAlreadyUsedOnInvoice: targetInvoice.walletAmountUsed || 0,
+                });
+                if (walletRedeemable <= 0) {
+                  return (
+                    <p className="text-[11px] text-muted-foreground">
+                      { (targetInvoice.walletAmountUsed || 0) >= MAX_WALLET_REDEEM_INR
+                        ? `Wallet redeem limit of ₹${MAX_WALLET_REDEEM_INR} already used on this invoice.`
+                        : null }
+                    </p>
+                  );
+                }
                 return (
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -344,9 +363,7 @@ export function CustomerCreditCheckDialog({
                           onChange={(e) => {
                             const checked = e.target.checked;
                             setUseWallet(checked);
-                            const walletUse = checked
-                              ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
-                              : 0;
+                            const walletUse = checked ? walletRedeemable : 0;
                             setPaymentAmount(String(Math.max(0, Math.round((remainingBalance - walletUse) * 100) / 100)));
                           }}
                           className="rounded border-border text-primary focus:ring-primary h-4 w-4"
@@ -354,6 +371,9 @@ export function CustomerCreditCheckDialog({
                         Use Wallet Balance
                       </label>
                     </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Max ₹{MAX_WALLET_REDEEM_INR} wallet redeemable per invoice.
+                    </p>
                     {useWallet && (
                       <div className="text-xs space-y-1 pt-1 border-t border-emerald-500/10 font-mono text-muted-foreground">
                         <div className="flex justify-between">
@@ -362,11 +382,11 @@ export function CustomerCreditCheckDialog({
                         </div>
                         <div className="flex justify-between text-rose-500">
                           <span>Wallet Used:</span>
-                          <span>-₹{Math.min(invoiceCustomer.walletBalance, remainingBalance)}</span>
+                          <span>-₹{walletRedeemable}</span>
                         </div>
                         <div className="flex justify-between font-bold text-foreground">
                           <span>Amount to Pay:</span>
-                          <span>₹{Math.max(0, Math.round((remainingBalance - Math.min(invoiceCustomer.walletBalance, remainingBalance)) * 100) / 100)}</span>
+                          <span>₹{Math.max(0, Math.round((remainingBalance - walletRedeemable) * 100) / 100)}</span>
                         </div>
                       </div>
                     )}
@@ -392,7 +412,11 @@ export function CustomerCreditCheckDialog({
               const invoiceCustomer = useCustomerStore.getState().customers.find((c) => c.id === targetInvoice.customerId);
               const remainingBalance = balanceDue(targetInvoice);
               const walletUse = useWallet && invoiceCustomer
-                ? Math.min(invoiceCustomer.walletBalance, remainingBalance)
+                ? maxWalletRedeemForPayment({
+                    walletBalance: invoiceCustomer.walletBalance,
+                    amountDue: remainingBalance,
+                    walletAlreadyUsedOnInvoice: targetInvoice.walletAmountUsed || 0,
+                  })
                 : 0;
               const inputAmt = Number(paymentAmount) || 0;
               const targetBalance = remainingBalance - walletUse;

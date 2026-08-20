@@ -36,6 +36,7 @@ import { useWalletStore } from "@/store/wallet-store";
 import { useReferralSettingsStore } from "@/store/referral-settings-store";
 import { creditReferralWalletsForInvoice } from "@/lib/referral-wallet-credits";
 import { resolveReferralProgramRewards } from "@/lib/referral-program-rewards";
+import { maxWalletRedeemForPayment, MAX_WALLET_REDEEM_INR } from "@/lib/wallet-redeem";
 import type { PaymentMethod } from "@/types";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -123,7 +124,11 @@ export function RecordPaymentDialog({
         (invoice.walletAmountUsed || 0);
 
       const walletAmountUsed = useWallet
-        ? Math.min(customer?.walletBalance || 0, dialogRemainingBalance)
+        ? maxWalletRedeemForPayment({
+            walletBalance: customer?.walletBalance || 0,
+            amountDue: dialogRemainingBalance,
+            walletAlreadyUsedOnInvoice: invoice.walletAmountUsed || 0,
+          })
         : 0;
 
       const extraAmount =
@@ -299,9 +304,14 @@ export function RecordPaymentDialog({
     }
   };
 
-  const walletUse = useWallet
-    ? Math.min(customer?.walletBalance || 0, dialogRemainingBalance)
+  const walletRedeemable = customer
+    ? maxWalletRedeemForPayment({
+        walletBalance: customer.walletBalance || 0,
+        amountDue: dialogRemainingBalance,
+        walletAlreadyUsedOnInvoice: invoice?.walletAmountUsed || 0,
+      })
     : 0;
+  const walletUse = useWallet ? walletRedeemable : 0;
   const inputAmt = Number(paymentAmount) || 0;
   const targetBalance = dialogRemainingBalance - walletUse;
   const extra =
@@ -325,7 +335,7 @@ export function RecordPaymentDialog({
             <p className="text-sm text-destructive">Invoice not found.</p>
           )}
 
-          {customer && customer.walletBalance > 0 && (
+          {customer && walletRedeemable > 0 && (
             <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
@@ -338,9 +348,7 @@ export function RecordPaymentDialog({
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setUseWallet(checked);
-                      const walletAmt = checked
-                        ? Math.min(customer.walletBalance, dialogRemainingBalance)
-                        : 0;
+                      const walletAmt = checked ? walletRedeemable : 0;
                       setPaymentAmount(
                         String(
                           Math.max(0, Math.round((dialogRemainingBalance - walletAmt) * 100) / 100)
@@ -352,6 +360,13 @@ export function RecordPaymentDialog({
                   Use Wallet Balance
                 </label>
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                Max ₹{MAX_WALLET_REDEEM_INR} wallet redeemable per invoice
+                {(invoice?.walletAmountUsed || 0) > 0
+                  ? ` (₹${invoice?.walletAmountUsed} already used)`
+                  : ""}
+                .
+              </p>
               {useWallet && (
                 <div className="space-y-1 border-t border-emerald-500/10 pt-1 font-mono text-xs text-muted-foreground">
                   <div className="flex justify-between">
@@ -360,9 +375,7 @@ export function RecordPaymentDialog({
                   </div>
                   <div className="flex justify-between text-rose-500">
                     <span>Wallet Used:</span>
-                    <span>
-                      -₹{Math.min(customer.walletBalance, dialogRemainingBalance)}
-                    </span>
+                    <span>-₹{walletRedeemable}</span>
                   </div>
                   <div className="flex justify-between font-bold text-foreground">
                     <span>Amount to Pay:</span>
@@ -370,11 +383,7 @@ export function RecordPaymentDialog({
                       ₹
                       {Math.max(
                         0,
-                        Math.round(
-                          (dialogRemainingBalance -
-                            Math.min(customer.walletBalance, dialogRemainingBalance)) *
-                            100
-                        ) / 100
+                        Math.round((dialogRemainingBalance - walletRedeemable) * 100) / 100
                       )}
                     </span>
                   </div>
@@ -383,6 +392,14 @@ export function RecordPaymentDialog({
             </div>
           )}
 
+          {customer &&
+            customer.walletBalance > 0 &&
+            walletRedeemable <= 0 &&
+            (invoice?.walletAmountUsed || 0) >= MAX_WALLET_REDEEM_INR && (
+              <p className="text-[11px] text-muted-foreground">
+                Wallet redeem limit of ₹{MAX_WALLET_REDEEM_INR} already used on this invoice.
+              </p>
+            )}
           <div className="space-y-2">
             <Label htmlFor="record-payment-amount">Amount (₹)</Label>
             <Input
