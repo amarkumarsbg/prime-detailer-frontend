@@ -193,13 +193,14 @@ function ExpensesPageContent() {
   }, [branchScopedExpenses, dateFilter, categoryFilter, statusFilter]);
 
   const kpis = useMemo(() => {
-    const total = scoped.reduce((s, e) => s + recognizedExpenseAmount(e), 0);
-    const totalPaid = scoped.reduce((s, e) => s + expensePaidAmount(e), 0);
+    /** Cash paid — same basis as Accounting → Total Expenses. */
+    const total = scoped.reduce((s, e) => s + expensePaidAmount(e), 0);
     const payables = scoped.reduce((s, e) => s + expenseOutstanding(e), 0);
+    const billed = scoped.reduce((s, e) => s + recognizedExpenseAmount(e), 0);
     const partialCount = scoped.filter((e) => e.paymentStatus === "PARTIAL").length;
     return {
       total,
-      totalPaid,
+      billed,
       payables,
       partialCount,
       expenseCount: scoped.length,
@@ -455,7 +456,7 @@ function ExpensesPageContent() {
           size="compact"
           title="Total Expenses"
           value={formatCurrency(kpis.total)}
-          subtitle={`${kpis.expenseCount} expense(s)`}
+          subtitle="Cash paid in period"
           icon={IndianRupee}
           tone="blue"
           titleClassName="text-[11px] leading-tight sm:text-xs"
@@ -463,9 +464,9 @@ function ExpensesPageContent() {
         />
         <KPICard
           size="compact"
-          title="Total Paid"
-          value={formatCurrency(kpis.totalPaid)}
-          subtitle="Including partial"
+          title="Total Billed"
+          value={formatCurrency(kpis.billed)}
+          subtitle={`${kpis.expenseCount} expense(s)`}
           icon={FileCheck}
           tone="emerald"
           titleClassName="text-[11px] leading-tight sm:text-xs"

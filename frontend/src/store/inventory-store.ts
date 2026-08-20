@@ -458,6 +458,18 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       grandTotal: totals.grandTotal,
       amountPaid,
       paymentStatus,
+      /** Seed payment row so Accounting cash-out matches Expenses paid amount. */
+      payments:
+        amountPaid > 0.01
+          ? [
+              {
+                id: `ppay-${id}-initial`,
+                amount: amountPaid,
+                method: "CASH" as const,
+                paidAt: input.purchasedAt || new Date().toISOString(),
+              },
+            ]
+          : [],
       reference: input.supplierInvoiceNumber,
     };
 

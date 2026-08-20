@@ -67,10 +67,48 @@ export function recognizedExpenseAmount(e: Expense): number {
   return e.amount;
 }
 
+/** Cash recorded on the purchase row (payment lines, or legacy amountPaid). */
+function purchaseRecordedCashTotal(purchase: ProductPurchase): number {
+  const payments = purchase.payments ?? [];
+  if (payments.length > 0) {
+    return payments.reduce((s, p) => s + p.amount, 0);
+  }
+  return purchase.amountPaid ?? 0;
+}
+
+/**
+ * Purchase-linked expense cash when the purchase is out of scope / missing
+ * payment rows (Expenses bill still shows paid). Avoids Accounting ₹0 while
+ * Expenses shows the paid amount for the same bill.
+ */
+export function sumPurchaseLinkedExpenseFallbackInPeriod(
+  expenses: Expense[],
+  purchases: ProductPurchase[],
+  filter: ExpenseDateFilter,
+  methods: ExpensePaymentMethod[] | "all" = "all"
+): number {
+  const purchaseById = new Map(purchases.map((p) => [p.id, p]));
+  const set = methods === "all" ? null : new Set(methods);
+  let s = 0;
+  for (const e of expenses) {
+    if (!e.purchaseId) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    if (!matchesExpenseDate(e.date, filter)) continue;
+    if (set && !set.has(e.paymentMethod)) continue;
+
+    const purchase = purchaseById.get(e.purchaseId);
+    if (purchase && purchaseRecordedCashTotal(purchase) > 0.01) continue;
+    s += paid;
+  }
+  return Math.round(s * 100) / 100;
+}
+
 /**
  * Cash-basis expenses for a period (aligned with Total Income receipts):
- * - Purchase-linked: sum vendor payments by paidAt
+ * - Purchase-linked: sum vendor payments by paidAt (legacy amountPaid fallback)
  * - Standalone: sum amount actually paid, keyed on expense date
+ * - Linked expense fallback when purchase cash is missing from scope
  */
 export function totalExpenseCashOutInPeriod(
   expenses: Expense[],
@@ -80,7 +118,8 @@ export function totalExpenseCashOutInPeriod(
   return (
     Math.round(
       (sumPurchasePaymentsInPeriod(purchases, filter, "all") +
-        sumStandaloneExpenseCashOutInPeriod(expenses, filter, "all")) *
+        sumStandaloneExpenseCashOutInPeriod(expenses, filter, "all") +
+        sumPurchaseLinkedExpenseFallbackInPeriod(expenses, purchases, filter, "all")) *
         100
     ) / 100
   );
@@ -108,11 +147,30 @@ export function expensesByCategoryCashOut(
   }
 
   for (const purchase of purchases) {
-    for (const payment of purchase.payments ?? []) {
-      if (!matchesExpenseDate(payment.paidAt, filter)) continue;
-      const cat = linkedByPurchase.get(purchase.id)?.category ?? "SUPPLIES";
-      map.set(cat, (map.get(cat) ?? 0) + payment.amount);
+    const payments = purchase.payments ?? [];
+    if (payments.length > 0) {
+      for (const payment of payments) {
+        if (!matchesExpenseDate(payment.paidAt, filter)) continue;
+        const cat = linkedByPurchase.get(purchase.id)?.category ?? "SUPPLIES";
+        map.set(cat, (map.get(cat) ?? 0) + payment.amount);
+      }
+      continue;
     }
+    const paid = purchase.amountPaid ?? 0;
+    if (paid <= 0.01) continue;
+    if (!matchesExpenseDate(purchase.purchasedAt, filter)) continue;
+    const cat = linkedByPurchase.get(purchase.id)?.category ?? "SUPPLIES";
+    map.set(cat, (map.get(cat) ?? 0) + paid);
+  }
+
+  for (const e of expenses) {
+    if (!e.purchaseId) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    if (!matchesExpenseDate(e.date, filter)) continue;
+    const purchase = purchases.find((p) => p.id === e.purchaseId);
+    if (purchase && purchaseRecordedCashTotal(purchase) > 0.01) continue;
+    map.set(e.category, (map.get(e.category) ?? 0) + paid);
   }
 
   return [...map.entries()]
@@ -149,11 +207,21 @@ export function sumPurchasePaymentsInPeriod(
 ): number {
   let s = 0;
   for (const purchase of purchases) {
-    for (const payment of purchase.payments ?? []) {
-      if (!matchesExpenseDate(payment.paidAt, filter)) continue;
-      if (!purchasePaymentMatchesScope(payment.method, scope)) continue;
-      s += payment.amount;
+    const payments = purchase.payments ?? [];
+    if (payments.length > 0) {
+      for (const payment of payments) {
+        if (!matchesExpenseDate(payment.paidAt, filter)) continue;
+        if (!purchasePaymentMatchesScope(payment.method, scope)) continue;
+        s += payment.amount;
+      }
+      continue;
     }
+    // Legacy purchases paid at create time without a payments[] row
+    const paid = purchase.amountPaid ?? 0;
+    if (paid <= 0.01) continue;
+    if (!matchesExpenseDate(purchase.purchasedAt, filter)) continue;
+    if (scope === "online") continue;
+    if (scope === "cash" || scope === "all") s += paid;
   }
   return Math.round(s * 100) / 100;
 }
@@ -164,10 +232,18 @@ export function sumPurchasePayments(
 ): number {
   let s = 0;
   for (const purchase of purchases) {
-    for (const payment of purchase.payments ?? []) {
-      if (!purchasePaymentMatchesScope(payment.method, scope)) continue;
-      s += payment.amount;
+    const payments = purchase.payments ?? [];
+    if (payments.length > 0) {
+      for (const payment of payments) {
+        if (!purchasePaymentMatchesScope(payment.method, scope)) continue;
+        s += payment.amount;
+      }
+      continue;
     }
+    const paid = purchase.amountPaid ?? 0;
+    if (paid <= 0.01) continue;
+    if (scope === "online") continue;
+    if (scope === "cash" || scope === "all") s += paid;
   }
   return Math.round(s * 100) / 100;
 }
@@ -466,13 +542,24 @@ export function buildIncomeExpenseTrend(
   }
 
   for (const purchase of purchases) {
-    for (const payment of purchase.payments ?? []) {
-      if (!matchesExpenseDate(payment.paidAt, filter)) continue;
-      const { key, sort } = keyFor(payment.paidAt);
-      const prev = map.get(key) ?? { income: 0, expense: 0, sort };
-      prev.expense += payment.amount;
-      map.set(key, prev);
+    const payments = purchase.payments ?? [];
+    if (payments.length > 0) {
+      for (const payment of payments) {
+        if (!matchesExpenseDate(payment.paidAt, filter)) continue;
+        const { key, sort } = keyFor(payment.paidAt);
+        const prev = map.get(key) ?? { income: 0, expense: 0, sort };
+        prev.expense += payment.amount;
+        map.set(key, prev);
+      }
+      continue;
     }
+    const paid = purchase.amountPaid ?? 0;
+    if (paid <= 0.01) continue;
+    if (!matchesExpenseDate(purchase.purchasedAt, filter)) continue;
+    const { key, sort } = keyFor(purchase.purchasedAt);
+    const prev = map.get(key) ?? { income: 0, expense: 0, sort };
+    prev.expense += paid;
+    map.set(key, prev);
   }
 
   for (const e of expenses) {
@@ -480,6 +567,20 @@ export function buildIncomeExpenseTrend(
     if (!matchesExpenseDate(e.date, filter)) continue;
     const paid = expensePaidAmount(e);
     if (paid <= 0) continue;
+    const { key, sort } = keyFor(e.date);
+    const prev = map.get(key) ?? { income: 0, expense: 0, sort };
+    prev.expense += paid;
+    map.set(key, prev);
+  }
+
+  const purchaseById = new Map(purchases.map((p) => [p.id, p]));
+  for (const e of expenses) {
+    if (!e.purchaseId) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    if (!matchesExpenseDate(e.date, filter)) continue;
+    const purchase = purchaseById.get(e.purchaseId);
+    if (purchase && purchaseRecordedCashTotal(purchase) > 0.01) continue;
     const { key, sort } = keyFor(e.date);
     const prev = map.get(key) ?? { income: 0, expense: 0, sort };
     prev.expense += paid;
@@ -513,10 +614,15 @@ export function paymentMethodBreakdown(
 ) {
   const cashIncome = sumInvoicePayments(invoices, ["CASH"]);
   const onlineIncome = sumInvoicePayments(invoices, ONLINE_INCOME);
+  const allFilter: ExpenseDateFilter = { kind: "preset", preset: "all" };
   const cashExpenses =
-    sumPurchasePayments(purchases, "cash") + sumStandaloneExpenseCashOut(expenses, CASH_EXPENSE);
+    sumPurchasePayments(purchases, "cash") +
+    sumStandaloneExpenseCashOut(expenses, CASH_EXPENSE) +
+    sumPurchaseLinkedExpenseFallbackInPeriod(expenses, purchases, allFilter, CASH_EXPENSE);
   const onlineExpenses =
-    sumPurchasePayments(purchases, "online") + sumStandaloneExpenseCashOut(expenses, ONLINE_EXPENSE);
+    sumPurchasePayments(purchases, "online") +
+    sumStandaloneExpenseCashOut(expenses, ONLINE_EXPENSE) +
+    sumPurchaseLinkedExpenseFallbackInPeriod(expenses, purchases, allFilter, ONLINE_EXPENSE);
   return {
     cashIncome,
     onlineIncome,
@@ -538,10 +644,12 @@ export function paymentMethodBreakdownForPeriod(
   const onlineIncome = sumInvoicePaymentsInPeriod(invoices, filter, ONLINE_INCOME);
   const cashExpenses =
     sumPurchasePaymentsInPeriod(purchases, filter, "cash") +
-    sumStandaloneExpenseCashOutInPeriod(expenses, filter, CASH_EXPENSE);
+    sumStandaloneExpenseCashOutInPeriod(expenses, filter, CASH_EXPENSE) +
+    sumPurchaseLinkedExpenseFallbackInPeriod(expenses, purchases, filter, CASH_EXPENSE);
   const onlineExpenses =
     sumPurchasePaymentsInPeriod(purchases, filter, "online") +
-    sumStandaloneExpenseCashOutInPeriod(expenses, filter, ONLINE_EXPENSE);
+    sumStandaloneExpenseCashOutInPeriod(expenses, filter, ONLINE_EXPENSE) +
+    sumPurchaseLinkedExpenseFallbackInPeriod(expenses, purchases, filter, ONLINE_EXPENSE);
   return {
     cashIncome,
     onlineIncome,

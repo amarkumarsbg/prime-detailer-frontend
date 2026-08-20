@@ -70,6 +70,23 @@ describe("totalExpenseCashOutInPeriod", () => {
     expect(totalExpenseCashOutInPeriod(expenses, purchases, filter)).toBe(10);
     expect(totalExpenseAmount(expenses)).toBe(70);
   });
+
+  it("counts legacy purchase amountPaid when payments[] is empty", () => {
+    const purchases = [purchase(5900, 5900, [])];
+    const expenses = [purchaseExpense(5900, 5900)];
+    expect(totalExpenseCashOutInPeriod(expenses, purchases, filter)).toBe(5900);
+  });
+
+  it("falls back to linked expense when purchase is out of scope", () => {
+    const expenses = [purchaseExpense(5900, 5900)];
+    expect(totalExpenseCashOutInPeriod(expenses, [], filter)).toBe(5900);
+  });
+
+  it("does not double-count when purchase already has cash recorded", () => {
+    const purchases = [purchase(5900, 5900, [])];
+    const expenses = [purchaseExpense(5900, 5900)];
+    expect(totalExpenseCashOutInPeriod(expenses, purchases, filter)).toBe(5900);
+  });
 });
 
 describe("purchase-linked expense recognition (accrual)", () => {
