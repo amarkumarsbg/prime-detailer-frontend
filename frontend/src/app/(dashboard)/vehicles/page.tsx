@@ -75,6 +75,9 @@ interface AddVehicleFormData {
   customerId: string;
   notes?: string;
   odometer?: number;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceDueDate?: string;
 }
 
 function formatFuelLabel(fuel: FuelType): string {
@@ -164,6 +167,9 @@ export default function VehiclesPage() {
       year: data.year,
       notes: data.notes || undefined,
       odometer: data.odometer ? Number(data.odometer) : undefined,
+      insuranceProvider: data.insuranceProvider?.trim() || undefined,
+      insurancePolicyNumber: data.insurancePolicyNumber?.trim() || undefined,
+      insuranceDueDate: data.insuranceDueDate || undefined,
     };
     setVehicles((prev) => [newVehicle, ...prev]);
     reset();
@@ -588,6 +594,39 @@ export default function VehiclesPage() {
                     )}
                   </div>
 
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Insurance details
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="insuranceProvider">Insurance Provider</Label>
+                    <Input
+                      id="insuranceProvider"
+                      placeholder="e.g. HDFC Ergo"
+                      {...register("insuranceProvider")}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="insurancePolicyNumber">Policy Number</Label>
+                    <Input
+                      id="insurancePolicyNumber"
+                      placeholder="e.g. POL123456"
+                      {...register("insurancePolicyNumber")}
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="insuranceDueDate">Insurance Due Date</Label>
+                    <Input
+                      id="insuranceDueDate"
+                      type="date"
+                      className="date-input-icon-end pr-9"
+                      {...register("insuranceDueDate")}
+                    />
+                  </div>
                 </div>
               </div>
 

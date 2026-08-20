@@ -316,6 +316,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleYear, setVehicleYear] = useState(() => String(new Date().getFullYear()));
   const [vehicleNotes, setVehicleNotes] = useState("");
   const [vehicleOdometer, setVehicleOdometer] = useState("");
+  const [vehicleInsuranceProvider, setVehicleInsuranceProvider] = useState("");
+  const [vehicleInsurancePolicyNumber, setVehicleInsurancePolicyNumber] = useState("");
+  const [vehicleInsuranceDueDate, setVehicleInsuranceDueDate] = useState("");
   const [bookingWhen, setBookingWhen] = useState(() =>
     isWalkIn ? datetimeLocalValue(new Date()) : ""
   );
@@ -797,6 +800,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleYear(String(new Date().getFullYear()));
     setVehicleNotes("");
     setVehicleOdometer("");
+    setVehicleInsuranceProvider("");
+    setVehicleInsurancePolicyNumber("");
+    setVehicleInsuranceDueDate("");
   };
 
   const doneAddVehiclePopup = () => {
@@ -846,6 +852,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       year: Number(vehicleYear) || new Date().getFullYear(),
       notes: vehicleNotes.trim() || undefined,
       odometer: vehicleOdometer.trim() ? Number(vehicleOdometer) : undefined,
+      insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
+      insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
+      insuranceDueDate: vehicleInsuranceDueDate || undefined,
     };
     setVehicles((prev) => [newVehicle, ...prev]);
     setVehicleBrand(rb);
@@ -868,6 +877,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleYear(String(new Date().getFullYear()));
     setVehicleNotes("");
     setVehicleOdometer("");
+    setVehicleInsuranceProvider("");
+    setVehicleInsurancePolicyNumber("");
+    setVehicleInsuranceDueDate("");
     
     toast.success("Vehicle saved", { description: "It appears in your garage above." });
   };
@@ -3512,6 +3524,52 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   </div>
 
 
+
+                  {/* Insurance details */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Insurance details
+                    </p>
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-insurance-provider-popup" className="text-foreground">
+                          Insurance Provider
+                        </Label>
+                        <Input
+                          id="vehicle-insurance-provider-popup"
+                          value={vehicleInsuranceProvider}
+                          onChange={(e) => setVehicleInsuranceProvider(e.target.value)}
+                          placeholder="e.g. HDFC Ergo"
+                          className="h-10 rounded-md"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="vehicle-insurance-policy-popup" className="text-foreground">
+                          Policy Number
+                        </Label>
+                        <Input
+                          id="vehicle-insurance-policy-popup"
+                          value={vehicleInsurancePolicyNumber}
+                          onChange={(e) => setVehicleInsurancePolicyNumber(e.target.value)}
+                          placeholder="e.g. POL123456"
+                          className="h-10 rounded-md"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-insurance-due-popup" className="text-foreground">
+                        Insurance Due Date
+                      </Label>
+                      <Input
+                        id="vehicle-insurance-due-popup"
+                        type="date"
+                        value={vehicleInsuranceDueDate}
+                        onChange={(e) => setVehicleInsuranceDueDate(e.target.value)}
+                        className="h-10 rounded-md w-full date-input-icon-end pr-9"
+                      />
+                    </div>
+                  </div>
 
                   {/* Notes */}
                   <div className="space-y-2">

@@ -23,6 +23,9 @@ export interface Vehicle {
   year: number;
   notes?: string;
   odometer?: number;
+  insuranceProvider?: string;
+  insurancePolicyNumber?: string;
+  insuranceDueDate?: string;
   /** Outgoing owners in chronological order (matches ownership_transfers from_customer chain). */
   previousOwners?: {
     customerId: string;
