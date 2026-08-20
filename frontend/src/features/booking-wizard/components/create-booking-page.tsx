@@ -307,6 +307,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [customerCreditDialogOpen, setCustomerCreditDialogOpen] = useState(false);
   const [lookupQuery, setLookupQuery] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  const [vehicleVinNumber, setVehicleVinNumber] = useState("");
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment | "">("");
@@ -321,6 +322,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleInsuranceDueDate, setVehicleInsuranceDueDate] = useState("");
   const [vehicleIdentifierType, setVehicleIdentifierType] = useState<"REG" | "VIN">("REG");
   const [vehicleIdentifierValue, setVehicleIdentifierValue] = useState("");
+
+  useEffect(() => {
+    if (vehicleIdentifierType === "VIN") {
+      setVehicleNumber(vehicleIdentifierValue.trim().toUpperCase());
+      setVehicleVinNumber(vehicleIdentifierValue.trim().toUpperCase());
+    } else {
+      setVehicleNumber(normalizeRegistrationNumber(vehicleIdentifierValue));
+      setVehicleVinNumber("");
+    }
+  }, [vehicleIdentifierType, vehicleIdentifierValue]);
+
   const [bookingWhen, setBookingWhen] = useState(() =>
     isWalkIn ? datetimeLocalValue(new Date()) : ""
   );
@@ -1399,11 +1411,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       return;
     }
     if (!vehicleNumber.trim() || !vehicleBrand.trim() || !vehicleModel.trim() || !vehicleSegment) {
-      toast.error("Vehicle registration, brand, model, and type are required.");
+      toast.error("Vehicle identifier, brand, model, and type are required.");
       return;
     }
-    if (!isValidIndianVehicleRegistration(vehicleNumber)) {
+    if (vehicleIdentifierType === "REG" && !isValidIndianVehicleRegistration(vehicleNumber)) {
       toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
+      return;
+    }
+    if (vehicleIdentifierType === "VIN" && vehicleNumber.length < 5) {
+      toast.error("VIN must be at least 5 characters.");
       return;
     }
     if (
@@ -2269,8 +2285,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         toast.error("Complete vehicle details to continue.");
         return;
       }
-      if (!isValidIndianVehicleRegistration(vehicleNumber)) {
+      if (vehicleIdentifierType === "REG" && !isValidIndianVehicleRegistration(vehicleNumber)) {
         toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
+        return;
+      }
+      if (vehicleIdentifierType === "VIN" && vehicleNumber.length < 5) {
+        toast.error("VIN must be at least 5 characters.");
         return;
       }
     }
@@ -3164,21 +3184,57 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicle-reg" className="text-foreground">
-                      Registration Number
-                    </Label>
-                    <Input
-                      id="vehicle-reg"
-                      value={vehicleNumber}
-                      onChange={(e) => setVehicleNumber(sanitizeVehicleRegistrationInput(e.target.value))}
-                      placeholder="e.g. KA01AB1234"
-                      maxLength={16}
-                      className="h-10 rounded-md"
-                      required
-                      autoCapitalize="characters"
-                    />
-                    <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-identifier-type-inline" className="text-foreground">
+                        Identifier Type
+                      </Label>
+                      <Select
+                        value={vehicleIdentifierType}
+                        onValueChange={(val) => {
+                          setVehicleIdentifierType(val as "REG" | "VIN");
+                          setVehicleIdentifierValue("");
+                        }}
+                      >
+                        <SelectTrigger id="vehicle-identifier-type-inline" className="h-10 rounded-md">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="REG">Registration Number</SelectItem>
+                          <SelectItem value="VIN">VIN Number</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-identifier-value-inline" className="text-foreground">
+                        {vehicleIdentifierType === "REG" ? "Registration Number" : "VIN Number"} <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="vehicle-identifier-value-inline"
+                        value={vehicleIdentifierValue}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setVehicleIdentifierValue(
+                            vehicleIdentifierType === "REG"
+                              ? sanitizeVehicleRegistrationInput(val)
+                              : val
+                          );
+                        }}
+                        placeholder={
+                          vehicleIdentifierType === "REG"
+                            ? "e.g. KA01AB1234"
+                            : "e.g. VIN1234567890"
+                        }
+                        maxLength={16}
+                        className="h-10 rounded-md"
+                        required
+                        autoCapitalize="characters"
+                      />
+                      {vehicleIdentifierType === "REG" && (
+                        <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
