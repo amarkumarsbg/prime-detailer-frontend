@@ -319,6 +319,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleInsuranceProvider, setVehicleInsuranceProvider] = useState("");
   const [vehicleInsurancePolicyNumber, setVehicleInsurancePolicyNumber] = useState("");
   const [vehicleInsuranceDueDate, setVehicleInsuranceDueDate] = useState("");
+  const [vehicleIdentifierType, setVehicleIdentifierType] = useState<"REG" | "VIN">("REG");
+  const [vehicleIdentifierValue, setVehicleIdentifierValue] = useState("");
   const [bookingWhen, setBookingWhen] = useState(() =>
     isWalkIn ? datetimeLocalValue(new Date()) : ""
   );
@@ -803,6 +805,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleInsuranceProvider("");
     setVehicleInsurancePolicyNumber("");
     setVehicleInsuranceDueDate("");
+    setVehicleIdentifierType("REG");
+    setVehicleIdentifierValue("");
   };
 
   const doneAddVehiclePopup = () => {
@@ -812,23 +816,32 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
     const brandTrim = vehicleBrand.trim();
     const modelTrim = vehicleModel.trim();
-    if (!vehicleNumber.trim() || !brandTrim || !modelTrim) {
-      toast.error("Registration, brand, and model are required.");
+    if (!vehicleIdentifierValue.trim() || !brandTrim || !modelTrim) {
+      toast.error("Identifier, brand, and model are required.");
       return;
     }
-    if (!isValidIndianVehicleRegistration(vehicleNumber)) {
+    const isVin = vehicleIdentifierType === "VIN";
+    const regStored = isVin
+      ? vehicleIdentifierValue.trim().toUpperCase()
+      : normalizeRegistrationNumber(vehicleIdentifierValue);
+
+    if (vehicleIdentifierType === "REG" && !isValidIndianVehicleRegistration(vehicleIdentifierValue)) {
       toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
       return;
     }
-    const regStored = normalizeRegistrationNumber(vehicleNumber);
-    const dup = findVehicleByNormalizedReg(vehicles, vehicleNumber);
+    if (vehicleIdentifierType === "VIN" && vehicleIdentifierValue.trim().length < 5) {
+      toast.error("VIN must be at least 5 characters.");
+      return;
+    }
+
+    const dup = findVehicleByNormalizedReg(vehicles, regStored);
     if (dup) {
       if (dup.customerId === existingCustomerId) {
         skipAddVehicleCancelOnCloseRef.current = true;
         selectVehicleFromGarage(dup);
         return;
       }
-      toast.error("Registration belongs to another customer", {
+      toast.error("Vehicle identifier belongs to another customer", {
         description: `${dup.registrationNumber} — ${dup.customerName}`,
       });
       return;
@@ -855,6 +868,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
       insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
       insuranceDueDate: vehicleInsuranceDueDate || undefined,
+      vinNumber: isVin ? regStored : undefined,
     };
     setVehicles((prev) => [newVehicle, ...prev]);
     setVehicleBrand(rb);
@@ -880,6 +894,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleInsuranceProvider("");
     setVehicleInsurancePolicyNumber("");
     setVehicleInsuranceDueDate("");
+    setVehicleIdentifierType("REG");
+    setVehicleIdentifierValue("");
     
     toast.success("Vehicle saved", { description: "It appears in your garage above." });
   };
@@ -3294,7 +3310,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               cancelAddVehicleFromPopup();
             }}
           >
-            <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,720px)]")}>
+            <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,720px)] sm:max-w-[640px]")}>
               <DialogHeader className={dialogMobileSheetHeaderClasses}>
                 <DialogTitle>Add New Vehicle</DialogTitle>
               </DialogHeader>
@@ -3302,35 +3318,69 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="vehicle-reg-popup" className="text-foreground">
-                        Registration Number <span className="text-destructive">*</span>
+                      <Label htmlFor="vehicle-identifier-type-popup" className="text-foreground">
+                        Identifier Type
+                      </Label>
+                      <Select
+                        value={vehicleIdentifierType}
+                        onValueChange={(val) => {
+                          setVehicleIdentifierType(val as "REG" | "VIN");
+                          setVehicleIdentifierValue("");
+                        }}
+                      >
+                        <SelectTrigger id="vehicle-identifier-type-popup" className="h-10 rounded-md">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="REG">Registration Number</SelectItem>
+                          <SelectItem value="VIN">VIN Number</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="vehicle-identifier-value-popup" className="text-foreground">
+                        {vehicleIdentifierType === "REG" ? "Registration Number" : "VIN Number"} <span className="text-destructive">*</span>
                       </Label>
                       <Input
-                        id="vehicle-reg-popup"
-                        value={vehicleNumber}
-                        onChange={(e) => setVehicleNumber(sanitizeVehicleRegistrationInput(e.target.value))}
-                        placeholder="e.g. KA01AB1234"
+                        id="vehicle-identifier-value-popup"
+                        value={vehicleIdentifierValue}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setVehicleIdentifierValue(
+                            vehicleIdentifierType === "REG"
+                              ? sanitizeVehicleRegistrationInput(val)
+                              : val
+                          );
+                        }}
+                        placeholder={
+                          vehicleIdentifierType === "REG"
+                            ? "e.g. KA01AB1234"
+                            : "e.g. VIN1234567890"
+                        }
                         maxLength={16}
                         className="h-10 rounded-md"
                         required
                         autoCapitalize="characters"
                       />
-                      <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                      {vehicleIdentifierType === "REG" && (
+                        <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
+                      )}
                     </div>
+                  </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-odometer-popup" className="text-foreground">
-                        Odometer (km)
-                      </Label>
-                      <Input
-                        id="vehicle-odometer-popup"
-                        type="number"
-                        value={vehicleOdometer}
-                        onChange={(e) => setVehicleOdometer(e.target.value)}
-                        placeholder="e.g. 25000"
-                        className="h-10 rounded-md"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="vehicle-odometer-popup" className="text-foreground">
+                      Odometer (km)
+                    </Label>
+                    <Input
+                      id="vehicle-odometer-popup"
+                      type="number"
+                      value={vehicleOdometer}
+                      onChange={(e) => setVehicleOdometer(e.target.value)}
+                      placeholder="e.g. 25000"
+                      className="h-10 rounded-md"
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">

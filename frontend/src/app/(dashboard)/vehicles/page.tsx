@@ -8,6 +8,8 @@ import {
   findVehicleByNormalizedReg,
   INDIAN_VEHICLE_REG_ERROR_SHORT,
   isValidIndianVehicleRegistration,
+  normalizeRegistrationNumber,
+  INDIAN_VEHICLE_REG_HINT,
 } from "@/lib/vehicle-registration";
 import {
   DropdownMenu,
@@ -42,6 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
   dialogMobileSheetContentClasses,
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
@@ -78,6 +81,9 @@ interface AddVehicleFormData {
   insuranceProvider?: string;
   insurancePolicyNumber?: string;
   insuranceDueDate?: string;
+  vinNumber?: string;
+  identifierType: "REG" | "VIN";
+  identifierValue: string;
 }
 
 function formatFuelLabel(fuel: FuelType): string {
@@ -109,6 +115,13 @@ export default function VehiclesPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  const [extraBrands, setExtraBrands] = useState<string[]>([]);
+  const [extraModels, setExtraModels] = useState<Record<string, Array<{ name: string }>>>({});
+  const [newBrandOpen, setNewBrandOpen] = useState(false);
+  const [newBrandDraft, setNewBrandDraft] = useState("");
+  const [newModelOpen, setNewModelOpen] = useState(false);
+  const [newModelDraft, setNewModelDraft] = useState("");
+
   const {
     register,
     handleSubmit,
@@ -121,6 +134,8 @@ export default function VehiclesPage() {
       fuelType: "PETROL",
       segment: "HATCHBACK",
       year: new Date().getFullYear(),
+      identifierType: "REG",
+      identifierValue: "",
     },
   });
 
@@ -130,23 +145,36 @@ export default function VehiclesPage() {
   const watchSegment = watch("segment");
   const watchMake = watch("make");
   const watchModel = watch("model");
+  const watchIdentifierType = watch("identifierType") || "REG";
   /* eslint-enable react-hooks/incompatible-library */
 
-  const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
-  const modelOptions = useMemo(
-    () => (watchMake ? getModels(watchMake) : []),
-    [getModels, watchMake]
-  );
+  const makeOptions = useMemo(() => {
+    return [...new Set([...getBrandNames(), ...extraBrands])].sort((a, b) => a.localeCompare(b));
+  }, [getBrandNames, extraBrands]);
+
+  const modelOptions = useMemo(() => {
+    if (!watchMake) return [];
+    const defaultModels = getModels(watchMake);
+    const added = extraModels[watchMake] || [];
+    const combined = [...defaultModels, ...added];
+    const unique = Array.from(new Map(combined.map((m) => [m.name.toLowerCase(), m])).values());
+    return unique.sort((a, b) => a.name.localeCompare(b.name));
+  }, [getModels, watchMake, extraModels]);
 
   const onSubmit = (data: AddVehicleFormData) => {
-    const dup = findVehicleByNormalizedReg(vehicleList, data.registrationNumber);
+    const isVin = data.identifierType === "VIN";
+    const regStored = isVin
+      ? data.identifierValue.trim().toUpperCase()
+      : normalizeRegistrationNumber(data.identifierValue);
+
+    const dup = findVehicleByNormalizedReg(vehicleList, regStored);
     if (dup) {
       if (dup.customerId === data.customerId) {
-        toast.error("This registration is already listed for this customer", {
+        toast.error("This vehicle identifier is already listed for this customer", {
           description: `${dup.registrationNumber} — ${dup.make} ${dup.model}`,
         });
       } else {
-        toast.error("Registration already assigned to another customer", {
+        toast.error("Vehicle identifier already assigned to another customer", {
           description: `${dup.registrationNumber} belongs to ${dup.customerName}. Transfer ownership first if the vehicle changed hands.`,
         });
       }
@@ -157,7 +185,7 @@ export default function VehiclesPage() {
       id: `veh-${Date.now()}`,
       customerId: data.customerId,
       customerName: customer?.name ?? "Unknown",
-      registrationNumber: data.registrationNumber.toUpperCase(),
+      registrationNumber: regStored,
       make: data.make,
       model: data.model,
       variant: data.variant || undefined,
@@ -170,11 +198,12 @@ export default function VehiclesPage() {
       insuranceProvider: data.insuranceProvider?.trim() || undefined,
       insurancePolicyNumber: data.insurancePolicyNumber?.trim() || undefined,
       insuranceDueDate: data.insuranceDueDate || undefined,
+      vinNumber: isVin ? regStored : undefined,
     };
     setVehicles((prev) => [newVehicle, ...prev]);
     reset();
     setAddDialogOpen(false);
-    toast.success("Vehicle added", { description: `${data.registrationNumber.toUpperCase()} has been registered.` });
+    toast.success("Vehicle added", { description: `${regStored} has been registered.` });
   };
 
   const tableData = vehicleList as (Vehicle & Record<string, unknown>)[];
@@ -363,8 +392,8 @@ export default function VehiclesPage() {
       <DataTable<Vehicle & Record<string, unknown>>
         data={tableData}
         columns={columns}
-        searchPlaceholder="Search by registration, make, model, customer..."
-        searchKeys={["registrationNumber", "make", "model", "customerName"]}
+        searchPlaceholder="Search by registration, VIN, make, model, customer..."
+        searchKeys={["registrationNumber", "vinNumber", "make", "model", "customerName"]}
         pageSize={10}
         onRowClick={(item) => router.push(`/vehicles/${(item as Vehicle).id}`)}
         renderMobileCard={(item) => {
@@ -408,7 +437,7 @@ export default function VehiclesPage() {
       />
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,100%)] sm:max-w-[500px]")}>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,100%)] sm:max-w-[640px]")}>
           <DialogHeader className={dialogMobileSheetHeaderClasses}>
             <DialogTitle>Add Vehicle</DialogTitle>
           </DialogHeader>
@@ -420,19 +449,59 @@ export default function VehiclesPage() {
               <div className="space-y-2">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="registrationNumber">Registration Number</Label>
+                    <Label htmlFor="identifierType">Identifier Type</Label>
+                    <input type="hidden" {...register("identifierType", { required: "Required" })} />
+                    <Select
+                      value={watchIdentifierType}
+                      onValueChange={(val) => {
+                        setValue("identifierType", val as "REG" | "VIN");
+                        setValue("identifierValue", "");
+                      }}
+                    >
+                      <SelectTrigger id="identifierType">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="REG">Registration Number</SelectItem>
+                        <SelectItem value="VIN">VIN Number</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="identifierValue">
+                      {watchIdentifierType === "REG" ? "Registration Number" : "VIN Number"}
+                    </Label>
                     <Input
-                      id="registrationNumber"
-                      placeholder="KA-01-AB-1234"
-                      maxLength={16}
-                      {...register("registrationNumber", {
+                      id="identifierValue"
+                      placeholder={watchIdentifierType === "REG" ? "e.g. KA-01-AB-1234" : "e.g. VIN1234567890"}
+                      {...register("identifierValue", {
                         required: "Required",
-                        validate: (v) =>
-                          isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_ERROR_SHORT,
+                        validate: (v) => {
+                          if (watchIdentifierType === "REG") {
+                            return isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_HINT;
+                          }
+                          return String(v).trim().length >= 5 || "Must be at least 5 characters";
+                        }
                       })}
                     />
-                    {errors.registrationNumber && (
-                      <p className="text-xs text-destructive">{errors.registrationNumber.message}</p>
+                    {errors.identifierValue && (
+                      <p className="text-xs text-destructive">{errors.identifierValue.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="customerId">Customer</Label>
+                    <CustomerSearchSelect
+                      customers={customers}
+                      selectedCustomerId={watchCustomerId}
+                      onSelectCustomer={(v) => setValue("customerId", v)}
+                      className={cn(errors.customerId && "border-destructive")}
+                    />
+                    {errors.customerId && (
+                      <p className="text-xs text-destructive">{errors.customerId.message}</p>
                     )}
                   </div>
 
@@ -444,18 +513,6 @@ export default function VehiclesPage() {
                     )}
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="customerId">Customer</Label>
-                  <CustomerSearchSelect
-                    customers={customers}
-                    selectedCustomerId={watchCustomerId}
-                    onSelectCustomer={(v) => setValue("customerId", v)}
-                    className={cn(errors.customerId && "border-destructive")}
-                  />
-                  {errors.customerId && (
-                    <p className="text-xs text-destructive">{errors.customerId.message}</p>
-                  )}
-                </div>
               </div>
 
               <div className="space-y-2">
@@ -464,7 +521,21 @@ export default function VehiclesPage() {
                 </p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="make">Make</Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="make">Make</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                        onClick={() => {
+                          setNewBrandDraft("");
+                          setNewBrandOpen(true);
+                        }}
+                      >
+                        + New
+                      </Button>
+                    </div>
                     <input type="hidden" {...register("make", { required: "Required" })} />
                     <Select
                       value={watchMake || undefined}
@@ -497,7 +568,22 @@ export default function VehiclesPage() {
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="model">Model</Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="model">Model</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                        onClick={() => {
+                          setNewModelDraft("");
+                          setNewModelOpen(true);
+                        }}
+                        disabled={!watchMake}
+                      >
+                        + New
+                      </Button>
+                    </div>
                     <input type="hidden" {...register("model", { required: "Required" })} />
                     <Select
                       value={watchModel || undefined}
@@ -654,6 +740,142 @@ export default function VehiclesPage() {
               <Button type="submit">Add Vehicle</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={newBrandOpen}
+        onOpenChange={(open) => {
+          setNewBrandOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add brand</DialogTitle>
+            <DialogDescription>
+              Add a brand name when it is not in the catalog list.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Brand name"
+            value={newBrandDraft}
+            onChange={(e) => setNewBrandDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const t = newBrandDraft.trim();
+                if (!t) return;
+                if (makeOptions.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                  toast.error("Brand already in list");
+                  return;
+                }
+                setExtraBrands((prev) => [...prev, t]);
+                setValue("make", t, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                setValue("model", "", { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                setNewBrandOpen(false);
+                setNewBrandDraft("");
+                toast.success("Brand added", { description: t });
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const t = newBrandDraft.trim();
+                if (!t) {
+                  toast.error("Enter a brand name");
+                  return;
+                }
+                if (makeOptions.some((b) => b.toLowerCase() === t.toLowerCase())) {
+                  toast.error("Brand already in list");
+                  return;
+                }
+                setExtraBrands((prev) => [...prev, t]);
+                setValue("make", t, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                setValue("model", "", { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                setNewBrandOpen(false);
+                setNewBrandDraft("");
+                toast.success("Brand added", { description: t });
+              }}
+            >
+              Add brand
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={newModelOpen}
+        onOpenChange={(open) => {
+          setNewModelOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add model</DialogTitle>
+            <DialogDescription>
+              Add a model for <span className="font-medium text-foreground">{watchMake}</span> when it is not listed.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Model name"
+            value={newModelDraft}
+            onChange={(e) => setNewModelDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const t = newModelDraft.trim();
+                if (!t) return;
+                if (modelOptions.some((m) => m.name.toLowerCase() === t.toLowerCase())) {
+                  toast.error("Model already in list");
+                  return;
+                }
+                const makeKey = watchMake || "";
+                setExtraModels((prev) => ({
+                  ...prev,
+                  [makeKey]: [...(prev[makeKey] || []), { name: t }],
+                }));
+                setValue("model", t, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                setNewModelOpen(false);
+                setNewModelDraft("");
+                toast.success("Model added", { description: t });
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const t = newModelDraft.trim();
+                if (!t) {
+                  toast.error("Enter a model name");
+                  return;
+                }
+                if (modelOptions.some((m) => m.name.toLowerCase() === t.toLowerCase())) {
+                  toast.error("Model already in list");
+                  return;
+                }
+                const makeKey = watchMake || "";
+                setExtraModels((prev) => ({
+                  ...prev,
+                  [makeKey]: [...(prev[makeKey] || []), { name: t }],
+                }));
+                setValue("model", t, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                setNewModelOpen(false);
+                setNewModelDraft("");
+                toast.success("Model added", { description: t });
+              }}
+            >
+              Add model
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

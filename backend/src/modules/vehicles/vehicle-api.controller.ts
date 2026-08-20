@@ -46,6 +46,11 @@ const vehicleSchema = z.object({
   color: z.string().min(1),
   year: z.number().int(),
   notes: z.string().nullable().optional(),
+  odometer: z.number().int().nullable().optional(),
+  insuranceProvider: z.string().nullable().optional(),
+  insurancePolicyNumber: z.string().nullable().optional(),
+  insuranceDueDate: z.string().nullable().optional(),
+  vinNumber: z.string().nullable().optional(),
   previousOwners: z.array(z.unknown()).nullable().optional(),
 });
 

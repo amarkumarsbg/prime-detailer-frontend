@@ -225,6 +225,11 @@ model Vehicle {
   color              String
   year               Int
   notes              String?
+  odometer           Int?
+  insuranceProvider  String?
+  insurancePolicyNumber String?
+  insuranceDueDate   String?
+  vinNumber          String?
   previousOwners     Json?
   organizationId     String
   organization       Organization   @relation(fields: [organizationId], references: [id])

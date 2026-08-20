@@ -51,7 +51,8 @@ export function computeCustomerLookupMatches(
       const vn = normalizeRegistrationNumber(v.registrationNumber);
       const hitReg =
         (regNorm.length >= 3 && vn.includes(regNorm)) ||
-        v.registrationNumber.toLowerCase().includes(ql);
+        v.registrationNumber.toLowerCase().includes(ql) ||
+        (v.vinNumber && v.vinNumber.toLowerCase().includes(ql));
       if (hitReg) push(customers.find((x) => x.id === v.customerId));
     }
   }

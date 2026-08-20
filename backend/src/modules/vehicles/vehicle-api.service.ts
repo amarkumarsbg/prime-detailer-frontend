@@ -15,6 +15,11 @@ export function toApiVehicle(v: VehicleRow) {
     color: v.color,
     year: v.year,
     notes: v.notes ?? undefined,
+    odometer: v.odometer ?? undefined,
+    insuranceProvider: v.insuranceProvider ?? undefined,
+    insurancePolicyNumber: v.insurancePolicyNumber ?? undefined,
+    insuranceDueDate: v.insuranceDueDate ?? undefined,
+    vinNumber: v.vinNumber ?? undefined,
     previousOwners: (v.previousOwners as VehicleRow["previousOwners"]) ?? undefined,
   };
 }
@@ -57,6 +62,11 @@ export async function createVehicleApi(data: {
   color: string;
   year: number;
   notes?: string | null;
+  odometer?: number | null;
+  insuranceProvider?: string | null;
+  insurancePolicyNumber?: string | null;
+  insuranceDueDate?: string | null;
+  vinNumber?: string | null;
   previousOwners?: unknown;
 }) {
   const customer = await prisma.customer.findFirst({
@@ -80,6 +90,11 @@ export async function createVehicleApi(data: {
       color: data.color,
       year: data.year,
       notes: data.notes ?? null,
+      odometer: data.odometer ?? null,
+      insuranceProvider: data.insuranceProvider ?? null,
+      insurancePolicyNumber: data.insurancePolicyNumber ?? null,
+      insuranceDueDate: data.insuranceDueDate ?? null,
+      vinNumber: data.vinNumber ?? null,
       previousOwners: data.previousOwners ? (data.previousOwners as object) : undefined,
     },
   });
@@ -101,6 +116,11 @@ export async function updateVehicleApi(
     color: string;
     year: number;
     notes: string | null;
+    odometer: number | null;
+    insuranceProvider: string | null;
+    insurancePolicyNumber: string | null;
+    insuranceDueDate: string | null;
+    vinNumber: string | null;
     previousOwners: unknown;
   }>
 ): Promise<ReturnType<typeof toApiVehicle> | null> {
@@ -146,6 +166,11 @@ type VehicleUpsertInput = {
   color: string;
   year: number;
   notes?: string | null;
+  odometer?: number | null;
+  insuranceProvider?: string | null;
+  insurancePolicyNumber?: string | null;
+  insuranceDueDate?: string | null;
+  vinNumber?: string | null;
   previousOwners?: unknown;
 };
 
@@ -172,6 +197,11 @@ export async function replaceAllVehiclesApi(
           color: data.color,
           year: data.year,
           notes: data.notes ?? null,
+          odometer: data.odometer ?? null,
+          insuranceProvider: data.insuranceProvider ?? null,
+          insurancePolicyNumber: data.insurancePolicyNumber ?? null,
+          insuranceDueDate: data.insuranceDueDate ?? null,
+          vinNumber: data.vinNumber ?? null,
           previousOwners: data.previousOwners ? (data.previousOwners as object) : undefined,
         },
       });
