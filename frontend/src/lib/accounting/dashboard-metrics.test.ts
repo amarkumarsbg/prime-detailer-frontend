@@ -4,6 +4,7 @@ import {
   recognizedExpenseAmount,
   sumPurchasePaymentsInPeriod,
   totalExpenseAmount,
+  totalExpenseCashOutInPeriod,
   totalPayables,
 } from "@/lib/accounting/dashboard-metrics";
 import { expenseOutstanding, expensePaidAmount } from "@/lib/party/ledger-math";
@@ -50,6 +51,26 @@ function purchase(
     payments,
   };
 }
+
+describe("totalExpenseCashOutInPeriod", () => {
+  const filter = { kind: "custom" as const, start: "2026-08-01", end: "2026-08-31" };
+
+  it("counts only the partial payment, not the full bill", () => {
+    const purchases = [
+      purchase(70, 10, [
+        {
+          id: "pay-1",
+          amount: 10,
+          method: "CASH",
+          paidAt: "2026-08-10T10:00:00.000Z",
+        },
+      ]),
+    ];
+    const expenses = [purchaseExpense(70, 10)];
+    expect(totalExpenseCashOutInPeriod(expenses, purchases, filter)).toBe(10);
+    expect(totalExpenseAmount(expenses)).toBe(70);
+  });
+});
 
 describe("purchase-linked expense recognition (accrual)", () => {
   it("recognizes full bill on unpaid purchase", () => {

@@ -61,7 +61,7 @@ import {
 import {
   buildIncomeExpenseTrend,
   categoryDisplayLabel,
-  expensesByCategory,
+  expensesByCategoryCashOut,
   filterExpensesByDate,
   filterInvoicesByDate,
   filterJobCardsByAdvanceDate,
@@ -71,7 +71,7 @@ import {
   percentChange,
   previousExpenseDateFilter,
   recognizedInvoices,
-  totalExpenseAmount,
+  totalExpenseCashOutInPeriod,
   totalIncomeReceipts,
   totalPayables,
   totalReceivables,
@@ -236,8 +236,8 @@ export function AccountingDashboard() {
   );
   const totalIncome = incomeReceipts.total;
   const totalExpensesAmt = useMemo(
-    () => totalExpenseAmount(periodExpenses),
-    [periodExpenses]
+    () => totalExpenseCashOutInPeriod(branchExpenses, branchPurchases, dateFilter),
+    [branchExpenses, branchPurchases, dateFilter]
   );
   const netProfit = Math.round((totalIncome - totalExpensesAmt) * 100) / 100;
   const receivables = useMemo(() => totalReceivables(branchInvoices), [branchInvoices]);
@@ -249,8 +249,8 @@ export function AccountingDashboard() {
   );
 
   const expenseCategoryRows = useMemo(
-    () => expensesByCategory(periodExpenses),
-    [periodExpenses]
+    () => expensesByCategoryCashOut(branchExpenses, branchPurchases, dateFilter),
+    [branchExpenses, branchPurchases, dateFilter]
   );
 
   const compareFilter = useMemo(
@@ -268,12 +268,11 @@ export function AccountingDashboard() {
       packages,
       filter: compareFilter,
     }).total;
-    const prevExp = filterExpensesByDate(branchExpenses, compareFilter);
     return {
       income: prevIncome,
-      expenses: totalExpenseAmount(prevExp),
+      expenses: totalExpenseCashOutInPeriod(branchExpenses, branchPurchases, compareFilter),
     };
-  }, [compareFilter, branchInvoices, branchJobs, branchExpenses, memberships, packages]);
+  }, [compareFilter, branchInvoices, branchJobs, branchExpenses, branchPurchases, memberships, packages]);
 
   const incomeDelta = compareMetrics
     ? percentChange(totalIncome, compareMetrics.income)
@@ -283,13 +282,13 @@ export function AccountingDashboard() {
     : null;
 
   const payments = useMemo(
-    () => paymentMethodBreakdownForPeriod(branchInvoices, periodExpenses, dateFilter, branchPurchases),
-    [branchInvoices, periodExpenses, dateFilter, branchPurchases]
+    () => paymentMethodBreakdownForPeriod(branchInvoices, branchExpenses, dateFilter, branchPurchases),
+    [branchInvoices, branchExpenses, dateFilter, branchPurchases]
   );
 
   const trend = useMemo(
-    () => buildIncomeExpenseTrend(periodInvoices, periodExpenses, dateFilter),
-    [periodInvoices, periodExpenses, dateFilter]
+    () => buildIncomeExpenseTrend(branchInvoices, branchExpenses, dateFilter, branchPurchases),
+    [branchInvoices, branchExpenses, dateFilter, branchPurchases]
   );
 
   const categoryData = useMemo(() => {
@@ -550,13 +549,14 @@ export function AccountingDashboard() {
               title="Total Expenses"
               value={totalExpensesAmt}
               valueClass="text-rose-600 dark:text-rose-400"
-              subtitle="Operational costs"
+              subtitle="Cash paid in period"
               icon={TrendingDown}
               iconWrap="bg-rose-500 text-white"
               headerBg="bg-rose-50/90 dark:bg-rose-950/30"
               delta={expenseDelta}
               deltaInvert
               breakdownTitle="Calculation Breakdown"
+              breakdownNote="Total Expenses = vendor purchase payments + standalone expense amounts actually paid in this period (not the full unpaid bill). Outstanding bills stay under Payables."
               breakdown={
                 expenseCategoryRows.length > 0
                   ? expenseCategoryRows.map((r) => ({
@@ -564,7 +564,7 @@ export function AccountingDashboard() {
                       amount: r.amount,
                       dot: "bg-rose-500",
                     }))
-                  : [{ label: "No expenses", amount: 0, dot: "bg-muted-foreground" }]
+                  : [{ label: "No expenses paid", amount: 0, dot: "bg-muted-foreground" }]
               }
             />
             <MetricCard
@@ -917,6 +917,8 @@ export function AccountingDashboard() {
             invoices={periodInvoices}
             expenses={periodExpenses}
             periodIncome={totalIncome}
+            periodExpenseCashOut={totalExpensesAmt}
+            expenseCategoryRows={expenseCategoryRows}
             cashInflow={payments.cashIncome + payments.onlineIncome}
             cashOutflow={totalExpensesAmt}
             openingCashBalance={openingCashBalance}

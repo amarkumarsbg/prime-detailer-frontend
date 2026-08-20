@@ -17,9 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
   categoryDisplayLabel,
-  expensesByCategory,
   recognizedInvoices,
-  totalExpenseAmount,
 } from "@/lib/accounting/dashboard-metrics";
 import type { Expense, Invoice } from "@/types";
 import type { LucideIcon } from "lucide-react";
@@ -31,6 +29,9 @@ type AccountingReportsPanelProps = {
   expenses: Expense[];
   /** Period income from actual receipts (payments + advances + memberships). */
   periodIncome: number;
+  /** Period expenses from actual cash paid (purchase payments + paid standalone expenses). */
+  periodExpenseCashOut: number;
+  expenseCategoryRows?: { category: string; amount: number }[];
   cashInflow: number;
   cashOutflow: number;
   openingCashBalance: number;
@@ -40,16 +41,34 @@ export function AccountingReportsPanel({
   invoices,
   expenses,
   periodIncome,
+  periodExpenseCashOut,
+  expenseCategoryRows,
   cashInflow,
   cashOutflow,
   openingCashBalance,
 }: AccountingReportsPanelProps) {
   const [view, setView] = useState<ReportView>("pl");
 
-  const expenseTotal = useMemo(() => totalExpenseAmount(expenses), [expenses]);
+  const expenseTotal = periodExpenseCashOut;
   const netProfit = Math.round((periodIncome - expenseTotal) * 100) / 100;
   const margin = periodIncome > 0 ? (netProfit / periodIncome) * 100 : 0;
-  const byCategory = useMemo(() => expensesByCategory(expenses), [expenses]);
+  const byCategory = useMemo(() => {
+    if (expenseCategoryRows && expenseCategoryRows.length > 0) return expenseCategoryRows;
+    const map = new Map<string, number>();
+    for (const e of expenses) {
+      const paid =
+        e.paymentStatus === "PAID"
+          ? e.amount
+          : e.paymentStatus === "PARTIAL"
+            ? e.amountPaid ?? 0
+            : 0;
+      if (paid <= 0) continue;
+      map.set(e.category, (map.get(e.category) ?? 0) + paid);
+    }
+    return [...map.entries()]
+      .map(([category, amount]) => ({ category, amount: Math.round(amount * 100) / 100 }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [expenses, expenseCategoryRows]);
   const recognized = useMemo(() => recognizedInvoices(invoices), [invoices]);
 
   const tax = useMemo(() => {

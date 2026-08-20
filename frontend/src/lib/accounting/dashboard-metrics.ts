@@ -62,9 +62,62 @@ export function expenseAmountForMethod(e: Expense): number {
   return expensePaidAmount(e);
 }
 
-/** P&L / Total Expenses: full bill amount when the expense is recognized (accrual). */
+/** P&L / Total Expenses (legacy accrual): full bill amount when the expense is recognized. */
 export function recognizedExpenseAmount(e: Expense): number {
   return e.amount;
+}
+
+/**
+ * Cash-basis expenses for a period (aligned with Total Income receipts):
+ * - Purchase-linked: sum vendor payments by paidAt
+ * - Standalone: sum amount actually paid, keyed on expense date
+ */
+export function totalExpenseCashOutInPeriod(
+  expenses: Expense[],
+  purchases: ProductPurchase[],
+  filter: ExpenseDateFilter
+): number {
+  return (
+    Math.round(
+      (sumPurchasePaymentsInPeriod(purchases, filter, "all") +
+        sumStandaloneExpenseCashOutInPeriod(expenses, filter, "all")) *
+        100
+    ) / 100
+  );
+}
+
+/** Category breakdown using cash paid in period (not full unpaid bills). */
+export function expensesByCategoryCashOut(
+  expenses: Expense[],
+  purchases: ProductPurchase[],
+  filter: ExpenseDateFilter
+): { category: string; amount: number }[] {
+  const map = new Map<string, number>();
+
+  for (const e of expenses) {
+    if (e.purchaseId) continue;
+    if (!matchesExpenseDate(e.date, filter)) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    map.set(e.category, (map.get(e.category) ?? 0) + paid);
+  }
+
+  const linkedByPurchase = new Map<string, Expense>();
+  for (const e of expenses) {
+    if (e.purchaseId) linkedByPurchase.set(e.purchaseId, e);
+  }
+
+  for (const purchase of purchases) {
+    for (const payment of purchase.payments ?? []) {
+      if (!matchesExpenseDate(payment.paidAt, filter)) continue;
+      const cat = linkedByPurchase.get(purchase.id)?.category ?? "SUPPLIES";
+      map.set(cat, (map.get(cat) ?? 0) + payment.amount);
+    }
+  }
+
+  return [...map.entries()]
+    .map(([category, amount]) => ({ category, amount: Math.round(amount * 100) / 100 }))
+    .sort((a, b) => b.amount - a.amount);
 }
 
 export function sumExpensesByMethods(
@@ -372,7 +425,8 @@ export function percentChange(current: number, previous: number): number | null 
 export function buildIncomeExpenseTrend(
   invoices: Invoice[],
   expenses: Expense[],
-  filter: ExpenseDateFilter
+  filter: ExpenseDateFilter,
+  purchases: ProductPurchase[] = []
 ): IncomeExpenseTrendPoint[] {
   const recognized = recognizedInvoices(invoices);
   const bounds = dateRangeBounds(filter);
@@ -390,7 +444,7 @@ export function buildIncomeExpenseTrend(
   const map = new Map<string, { income: number; expense: number; sort: string }>();
 
   const keyFor = (iso: string): { key: string; sort: string } => {
-    const d = parseISO(iso);
+    const d = parseISO(iso.length <= 10 ? `${iso}T12:00:00` : iso);
     if (bucket === "month") {
       return { key: format(d, "yyyy-MM"), sort: format(d, "yyyy-MM") };
     }
@@ -402,15 +456,33 @@ export function buildIncomeExpenseTrend(
   };
 
   for (const inv of recognized) {
-    const { key, sort } = keyFor(inv.createdAt);
-    const prev = map.get(key) ?? { income: 0, expense: 0, sort };
-    prev.income += inv.grandTotal;
-    map.set(key, prev);
+    for (const p of inv.payments) {
+      if (!matchesExpenseDate(p.paidAt, filter)) continue;
+      const { key, sort } = keyFor(p.paidAt);
+      const prev = map.get(key) ?? { income: 0, expense: 0, sort };
+      prev.income += p.amount;
+      map.set(key, prev);
+    }
   }
+
+  for (const purchase of purchases) {
+    for (const payment of purchase.payments ?? []) {
+      if (!matchesExpenseDate(payment.paidAt, filter)) continue;
+      const { key, sort } = keyFor(payment.paidAt);
+      const prev = map.get(key) ?? { income: 0, expense: 0, sort };
+      prev.expense += payment.amount;
+      map.set(key, prev);
+    }
+  }
+
   for (const e of expenses) {
+    if (e.purchaseId) continue;
+    if (!matchesExpenseDate(e.date, filter)) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
     const { key, sort } = keyFor(e.date);
     const prev = map.get(key) ?? { income: 0, expense: 0, sort };
-    prev.expense += recognizedExpenseAmount(e);
+    prev.expense += paid;
     map.set(key, prev);
   }
 
