@@ -6,6 +6,31 @@ import {
   taxRateAsPercentLabel,
 } from "@/lib/tax-invoice-format";
 
+describe("formatInvoiceVehicleDetailsLine", () => {
+  it("joins variant, year, fuel, and color", async () => {
+    const { formatInvoiceVehicleDetailsLine } = await import("@/lib/tax-invoice-format");
+    expect(
+      formatInvoiceVehicleDetailsLine({
+        variant: "EX",
+        year: 2026,
+        fuelType: "DIESEL",
+        color: "Blue",
+      })
+    ).toBe("EX · 2026 · Diesel · Blue");
+  });
+
+  it("skips empty and placeholder color", async () => {
+    const { formatInvoiceVehicleDetailsLine } = await import("@/lib/tax-invoice-format");
+    expect(
+      formatInvoiceVehicleDetailsLine({
+        year: 2024,
+        fuelType: "CNG",
+        color: "—",
+      })
+    ).toBe("2024 · CNG");
+  });
+});
+
 describe("splitCgstSgst", () => {
   it("splits tax evenly", () => {
     expect(splitCgstSgst(180)).toEqual({ cgst: 90, sgst: 90 });

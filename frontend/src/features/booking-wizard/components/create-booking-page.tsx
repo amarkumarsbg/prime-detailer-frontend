@@ -324,15 +324,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleIdentifierValue, setVehicleIdentifierValue] = useState("");
   const [showMoreVehicleDetails, setShowMoreVehicleDetails] = useState(true);
 
-  useEffect(() => {
-    if (vehicleIdentifierType === "VIN") {
-      setVehicleNumber(vehicleIdentifierValue.trim().toUpperCase());
-      setVehicleVinNumber(vehicleIdentifierValue.trim().toUpperCase());
-    } else {
-      setVehicleNumber(normalizeRegistrationNumber(vehicleIdentifierValue));
-      setVehicleVinNumber("");
-    }
-  }, [vehicleIdentifierType, vehicleIdentifierValue]);
 
   const [bookingWhen, setBookingWhen] = useState(() =>
     isWalkIn ? datetimeLocalValue(new Date()) : ""
@@ -638,6 +629,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       setSelectedVehicleId(v.id);
       setAddingNewVehicle(false);
       setVehicleNumber(v.registrationNumber);
+      setVehicleIdentifierType(v.vinNumber ? "VIN" : "REG");
       const rb = brandNames.find((b) => b.toLowerCase() === v.make.toLowerCase()) ?? v.make;
       setVehicleBrand(rb);
       setVehicleModel(v.model);
@@ -676,6 +668,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       setSelectedVehicleId(v.id);
       setAddingNewVehicle(false);
       setVehicleNumber(v.registrationNumber);
+      setVehicleIdentifierType(v.vinNumber ? "VIN" : "REG");
       const rb = brandNames.find((b) => b.toLowerCase() === v.make.toLowerCase()) ?? v.make;
       setVehicleBrand(rb);
       setVehicleModel(v.model);
@@ -786,6 +779,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setAddingNewVehicle(false);
     setAddVehiclePopupOpen(false);
     setVehicleNumber(v.registrationNumber);
+    setVehicleIdentifierType(v.vinNumber ? "VIN" : "REG");
     const rb = brandNames.find((b) => b.toLowerCase() === v.make.toLowerCase()) ?? v.make;
     setVehicleBrand(rb);
     setVehicleModel(v.model);
@@ -1105,6 +1099,18 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     membershipPackagesAll,
   ]);
 
+  const selectedVehicleObj = useMemo(() => {
+    if (!selectedVehicleId) return null;
+    return vehicles.find((v) => v.id === selectedVehicleId) ?? null;
+  }, [selectedVehicleId, vehicles]);
+
+  const isVinMode = useMemo(() => {
+    if (selectedVehicleObj) {
+      return !!selectedVehicleObj.vinNumber;
+    }
+    return vehicleIdentifierType === "VIN";
+  }, [selectedVehicleObj, vehicleIdentifierType]);
+
   const showVehicleDetailsForm =
     !existingCustomerId || addingNewVehicle || ownedVehicles.length === 0;
 
@@ -1415,11 +1421,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       toast.error("Vehicle identifier, brand, model, and type are required.");
       return;
     }
-    if (vehicleIdentifierType === "REG" && !isValidIndianVehicleRegistration(vehicleNumber)) {
+    if (!isVinMode && !isValidIndianVehicleRegistration(vehicleNumber)) {
       toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
       return;
     }
-    if (vehicleIdentifierType === "VIN" && vehicleNumber.length < 5) {
+    if (isVinMode && vehicleNumber.length < 5) {
       toast.error("VIN must be at least 5 characters.");
       return;
     }
@@ -2292,11 +2298,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         toast.error("Complete vehicle details to continue.");
         return;
       }
-      if (vehicleIdentifierType === "REG" && !isValidIndianVehicleRegistration(vehicleNumber)) {
+      // Match handleSubmit: garage VIN vehicles use isVinMode, not the REG form toggle
+      if (!isVinMode && !isValidIndianVehicleRegistration(vehicleNumber)) {
         toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
         return;
       }
-      if (vehicleIdentifierType === "VIN" && vehicleNumber.length < 5) {
+      if (isVinMode && vehicleNumber.length < 5) {
         toast.error("VIN must be at least 5 characters.");
         return;
       }
@@ -2447,7 +2454,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           <p className="font-medium">
             {vehicleBrand || "—"} {vehicleModel}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5 font-mono">{vehicleNumber || "No registration"}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+            {isVinMode ? "VIN" : "Reg"}:{" "}
+            {vehicleNumber || (isVinMode ? "No VIN" : "No registration")}
+          </p>
         </div>
 
         <div className="rounded-lg border border-border/80 bg-card p-3">
@@ -2642,7 +2652,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             <dd>{vehicleSegment || "—"}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-muted-foreground">Registration</dt>
+            <dt className="text-muted-foreground">{isVinMode ? "VIN" : "Registration"}</dt>
             <dd className="font-mono text-xs">{vehicleNumber || "Not selected"}</dd>
           </div>
           <div className="flex justify-between gap-2 align-start">
@@ -3157,7 +3167,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                 {rb} {v.model}
                               </p>
                               <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                                Reg: {v.registrationNumber}
+                                {v.vinNumber ? "VIN" : "Reg"}: {v.registrationNumber}
                               </p>
                             </div>
                           </div>
@@ -3187,6 +3197,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         onValueChange={(val) => {
                           setVehicleIdentifierType(val as "REG" | "VIN");
                           setVehicleIdentifierValue("");
+                          setVehicleNumber("");
+                          setVehicleVinNumber("");
                         }}
                       >
                         <SelectTrigger id="vehicle-identifier-type-inline" className="h-10 rounded-md">
@@ -3208,11 +3220,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         value={vehicleIdentifierValue}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setVehicleIdentifierValue(
-                            vehicleIdentifierType === "REG"
-                              ? sanitizeVehicleRegistrationInput(val)
-                              : val
-                          );
+                          const sanitized = vehicleIdentifierType === "REG"
+                            ? sanitizeVehicleRegistrationInput(val)
+                            : val;
+                          setVehicleIdentifierValue(sanitized);
+                          if (vehicleIdentifierType === "VIN") {
+                            setVehicleNumber(sanitized.trim().toUpperCase());
+                            setVehicleVinNumber(sanitized.trim().toUpperCase());
+                          } else {
+                            setVehicleNumber(normalizeRegistrationNumber(sanitized));
+                            setVehicleVinNumber("");
+                          }
                         }}
                         placeholder={
                           vehicleIdentifierType === "REG"
@@ -3528,6 +3546,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         onValueChange={(val) => {
                           setVehicleIdentifierType(val as "REG" | "VIN");
                           setVehicleIdentifierValue("");
+                          setVehicleNumber("");
+                          setVehicleVinNumber("");
                         }}
                       >
                         <SelectTrigger id="vehicle-identifier-type-popup" className="h-10 rounded-md">
@@ -3549,11 +3569,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         value={vehicleIdentifierValue}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setVehicleIdentifierValue(
-                            vehicleIdentifierType === "REG"
-                              ? sanitizeVehicleRegistrationInput(val)
-                              : val
-                          );
+                          const sanitized = vehicleIdentifierType === "REG"
+                            ? sanitizeVehicleRegistrationInput(val)
+                            : val;
+                          setVehicleIdentifierValue(sanitized);
+                          if (vehicleIdentifierType === "VIN") {
+                            setVehicleNumber(sanitized.trim().toUpperCase());
+                            setVehicleVinNumber(sanitized.trim().toUpperCase());
+                          } else {
+                            setVehicleNumber(normalizeRegistrationNumber(sanitized));
+                            setVehicleVinNumber("");
+                          }
                         }}
                         placeholder={
                           vehicleIdentifierType === "REG"

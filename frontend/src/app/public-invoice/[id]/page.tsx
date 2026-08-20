@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiGet } from "@/lib/api-client";
-import { buildTaxInvoicePrintHtml } from "@/lib/tax-invoice-format";
+import { buildTaxInvoicePrintHtml, formatInvoiceVehicleDetailsLine } from "@/lib/tax-invoice-format";
 import { resolveMembershipInvoiceDetails } from "@/lib/membership-invoice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +25,15 @@ import {
 interface PublicInvoiceData {
   invoice: any;
   jobCard: any;
+  vehicle?: {
+    variant?: string;
+    year?: number;
+    fuelType?: string;
+    color?: string;
+    odometer?: number;
+    make?: string;
+    model?: string;
+  } | null;
   businessSettings: any;
 }
 
@@ -55,7 +64,7 @@ export default function PublicInvoicePage() {
 
   const previewHtml = useMemo(() => {
     if (!data) return "";
-    const { invoice, jobCard, businessSettings } = data;
+    const { invoice, jobCard, vehicle, businessSettings } = data;
     
     const totalPaid = (invoice.payments ? invoice.payments.reduce((s: number, p: any) => s + p.amount, 0) : 0) + (invoice.walletAmountUsed || 0);
     const remainingBalance = Math.max(0, invoice.grandTotal - totalPaid);
@@ -85,6 +94,17 @@ export default function PublicInvoicePage() {
       bankUpi: businessSettings?.bankUpi || "",
     };
 
+    const vehicleDetailsLine = formatInvoiceVehicleDetailsLine({
+      variant: vehicle?.variant,
+      year: vehicle?.year,
+      fuelType: vehicle?.fuelType,
+      color: vehicle?.color,
+    });
+    const odometerReading =
+      jobCard?.odometerReading != null && Number.isFinite(jobCard.odometerReading)
+        ? jobCard.odometerReading
+        : vehicle?.odometer;
+
     return buildTaxInvoicePrintHtml(
       {
         invoice,
@@ -94,6 +114,8 @@ export default function PublicInvoicePage() {
         customerEmail: jobCard?.customerEmail ?? "",
         customerAddress: jobCard?.customerAddress ?? "",
         vehicleMakeModel: invoice.vehicleMakeModel || jobCard?.vehicleMakeModel || "—",
+        vehicleDetailsLine: vehicleDetailsLine || undefined,
+        odometerReading: odometerReading ?? undefined,
         business: businessDetails,
         payments: invoice.payments || [],
         totalPaid,
@@ -156,7 +178,7 @@ export default function PublicInvoicePage() {
     );
   }
 
-  const { invoice, jobCard, businessSettings } = data;
+  const { invoice, jobCard, vehicle, businessSettings } = data;
 
   const totalPaid = (invoice.payments ? invoice.payments.reduce((s: number, p: any) => s + p.amount, 0) : 0) + (invoice.walletAmountUsed || 0);
   const isPaid = invoice.status === "PAID" || totalPaid >= invoice.grandTotal;
@@ -165,6 +187,18 @@ export default function PublicInvoicePage() {
   const businessName = businessSettings?.businessName || "Prime Detailers";
   const businessPhone = businessSettings?.businessPhone || "+91-80-4123-4567";
   const businessWhatsApp = businessSettings?.businessWhatsApp || "+91-80-4123-4567";
+  const vehicleDetailsLine = formatInvoiceVehicleDetailsLine({
+    variant: vehicle?.variant,
+    year: vehicle?.year,
+    fuelType: vehicle?.fuelType,
+    color: vehicle?.color,
+  });
+  const odometerDisplay =
+    jobCard?.odometerReading != null
+      ? jobCard.odometerReading
+      : vehicle?.odometer != null
+        ? vehicle.odometer
+        : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fbfbfe] text-slate-800 antialiased relative overflow-hidden pb-12">
@@ -256,6 +290,16 @@ export default function PublicInvoicePage() {
                 <p className="text-sm font-bold text-slate-800 truncate max-w-[150px]" title={jobCard?.vehicleMakeModel}>
                   {jobCard?.vehicleMakeModel || "Customer Vehicle"}
                 </p>
+                {vehicleDetailsLine ? (
+                  <p className="text-[10px] text-slate-500 truncate max-w-[180px]">
+                    {vehicleDetailsLine}
+                  </p>
+                ) : null}
+                {odometerDisplay != null && (
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Odo: {odometerDisplay.toLocaleString("en-IN")} km
+                  </p>
+                )}
                 {invoice.vehicleRegNumber && (
                   <div className="mt-1">
                     <span className="px-2 py-0.5 border border-slate-700/80 rounded font-mono text-[9px] bg-slate-900 text-amber-400 font-black tracking-wider uppercase inline-block shadow-sm">

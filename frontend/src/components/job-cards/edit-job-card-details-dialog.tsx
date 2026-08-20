@@ -73,11 +73,13 @@ export function EditJobCardDetailsDialog({
   const [serviceSearch, setServiceSearch] = useState("");
   const [addServiceOpen, setAddServiceOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [odometerReading, setOdometerReading] = useState("");
 
   useEffect(() => {
     if (!jobCard || !open) return;
     setReportedIssues(jobCard.reportedIssues ?? "");
     setExpectedDelivery(jobCard.expectedDelivery?.slice(0, 10) ?? "");
+    setOdometerReading(jobCard.odometerReading ? String(jobCard.odometerReading) : "");
     setNotes(jobCard.notes ?? "");
     setTerms(jobCard.termsAndConditions ?? "");
     setSelectedServiceIds(new Set(jobCard.services.map((s) => s.serviceCatalogId)));
@@ -213,6 +215,7 @@ export function EditJobCardDetailsDialog({
       expectedDelivery: expectedDelivery.trim()
         ? new Date(`${expectedDelivery.trim()}T12:00:00`).toISOString()
         : jobCard.expectedDelivery,
+      odometerReading: odometerReading.trim() ? parseInt(odometerReading.trim(), 10) : undefined,
       notes: notes.trim() || undefined,
       termsAndConditions: terms.trim() || undefined,
       services: servicesPreview,
@@ -273,6 +276,16 @@ export function EditJobCardDetailsDialog({
               className="date-input-icon-end pr-9"
               value={expectedDelivery}
               onChange={(e) => setExpectedDelivery(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="jc-odometer">Odometer (km)</Label>
+            <Input
+              id="jc-odometer"
+              type="number"
+              value={odometerReading}
+              onChange={(e) => setOdometerReading(e.target.value)}
+              placeholder="e.g. 25000"
             />
           </div>
           <div className="space-y-1.5">

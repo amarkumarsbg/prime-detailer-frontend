@@ -1748,6 +1748,12 @@ export default function JobCardDetailPage() {
                     <p className="text-xs text-muted-foreground">Model</p>
                     <p className="font-medium mt-0.5">{jobCard.vehicleMakeModel}</p>
                   </div>
+                  {jobCard.odometerReading != null && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Odometer</p>
+                      <p className="font-medium mt-0.5">{jobCard.odometerReading.toLocaleString()} km</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <Card className="border-border/80 shadow-sm">

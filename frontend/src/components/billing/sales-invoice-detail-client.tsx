@@ -86,7 +86,7 @@ import {
   warmInvoicePdfEngine,
   type InvoicePdfOpts,
 } from "@/lib/invoice-pdf";
-import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
+import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, formatInvoiceVehicleDetailsLine, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
 import { invoiceSourceTitle } from "@/lib/invoice-source";
 import {
   canApplyReferralOnInvoice,
@@ -430,6 +430,28 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     jobCard?.vehicleMakeModel ||
     vehicleMakeModelLabel(membershipVehicle) ||
     "—";
+
+  const invoiceVehicle = useMemo(() => {
+    if (membershipVehicle) return membershipVehicle;
+    if (!jobCard?.vehicleId) return null;
+    return vehicles.find((v) => v.id === jobCard.vehicleId) ?? null;
+  }, [membershipVehicle, jobCard?.vehicleId, vehicles]);
+
+  const vehicleDetailsLine = useMemo(
+    () =>
+      formatInvoiceVehicleDetailsLine({
+        variant: invoiceVehicle?.variant,
+        year: invoiceVehicle?.year,
+        fuelType: invoiceVehicle?.fuelType,
+        color: invoiceVehicle?.color,
+      }),
+    [invoiceVehicle]
+  );
+
+  const odometerReading =
+    jobCard?.odometerReading != null && Number.isFinite(jobCard.odometerReading)
+      ? jobCard.odometerReading
+      : invoiceVehicle?.odometer;
 
   // Persist membership snapshot on older invoices so PDF / public share keep the ID.
   useEffect(() => {
@@ -812,6 +834,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       customerEmail: invoiceCustomer?.email?.trim() ?? "",
       customerAddress: invoiceCustomer?.address ?? "",
       vehicleMakeModel: resolvedVehicleMakeModel,
+      vehicleDetailsLine: vehicleDetailsLine || undefined,
+      odometerReading: odometerReading ?? undefined,
       business: {
         businessName,
         businessTagline,
@@ -867,6 +891,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
     membershipPackageName,
     membershipDetails,
     resolvedVehicleMakeModel,
+    vehicleDetailsLine,
+    odometerReading,
   ]);
 
   useEffect(() => {

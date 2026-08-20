@@ -83,6 +83,32 @@ export interface TaxInvoiceBusinessBlock {
   bankUpi: string;
 }
 
+/** Compact vehicle meta for invoice header (e.g. "EX · 2026 · Diesel · Blue"). */
+export function formatInvoiceVehicleDetailsLine(parts: {
+  variant?: string | null;
+  year?: number | string | null;
+  fuelType?: string | null;
+  color?: string | null;
+}): string {
+  const bits: string[] = [];
+  const variant = parts.variant?.trim();
+  if (variant) bits.push(variant);
+  if (parts.year != null && String(parts.year).trim() !== "") {
+    bits.push(String(parts.year).trim());
+  }
+  const fuel = parts.fuelType?.trim();
+  if (fuel) {
+    bits.push(
+      fuel.toUpperCase() === "CNG"
+        ? "CNG"
+        : fuel.charAt(0).toUpperCase() + fuel.slice(1).toLowerCase()
+    );
+  }
+  const color = parts.color?.trim();
+  if (color && color !== "—") bits.push(color);
+  return bits.join(" · ");
+}
+
 export type TaxInvoiceDocumentOpts = {
   invoice: Invoice;
   jobCard: JobCard | null;
@@ -92,6 +118,10 @@ export type TaxInvoiceDocumentOpts = {
   customerAddress: string;
   customerWhatsApp?: string;
   vehicleMakeModel: string;
+  /** Variant · year · fuel · color under vehicle name */
+  vehicleDetailsLine?: string;
+  /** Odometer at service time (km) */
+  odometerReading?: number;
   business: TaxInvoiceBusinessBlock;
   payments: Payment[];
   totalPaid: number;
@@ -185,6 +215,8 @@ export function buildTaxInvoicePrintHtml(
     customerAddress,
     customerWhatsApp,
     vehicleMakeModel,
+    vehicleDetailsLine = "",
+    odometerReading,
     business,
     payments,
     totalPaid,
@@ -197,6 +229,11 @@ export function buildTaxInvoicePrintHtml(
     membershipPackageName,
     membershipDetails,
   } = opts;
+  const vehicleDetailsTrimmed = vehicleDetailsLine.trim();
+  const odometerLabel =
+    odometerReading != null && Number.isFinite(odometerReading)
+      ? `${Math.round(odometerReading).toLocaleString("en-IN")} km`
+      : "";
 
   const isGstRegistered = business.gstRegistrationStatus !== "NOT_REGISTERED";
   const displayTaxRate = isGstRegistered ? invoice.taxRate : 0;
@@ -385,10 +422,11 @@ body { font-family: 'Outfit', system-ui, sans-serif; font-size: 10.5px; color: #
   overflow: hidden;
 }
 .brand-text { min-width: 0; }
-.metadata-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 16px 0; padding: 10px 12px; border-top: 1.5px solid #3b82f6; border-bottom: 1.5px solid #3b82f6; background: #eff6ff; border-radius: 2px; }
+.metadata-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin: 16px 0; padding: 10px 12px; border-top: 1.5px solid #3b82f6; border-bottom: 1.5px solid #3b82f6; background: #eff6ff; border-radius: 2px; }
 .metadata-bar.membership { grid-template-columns: repeat(2, 1fr); }
 .metadata-item div:first-child { color: #737373; font-weight: 500; text-transform: uppercase; font-size: 8px; margin-bottom: 2px; letter-spacing: 0.5px; }
-.metadata-item div:last-child { font-weight: 700; color: #171717; font-size: 10px; }
+.metadata-item > div:nth-child(2) { font-weight: 700; color: #171717; font-size: 10px; }
+.metadata-item .vehicle-meta { font-weight: 500; color: #525252; font-size: 8.5px; margin-top: 2px; line-height: 1.35; text-transform: none; }
 .membership-details { border: 1px solid #d4d4d4; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; background: #fafafa; }
 .membership-details h4 { font-size: 9.5px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; border-bottom: 1px solid #e5e5e5; padding-bottom: 4px; }
 .membership-details-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
@@ -533,12 +571,27 @@ table.inv .b { font-weight: 700; color: #171717; }
     </div>
     <div class="metadata-item">
       <div>Vehicle Name</div>
-      <div style="text-transform: capitalize;">${escapeHtml(vehicleMakeModel)}</div>
+      <div>
+        <div style="text-transform: capitalize;">${escapeHtml(vehicleMakeModel)}</div>
+        ${
+          vehicleDetailsTrimmed
+            ? `<div class="vehicle-meta">${escapeHtml(vehicleDetailsTrimmed)}</div>`
+            : ""
+        }
+      </div>
     </div>
     <div class="metadata-item">
       <div>Vehicle Number</div>
       <div style="font-family: monospace;">${escapeHtml(invoice.vehicleRegNumber)}</div>
+    </div>
+    ${
+      odometerLabel
+        ? `<div class="metadata-item">
+      <div>Odometer</div>
+      <div>${escapeHtml(odometerLabel)}</div>
     </div>`
+        : ""
+    }`
     }
   </div>
 
