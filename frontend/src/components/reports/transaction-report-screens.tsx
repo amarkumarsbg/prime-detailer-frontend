@@ -407,19 +407,29 @@ export function ExpenseCategoryReport() {
           <thead>
             <tr className="border-b border-border bg-muted/50 text-[10px] font-semibold uppercase text-muted-foreground sm:text-xs">
               <th className="px-2 py-2 text-left">Category</th>
-              <th className="px-2 py-2 text-right">Total Amount</th>
+              <th className="px-2 py-2 text-right">Cash Paid</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <ReportTableEmpty colSpan={2} />
             ) : (
-              rows.map((r) => (
-                <tr key={r.category} className="border-b border-border/80 hover:bg-muted/10">
-                  <td className="px-2 py-2 font-medium">{r.category}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+              <>
+                {rows.map((r) => (
+                  <tr key={r.category} className="border-b border-border/80 hover:bg-muted/10">
+                    <td className="px-2 py-2 font-medium">{r.category}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-border bg-muted/30 font-semibold">
+                  <td className="px-2 py-2">Total</td>
+                  <td className="px-2 py-2 text-right tabular-nums">
+                    {formatInrFull(
+                      Math.round(rows.reduce((s, r) => s + r.totalAmount, 0) * 100) / 100
+                    )}
+                  </td>
                 </tr>
-              ))
+              </>
             )}
           </tbody>
         </table>
@@ -437,6 +447,10 @@ export function ExpenseTransactionReport() {
   const rows = useMemo(
     () => buildExpenseTransactionRows(expenses, period, category),
     [expenses, period, category]
+  );
+  const totalCashPaid = useMemo(
+    () => Math.round(rows.reduce((s, r) => s + r.totalAmount, 0) * 100) / 100,
+    [rows]
   );
 
   return (
@@ -470,22 +484,30 @@ export function ExpenseTransactionReport() {
               <th className="px-2 py-2 text-left">Expense Number</th>
               <th className="px-2 py-2 text-left">Category</th>
               <th className="px-2 py-2 text-left">Payment Mode</th>
-              <th className="px-2 py-2 text-right">Total Amount</th>
+              <th className="px-2 py-2 text-right">Cash Paid</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <ReportTableEmpty colSpan={5} />
             ) : (
-              rows.map((r) => (
-                <tr key={r.expenseNumber} className="border-b border-border/80 hover:bg-muted/10">
-                  <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
-                  <td className="px-2 py-2 font-mono text-xs">{r.expenseNumber}</td>
-                  <td className="px-2 py-2">{r.category}</td>
-                  <td className="px-2 py-2">{r.paymentMode}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+              <>
+                {rows.map((r) => (
+                  <tr key={`${r.expenseNumber}-${r.date}`} className="border-b border-border/80 hover:bg-muted/10">
+                    <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                    <td className="px-2 py-2 font-mono text-xs">{r.expenseNumber}</td>
+                    <td className="px-2 py-2">{r.category}</td>
+                    <td className="px-2 py-2">{r.paymentMode}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(r.totalAmount)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t border-border bg-muted/30 font-semibold">
+                  <td className="px-2 py-2" colSpan={4}>
+                    Total (cash paid)
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(totalCashPaid)}</td>
                 </tr>
-              ))
+              </>
             )}
           </tbody>
         </table>

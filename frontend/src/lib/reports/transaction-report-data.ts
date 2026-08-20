@@ -1,9 +1,8 @@
 import type { Invoice, Expense, ProductPurchase, Part } from "@/types";
 import type { CashBankAccount, CashBankTransaction } from "@/store/cash-bank-store";
 import { dateInPreset } from "@/lib/reports/report-period-presets";
-import { invoicePaidTotal, expensePaidAmount } from "@/lib/party/ledger-math";
+import { expensePaidAmount } from "@/lib/party/ledger-math";
 import { purchaseGrandTotal } from "@/lib/inventory/purchase-math";
-import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
 
 export type BillWiseProfitRow = {
   date: string;
@@ -101,6 +100,7 @@ export function buildDaybookRows(
   }
 
   for (const e of expenses) {
+    // Purchase payouts are posted via Cash & Bank / purchase payments — avoid double-count.
     if (e.purchaseId) continue;
     if (!dateInPreset(e.date, period)) continue;
     const paid = expensePaidAmount(e);
@@ -109,7 +109,7 @@ export function buildDaybookRows(
         at: `${e.date}T12:00:00.000Z`,
         partyName: e.vendorName ?? e.title,
         txnType: "Payment",
-        txnNo: e.id,
+        txnNo: e.title?.trim() || e.id,
         moneyIn: 0,
         moneyOut: paid,
       });
@@ -288,8 +288,10 @@ export function buildExpenseCategoryRows(expenses: Expense[], period: string): E
   const map = new Map<string, number>();
   for (const e of expenses) {
     if (!dateInPreset(e.date, period)) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
     const key = expenseCategoryLabel(e.category);
-    map.set(key, (map.get(key) ?? 0) + recognizedExpenseAmount(e));
+    map.set(key, (map.get(key) ?? 0) + paid);
   }
   return [...map.entries()]
     .map(([category, totalAmount]) => ({
@@ -315,6 +317,7 @@ export type ExpenseTransactionRow = {
   totalAmount: number;
 };
 
+/** Line-level cash paid on expenses (same basis as Accounting Total Expenses). */
 export function buildExpenseTransactionRows(
   expenses: Expense[],
   period: string,
@@ -323,15 +326,16 @@ export function buildExpenseTransactionRows(
   return expenses
     .filter((e) => {
       if (!dateInPreset(e.date, period)) return false;
+      if (expensePaidAmount(e) <= 0) return false;
       if (categoryFilter === "All Expense Categories") return true;
       return expenseCategoryLabel(e.category) === categoryFilter;
     })
     .map((e) => ({
       date: e.date,
-      expenseNumber: e.id,
+      expenseNumber: e.title?.trim() || e.id,
       category: expenseCategoryLabel(e.category),
       paymentMode: e.paymentMethod.replace(/_/g, " "),
-      totalAmount: recognizedExpenseAmount(e),
+      totalAmount: expensePaidAmount(e),
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
 }

@@ -34,11 +34,11 @@ const META: Record<string, { title: string; description: string }> = {
   },
   "expense-category": {
     title: "Expense Category Report",
-    description: "Totals by expense category for the selected period.",
+    description: "Cash paid by expense category for the selected period.",
   },
   "expense-transaction": {
     title: "Expense Transaction Report",
-    description: "Line-level expenses with category and payment mode.",
+    description: "Line-level cash paid on expenses, with category and payment mode.",
   },
 };
 
