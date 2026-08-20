@@ -315,9 +315,9 @@ export function CatalogItemFormDialog({
       updatePart(existing.id, next);
       toast.success("Catalog item updated");
     } else {
-      addPart(next);
+      const created = addPart(next);
       toast.success("Catalog item created");
-      onCreated?.(next);
+      onCreated?.(created);
     }
     onOpenChange(false);
     reset();

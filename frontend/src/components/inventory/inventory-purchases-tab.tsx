@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { KPICard } from "@/components/shared/kpi-card";
@@ -40,7 +40,7 @@ import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-
 import { PurchaseExpandableTable } from "@/components/inventory/purchase-expandable-table";
 import { VendorFormDialog } from "@/components/expenses/vendor-form-dialog";
 import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchase-payment-dialog";
-import type { InventoryPurchaseLine, ProductPurchase } from "@/types";
+import type { InventoryPurchaseLine, Part, ProductPurchase } from "@/types";
 import { Package, CircleDollarSign, Wallet, AlertCircle } from "lucide-react";
 
 type DraftItem = {
@@ -53,7 +53,25 @@ type DraftItem = {
 };
 
 function emptyItem(): DraftItem {
-  return { key: String(Date.now()), partId: "", quantity: "1", unitPrice: "", discount: "0", gstRate: "18" };
+  return { key: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, partId: "", quantity: "1", unitPrice: "", discount: "0", gstRate: "18" };
+}
+
+function applyPartToDraftItems(prev: DraftItem[], part: Part, targetKey?: string | null): DraftItem[] {
+  const patch = {
+    partId: part.id,
+    unitPrice: String(part.costPrice ?? part.unitPrice ?? ""),
+    gstRate: String(part.gstRate ?? 18),
+  };
+  if (targetKey && prev.some((i) => i.key === targetKey)) {
+    return prev.map((i) => (i.key === targetKey ? { ...i, ...patch } : i));
+  }
+  const emptyIdx = prev.findIndex((i) => !i.partId);
+  if (emptyIdx >= 0) {
+    const next = [...prev];
+    next[emptyIdx] = { ...next[emptyIdx]!, ...patch };
+    return next;
+  }
+  return [...prev, { ...emptyItem(), ...patch }];
 }
 
 export function InventoryPurchasesTab() {
@@ -70,6 +88,8 @@ export function InventoryPurchasesTab() {
   const [open, setOpen] = useState(false);
   const [quickPartOpen, setQuickPartOpen] = useState(false);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const quickPartTargetKeyRef = useRef<string | null>(null);
+  const nestedDialogOpenRef = useRef(false);
   const [supplierName, setSupplierName] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -83,6 +103,8 @@ export function InventoryPurchasesTab() {
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [payTarget, setPayTarget] = useState<ProductPurchase | null>(null);
 
+  nestedDialogOpenRef.current = quickPartOpen || vendorDialogOpen;
+
   useEffect(() => {
     if (purchases.length === 0) return;
     void backfillPurchaseExpenses(purchases, {
@@ -94,6 +116,15 @@ export function InventoryPurchasesTab() {
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
   const hasMultipleBranches = activeBranches.length > 1;
   const activeParts = useMemo(() => parts.filter((p) => p.isActive !== false), [parts]);
+  const partsForSelect = useMemo(() => {
+    const byId = new Map(activeParts.map((p) => [p.id, p]));
+    for (const item of items) {
+      if (!item.partId || byId.has(item.partId)) continue;
+      const missing = parts.find((p) => p.id === item.partId);
+      if (missing) byId.set(missing.id, missing);
+    }
+    return [...byId.values()];
+  }, [activeParts, items, parts]);
   const branchLabel = (id?: string) => (id ? branches.find((b) => b.id === id)?.name ?? id : "—");
 
   const scopedPurchases = useMemo(() => {
@@ -271,7 +302,15 @@ export function InventoryPurchasesTab() {
         onPay={(p) => setPayTarget(p)}
       />
 
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          // Nested catalog/vendor dialogs must not dismiss or reset the purchase form.
+          if (!v && nestedDialogOpenRef.current) return;
+          setOpen(v);
+          if (!v) reset();
+        }}
+      >
         <DialogContent
           className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,720px)] sm:max-w-3xl")}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -418,6 +457,8 @@ export function InventoryPurchasesTab() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      const empty = items.find((i) => !i.partId);
+                      quickPartTargetKeyRef.current = empty?.key ?? items[0]?.key ?? null;
                       setQuickPartOpen(true);
                     }}
                   >
@@ -451,7 +492,7 @@ export function InventoryPurchasesTab() {
                       <div className="col-span-2 min-w-0 pr-9 sm:col-span-1 sm:pr-0">
                         <Label className="mb-1 text-xs sm:sr-only">Part</Label>
                         <Select
-                          value={item.partId}
+                          value={item.partId || undefined}
                           onValueChange={(partId) => {
                             const part = parts.find((p) => p.id === partId);
                             patchItem(item.key, {
@@ -465,7 +506,7 @@ export function InventoryPurchasesTab() {
                             <SelectValue placeholder="Select part" />
                           </SelectTrigger>
                           <SelectContent>
-                            {activeParts.map((p) => (
+                            {partsForSelect.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.name}
                               </SelectItem>
@@ -604,22 +645,11 @@ export function InventoryPurchasesTab() {
         open={quickPartOpen}
         onOpenChange={setQuickPartOpen}
         onCreated={(part) => {
-          setItems((prev) => {
-            const next = [...prev];
-            const patch = {
-              partId: part.id,
-              unitPrice: String(part.costPrice ?? part.unitPrice ?? ""),
-              gstRate: String(part.gstRate ?? 18),
-            };
-            const emptyIdx = next.findIndex((i) => !i.partId);
-            if (emptyIdx >= 0) {
-              next[emptyIdx] = { ...next[emptyIdx]!, ...patch };
-            } else {
-              next.push({ ...emptyItem(), ...patch });
-            }
-            return next;
-          });
-          setQuickPartOpen(false);
+          const fromStore =
+            useInventoryStore.getState().parts.find((p) => p.id === part.id) ?? part;
+          const targetKey = quickPartTargetKeyRef.current;
+          quickPartTargetKeyRef.current = null;
+          setItems((prev) => applyPartToDraftItems(prev, fromStore, targetKey));
         }}
       />
     </div>

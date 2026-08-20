@@ -39,7 +39,7 @@ interface InventoryStore {
   branchStocks: BranchStock[];
   stockTransfers: StockTransfer[];
   partCategories: PartCategoryRecord[];
-  addPart: (part: Part) => void;
+  addPart: (part: Part) => Part;
   addPartCategory: (name: string) => { ok: true; name: string } | { ok: false; error: string };
   updatePart: (partId: string, patch: Partial<Part>) => void;
   removePart: (partId: string) => Promise<void>;
@@ -303,10 +303,12 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   },
 
   addPart: (part) => {
+    const normalized = normalizePartUnits(initializeDualUnitStock(part));
     set((state) => ({
-      parts: [normalizePartUnits(initializeDualUnitStock(part)), ...state.parts],
+      parts: [normalized, ...state.parts],
     }));
     persistInventorySnapshot(get);
+    return normalized;
   },
 
   updatePart: (partId, patch) => {
