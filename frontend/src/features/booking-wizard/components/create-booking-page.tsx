@@ -119,6 +119,9 @@ import {
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
 import { reconcilePickupWithJobCards } from "@/lib/sync-pickup-from-job-card";
+import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
+import { AddVehicleInlineForm } from "@/components/vehicles/add-vehicle-inline-form";
+import type { AddVehicleFormData } from "@/components/vehicles/add-vehicle-form-types";
 import {
   isDatetimeLocalInPast,
   localDatetimeLocalInputMin,
@@ -432,10 +435,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const skipAddVehicleCancelOnCloseRef = useRef(false);
   const [extraBrands, setExtraBrands] = useState<string[]>([]);
   const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
-  const [newBrandOpen, setNewBrandOpen] = useState(false);
-  const [newBrandDraft, setNewBrandDraft] = useState("");
-  const [newModelOpen, setNewModelOpen] = useState(false);
-  const [newModelDraft, setNewModelDraft] = useState("");
   const [pricingService, setPricingService] = useState<ServiceCatalogItem | null>(null);
   const serviceSearchInputRef = useRef<HTMLInputElement>(null);
   const addonsCardRef = useRef<HTMLDivElement>(null);
@@ -471,6 +470,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     jobNumber: string;
     customerName: string;
     vehicleRegLabel: string;
+    vehicleIdLabel: "VIN" | "Registration";
   } | null>(null);
   const [checkInReportedIssuesBase, setCheckInReportedIssuesBase] = useState("");
   const [checkInNotesBase, setCheckInNotesBase] = useState("");
@@ -486,6 +486,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInMultiCamStreamPromise, setCheckInMultiCamStreamPromise] =
     useState<Promise<MediaStream> | null>(null);
   const checkInJobIdRef = useRef<string | null>(null);
+  const inlineVehicleFormRef = useRef<{
+    validate: () => Promise<boolean>;
+    getValues: () => AddVehicleFormData & { registrationNumber: string; isVin: boolean };
+  } | null>(null);
   const isSubmittingJobRef = useRef(false);
 
   const [jobCreateStep, setJobCreateStep] = useState(0);
@@ -634,6 +638,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       setVehicleBrand(rb);
       setVehicleModel(v.model);
       setVehicleSegment(v.segment);
+      setOdometerReading("");
+      setVehicleOdometer("");
     } else {
       setSelectedVehicleId(null);
     }
@@ -673,6 +679,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       setVehicleBrand(rb);
       setVehicleModel(v.model);
       setVehicleSegment(v.segment);
+      setOdometerReading("");
+      setVehicleOdometer("");
     } else {
       setSelectedVehicleId(null);
       setAddingNewVehicle(true);
@@ -784,6 +792,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleBrand(rb);
     setVehicleModel(v.model);
     setVehicleSegment(v.segment);
+    // Clear visit odometer so staff enter the current reading (last value shown as hint)
+    setOdometerReading("");
+    setVehicleOdometer("");
   };
 
   const startAddNewVehicle = () => {
@@ -816,95 +827,35 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setVehicleIdentifierValue("");
   };
 
-  const doneAddVehiclePopup = () => {
-    if (!existingCustomerId) {
-      toast.error("Select a customer first.");
-      return;
-    }
-    const brandTrim = vehicleBrand.trim();
-    const modelTrim = vehicleModel.trim();
-    if (!vehicleIdentifierValue.trim() || !brandTrim || !modelTrim) {
-      toast.error("Identifier, brand, and model are required.");
-      return;
-    }
-    const isVin = vehicleIdentifierType === "VIN";
-    const regStored = isVin
-      ? vehicleIdentifierValue.trim().toUpperCase()
-      : normalizeRegistrationNumber(vehicleIdentifierValue);
 
-    if (vehicleIdentifierType === "REG" && !isValidIndianVehicleRegistration(vehicleIdentifierValue)) {
-      toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
-      return;
-    }
-    if (vehicleIdentifierType === "VIN" && vehicleIdentifierValue.trim().length < 5) {
-      toast.error("VIN must be at least 5 characters.");
-      return;
-    }
+  const applyVehicleFormToWizardState = (
+    data: AddVehicleFormData & { registrationNumber: string; isVin: boolean }
+  ) => {
+    setVehicleIdentifierType(data.identifierType);
+    setVehicleIdentifierValue(data.identifierValue);
+    setVehicleNumber(data.registrationNumber);
+    setVehicleVinNumber(data.isVin ? data.registrationNumber : "");
+    setVehicleBrand(data.make);
+    setVehicleModel(data.model);
+    setVehicleSegment(data.segment);
+    setVehicleVariant(data.variant ?? "");
+    setVehicleFuelType(data.fuelType);
+    setVehicleColor(data.color ?? "");
+    setVehicleYear(String(data.year || new Date().getFullYear()));
+    setVehicleNotes(data.notes ?? "");
+    const odo =
+      data.odometer === "" || data.odometer == null ? "" : String(data.odometer);
+    setVehicleOdometer(odo);
+    if (odo) setOdometerReading(odo);
+    setVehicleInsuranceProvider(data.insuranceProvider ?? "");
+    setVehicleInsurancePolicyNumber(data.insurancePolicyNumber ?? "");
+    setVehicleInsuranceDueDate(data.insuranceDueDate ?? "");
+  };
 
-    const dup = findVehicleByNormalizedReg(vehicles, regStored);
-    if (dup) {
-      if (dup.customerId === existingCustomerId) {
-        skipAddVehicleCancelOnCloseRef.current = true;
-        selectVehicleFromGarage(dup);
-        return;
-      }
-      toast.error("Vehicle identifier belongs to another customer", {
-        description: `${dup.registrationNumber} — ${dup.customerName}`,
-      });
-      return;
-    }
-    const cust = customers.find((c) => c.id === existingCustomerId);
-    const inferredSeg = getModelSegment(vehicleBrand, vehicleModel);
-    const seg: VehicleSegment = (vehicleSegment || inferredSeg || "HATCHBACK") as VehicleSegment;
-    const rb = brandNames.find((b) => b.toLowerCase() === brandTrim.toLowerCase()) ?? brandTrim;
-    const newId = `veh-${Date.now()}`;
-    const newVehicle: Vehicle = {
-      id: newId,
-      customerId: existingCustomerId,
-      customerName: (cust?.name ?? customerName).trim(),
-      registrationNumber: regStored,
-      make: rb,
-      model: modelTrim,
-      variant: vehicleVariant.trim() || undefined,
-      segment: seg,
-      fuelType: vehicleFuelType,
-      color: vehicleColor.trim() || "—",
-      year: Number(vehicleYear) || new Date().getFullYear(),
-      notes: vehicleNotes.trim() || undefined,
-      odometer: vehicleOdometer.trim() ? Number(vehicleOdometer) : undefined,
-      insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
-      insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
-      insuranceDueDate: vehicleInsuranceDueDate || undefined,
-      vinNumber: isVin ? regStored : undefined,
-    };
-    setVehicles((prev) => [newVehicle, ...prev]);
-    setVehicleBrand(rb);
-    setVehicleModel(modelTrim);
-    setVehicleNumber(regStored);
-    setVehicleSegment(seg);
-    setSelectedVehicleId(newId);
-    setAddingNewVehicle(false);
+  const handleGarageVehicleCreated = (v: Vehicle) => {
     skipAddVehicleCancelOnCloseRef.current = true;
-    setAddVehiclePopupOpen(false);
-    
-    if (vehicleOdometer.trim()) {
-      setOdometerReading(vehicleOdometer.trim());
-    }
-
-    // Clear state
-    setVehicleVariant("");
-    setVehicleFuelType("PETROL");
-    setVehicleColor("");
-    setVehicleYear(String(new Date().getFullYear()));
-    setVehicleNotes("");
-    setVehicleOdometer("");
-    setVehicleInsuranceProvider("");
-    setVehicleInsurancePolicyNumber("");
-    setVehicleInsuranceDueDate("");
-    setVehicleIdentifierType("REG");
-    setVehicleIdentifierValue("");
-    
-    toast.success("Vehicle saved", { description: "It appears in your garage above." });
+    selectVehicleFromGarage(v);
+    setAddingNewVehicle(false);
   };
 
   const categories = useMemo(() => {
@@ -1417,15 +1368,41 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       toast.error("Customer name and a valid 10-digit phone are required.");
       return;
     }
-    if (!vehicleNumber.trim() || !vehicleBrand.trim() || !vehicleModel.trim() || !vehicleSegment) {
+
+    if (showInlineVehicleDetailsForm && inlineVehicleFormRef.current) {
+      const ok = await inlineVehicleFormRef.current.validate();
+      if (!ok) {
+        toast.error("Vehicle identifier, brand, model, and type are required.");
+        return;
+      }
+      applyVehicleFormToWizardState(inlineVehicleFormRef.current.getValues());
+    }
+
+    const number = showInlineVehicleDetailsForm && inlineVehicleFormRef.current
+      ? inlineVehicleFormRef.current.getValues().registrationNumber
+      : vehicleNumber;
+    const brand = showInlineVehicleDetailsForm && inlineVehicleFormRef.current
+      ? inlineVehicleFormRef.current.getValues().make
+      : vehicleBrand;
+    const model = showInlineVehicleDetailsForm && inlineVehicleFormRef.current
+      ? inlineVehicleFormRef.current.getValues().model
+      : vehicleModel;
+    const segment = showInlineVehicleDetailsForm && inlineVehicleFormRef.current
+      ? inlineVehicleFormRef.current.getValues().segment
+      : vehicleSegment;
+    const vinMode = showInlineVehicleDetailsForm && inlineVehicleFormRef.current
+      ? inlineVehicleFormRef.current.getValues().isVin
+      : isVinMode;
+
+    if (!number.trim() || !brand.trim() || !model.trim() || !segment) {
       toast.error("Vehicle identifier, brand, model, and type are required.");
       return;
     }
-    if (!isVinMode && !isValidIndianVehicleRegistration(vehicleNumber)) {
+    if (!vinMode && !isValidIndianVehicleRegistration(number)) {
       toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
       return;
     }
-    if (isVinMode && vehicleNumber.length < 5) {
+    if (vinMode && number.length < 5) {
       toast.error("VIN must be at least 5 characters.");
       return;
     }
@@ -1488,7 +1465,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       : undefined;
 
     let custId = existingCustomerId ?? `cust-local-${Date.now()}`;
-    const regStored = normalizeRegistrationNumber(vehicleNumber);
+    const inlineVals =
+      showInlineVehicleDetailsForm && inlineVehicleFormRef.current
+        ? inlineVehicleFormRef.current.getValues()
+        : null;
+    const regStored = inlineVals
+      ? inlineVals.isVin
+        ? inlineVals.registrationNumber
+        : normalizeRegistrationNumber(inlineVals.registrationNumber)
+      : isVinMode
+        ? vehicleNumber.trim().toUpperCase()
+        : normalizeRegistrationNumber(vehicleNumber);
     const formDigits = normalizePhoneDigits(customerPhone);
 
     const vehiclesNow = useVehicleStore.getState().vehicles;
@@ -1755,6 +1742,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 make: vehicleBrand.trim(),
                 model: vehicleModel.trim() || "—",
                 segment: seg,
+                ...(odometerReading.trim()
+                  ? { odometer: Number.parseInt(odometerReading, 10) || v.odometer }
+                  : {}),
               }
             : v
         )
@@ -1774,6 +1764,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           color: vehicleColor.trim() || "—",
           year: Number(vehicleYear) || new Date().getFullYear(),
           notes: vehicleNotes.trim() || undefined,
+          odometer: odometerReading.trim()
+            ? Number.parseInt(odometerReading, 10) || undefined
+            : undefined,
           insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
           insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
           insuranceDueDate: vehicleInsuranceDueDate || undefined,
@@ -1995,6 +1988,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       jobNumber,
       customerName: customerName.trim(),
       vehicleRegLabel: vehicleNumber.trim() || regStored,
+      vehicleIdLabel: isVinMode ? "VIN" : "Registration",
     });
     setCheckInReportedIssuesBase(reportedIssues.trim() || "—");
     setCheckInNotesBase(bookingNote?.trim() ?? "");
@@ -2284,7 +2278,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return jobWizardStepId === id;
   };
 
-  const goNextJobWizard = () => {
+  const goNextJobWizard = async () => {
     if (!useBookingWizard) return;
     if (jobCreateStep >= jobWizardStepCount - 1) return;
     if (jobWizardStepId === "customer") {
@@ -2294,16 +2288,36 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
     }
     if (jobWizardStepId === "vehicle") {
-      if (!vehicleNumber.trim() || !vehicleBrand.trim() || !vehicleModel.trim() || !vehicleSegment) {
+      let number = vehicleNumber;
+      let brand = vehicleBrand;
+      let model = vehicleModel;
+      let segment = vehicleSegment;
+      let vinMode = isVinMode;
+
+      if (showInlineVehicleDetailsForm && inlineVehicleFormRef.current) {
+        const ok = await inlineVehicleFormRef.current.validate();
+        if (!ok) {
+          toast.error("Complete vehicle details to continue.");
+          return;
+        }
+        const vals = inlineVehicleFormRef.current.getValues();
+        applyVehicleFormToWizardState(vals);
+        number = vals.registrationNumber;
+        brand = vals.make;
+        model = vals.model;
+        segment = vals.segment;
+        vinMode = vals.isVin;
+      }
+
+      if (!number.trim() || !brand.trim() || !model.trim() || !segment) {
         toast.error("Complete vehicle details to continue.");
         return;
       }
-      // Match handleSubmit: garage VIN vehicles use isVinMode, not the REG form toggle
-      if (!isVinMode && !isValidIndianVehicleRegistration(vehicleNumber)) {
+      if (!vinMode && !isValidIndianVehicleRegistration(number)) {
         toast.error("Invalid registration", { description: INDIAN_VEHICLE_REG_HINT });
         return;
       }
-      if (isVinMode && vehicleNumber.length < 5) {
+      if (vinMode && number.length < 5) {
         toast.error("VIN must be at least 5 characters.");
         return;
       }
@@ -3133,8 +3147,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           {showJobWizardStep("vehicle") && (
           <>
           <Card>
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-4">
-              <CardTitle className="text-lg font-semibold tracking-tight">Vehicle Details</CardTitle>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 p-4 pb-2 sm:px-6 sm:pt-4 sm:pb-2">
+              <CardTitle className="text-base font-semibold tracking-tight">Vehicle Details</CardTitle>
               {existingCustomerId && ownedVehicles.length > 0 && (
                 <Button type="button" variant="outline" size="sm" onClick={startAddNewVehicle}>
                   <Plus className="w-4 h-4 mr-1.5" />
@@ -3142,9 +3156,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-3 px-4 pb-4 pt-0 sm:px-6 sm:pb-4">
               {ownedVehicles.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {ownedVehicles.map((v) => {
                     const sel = selectedVehicleId === v.id && !addingNewVehicle;
                     const rb =
@@ -3155,15 +3169,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                         type="button"
                         onClick={() => selectVehicleFromGarage(v)}
                         className={cn(
-                          "rounded-xl border-2 p-4 text-left transition-all",
+                          "rounded-lg border-2 p-3 text-left transition-all",
                           sel ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <Car className="w-8 h-8 shrink-0 text-muted-foreground" />
+                            <Car className="w-7 h-7 shrink-0 text-muted-foreground" />
                             <div className="min-w-0">
-                              <p className="font-semibold truncate">
+                              <p className="font-semibold truncate text-sm">
                                 {rb} {v.model}
                               </p>
                               <p className="text-xs text-muted-foreground font-mono mt-0.5">
@@ -3175,7 +3189,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                             <Badge className="shrink-0 bg-primary text-primary-foreground hover:bg-primary">Selected</Badge>
                           )}
                         </div>
-                        <Badge variant="secondary" className="mt-2 text-[10px]">
+                        <Badge variant="secondary" className="mt-1.5 text-[10px]">
                           {v.segment.replace("_", " ")}
                         </Badge>
                       </button>
@@ -3184,326 +3198,49 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                 </div>
               )}
 
-              {showInlineVehicleDetailsForm && (
-                <div className="space-y-5">
-
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-identifier-type-inline" className="text-foreground">
-                        Identifier Type
-                      </Label>
-                      <Select
-                        value={vehicleIdentifierType}
-                        onValueChange={(val) => {
-                          setVehicleIdentifierType(val as "REG" | "VIN");
-                          setVehicleIdentifierValue("");
-                          setVehicleNumber("");
-                          setVehicleVinNumber("");
-                        }}
-                      >
-                        <SelectTrigger id="vehicle-identifier-type-inline" className="h-10 rounded-md">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="REG">Registration Number</SelectItem>
-                          <SelectItem value="VIN">VIN Number</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-identifier-value-inline" className="text-foreground">
-                        {vehicleIdentifierType === "REG" ? "Registration Number" : "VIN Number"} <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="vehicle-identifier-value-inline"
-                        value={vehicleIdentifierValue}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const sanitized = vehicleIdentifierType === "REG"
-                            ? sanitizeVehicleRegistrationInput(val)
-                            : val;
-                          setVehicleIdentifierValue(sanitized);
-                          if (vehicleIdentifierType === "VIN") {
-                            setVehicleNumber(sanitized.trim().toUpperCase());
-                            setVehicleVinNumber(sanitized.trim().toUpperCase());
-                          } else {
-                            setVehicleNumber(normalizeRegistrationNumber(sanitized));
-                            setVehicleVinNumber("");
-                          }
-                        }}
-                        placeholder={
-                          vehicleIdentifierType === "REG"
-                            ? "e.g. KA01AB1234"
-                            : "e.g. VIN1234567890"
-                        }
-                        maxLength={16}
-                        className="h-10 rounded-md"
-                        required
-                        autoCapitalize="characters"
-                      />
-                      {vehicleIdentifierType === "REG" && (
-                        <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label htmlFor="vehicle-brand" className="text-foreground">
-                          Brand <span className="text-destructive">*</span>
-                        </Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-                          onClick={() => {
-                            setNewBrandDraft("");
-                            setNewBrandOpen(true);
-                          }}
-                        >
-                          + New
-                        </Button>
-                      </div>
-                      <Select
-                        value={vehicleBrand || undefined}
-                        onValueChange={(v) => {
-                          setVehicleBrand(v);
-                          setVehicleModel("");
-                          setVehicleSegment("");
-                        }}
-                        required
-                      >
-                        <SelectTrigger id="vehicle-brand" className="h-10 w-full">
-                          <SelectValue placeholder="Select brand" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allBrandsSorted.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label
-                          htmlFor="vehicle-model"
-                          className={cn(
-                            "text-foreground",
-                            !vehicleBrand.trim() && "text-muted-foreground"
-                          )}
-                        >
-                          Model <span className="text-destructive">*</span>
-                        </Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!vehicleBrand.trim()}
-                          className="h-7 shrink-0 px-2.5 text-xs font-medium disabled:opacity-50"
-                          onClick={() => {
-                            if (!vehicleBrand.trim()) return;
-                            setNewModelDraft("");
-                            setNewModelOpen(true);
-                          }}
-                        >
-                          + New
-                        </Button>
-                      </div>
-                      <Select
-                        value={vehicleModel || undefined}
-                        onValueChange={(v) => {
-                          setVehicleModel(v);
-                          const seg = getModelSegment(vehicleBrand, v);
-                          if (seg) setVehicleSegment(seg);
-                        }}
-                        disabled={!vehicleBrand.trim()}
-                        required={!!vehicleBrand.trim()}
-                      >
-                        <SelectTrigger
-                          id="vehicle-model"
-                          className={cn(
-                            "h-10 w-full",
-                            !vehicleBrand.trim() && "cursor-not-allowed opacity-60"
-                          )}
-                        >
-                          <SelectValue
-                            placeholder={vehicleBrand.trim() ? "Select model" : "Select brand first"}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allModelsSorted.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-
-                      {/* Variant */}
-                      <div className="space-y-2">
-                        <Label htmlFor="vehicle-variant-inline" className="text-foreground">
-                          Variant (optional)
-                        </Label>
-                        <Input
-                          id="vehicle-variant-inline"
-                          value={vehicleVariant}
-                          onChange={(e) => setVehicleVariant(e.target.value)}
-                          placeholder="e.g. VXI"
-                          className="h-10 rounded-md"
-                        />
-                      </div>
-
-                      {/* Fuel Type & Segment */}
-                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="vehicle-fuel-inline" className="text-foreground">
-                            Fuel Type <span className="text-destructive">*</span>
-                          </Label>
-                          <Select
-                            value={vehicleFuelType}
-                            onValueChange={(v) => setVehicleFuelType(v as any)}
-                            required
-                          >
-                            <SelectTrigger id="vehicle-fuel-inline" className="h-10 w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PETROL">PETROL</SelectItem>
-                              <SelectItem value="DIESEL">DIESEL</SelectItem>
-                              <SelectItem value="ELECTRIC">ELECTRIC</SelectItem>
-                              <SelectItem value="CNG">CNG</SelectItem>
-                              <SelectItem value="HYBRID">HYBRID</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="vehicle-segment-inline" className="text-foreground">
-                            Segment <span className="text-destructive">*</span>
-                          </Label>
-                          <Select
-                            value={vehicleSegment}
-                            onValueChange={(v) => setVehicleSegment(v as any)}
-                            required
-                          >
-                            <SelectTrigger id="vehicle-segment-inline" className="h-10 w-full">
-                              <SelectValue placeholder="Select segment" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="HATCHBACK">HATCHBACK</SelectItem>
-                              <SelectItem value="SEDAN">SEDAN</SelectItem>
-                              <SelectItem value="SUV">SUV</SelectItem>
-                              <SelectItem value="MUV">MUV</SelectItem>
-                              <SelectItem value="LUXURY">LUXURY</SelectItem>
-                              <SelectItem value="BIKE">BIKE</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Color & Year */}
-                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="vehicle-color-inline" className="text-foreground">
-                            Color
-                          </Label>
-                          <Input
-                            id="vehicle-color-inline"
-                            value={vehicleColor}
-                            onChange={(e) => setVehicleColor(e.target.value)}
-                            placeholder="e.g. White"
-                            className="h-10 rounded-md"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="vehicle-year-inline" className="text-foreground">
-                            Year
-                          </Label>
-                          <Input
-                            id="vehicle-year-inline"
-                            type="number"
-                            value={vehicleYear}
-                            onChange={(e) => setVehicleYear(e.target.value)}
-                            className="h-10 rounded-md"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Insurance details */}
-                      <div className="space-y-3 pt-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Insurance details
-                        </p>
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                          <div className="space-y-2">
-                            <Label htmlFor="vehicle-insurance-provider-inline" className="text-foreground">
-                              Insurance Provider
-                            </Label>
-                            <Input
-                              id="vehicle-insurance-provider-inline"
-                              value={vehicleInsuranceProvider}
-                              onChange={(e) => setVehicleInsuranceProvider(e.target.value)}
-                              placeholder="e.g. HDFC Ergo"
-                              className="h-10 rounded-md"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="vehicle-insurance-policy-inline" className="text-foreground">
-                              Policy Number
-                            </Label>
-                            <Input
-                              id="vehicle-insurance-policy-inline"
-                              value={vehicleInsurancePolicyNumber}
-                              onChange={(e) => setVehicleInsurancePolicyNumber(e.target.value)}
-                              placeholder="e.g. POL123456"
-                              className="h-10 rounded-md"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="vehicle-insurance-due-inline" className="text-foreground">
-                            Insurance Due Date
-                          </Label>
-                          <Input
-                            id="vehicle-insurance-due-inline"
-                            type="date"
-                            value={vehicleInsuranceDueDate}
-                            onChange={(e) => setVehicleInsuranceDueDate(e.target.value)}
-                            className="h-10 rounded-md w-full date-input-icon-end pr-9"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Notes */}
-                      <div className="space-y-2">
-                        <Label htmlFor="vehicle-notes-inline" className="text-foreground">
-                          Notes (optional)
-                        </Label>
-                        <Textarea
-                          id="vehicle-notes-inline"
-                          value={vehicleNotes}
-                          onChange={(e) => setVehicleNotes(e.target.value)}
-                          placeholder="Additional notes..."
-                          rows={3}
-                          className="rounded-md resize-none"
-                        />
-                      </div>
+              {selectedVehicleId && !addingNewVehicle && ownedVehicles.length > 0 && (
+                <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 space-y-1.5">
+                  <Label htmlFor="garage-odometer-reading" className="text-sm font-medium">
+                    Odometer for this visit (km)
+                  </Label>
+                  <Input
+                    id="garage-odometer-reading"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="e.g. 45200"
+                    value={odometerReading}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setOdometerReading(v);
+                      setVehicleOdometer(v);
+                    }}
+                    className="h-9 max-w-xs"
+                  />
+                  {selectedVehicleObj?.odometer != null && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Last recorded: {selectedVehicleObj.odometer.toLocaleString("en-IN")} km — enter
+                      the current reading for this job.
+                    </p>
+                  )}
+                  {selectedVehicleObj?.odometer == null && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Optional. Saved on this job card and updates the vehicle record.
+                    </p>
+                  )}
                 </div>
               )}
 
+              {showInlineVehicleDetailsForm && (
+                <AddVehicleInlineForm
+                  lockedCustomerId={existingCustomerId ?? ""}
+                  idPrefix="booking-inline-veh"
+                  formRef={inlineVehicleFormRef}
+                  onChange={applyVehicleFormToWizardState}
+                />
+              )}
+
               {ownedVehicles.length > 0 && (
-                <div className="flex gap-2 rounded-lg border border-sky-200/80 bg-sky-50/70 px-3 py-2.5 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-sky-100">
+                <div className="flex gap-2 rounded-lg border border-sky-200/80 bg-sky-50/70 px-3 py-2 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-sky-100">
                   <Info className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
                     {addingNewVehicle && addVehiclePopupOpen
@@ -3515,8 +3252,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </CardContent>
           </Card>
 
-          <Dialog
+          <AddVehicleDialog
             open={addVehiclePopupOpen}
+            title="Add New Vehicle"
+            lockedCustomerId={existingCustomerId ?? undefined}
+            onCreated={handleGarageVehicleCreated}
             onOpenChange={(open) => {
               if (open) {
                 setAddVehiclePopupOpen(true);
@@ -3525,492 +3265,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               guardBookingShellFromNestedClose();
               if (skipAddVehicleCancelOnCloseRef.current) {
                 skipAddVehicleCancelOnCloseRef.current = false;
+                setAddVehiclePopupOpen(false);
                 return;
               }
               cancelAddVehicleFromPopup();
             }}
-          >
-            <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[min(90vh,720px)] sm:max-w-[640px]")}>
-              <DialogHeader className={dialogMobileSheetHeaderClasses}>
-                <DialogTitle>Add New Vehicle</DialogTitle>
-              </DialogHeader>
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-identifier-type-popup" className="text-foreground">
-                        Identifier Type
-                      </Label>
-                      <Select
-                        value={vehicleIdentifierType}
-                        onValueChange={(val) => {
-                          setVehicleIdentifierType(val as "REG" | "VIN");
-                          setVehicleIdentifierValue("");
-                          setVehicleNumber("");
-                          setVehicleVinNumber("");
-                        }}
-                      >
-                        <SelectTrigger id="vehicle-identifier-type-popup" className="h-10 rounded-md">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="REG">Registration Number</SelectItem>
-                          <SelectItem value="VIN">VIN Number</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+          />
 
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-identifier-value-popup" className="text-foreground">
-                        {vehicleIdentifierType === "REG" ? "Registration Number" : "VIN Number"} <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="vehicle-identifier-value-popup"
-                        value={vehicleIdentifierValue}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const sanitized = vehicleIdentifierType === "REG"
-                            ? sanitizeVehicleRegistrationInput(val)
-                            : val;
-                          setVehicleIdentifierValue(sanitized);
-                          if (vehicleIdentifierType === "VIN") {
-                            setVehicleNumber(sanitized.trim().toUpperCase());
-                            setVehicleVinNumber(sanitized.trim().toUpperCase());
-                          } else {
-                            setVehicleNumber(normalizeRegistrationNumber(sanitized));
-                            setVehicleVinNumber("");
-                          }
-                        }}
-                        placeholder={
-                          vehicleIdentifierType === "REG"
-                            ? "e.g. KA01AB1234"
-                            : "e.g. VIN1234567890"
-                        }
-                        maxLength={16}
-                        className="h-10 rounded-md"
-                        required
-                        autoCapitalize="characters"
-                      />
-                      {vehicleIdentifierType === "REG" && (
-                        <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicle-odometer-popup" className="text-foreground">
-                      Odometer (km)
-                    </Label>
-                    <Input
-                      id="vehicle-odometer-popup"
-                      type="number"
-                      value={vehicleOdometer}
-                      onChange={(e) => setVehicleOdometer(e.target.value)}
-                      placeholder="e.g. 25000"
-                      className="h-10 rounded-md"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label htmlFor="vehicle-brand-popup" className="text-foreground">
-                          Brand <span className="text-destructive">*</span>
-                        </Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-                          onClick={() => {
-                            setNewBrandDraft("");
-                            setNewBrandOpen(true);
-                          }}
-                        >
-                          + New
-                        </Button>
-                      </div>
-                      <Select
-                        value={vehicleBrand || undefined}
-                        onValueChange={(v) => {
-                          setVehicleBrand(v);
-                          setVehicleModel("");
-                          setVehicleSegment("");
-                        }}
-                        required
-                      >
-                        <SelectTrigger id="vehicle-brand-popup" className="h-10 w-full">
-                          <SelectValue placeholder="Select brand" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allBrandsSorted.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label
-                          htmlFor="vehicle-model-popup"
-                          className={cn(
-                            "text-foreground",
-                            !vehicleBrand.trim() && "text-muted-foreground"
-                          )}
-                        >
-                          Model <span className="text-destructive">*</span>
-                        </Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!vehicleBrand.trim()}
-                          className="h-7 shrink-0 px-2.5 text-xs font-medium disabled:opacity-50"
-                          onClick={() => {
-                            if (!vehicleBrand.trim()) return;
-                            setNewModelDraft("");
-                            setNewModelOpen(true);
-                          }}
-                        >
-                          + New
-                        </Button>
-                      </div>
-                      <Select
-                        value={vehicleModel || undefined}
-                        onValueChange={(v) => {
-                          setVehicleModel(v);
-                          const seg = getModelSegment(vehicleBrand, v);
-                          if (seg) setVehicleSegment(seg);
-                        }}
-                        disabled={!vehicleBrand.trim()}
-                        required={!!vehicleBrand.trim()}
-                      >
-                        <SelectTrigger
-                          id="vehicle-model-popup"
-                          className={cn(
-                            "h-10 w-full",
-                            !vehicleBrand.trim() && "cursor-not-allowed opacity-60"
-                          )}
-                        >
-                          <SelectValue
-                            placeholder={vehicleBrand.trim() ? "Select model" : "Select brand first"}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allModelsSorted.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Variant */}
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicle-variant-popup" className="text-foreground">
-                      Variant (optional)
-                    </Label>
-                    <Input
-                      id="vehicle-variant-popup"
-                      value={vehicleVariant}
-                      onChange={(e) => setVehicleVariant(e.target.value)}
-                      placeholder="e.g. VXI"
-                      className="h-10 rounded-md"
-                    />
-                  </div>
-
-                  {/* Fuel Type & Segment */}
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-fuel-popup" className="text-foreground">
-                        Fuel Type <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={vehicleFuelType}
-                        onValueChange={(v) => setVehicleFuelType(v as any)}
-                        required
-                      >
-                        <SelectTrigger id="vehicle-fuel-popup" className="h-10 w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="PETROL">PETROL</SelectItem>
-                          <SelectItem value="DIESEL">DIESEL</SelectItem>
-                          <SelectItem value="ELECTRIC">ELECTRIC</SelectItem>
-                          <SelectItem value="CNG">CNG</SelectItem>
-                          <SelectItem value="HYBRID">HYBRID</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-segment-popup" className="text-foreground">
-                        Segment <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={vehicleSegment}
-                        onValueChange={(v) => setVehicleSegment(v as any)}
-                        required
-                      >
-                        <SelectTrigger id="vehicle-segment-popup" className="h-10 w-full">
-                          <SelectValue placeholder="Select segment" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="HATCHBACK">HATCHBACK</SelectItem>
-                          <SelectItem value="SEDAN">SEDAN</SelectItem>
-                          <SelectItem value="SUV">SUV</SelectItem>
-                          <SelectItem value="MUV">MUV</SelectItem>
-                          <SelectItem value="LUXURY">LUXURY</SelectItem>
-                          <SelectItem value="BIKE">BIKE</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Color & Year */}
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-color-popup" className="text-foreground">
-                        Color
-                      </Label>
-                      <Input
-                        id="vehicle-color-popup"
-                        value={vehicleColor}
-                        onChange={(e) => setVehicleColor(e.target.value)}
-                        placeholder="e.g. White"
-                        className="h-10 rounded-md"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-year-popup" className="text-foreground">
-                        Year
-                      </Label>
-                      <Input
-                        id="vehicle-year-popup"
-                        type="number"
-                        value={vehicleYear}
-                        onChange={(e) => setVehicleYear(e.target.value)}
-                        className="h-10 rounded-md"
-                      />
-                    </div>
-                  </div>
-
-
-
-                  {/* Insurance details */}
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Insurance details
-                    </p>
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="vehicle-insurance-provider-popup" className="text-foreground">
-                          Insurance Provider
-                        </Label>
-                        <Input
-                          id="vehicle-insurance-provider-popup"
-                          value={vehicleInsuranceProvider}
-                          onChange={(e) => setVehicleInsuranceProvider(e.target.value)}
-                          placeholder="e.g. HDFC Ergo"
-                          className="h-10 rounded-md"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="vehicle-insurance-policy-popup" className="text-foreground">
-                          Policy Number
-                        </Label>
-                        <Input
-                          id="vehicle-insurance-policy-popup"
-                          value={vehicleInsurancePolicyNumber}
-                          onChange={(e) => setVehicleInsurancePolicyNumber(e.target.value)}
-                          placeholder="e.g. POL123456"
-                          className="h-10 rounded-md"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle-insurance-due-popup" className="text-foreground">
-                        Insurance Due Date
-                      </Label>
-                      <Input
-                        id="vehicle-insurance-due-popup"
-                        type="date"
-                        value={vehicleInsuranceDueDate}
-                        onChange={(e) => setVehicleInsuranceDueDate(e.target.value)}
-                        className="h-10 rounded-md w-full date-input-icon-end pr-9"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Notes */}
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicle-notes-popup" className="text-foreground">
-                      Notes (optional)
-                    </Label>
-                    <Textarea
-                      id="vehicle-notes-popup"
-                      value={vehicleNotes}
-                      onChange={(e) => setVehicleNotes(e.target.value)}
-                      placeholder="Additional notes..."
-                      rows={3}
-                      className="rounded-md resize-none"
-                    />
-                  </div>
-                </div>
-              </div>
-              <DialogFooter className="shrink-0 gap-2 border-t border-border px-6 py-4 sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={cancelAddVehicleFromPopup}>
-                  Cancel
-                </Button>
-                <Button type="button" onClick={doneAddVehiclePopup}>
-                  Done
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog
-            open={newBrandOpen}
-            onOpenChange={(open) => {
-              if (!open) guardBookingShellFromNestedClose();
-              setNewBrandOpen(open);
-            }}
-          >
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Add brand</DialogTitle>
-                <DialogDescription>
-                  Add a brand name when it is not in the catalog search list.
-                </DialogDescription>
-              </DialogHeader>
-              <Input
-                placeholder="Brand name"
-                value={newBrandDraft}
-                onChange={(e) => setNewBrandDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const t = newBrandDraft.trim();
-                    if (!t) return;
-                    if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
-                      toast.message("Brand already in list");
-                      return;
-                    }
-                    setExtraBrands((prev) => [...prev, t]);
-                    setVehicleBrand(t);
-                    setVehicleModel("");
-                    setVehicleSegment("");
-                    setNewBrandOpen(false);
-                    setNewBrandDraft("");
-                    toast.success("Brand added", { description: t });
-                  }
-                }}
-              />
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const t = newBrandDraft.trim();
-                    if (!t) {
-                      toast.error("Enter a brand name");
-                      return;
-                    }
-                    if (allBrandsSorted.some((b) => b.toLowerCase() === t.toLowerCase())) {
-                      toast.message("Brand already in list — select it from Search brand");
-                      return;
-                    }
-                    setExtraBrands((prev) => [...prev, t]);
-                    setVehicleBrand(t);
-                    setVehicleModel("");
-                    setVehicleSegment("");
-                    setNewBrandOpen(false);
-                    setNewBrandDraft("");
-                    toast.success("Brand added", { description: t });
-                  }}
-                >
-                  Add brand
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog
-            open={newModelOpen}
-            onOpenChange={(open) => {
-              if (!open) guardBookingShellFromNestedClose();
-              setNewModelOpen(open);
-            }}
-          >
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Add model</DialogTitle>
-                <DialogDescription>
-                  Add a model for <span className="font-medium text-foreground">{vehicleBrand}</span> when it is
-                  not listed.
-                </DialogDescription>
-              </DialogHeader>
-              <Input
-                placeholder="Model name"
-                value={newModelDraft}
-                onChange={(e) => setNewModelDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const t = newModelDraft.trim();
-                    if (!t || !vehicleBrand.trim()) return;
-                    setExtraModelsByBrand((prev) => ({
-                      ...prev,
-                      [vehicleBrand]: [...(prev[vehicleBrand] ?? []), t],
-                    }));
-                    setVehicleModel(t);
-                    const seg = getModelSegment(vehicleBrand, t);
-                    if (seg) setVehicleSegment(seg);
-                    setNewModelOpen(false);
-                    setNewModelDraft("");
-                    toast.success("Model added", { description: t });
-                  }
-                }}
-              />
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const t = newModelDraft.trim();
-                    if (!t) {
-                      toast.error("Enter a model name");
-                      return;
-                    }
-                    if (!vehicleBrand.trim()) return;
-                    setExtraModelsByBrand((prev) => ({
-                      ...prev,
-                      [vehicleBrand]: [...(prev[vehicleBrand] ?? []), t],
-                    }));
-                    setVehicleModel(t);
-                    const seg = getModelSegment(vehicleBrand, t);
-                    if (seg) setVehicleSegment(seg);
-                    setNewModelOpen(false);
-                    setNewModelDraft("");
-                    toast.success("Model added", { description: t });
-                  }}
-                >
-                  Add model
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
           </>
           )}
 
@@ -5915,7 +5176,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     <span className="font-medium">{checkInJob.customerName}</span>
                   </p>
                   <p>
-                    <span className="text-muted-foreground">Reg. number </span>
+                    <span className="text-muted-foreground">
+                      {checkInJob.vehicleIdLabel === "VIN" ? "VIN" : "Reg. number"}{" "}
+                    </span>
                     <span className="font-mono font-semibold tracking-wide">{checkInJob.vehicleRegLabel}</span>
                   </p>
                 </div>

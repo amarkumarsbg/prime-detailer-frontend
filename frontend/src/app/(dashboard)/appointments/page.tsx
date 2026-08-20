@@ -9,16 +9,10 @@ import { useStaffStore } from "@/store/staff-store";
 import { useAppointmentStore } from "@/store/appointment-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
-import {
-  appendExtraBrand,
-  appendExtraModel,
-  ensureCatalogBrand,
-  ensureCatalogModel,
-  isBrandNameTaken,
-} from "@/lib/vehicle-catalog-extras";
 import { isAppointmentSlotElapsed } from "@/lib/appointment-status";
 import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
+import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { useSettingsStore } from "@/store/settings-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useBranchScope } from "@/lib/branch-scope";
@@ -247,10 +241,6 @@ export default function AppointmentsPage() {
   const [formCustomerId, setFormCustomerId] = useState("");
   const [formVehicleId, setFormVehicleId] = useState("");
   const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
-  const [newVehicleRegInput, setNewVehicleRegInput] = useState("");
-  const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
-  const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
-  const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
   const [formServiceId, setFormServiceId] = useState("");
   const [formMechanicId, setFormMechanicId] = useState("");
   const [formDate, setFormDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
@@ -268,31 +258,11 @@ export default function AppointmentsPage() {
     return vehicles.filter((v) => v.customerId === formCustomerId);
   }, [formCustomerId, vehicles]);
 
-  const [extraBrands, setExtraBrands] = useState<string[]>([]);
-  const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
-  const [newBrandOpen, setNewBrandOpen] = useState(false);
-  const [newBrandDraft, setNewBrandDraft] = useState("");
-  const [newModelOpen, setNewModelOpen] = useState(false);
-  const [newModelDraft, setNewModelDraft] = useState("");
-
   const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
-  const allBrandsSorted = useMemo(
-    () => [...new Set([...makeOptions, ...extraBrands])].sort((a, b) => a.localeCompare(b)),
-    [makeOptions, extraBrands]
-  );
   const modelOptions = useMemo(
     () => (newVehicleMake ? getModels(newVehicleMake) : []),
     [getModels, newVehicleMake]
   );
-  const modelOptionsForExistingCustomer = useMemo(
-    () => (newVehicleMakeInput ? getModels(newVehicleMakeInput) : []),
-    [getModels, newVehicleMakeInput]
-  );
-  const allModelsSorted = useMemo(() => {
-    const catalog = newVehicleMakeInput ? getModels(newVehicleMakeInput).map((m) => m.name) : [];
-    const extra = newVehicleMakeInput ? extraModelsByBrand[newVehicleMakeInput] ?? [] : [];
-    return [...new Set([...catalog, ...extra])].sort((a, b) => a.localeCompare(b));
-  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
 
   const selectedExistingCustomer = useMemo(
     () => customers.find((c) => c.id === formCustomerId) ?? null,
@@ -347,79 +317,6 @@ export default function AppointmentsPage() {
     setFormVehicleId("");
   };
 
-  const handleExistingCustomerVehicleSelection = (value: string) => {
-    if (value === "__add_new_vehicle__") {
-      if (!formCustomerId) return;
-      setFormVehicleId("");
-      setNewVehicleRegInput("");
-      setNewVehicleMakeInput("");
-      setNewVehicleModelInput("");
-      setNewVehicleSegmentInput("HATCHBACK");
-      setAddVehicleForExistingCustomerDialogOpen(true);
-      return;
-    }
-    setFormVehicleId(value);
-  };
-
-  const handleSaveVehicleForExistingCustomer = () => {
-    if (!formCustomerId) {
-      toast.error("Select customer first");
-      return;
-    }
-
-    const reg = newVehicleRegInput.trim().toUpperCase();
-    const make = newVehicleMakeInput.trim();
-    const model = newVehicleModelInput.trim();
-    if (!reg || !make || !model) {
-      toast.error("Enter registration, make, and model");
-      return;
-    }
-
-    if (!isValidIndianVehicleRegistration(reg)) {
-      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
-      return;
-    }
-
-    const existingVehicle = findVehicleByNormalizedReg(vehicles, reg);
-    if (existingVehicle) {
-      toast.error("Registration already in the system", {
-        description: `${existingVehicle.registrationNumber} is already assigned to ${existingVehicle.customerName}.`,
-      });
-      return;
-    }
-
-    const customer = customers.find((c) => c.id === formCustomerId);
-    if (!customer) {
-      toast.error("Could not find selected customer");
-      return;
-    }
-
-    const inferredSegment = getModelSegment(make, model) ?? "HATCHBACK";
-    const newVehicle: Vehicle = {
-      id: `veh-apt-${Date.now()}`,
-      customerId: formCustomerId,
-      customerName: customer.name,
-      registrationNumber: reg,
-      make,
-      model,
-      segment: inferredSegment,
-      fuelType: "PETROL",
-      color: "—",
-      year: new Date().getFullYear(),
-    };
-
-    setVehicles((prev) => [...prev, newVehicle]);
-    setFormVehicleId(newVehicle.id);
-    setAddVehicleForExistingCustomerDialogOpen(false);
-    setNewVehicleRegInput("");
-    setNewVehicleMakeInput("");
-    setNewVehicleModelInput("");
-    setNewVehicleSegmentInput("HATCHBACK");
-    toast.success("Vehicle added", {
-      description: `${reg} has been linked to ${customer.name} and selected for this appointment.`,
-    });
-  };
-
   const resetAppointmentForm = () => {
     setCurrentStep("customer");
     setLookupQuery("");
@@ -436,10 +333,6 @@ export default function AppointmentsPage() {
     setFormCustomerId("");
     setFormVehicleId("");
     setAddVehicleForExistingCustomerDialogOpen(false);
-    setNewVehicleRegInput("");
-    setNewVehicleMakeInput("");
-    setNewVehicleModelInput("");
-    setNewVehicleSegmentInput("HATCHBACK");
     setFormServiceId("");
     setFormMechanicId("");
     setFormDate(format(new Date(), "yyyy-MM-dd"));
@@ -994,13 +887,7 @@ export default function AppointmentsPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              setNewVehicleRegInput("");
-                              setNewVehicleMakeInput("");
-                              setNewVehicleModelInput("");
-                              setNewVehicleSegmentInput("HATCHBACK");
-                              setAddVehicleForExistingCustomerDialogOpen(true);
-                            }}
+                            onClick={() => setAddVehicleForExistingCustomerDialogOpen(true)}
                           >
                             <Plus className="w-4 h-4 mr-1.5" />
                             Add New Vehicle
@@ -1142,252 +1029,15 @@ export default function AppointmentsPage() {
                       </div>
                     )}
 
-                    {/* Secondary popup/dialog for adding new vehicle to existing customer */}
-                    <Dialog
+                    <AddVehicleDialog
                       open={addVehicleForExistingCustomerDialogOpen}
                       onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
-                    >
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>Add New Vehicle</DialogTitle>
-                          <DialogDescription>
-                            Enter registration, brand, and model. Use + New if a brand or model is not in the list.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="apt-existing-vehicle-reg">Registration Number *</Label>
-                            <Input
-                              id="apt-existing-vehicle-reg"
-                              value={newVehicleRegInput}
-                              onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
-                              placeholder="e.g. KA01AB1234"
-                              maxLength={16}
-                              className="font-mono uppercase"
-                            />
-                            <p className="text-xs text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-                          </div>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="apt-existing-vehicle-make">Brand *</Label>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 shrink-0 border-sky-300 bg-white px-2.5 text-xs font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-                                  onClick={() => {
-                                    setNewBrandDraft("");
-                                    setNewBrandOpen(true);
-                                  }}
-                                >
-                                  + New
-                                </Button>
-                              </div>
-                              <Select
-                                value={newVehicleMakeInput || undefined}
-                                onValueChange={(value) => {
-                                  setNewVehicleMakeInput(value);
-                                  setNewVehicleModelInput("");
-                                  setNewVehicleSegmentInput("HATCHBACK");
-                                }}
-                              >
-                                <SelectTrigger id="apt-existing-vehicle-make">
-                                  <SelectValue placeholder="Select brand" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {allBrandsSorted.map((brand) => (
-                                    <SelectItem key={brand} value={brand}>
-                                      {brand}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="apt-existing-vehicle-model">Model *</Label>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={!newVehicleMakeInput}
-                                  className="h-7 shrink-0 px-2.5 text-xs font-medium disabled:opacity-50"
-                                  onClick={() => {
-                                    if (!newVehicleMakeInput) return;
-                                    setNewModelDraft("");
-                                    setNewModelOpen(true);
-                                  }}
-                                >
-                                  + New
-                                </Button>
-                              </div>
-                              <Select
-                                value={newVehicleModelInput || undefined}
-                                onValueChange={(value) => {
-                                  setNewVehicleModelInput(value);
-                                  const inferredSegment = getModelSegment(newVehicleMakeInput, value);
-                                  if (inferredSegment) {
-                                    setNewVehicleSegmentInput(inferredSegment);
-                                  }
-                                }}
-                                disabled={!newVehicleMakeInput}
-                              >
-                                <SelectTrigger id="apt-existing-vehicle-model">
-                                  <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {allModelsSorted.map((model) => (
-                                    <SelectItem key={model} value={model}>
-                                      {model}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
-                            Done
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-
-                    {/* Brand add nested dialog */}
-                    <Dialog
-                      open={newBrandOpen}
-                      onOpenChange={setNewBrandOpen}
-                    >
-                      <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Add brand</DialogTitle>
-                          <DialogDescription>
-                            Add a brand name when it is not in the catalog search list.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <Input
-                          placeholder="Brand name"
-                          value={newBrandDraft}
-                          onChange={(e) => setNewBrandDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const t = newBrandDraft.trim();
-                              if (!t) return;
-                              if (isBrandNameTaken(allBrandsSorted, t)) {
-                                toast.message("Brand already in list");
-                                return;
-                              }
-                              const canonical = ensureCatalogBrand(t);
-                              setExtraBrands((prev) => appendExtraBrand(prev, canonical));
-                              setNewVehicleMakeInput(canonical);
-                              setNewVehicleModelInput("");
-                              setNewBrandOpen(false);
-                              setNewBrandDraft("");
-                              toast.success("Brand added", { description: canonical });
-                            }
-                          }}
-                        />
-                        <div className="flex justify-end gap-2 pt-2">
-                          <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              const t = newBrandDraft.trim();
-                              if (!t) {
-                                toast.error("Enter a brand name");
-                                return;
-                              }
-                              if (isBrandNameTaken(allBrandsSorted, t)) {
-                                toast.message("Brand already in list");
-                                return;
-                              }
-                              const canonical = ensureCatalogBrand(t);
-                              setExtraBrands((prev) => appendExtraBrand(prev, canonical));
-                              setNewVehicleMakeInput(canonical);
-                              setNewVehicleModelInput("");
-                              setNewBrandOpen(false);
-                              setNewBrandDraft("");
-                              toast.success("Brand added", { description: canonical });
-                            }}
-                          >
-                            Add brand
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
-                    {/* Model add nested dialog */}
-                    <Dialog
-                      open={newModelOpen}
-                      onOpenChange={setNewModelOpen}
-                    >
-                      <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Add model</DialogTitle>
-                          <DialogDescription>
-                            Add a model for <span className="font-medium text-foreground">{newVehicleMakeInput}</span> when it is not listed.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <Input
-                          placeholder="Model name"
-                          value={newModelDraft}
-                          onChange={(e) => setNewModelDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const t = newModelDraft.trim();
-                              if (!t || !newVehicleMakeInput.trim()) return;
-                              ensureCatalogModel(newVehicleMakeInput, t, newVehicleSegmentInput);
-                              setExtraModelsByBrand((prev) =>
-                                appendExtraModel(prev, newVehicleMakeInput, t)
-                              );
-                              setNewVehicleModelInput(t);
-                              const seg = getModelSegment(newVehicleMakeInput, t);
-                              if (seg) setNewVehicleSegmentInput(seg);
-                              setNewModelOpen(false);
-                              setNewModelDraft("");
-                              toast.success("Model added", { description: t });
-                            }
-                          }}
-                        />
-                        <div className="flex justify-end gap-2 pt-2">
-                          <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              const t = newModelDraft.trim();
-                              if (!t) {
-                                toast.error("Enter a model name");
-                                return;
-                              }
-                              if (!newVehicleMakeInput.trim()) return;
-                              ensureCatalogModel(newVehicleMakeInput, t, newVehicleSegmentInput);
-                              setExtraModelsByBrand((prev) =>
-                                appendExtraModel(prev, newVehicleMakeInput, t)
-                              );
-                              setNewVehicleModelInput(t);
-                              const seg = getModelSegment(newVehicleMakeInput, t);
-                              if (seg) setNewVehicleSegmentInput(seg);
-                              setNewModelOpen(false);
-                              setNewModelDraft("");
-                              toast.success("Model added", { description: t });
-                            }}
-                          >
-                            Add model
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                      lockedCustomerId={formCustomerId}
+                      title="Add New Vehicle"
+                      onCreated={(vehicle) => {
+                        setFormVehicleId(vehicle.id);
+                      }}
+                    />
 
                     <div className="flex justify-between pt-3 border-t">
                       <Button

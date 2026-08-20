@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { PageSkeleton } from "@/components/shared/skeleton-loader";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { Button } from "@/components/ui/button";
@@ -246,12 +247,7 @@ export default function PickupDropPage() {
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[]>([]);
 
-  // Nested vehicle creation dialog for existing customers
   const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
-  const [newVehicleRegInput, setNewVehicleRegInput] = useState("");
-  const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
-  const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
-  const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
 
   const [pickupRequired, setPickupRequired] = useState(true);
   const [dropRequired, setDropRequired] = useState(false);
@@ -263,9 +259,7 @@ export default function PickupDropPage() {
   const [newScheduledLocal, setNewScheduledLocal] = useState("");
   const [notes, setNotes] = useState("");
 
-  const brandForModelDialog = addVehicleForExistingCustomerDialogOpen
-    ? newVehicleMakeInput
-    : vehicleMake;
+  const brandForModelDialog = vehicleMake;
 
   const commitNewBrand = (raw: string): boolean => {
     const t = raw.trim();
@@ -279,13 +273,8 @@ export default function PickupDropPage() {
     }
     const canonical = ensureCatalogBrand(t);
     setExtraBrands((prev) => appendExtraBrand(prev, canonical));
-    if (addVehicleForExistingCustomerDialogOpen) {
-      setNewVehicleMakeInput(canonical);
-      setNewVehicleModelInput("");
-    } else {
-      setVehicleMake(canonical);
-      setVehicleModel("");
-    }
+    setVehicleMake(canonical);
+    setVehicleModel("");
     setNewBrandOpen(false);
     setNewBrandDraft("");
     toast.success("Brand added", { description: canonical });
@@ -298,27 +287,16 @@ export default function PickupDropPage() {
       toast.error("Enter a model name");
       return false;
     }
-    const brandName = (
-      addVehicleForExistingCustomerDialogOpen ? newVehicleMakeInput : vehicleMake
-    ).trim();
+    const brandName = vehicleMake.trim();
     if (!brandName) {
       toast.error("Select a brand first");
       return false;
     }
-    const segment = addVehicleForExistingCustomerDialogOpen
-      ? newVehicleSegmentInput
-      : vehicleSegment;
-    ensureCatalogModel(brandName, t, segment);
+    ensureCatalogModel(brandName, t, vehicleSegment);
     setExtraModelsByBrand((prev) => appendExtraModel(prev, brandName, t));
-    if (addVehicleForExistingCustomerDialogOpen) {
-      setNewVehicleModelInput(t);
-      const seg = getModelSegment(brandName, t);
-      if (seg) setNewVehicleSegmentInput(seg);
-    } else {
-      setVehicleModel(t);
-      const seg = getModelSegment(brandName, t);
-      if (seg) setVehicleSegment(seg);
-    }
+    setVehicleModel(t);
+    const seg = getModelSegment(brandName, t);
+    if (seg) setVehicleSegment(seg);
     setNewModelOpen(false);
     setNewModelDraft("");
     toast.success("Model added", { description: t });
@@ -392,12 +370,6 @@ export default function PickupDropPage() {
     return vehicles.filter((v) => v.customerId === existingCustomerId);
   }, [existingCustomerId, vehicles]);
 
-  const allModelsSortedForExistingCustomer = useMemo(() => {
-    const catalog = newVehicleMakeInput ? getModels(newVehicleMakeInput).map((m) => m.name) : [];
-    const extra = newVehicleMakeInput ? extraModelsByBrand[newVehicleMakeInput] ?? [] : [];
-    return [...new Set([...catalog, ...extra])].sort((a, b) => a.localeCompare(b));
-  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
-
   useEffect(() => {
     const trimmed = lookupQuery.trim();
     if (!trimmed) {
@@ -441,60 +413,6 @@ export default function PickupDropPage() {
   const clearSelectedCustomer = () => {
     setExistingCustomerId(null);
     setSelectedVehicleId(null);
-  };
-
-  const handleSaveVehicleForExistingCustomer = () => {
-    if (!existingCustomerId) {
-      toast.error("Select customer first");
-      return;
-    }
-
-    const reg = newVehicleRegInput.trim().toUpperCase();
-    const make = newVehicleMakeInput.trim();
-    const model = newVehicleModelInput.trim();
-    if (!reg || !make || !model) {
-      toast.error("Enter registration, make, and model");
-      return;
-    }
-
-    if (!isValidIndianVehicleRegistration(reg)) {
-      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
-      return;
-    }
-
-    const existingVehicle = findVehicleByNormalizedReg(vehicles, reg);
-    if (existingVehicle) {
-      toast.error("Registration already in the system", {
-        description: `${existingVehicle.registrationNumber} is already assigned to ${existingVehicle.customerName}.`,
-      });
-      return;
-    }
-
-    const customer = customers.find((c) => c.id === existingCustomerId);
-    if (!customer) {
-      toast.error("Could not find selected customer");
-      return;
-    }
-
-    const inferredSegment = getModelSegment(make, model) ?? newVehicleSegmentInput;
-    const newVehicle: Vehicle = {
-      id: `veh-pd-${Date.now()}`,
-      customerId: existingCustomerId,
-      customerName: customer.name,
-      registrationNumber: reg,
-      make,
-      model,
-      segment: inferredSegment,
-      fuelType: "PETROL",
-      color: "—",
-      year: new Date().getFullYear(),
-    };
-
-    setVehicles((prev) => [newVehicle, ...prev]);
-
-    setSelectedVehicleId(newVehicle.id);
-    setAddVehicleForExistingCustomerDialogOpen(false);
-    toast.success("Vehicle registered", { description: `${make} ${model} (${reg})` });
   };
 
   const scopedRequests = useMemo(
@@ -555,10 +473,6 @@ export default function PickupDropPage() {
     setNewModelOpen(false);
     setNewModelDraft("");
     setAddVehicleForExistingCustomerDialogOpen(false);
-    setNewVehicleRegInput("");
-    setNewVehicleMakeInput("");
-    setNewVehicleModelInput("");
-    setNewVehicleSegmentInput("HATCHBACK");
   };
 
   const handleCreate = () => {
@@ -1094,13 +1008,7 @@ export default function PickupDropPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          setNewVehicleRegInput("");
-                          setNewVehicleMakeInput("");
-                          setNewVehicleModelInput("");
-                          setNewVehicleSegmentInput("HATCHBACK");
-                          setAddVehicleForExistingCustomerDialogOpen(true);
-                        }}
+                        onClick={() => setAddVehicleForExistingCustomerDialogOpen(true)}
                       >
                         <Plus className="w-4 h-4 mr-1.5" />
                         Add New Vehicle
@@ -1558,141 +1466,15 @@ export default function PickupDropPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Nested Add Vehicle dialog for existing customer */}
-      <Dialog
+      <AddVehicleDialog
         open={addVehicleForExistingCustomerDialogOpen}
-        onOpenChange={(open) => {
-          if (!open && (newBrandOpen || newModelOpen)) return;
-          setAddVehicleForExistingCustomerDialogOpen(open);
+        onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
+        lockedCustomerId={existingCustomerId ?? undefined}
+        title="Add New Vehicle"
+        onCreated={(vehicle) => {
+          setSelectedVehicleId(vehicle.id);
         }}
-      >
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Add New Vehicle</DialogTitle>
-            <DialogDescription className="sr-only">
-              Add a vehicle for the selected existing customer.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid gap-3 sm:grid-cols-2 py-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="pd-dialog-veh-reg" className="text-xs">Registration Number *</Label>
-              <Input
-                id="pd-dialog-veh-reg"
-                value={newVehicleRegInput}
-                onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
-                placeholder="e.g. KA01AB1234"
-                maxLength={16}
-                className="font-mono uppercase h-9 border-input"
-              />
-              <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pd-dialog-veh-seg" className="text-xs">Type</Label>
-              <Select
-                value={newVehicleSegmentInput}
-                onValueChange={(v) => setNewVehicleSegmentInput(v as VehicleSegment)}
-              >
-                <SelectTrigger id="pd-dialog-veh-seg" className="h-9 border-input">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="HATCHBACK">Hatchback</SelectItem>
-                  <SelectItem value="SEDAN">Sedan</SelectItem>
-                  <SelectItem value="COMPACT_SUV">Compact SUV</SelectItem>
-                  <SelectItem value="SUV">SUV</SelectItem>
-                  <SelectItem value="LUXURY">Luxury</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="pd-dialog-veh-make" className="text-xs">Brand *</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-6 shrink-0 border-sky-300 bg-white px-2 text-[10px] font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-                  onClick={() => {
-                    setNewBrandOpen(true);
-                    setNewBrandDraft("");
-                  }}
-                >
-                  + New
-                </Button>
-              </div>
-              <Select
-                value={newVehicleMakeInput || undefined}
-                onValueChange={(value) => {
-                  setNewVehicleMakeInput(value);
-                  setNewVehicleModelInput("");
-                }}
-              >
-                <SelectTrigger id="pd-dialog-veh-make" className="h-9 border-input">
-                  <SelectValue placeholder="Select brand" />
-                </SelectTrigger>
-                <SelectContent className={selectContentClass}>
-                  {allBrandsSorted.map((brand) => (
-                    <SelectItem key={brand} value={brand}>
-                      {brand}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="pd-dialog-veh-model" className="text-xs">Model *</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!newVehicleMakeInput}
-                  className="h-6 shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
-                  onClick={() => {
-                    if (!newVehicleMakeInput) return;
-                    setNewModelOpen(true);
-                    setNewModelDraft("");
-                  }}
-                >
-                  + New
-                </Button>
-              </div>
-              <Select
-                value={newVehicleModelInput || undefined}
-                onValueChange={(value) => {
-                  setNewVehicleModelInput(value);
-                  const inferredSegment = getModelSegment(newVehicleMakeInput, value);
-                  if (inferredSegment) {
-                    setNewVehicleSegmentInput(inferredSegment);
-                  }
-                }}
-                disabled={!newVehicleMakeInput}
-              >
-                <SelectTrigger id="pd-dialog-veh-model" className="h-9 border-input">
-                  <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
-                </SelectTrigger>
-                <SelectContent className={selectContentClass}>
-                  {allModelsSortedForExistingCustomer.map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
-              Register Vehicle
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
 
       {/* Brand add nested dialog */}
       <Dialog open={newBrandOpen} onOpenChange={setNewBrandOpen}>

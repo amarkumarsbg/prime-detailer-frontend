@@ -34,7 +34,7 @@ import { buildOwnershipTimeline } from "@/lib/ownership-transfers";
 import type { OwnershipTimelineItem } from "@/lib/ownership-transfers";
 import { toast } from "sonner";
 import { pushActivityLog } from "@/lib/activity-log-helper";
-import { ArrowLeft, Bell, AlertTriangle, Clock, Calendar, Wrench, Droplets, Disc3, Snowflake, Battery, Shield, FileCheck, UserPlus, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, Bell, AlertTriangle, Clock, Calendar, Wrench, Droplets, Disc3, Snowflake, Battery, Shield, FileCheck, UserPlus, Edit, Trash2, History } from "lucide-react";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import type { JobCard, Vehicle } from "@/types";
 import { EditVehicleDialog } from "../page";
@@ -112,17 +112,30 @@ export default function VehicleDetailPage() {
       ]} />
 
       <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-3xl font-bold font-mono tracking-tight">{vehicle.registrationNumber}</p>
-              <p className="text-lg text-muted-foreground mt-1">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold font-mono tracking-tight sm:text-3xl">
+                {vehicle.registrationNumber}
+              </p>
+              <p className="text-base text-muted-foreground mt-0.5 sm:text-lg">
                 {vehicle.make} {vehicle.model}
-                {vehicle.variant && ` ${vehicle.variant}`}
+                {vehicle.variant ? (
+                  <span className="text-muted-foreground/80"> · {vehicle.variant}</span>
+                ) : null}
+              </p>
+              <p className="mt-1.5 text-sm">
+                Customer:{" "}
+                <Link
+                  href={`/customers/${vehicle.customerId}`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {vehicle.customerName}
+                </Link>
               </p>
             </div>
-            <div className="flex flex-col sm:items-end gap-3 shrink-0">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col sm:items-end gap-2.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                 {vehicle.segment && (
                   <Badge variant="outline">{vehicle.segment.replace(/_/g, " ")}</Badge>
                 )}
@@ -130,18 +143,15 @@ export default function VehicleDetailPage() {
                 <span className="text-sm text-muted-foreground">{vehicle.year}</span>
                 <span className="flex items-center gap-1.5 text-sm">
                   <span
-                    className="size-4 rounded-full shrink-0 border border-border"
+                    className="size-3.5 rounded-full shrink-0 border border-border"
                     style={{ backgroundColor: hex }}
+                    aria-hidden
                   />
-                  {vehicle.color}
+                  {vehicle.color && vehicle.color !== "—" ? vehicle.color : "—"}
                 </span>
               </div>
-              <div className="flex items-center gap-2 sm:pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditOpen(true)}
-                >
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                   <Edit className="mr-1.5 h-4 w-4" />
                   Edit
                 </Button>
@@ -157,21 +167,106 @@ export default function VehicleDetailPage() {
               </div>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm">
-            <span>
-              Customer:{" "}
-              <Link
-                href={`/customers/${vehicle.customerId}`}
-                className="font-medium text-primary hover:underline"
-              >
-                {vehicle.customerName}
-              </Link>
-            </span>
-          </div>
-          {vehicle.notes && (
-            <p className="mt-3 text-sm text-muted-foreground">{vehicle.notes}</p>
-          )}
         </CardHeader>
+        <CardContent className="space-y-3 border-t border-border/60 pt-3">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Vehicle details
+            </p>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">
+                  {vehicle.vinNumber ? "VIN" : "Registration"}
+                </dt>
+                <dd className="mt-0.5 truncate text-sm font-medium font-mono tracking-wide">
+                  {vehicle.registrationNumber}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Odometer</dt>
+                <dd className="mt-0.5 text-sm font-medium">
+                  {vehicle.odometer != null
+                    ? `${vehicle.odometer.toLocaleString("en-IN")} km`
+                    : "—"}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Make</dt>
+                <dd className="mt-0.5 truncate text-sm font-medium">{vehicle.make || "—"}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Model</dt>
+                <dd className="mt-0.5 truncate text-sm font-medium">{vehicle.model || "—"}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Variant</dt>
+                <dd className="mt-0.5 truncate text-sm font-medium">{vehicle.variant?.trim() || "—"}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Fuel type</dt>
+                <dd className="mt-0.5 text-sm font-medium">{vehicle.fuelType || "—"}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Segment</dt>
+                <dd className="mt-0.5 text-sm font-medium">
+                  {vehicle.segment?.replace(/_/g, " ") || "—"}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Color</dt>
+                <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
+                  <span
+                    className="size-3 rounded-full shrink-0 border border-border"
+                    style={{ backgroundColor: hex }}
+                    aria-hidden
+                  />
+                  <span className="truncate">
+                    {vehicle.color && vehicle.color !== "—" ? vehicle.color : "—"}
+                  </span>
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Year</dt>
+                <dd className="mt-0.5 text-sm font-medium">{vehicle.year || "—"}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Insurance details
+            </p>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-3">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Provider</dt>
+                <dd className="mt-0.5 truncate text-sm font-medium">
+                  {vehicle.insuranceProvider?.trim() || "—"}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Policy number</dt>
+                <dd className="mt-0.5 truncate text-sm font-medium font-mono">
+                  {vehicle.insurancePolicyNumber?.trim() || "—"}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Due date</dt>
+                <dd className="mt-0.5 text-sm font-medium">
+                  {vehicle.insuranceDueDate ? formatDate(vehicle.insuranceDueDate) : "—"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Notes
+            </p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">
+              {vehicle.notes?.trim() || "—"}
+            </p>
+          </div>
+        </CardContent>
       </Card>
 
       <VehicleOwnershipSection vehicle={vehicle} vehicleId={vehicleId} vehicleList={vehicleList} setVehicleList={setVehicleList} />
@@ -433,7 +528,7 @@ function VehicleOwnershipSection({
 
   return (
     <div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <UserPlus className="w-5 h-5" />
           Ownership Transfer
@@ -448,7 +543,10 @@ function VehicleOwnershipSection({
           {timelineItems && timelineItems.length > 0 ? (
             <OwnershipTimeline items={timelineItems} />
           ) : (
-            <p className="text-sm text-muted-foreground">No previous ownership transfers.</p>
+            <div className="flex flex-col items-center justify-center gap-1.5 py-4 text-center">
+              <History className="h-5 w-5 text-muted-foreground/70" aria-hidden />
+              <p className="text-sm text-muted-foreground">No previous ownership transfers.</p>
+            </div>
           )}
         </CardContent>
       </Card>

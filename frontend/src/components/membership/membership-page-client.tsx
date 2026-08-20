@@ -55,15 +55,9 @@ import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-trigg
 import { createInvoiceForMembershipActivation } from "@/lib/membership-invoice";
 import { salesInvoiceDetailPath } from "@/lib/billing/payment-helpers";
 import { useAuthStore } from "@/store/auth-store";
-import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { computeCustomerLookupMatches } from "@/lib/customer-vehicle-lookup";
-import {
-  INDIAN_VEHICLE_REG_HINT,
-  findVehicleByNormalizedReg,
-  isValidIndianVehicleRegistration,
-  normalizeRegistrationNumber,
-} from "@/lib/vehicle-registration";
-import type { Customer, Vehicle, VehicleSegment } from "@/types";
+import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
+import type { Customer } from "@/types";
 
 const TIER_OPTIONS: { value: MembershipTier; label: string }[] = [
   { value: "MONTHLY", label: "Monthly (~30 days)" },
@@ -217,7 +211,6 @@ export function MembershipPageClient() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const customers = useCustomerStore((s) => s.customers);
   const vehicles = useVehicleStore((s) => s.vehicles);
-  const setVehicles = useVehicleStore((s) => s.setVehicles);
   const businessName = useSettingsStore((s) => s.businessName);
   const currentBranch = useAuthStore((s) => s.currentBranch);
 
@@ -322,15 +315,6 @@ export function MembershipPageClient() {
     setPkgDialogOpen(false);
   };
 
-  const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
-  const [extraBrands, setExtraBrands] = useState<string[]>([]);
-  const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
-
-  const allBrandsSorted = useMemo(() => {
-    const combined = new Set([...getBrandNames(), ...extraBrands]);
-    return Array.from(combined).sort();
-  }, [getBrandNames, extraBrands]);
-
   const [assignCustomerId, setAssignCustomerId] = useState<string>("");
   const [assignVehicleId, setAssignVehicleId] = useState<string>("");
   const [assignPackageId, setAssignPackageId] = useState<string>("");
@@ -339,17 +323,7 @@ export function MembershipPageClient() {
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[]>([]);
 
-  // Nested vehicle creation dialog for existing customer
   const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
-  const [newVehicleRegInput, setNewVehicleRegInput] = useState("");
-  const [newVehicleMakeInput, setNewVehicleMakeInput] = useState("");
-  const [newVehicleModelInput, setNewVehicleModelInput] = useState("");
-  const [newVehicleSegmentInput, setNewVehicleSegmentInput] = useState<VehicleSegment>("HATCHBACK");
-
-  const [newBrandOpen, setNewBrandOpen] = useState(false);
-  const [newBrandDraft, setNewBrandDraft] = useState("");
-  const [newModelOpen, setNewModelOpen] = useState(false);
-  const [newModelDraft, setNewModelDraft] = useState("");
 
   const selectedExistingCustomer = useMemo(
     () => customers.find((c) => c.id === assignCustomerId) || null,
@@ -364,13 +338,6 @@ export function MembershipPageClient() {
       .filter((v) => v.customerId === assignCustomerId)
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
   }, [assignCustomerId, vehicles]);
-
-  const allModelsSortedForExistingCustomer = useMemo(() => {
-    if (!newVehicleMakeInput) return [];
-    const fromCatalog = getModels(newVehicleMakeInput);
-    const fromExtra = extraModelsByBrand[newVehicleMakeInput] || [];
-    return Array.from(new Set([...fromCatalog.map((m) => (typeof m === "string" ? m : m.name)), ...fromExtra])).sort();
-  }, [newVehicleMakeInput, getModels, extraModelsByBrand]);
 
   useEffect(() => {
     const trimmed = lookupQuery.trim();
@@ -399,60 +366,6 @@ export function MembershipPageClient() {
   const clearSelectedCustomer = () => {
     setAssignCustomerId("");
     setAssignVehicleId("");
-  };
-
-  const handleSaveVehicleForExistingCustomer = () => {
-    if (!assignCustomerId) {
-      toast.error("Select customer first");
-      return;
-    }
-
-    const reg = newVehicleRegInput.trim().toUpperCase();
-    const make = newVehicleMakeInput.trim();
-    const model = newVehicleModelInput.trim();
-    if (!reg || !make || !model) {
-      toast.error("Enter registration, make, and model");
-      return;
-    }
-
-    if (!isValidIndianVehicleRegistration(reg)) {
-      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
-      return;
-    }
-
-    const existingVehicle = findVehicleByNormalizedReg(vehicles, reg);
-    if (existingVehicle) {
-      toast.error("Registration already in the system", {
-        description: `${existingVehicle.registrationNumber} is already assigned to ${existingVehicle.customerName}.`,
-      });
-      return;
-    }
-
-    const customer = customers.find((c) => c.id === assignCustomerId);
-    if (!customer) {
-      toast.error("Could not find selected customer");
-      return;
-    }
-
-    const inferredSegment = getModelSegment(make, model) ?? newVehicleSegmentInput;
-    const newVehicle: Vehicle = {
-      id: `veh-mem-${Date.now()}`,
-      customerId: assignCustomerId,
-      customerName: customer.name,
-      registrationNumber: reg,
-      make,
-      model,
-      segment: inferredSegment,
-      fuelType: "PETROL",
-      color: "—",
-      year: new Date().getFullYear(),
-    };
-
-    setVehicles((prev) => [newVehicle, ...prev]);
-
-    setAssignVehicleId(newVehicle.id);
-    setAddVehicleForExistingCustomerDialogOpen(false);
-    toast.success("Vehicle registered", { description: `${make} ${model} (${reg})` });
   };
 
   const activePackages = useMemo(() => packages.filter((p) => p.isActive), [packages]);
@@ -795,13 +708,7 @@ export function MembershipPageClient() {
                         variant="outline"
                         size="sm"
                         className="h-7 border-violet-200 text-violet-700 bg-white hover:bg-violet-50 text-[11px] font-medium animate-pulse hover:animate-none"
-                        onClick={() => {
-                          setAddVehicleForExistingCustomerDialogOpen(true);
-                          setNewVehicleRegInput("");
-                          setNewVehicleMakeInput("");
-                          setNewVehicleModelInput("");
-                          setNewVehicleSegmentInput("HATCHBACK");
-                        }}
+                        onClick={() => setAddVehicleForExistingCustomerDialogOpen(true)}
                       >
                         + Register Vehicle
                       </Button>
@@ -890,207 +797,15 @@ export function MembershipPageClient() {
             </Card>
           )}
 
-      {/* Nested Add Vehicle dialog for membership customer */}
-      <Dialog
+      <AddVehicleDialog
         open={addVehicleForExistingCustomerDialogOpen}
         onOpenChange={setAddVehicleForExistingCustomerDialogOpen}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add New Vehicle</DialogTitle>
-            <DialogDescription className="sr-only">
-              Add a vehicle for the selected existing customer.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid gap-3 sm:grid-cols-2 py-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="mem-dialog-veh-reg" className="text-xs">Registration Number *</Label>
-              <Input
-                id="mem-dialog-veh-reg"
-                value={newVehicleRegInput}
-                onChange={(e) => setNewVehicleRegInput(e.target.value.toUpperCase())}
-                placeholder="e.g. KA01AB1234"
-                maxLength={16}
-                className="font-mono uppercase h-9 border-input"
-              />
-              <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="mem-dialog-veh-seg" className="text-xs">Type</Label>
-              <Select
-                value={newVehicleSegmentInput}
-                onValueChange={(v) => setNewVehicleSegmentInput(v as VehicleSegment)}
-              >
-                <SelectTrigger id="mem-dialog-veh-seg" className="h-9 border-input">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="HATCHBACK">Hatchback</SelectItem>
-                  <SelectItem value="SEDAN">Sedan</SelectItem>
-                  <SelectItem value="COMPACT_SUV">Compact SUV</SelectItem>
-                  <SelectItem value="SUV">SUV</SelectItem>
-                  <SelectItem value="LUXURY">Luxury</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="mem-dialog-veh-make" className="text-xs">Brand *</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-6 shrink-0 border-sky-300 bg-white px-2 text-[10px] font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-                  onClick={() => {
-                    setNewBrandOpen(true);
-                    setNewBrandDraft("");
-                  }}
-                >
-                  + New
-                </Button>
-              </div>
-              <Select
-                value={newVehicleMakeInput || undefined}
-                onValueChange={(value) => {
-                  setNewVehicleMakeInput(value);
-                  setNewVehicleModelInput("");
-                }}
-              >
-                <SelectTrigger id="mem-dialog-veh-make" className="h-9 border-input">
-                  <SelectValue placeholder="Select brand" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allBrandsSorted.map((brand) => (
-                    <SelectItem key={brand} value={brand}>
-                      {brand}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="mem-dialog-veh-model" className="text-xs">Model *</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!newVehicleMakeInput}
-                  className="h-6 shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
-                  onClick={() => {
-                    if (!newVehicleMakeInput) return;
-                    setNewModelOpen(true);
-                    setNewModelDraft("");
-                  }}
-                >
-                  + New
-                </Button>
-              </div>
-              <Select
-                value={newVehicleModelInput || undefined}
-                onValueChange={(value) => {
-                  setNewVehicleModelInput(value);
-                  const inferredSegment = getModelSegment(newVehicleMakeInput, value);
-                  if (inferredSegment) {
-                    setNewVehicleSegmentInput(inferredSegment);
-                  }
-                }}
-                disabled={!newVehicleMakeInput}
-              >
-                <SelectTrigger id="mem-dialog-veh-model" className="h-9 border-input">
-                  <SelectValue placeholder={newVehicleMakeInput ? "Select model" : "Select brand first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {allModelsSortedForExistingCustomer.map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setAddVehicleForExistingCustomerDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleSaveVehicleForExistingCustomer}>
-              Register Vehicle
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Nested Brand add dialog */}
-      <Dialog open={newBrandOpen} onOpenChange={setNewBrandOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add brand</DialogTitle>
-            <DialogDescription>
-              Add a brand name when it is not in the catalog search list.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            placeholder="Brand name"
-            value={newBrandDraft}
-            onChange={(e) => setNewBrandDraft(e.target.value)}
-            className="border-input"
-          />
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setNewBrandOpen(false)}>Cancel</Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const b = newBrandDraft.trim();
-                if (!b) return;
-                setExtraBrands((prev) => [...prev, b]);
-                setNewVehicleMakeInput(b);
-                setNewBrandOpen(false);
-              }}
-            >
-              Add Brand
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Nested Model add dialog */}
-      <Dialog open={newModelOpen} onOpenChange={setNewModelOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add model</DialogTitle>
-            <DialogDescription>
-              Add a model name under brand "{newVehicleMakeInput}".
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            placeholder="Model name"
-            value={newModelDraft}
-            onChange={(e) => setNewModelDraft(e.target.value)}
-            className="border-input"
-          />
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setNewModelOpen(false)}>Cancel</Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const m = newModelDraft.trim();
-                if (!m) return;
-                setExtraModelsByBrand((prev) => ({
-                  ...prev,
-                  [newVehicleMakeInput]: [...(prev[newVehicleMakeInput] || []), m],
-                }));
-                setNewVehicleModelInput(m);
-                setNewModelOpen(false);
-              }}
-            >
-              Add Model
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        lockedCustomerId={assignCustomerId}
+        title="Add New Vehicle"
+        onCreated={(vehicle) => {
+          setAssignVehicleId(vehicle.id);
+        }}
+      />
 
           <Card>
             <CardHeader>

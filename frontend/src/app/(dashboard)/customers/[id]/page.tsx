@@ -3,7 +3,6 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
 import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -17,14 +16,8 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
+import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -37,7 +30,6 @@ import { useWalletStore } from "@/store/wallet-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useCommunicationStore } from "@/store/communication-store";
-import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import {
   MEMBERSHIP_TIER_DAYS,
   membershipIncludedQuantity,
@@ -57,15 +49,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import { ApiError } from "@/lib/api-client";
 import { getTransferTagForCustomer } from "@/lib/ownership-transfers";
-import {
-  findVehicleByNormalizedReg,
-  INDIAN_VEHICLE_REG_ERROR_SHORT,
-  isValidIndianVehicleRegistration,
-} from "@/lib/vehicle-registration";
-import type { Vehicle, JobCard, Invoice, WalletTransaction, FuelType, VehicleSegment } from "@/types";
-
-const fuelTypes: FuelType[] = ["PETROL", "DIESEL", "CNG", "ELECTRIC", "HYBRID"];
-const vehicleSegments: VehicleSegment[] = ["HATCHBACK", "SEDAN", "SUV", "LUXURY", "MUV", "COMPACT_SUV"];
+import type { Vehicle, JobCard, Invoice, WalletTransaction } from "@/types";
 
 function vehicleColorHex(colorName: string): string {
   const lower = colorName.toLowerCase();
@@ -78,18 +62,6 @@ function vehicleColorHex(colorName: string): string {
   if (lower.includes("beige") || lower.includes("rocky")) return "#d4a574";
   if (lower.includes("green")) return "#16a34a";
   return "#6366f1";
-}
-
-interface CustomerAddVehicleFormData {
-  registrationNumber: string;
-  make: string;
-  model: string;
-  variant?: string;
-  fuelType: FuelType;
-  segment: VehicleSegment;
-  color: string;
-  year: number;
-  notes?: string;
 }
 
 export default function CustomerDetailPage() {
@@ -113,35 +85,6 @@ export default function CustomerDetailPage() {
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustLoading, setAdjustLoading] = useState(false);
   const [walletFilter, setWalletFilter] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    watch,
-    reset,
-  } = useForm<CustomerAddVehicleFormData>({
-    defaultValues: {
-      fuelType: "PETROL",
-      segment: "HATCHBACK",
-      year: new Date().getFullYear(),
-    },
-  });
-
-  /* eslint-disable react-hooks/incompatible-library -- react-hook-form watch() */
-  const watchFuelType = watch("fuelType");
-  const watchSegment = watch("segment");
-  const watchMake = watch("make");
-  const watchModel = watch("model");
-  /* eslint-enable react-hooks/incompatible-library */
-
-  const { getBrandNames, getModels } = useVehicleCatalogStore();
-  const makeOptions = useMemo(() => getBrandNames(), [getBrandNames]);
-  const modelOptions = useMemo(
-    () => (watchMake ? getModels(watchMake) : []),
-    [getModels, watchMake]
-  );
 
   const { customers: allCustomers, updateCustomer, findByPhone, deleteCustomer } = useCustomerStore();
   const customer = useMemo(() => {
@@ -422,61 +365,6 @@ export default function CustomerDetailPage() {
     });
   };
 
-  const openAddVehicle = () => {
-    reset({
-      fuelType: "PETROL",
-      segment: "HATCHBACK",
-      year: new Date().getFullYear(),
-      registrationNumber: "",
-      make: "",
-      model: "",
-      variant: "",
-      color: "",
-      notes: "",
-    });
-    setAddVehicleOpen(true);
-  };
-
-  const onAddVehicle = (data: CustomerAddVehicleFormData) => {
-    const c = allCustomers.find((cust) => cust.id === id);
-    if (!c) return;
-    const dup = findVehicleByNormalizedReg(vehicleList, data.registrationNumber);
-    if (dup) {
-      if (dup.customerId === id) {
-        toast.error("This registration is already on file for this customer", {
-          description: `${dup.registrationNumber} — ${dup.make} ${dup.model}`,
-        });
-      } else {
-        toast.error("Registration belongs to another customer", {
-          description: `${dup.registrationNumber} is assigned to ${dup.customerName}. Transfer ownership under Vehicles if needed.`,
-        });
-      }
-      return;
-    }
-    const newVehicle: Vehicle = {
-      id: `veh-${Date.now()}`,
-      customerId: id,
-      customerName: c.name,
-      registrationNumber: data.registrationNumber.toUpperCase(),
-      make: data.make,
-      model: data.model,
-      variant: data.variant || undefined,
-      fuelType: data.fuelType,
-      segment: data.segment,
-      color: data.color,
-      year: data.year,
-      notes: data.notes || undefined,
-    };
-    setVehicles((prev) => [newVehicle, ...prev]);
-    reset({
-      fuelType: "PETROL",
-      segment: "HATCHBACK",
-      year: new Date().getFullYear(),
-    });
-    setAddVehicleOpen(false);
-    toast.success("Vehicle added", { description: `${data.registrationNumber.toUpperCase()} has been registered.` });
-  };
-
   if (!customer) {
     return (
       <div className="space-y-4 sm:space-y-6">
@@ -709,7 +597,7 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Vehicles</CardTitle>
-              <Button variant="outline" size="sm" type="button" onClick={openAddVehicle}>
+              <Button variant="outline" size="sm" type="button" onClick={() => setAddVehicleOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Vehicle
               </Button>
@@ -811,179 +699,12 @@ export default function CustomerDetailPage() {
             </CardContent>
           </Card>
 
-          <Dialog open={addVehicleOpen} onOpenChange={setAddVehicleOpen}>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add Vehicle</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(onAddVehicle)} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cust-registrationNumber">Registration Number</Label>
-                    <Input
-                      id="cust-registrationNumber"
-                      placeholder="KA-01-AB-1234"
-                      maxLength={16}
-                      {...register("registrationNumber", {
-                        required: "Required",
-                        validate: (v) =>
-                          isValidIndianVehicleRegistration(String(v)) || INDIAN_VEHICLE_REG_ERROR_SHORT,
-                      })}
-                    />
-                    {errors.registrationNumber && (
-                      <p className="text-sm text-destructive">{errors.registrationNumber.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cust-year">Year</Label>
-                    <Input
-                      id="cust-year"
-                      type="number"
-                      placeholder="2024"
-                      {...register("year", { valueAsNumber: true, required: "Required" })}
-                    />
-                    {errors.year && (
-                      <p className="text-sm text-destructive">{errors.year.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cust-make">Make</Label>
-                    <input type="hidden" {...register("make", { required: "Required" })} />
-                    <Select
-                      value={watchMake || undefined}
-                      onValueChange={(value) => {
-                        setValue("make", value, {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: true,
-                        });
-                        setValue("model", "", {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: true,
-                        });
-                      }}
-                    >
-                      <SelectTrigger id="cust-make" className={cn(errors.make && "border-destructive")}>
-                        <SelectValue placeholder="Select make" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {makeOptions.map((make) => (
-                          <SelectItem key={make} value={make}>
-                            {make}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.make && (
-                      <p className="text-sm text-destructive">{errors.make.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cust-model">Model</Label>
-                    <input type="hidden" {...register("model", { required: "Required" })} />
-                    <Select
-                      value={watchModel || undefined}
-                      onValueChange={(value) => {
-                        setValue("model", value, {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: true,
-                        });
-                      }}
-                      disabled={!watchMake}
-                    >
-                      <SelectTrigger id="cust-model" className={cn(errors.model && "border-destructive")}>
-                        <SelectValue placeholder={watchMake ? "Select model" : "Select make first"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelOptions.map((model) => (
-                          <SelectItem key={model.name} value={model.name}>
-                            {model.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.model && (
-                      <p className="text-sm text-destructive">{errors.model.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="cust-variant">Variant (optional)</Label>
-                  <Input id="cust-variant" placeholder="VXI" {...register("variant")} />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Fuel Type</Label>
-                    <Select
-                      value={watchFuelType}
-                      onValueChange={(v) => setValue("fuelType", v as FuelType)}
-                    >
-                      <SelectTrigger className={cn(errors.fuelType && "border-destructive")}>
-                        <SelectValue placeholder="Select fuel type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fuelTypes.map((ft) => (
-                          <SelectItem key={ft} value={ft}>
-                            {ft}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.fuelType && (
-                      <p className="text-sm text-destructive">{errors.fuelType.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Segment</Label>
-                    <Select
-                      value={watchSegment}
-                      onValueChange={(v) => setValue("segment", v as VehicleSegment)}
-                    >
-                      <SelectTrigger className={cn(errors.segment && "border-destructive")}>
-                        <SelectValue placeholder="Select segment" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {vehicleSegments.map((seg) => (
-                          <SelectItem key={seg} value={seg}>
-                            {seg.replace(/_/g, " ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.segment && (
-                      <p className="text-sm text-destructive">{errors.segment.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cust-color">Color</Label>
-                    <Input id="cust-color" placeholder="Pearl Arctic White" {...register("color", { required: "Required" })} />
-                    {errors.color && (
-                      <p className="text-sm text-destructive">{errors.color.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="cust-notes">Notes (optional)</Label>
-                  <Textarea id="cust-notes" placeholder="Additional notes..." {...register("notes")} />
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setAddVehicleOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Add Vehicle</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <AddVehicleDialog
+            open={addVehicleOpen}
+            onOpenChange={setAddVehicleOpen}
+            lockedCustomerId={id}
+            title="Add Vehicle"
+          />
         </TabsContent>
 
         <TabsContent value="wallet" className="space-y-4">
