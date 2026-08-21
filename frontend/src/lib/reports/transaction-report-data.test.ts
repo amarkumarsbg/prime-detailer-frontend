@@ -111,7 +111,7 @@ describe("buildExpenseTransactionRows", () => {
               id: "pay-upi",
               amount: 90,
               method: "UPI",
-              paidAt: "2026-08-18T11:00:00.000Z",
+              paidAt: "2026-08-18T11:05:00.000Z",
             },
           ],
         }),
@@ -119,10 +119,54 @@ describe("buildExpenseTransactionRows", () => {
     );
 
     expect(rows).toHaveLength(2);
+    // Newest payment first (UPI at 11:05 before cash at 11:00)
     expect(rows.map((r) => ({ mode: r.paymentMode, amount: r.totalAmount }))).toEqual([
-      { mode: "CASH", amount: 10 },
       { mode: "UPI", amount: 90 },
+      { mode: "CASH", amount: 10 },
     ]);
+  });
+
+  it("orders same-day payments by time so the latest amount is first", () => {
+    const rows = buildExpenseTransactionRows(
+      [
+        expense({
+          id: "e1",
+          title: "Purchase PUR-2026-0002",
+          amount: 708,
+          amountPaid: 108,
+          paymentStatus: "PARTIAL",
+          purchaseId: "pur-2",
+        }),
+      ],
+      period,
+      "All Expense Categories",
+      [
+        purchase({
+          id: "pur-2",
+          purchaseNumber: "PUR-2026-0002",
+          amountPaid: 108,
+          payments: [
+            {
+              id: "pay-old",
+              amount: 8,
+              method: "CASH",
+              paidAt: "2026-08-21T08:00:00.000Z",
+            },
+            {
+              id: "pay-latest",
+              amount: 100,
+              method: "CASH",
+              paidAt: "2026-08-21T18:30:00.000Z",
+            },
+          ],
+        }),
+      ]
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.totalAmount).toBe(100);
+    expect(rows[0]?.id).toBe("pay-latest");
+    expect(rows[1]?.totalAmount).toBe(8);
   });
 });
 

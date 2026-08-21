@@ -31,7 +31,7 @@ import {
 } from "@/lib/reports/transaction-report-data";
 import { useCashBankStore } from "@/store/cash-bank-store";
 import { useInventoryStore } from "@/store/inventory-store";
-import { formatDate, formatInrFull } from "@/lib/utils";
+import { formatDate, formatDateTime, formatInrFull } from "@/lib/utils";
 import { HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -495,7 +495,9 @@ export function ExpenseTransactionReport() {
               <>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-border/80 hover:bg-muted/10">
-                    <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      {formatDateTime(r.paidAt ?? r.date)}
+                    </td>
                     <td className="px-2 py-2 font-mono text-xs">{r.expenseNumber}</td>
                     <td className="px-2 py-2">{r.category}</td>
                     <td className="px-2 py-2">{r.paymentMode}</td>
