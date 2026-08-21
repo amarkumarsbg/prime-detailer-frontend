@@ -342,7 +342,7 @@ export function ReportsHub() {
     return (
       <div
         key={sec.id}
-        className="flex min-h-[220px] flex-col border border-border bg-card max-md:min-h-0 max-md:rounded-xl max-md:shadow-sm"
+        className="flex h-fit min-h-[220px] flex-col self-start border border-border bg-card max-md:min-h-0 max-md:w-full max-md:rounded-xl max-md:shadow-sm"
       >
         <div className="flex items-center gap-2 border-b border-border px-4 py-3 max-md:px-3 max-md:py-2.5">
           <Icon className="h-5 w-5 text-muted-foreground max-md:h-4 max-md:w-4" aria-hidden />
@@ -478,13 +478,13 @@ export function ReportsHub() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
+      <div className="grid items-start gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
           .filter((s) => ["favourite", "gst", "transaction"].includes(s.id))
           .map((s) => renderSectionCard(s))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
+      <div className="grid items-start gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
           .filter((s) => ["item", "party", "hr"].includes(s.id))
           .map((s) => renderSectionCard(s))}
