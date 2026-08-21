@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, ImagePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 type CapturedShot = {
   id: string;
@@ -315,155 +316,156 @@ export function MultiPhotoCameraCapture({
   const showNativeUi = nativeMode || !!error;
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex flex-col bg-black text-white"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Camera className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-          <h2 className="truncate text-sm font-semibold tracking-tight">{title}</h2>
-        </div>
-        {count > 0 ? (
-          <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold tabular-nums text-primary-foreground">
-            {count} captured
-          </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={handleClose}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/90 hover:bg-white/10"
-          aria-label="Close camera"
-          disabled={submitting}
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </header>
-
-      <div className="relative min-h-0 flex-1 bg-black">
-        <video
-          ref={videoRef}
-          className={cn(
-            "absolute inset-0 h-full w-full object-cover",
-            showNativeUi ? "invisible" : "visible"
-          )}
-          playsInline
-          muted
-          autoPlay
-        />
-
-        {showNativeUi ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
-              <Camera className="h-8 w-8 text-white/90" />
-            </div>
-            <p className="text-sm font-medium text-white">Tap the shutter to take a photo</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="border-white/30 bg-transparent text-white hover:bg-white/10"
-              onClick={() => galleryRef.current?.click()}
-            >
-              <ImagePlus className="mr-1.5 h-4 w-4" />
-              Gallery
-            </Button>
-            {canUseLiveCameraPreview() && error ? (
-              <Button type="button" variant="secondary" size="sm" onClick={() => void startCamera(null)}>
-                Retry
-              </Button>
-            ) : null}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showClose={false}
+        mobileVariant="fullscreen"
+        className="fixed inset-0 left-0 top-0 translate-x-0 translate-y-0 z-[200] flex flex-col bg-black text-white max-w-none w-full h-full p-0 border-0 rounded-none overflow-hidden sm:rounded-none [&>button]:hidden"
+      >
+        <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Camera className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+            <h2 className="truncate text-sm font-semibold tracking-tight">{title}</h2>
           </div>
-        ) : starting ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm text-white/80">
-            Starting camera…
-          </div>
-        ) : null}
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+          {count > 0 ? (
+            <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold tabular-nums text-primary-foreground">
+              {count} captured
+            </span>
+          ) : null}
           <button
             type="button"
-            onClick={handleShutter}
-            disabled={starting || count >= maxPhotos || submitting}
-            className={cn(
-              "pointer-events-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border-[3px] border-primary bg-white shadow-lg transition-transform active:scale-95",
-              "disabled:opacity-40"
-            )}
-            aria-label={showNativeUi ? "Open device camera" : "Capture photo"}
+            onClick={handleClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/90 hover:bg-white/10"
+            aria-label="Close camera"
+            disabled={submitting}
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-white">
-              <Camera className="h-6 w-6" strokeWidth={2} />
-            </span>
+            <X className="h-5 w-5" />
           </button>
-        </div>
+        </header>
 
-        {/* Native camera — works on HTTP LAN; one shot per open on most phones */}
-        <input
-          ref={nativeCaptureRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          onChange={(e) => {
-            appendFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <input
-          ref={galleryRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="sr-only"
-          onChange={(e) => {
-            appendFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-      </div>
+        <div className="relative min-h-0 flex-1 bg-black">
+          <video
+            ref={videoRef}
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover",
+              showNativeUi ? "invisible" : "visible"
+            )}
+            playsInline
+            muted
+            autoPlay
+          />
 
-      {count > 0 ? (
-        <div className="shrink-0 border-t border-white/10 bg-black/90 px-3 py-2">
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {shots.map((shot) => (
-              <div
-                key={shot.id}
-                className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 border-primary"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={shot.previewUrl} alt="" className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removeShot(shot.id)}
-                  className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow"
-                  aria-label="Remove photo"
-                  disabled={submitting}
-                >
-                  <X className="h-3 w-3" strokeWidth={3} />
-                </button>
+          {showNativeUi ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
+                <Camera className="h-8 w-8 text-white/90" />
               </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+              <p className="text-sm font-medium text-white">Tap the shutter to take a photo</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                onClick={() => galleryRef.current?.click()}
+              >
+                <ImagePlus className="mr-1.5 h-4 w-4" />
+                Gallery
+              </Button>
+              {canUseLiveCameraPreview() && error ? (
+                <Button type="button" variant="secondary" size="sm" onClick={() => void startCamera(null)}>
+                  Retry
+                </Button>
+              ) : null}
+            </div>
+          ) : starting ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm text-white/80">
+              Starting camera…
+            </div>
+          ) : null}
 
-      <div className="shrink-0 border-t border-white/10 bg-black px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <Button
-          type="button"
-          className="h-12 w-full bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
-          disabled={count === 0 || submitting}
-          onClick={() => void handleDone()}
-        >
-          <Check className="mr-2 h-5 w-5" />
-          {submitting
-            ? "Saving…"
-            : count === 0
-              ? "Capture at least one photo"
-              : `Done — Add ${count} photo${count === 1 ? "" : "s"}`}
-        </Button>
-      </div>
-    </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+            <button
+              type="button"
+              onClick={handleShutter}
+              disabled={starting || count >= maxPhotos || submitting}
+              className={cn(
+                "pointer-events-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border-[3px] border-primary bg-white shadow-lg transition-transform active:scale-95",
+                "disabled:opacity-40"
+              )}
+              aria-label={showNativeUi ? "Open device camera" : "Capture photo"}
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-white">
+                <Camera className="h-6 w-6" strokeWidth={2} />
+              </span>
+            </button>
+          </div>
+
+          {/* Native camera — works on HTTP LAN; one shot per open on most phones */}
+          <input
+            ref={nativeCaptureRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(e) => {
+              appendFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            onChange={(e) => {
+              appendFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        {count > 0 ? (
+          <div className="shrink-0 border-t border-white/10 bg-black/90 px-3 py-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {shots.map((shot) => (
+                <div
+                  key={shot.id}
+                  className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 border-primary"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={shot.previewUrl} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeShot(shot.id)}
+                    className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow"
+                    aria-label="Remove photo"
+                    disabled={submitting}
+                  >
+                    <X className="h-3 w-3" strokeWidth={3} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="shrink-0 border-t border-white/10 bg-black px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Button
+            type="button"
+            className="h-12 w-full bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+            disabled={count === 0 || submitting}
+            onClick={() => void handleDone()}
+          >
+            <Check className="mr-2 h-5 w-5" />
+            {submitting
+              ? "Saving…"
+              : count === 0
+                ? "Capture at least one photo"
+                : `Done — Add ${count} photo${count === 1 ? "" : "s"}`}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
