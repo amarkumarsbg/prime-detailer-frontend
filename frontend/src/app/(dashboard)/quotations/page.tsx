@@ -170,6 +170,8 @@ export default function QuotationsPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const addVehicle = useVehicleStore((s) => s.addVehicle);
+  const updateVehicle = useVehicleStore((s) => s.updateVehicle);
   const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
@@ -649,24 +651,21 @@ export default function QuotationsPage() {
         const odoParsedNew = odometerReading.trim()
           ? Number.parseInt(odometerReading, 10)
           : NaN;
-        setVehicles((prev) => [
-          ...prev,
-          {
-            id: vehicleId,
-            customerId,
-            customerName,
-            registrationNumber: vehicleRegNumber,
-            make,
-            model,
-            segment: formSegment,
-            fuelType: "PETROL",
-            color: "—",
-            year: new Date().getFullYear(),
-            ...(Number.isFinite(odoParsedNew) && odoParsedNew > 0
-              ? { odometer: odoParsedNew }
-              : {}),
-          },
-        ]);
+        await addVehicle({
+          id: vehicleId,
+          customerId,
+          customerName,
+          registrationNumber: vehicleRegNumber,
+          make,
+          model,
+          segment: formSegment,
+          fuelType: "PETROL",
+          color: "—",
+          year: new Date().getFullYear(),
+          ...(Number.isFinite(odoParsedNew) && odoParsedNew > 0
+            ? { odometer: odoParsedNew }
+            : {}),
+        });
       }
     }
 
@@ -682,9 +681,7 @@ export default function QuotationsPage() {
       hasExistingCustomer &&
       formVehicleId
     ) {
-      setVehicles((prev) =>
-        prev.map((v) => (v.id === formVehicleId ? { ...v, odometer: odometerValue } : v))
-      );
+      await updateVehicle(formVehicleId, { odometer: odometerValue });
     }
 
     const services = Array.from(formServiceIds).map((sid) => {

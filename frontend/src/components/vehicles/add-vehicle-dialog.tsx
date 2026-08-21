@@ -45,6 +45,7 @@ export function AddVehicleDialog({
   const customers = useCustomerStore((s) => s.customers);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const addVehicle = useVehicleStore((s) => s.addVehicle);
 
   const form = useForm<AddVehicleFormData>({
     defaultValues: {
@@ -62,7 +63,7 @@ export function AddVehicleDialog({
     });
   }, [open, lockedCustomerId, form]);
 
-  const onSubmit = (data: AddVehicleFormData) => {
+  const onSubmit = async (data: AddVehicleFormData) => {
     const payload: AddVehicleFormData = {
       ...data,
       customerId: lockedCustomerId || data.customerId,
@@ -72,11 +73,15 @@ export function AddVehicleDialog({
       toast.error(result.error, result.description ? { description: result.description } : undefined);
       return;
     }
-    setVehicles((prev) => [result.vehicle, ...prev]);
+    const added = await addVehicle(result.vehicle);
+    if (!added) {
+      toast.error("Failed to add vehicle in the database");
+      return;
+    }
     toast.success("Vehicle added", {
       description: `${result.vehicle.registrationNumber} has been registered.`,
     });
-    onCreated?.(result.vehicle);
+    onCreated?.(added);
     onOpenChange(false);
   };
 

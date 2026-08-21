@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import type { Vehicle } from "@/types";
 import { postVehicleSnapshot } from "@/lib/collection-sync";
-import { apiGet, apiPost } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
 import type { VehicleImportPayloadItem } from "@/lib/vehicle-import/types";
 
 let vehicleSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -35,6 +35,9 @@ interface VehicleStore {
   fetchVehicles: () => Promise<void>;
   /** Bulk-create via API; merges created rows into the store (no snapshot). */
   importVehicles: (vehicles: VehicleImportPayloadItem[]) => Promise<VehicleBulkImportResult>;
+  addVehicle: (vehicle: Omit<Vehicle, "createdAt">) => Promise<Vehicle | null>;
+  updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<Vehicle | null>;
+  deleteVehicle: (id: string) => Promise<boolean>;
 }
 
 export const useVehicleStore = create<VehicleStore>((set) => ({
@@ -59,5 +62,44 @@ export const useVehicleStore = create<VehicleStore>((set) => ({
       set((state) => ({ vehicles: [...data.created, ...state.vehicles] }));
     }
     return data;
+  },
+
+  addVehicle: async (vehicle) => {
+    try {
+      const data = await apiPost<{ vehicle: Vehicle }>("/api/vehicles", vehicle);
+      set((state) => ({
+        vehicles: [data.vehicle, ...state.vehicles.filter((v) => v.id !== vehicle.id)],
+      }));
+      return data.vehicle;
+    } catch (e) {
+      console.error("Failed to add vehicle via API:", e);
+      return null;
+    }
+  },
+
+  updateVehicle: async (id, updates) => {
+    try {
+      const data = await apiPut<{ vehicle: Vehicle }>(`/api/vehicles/${id}`, updates);
+      set((state) => ({
+        vehicles: state.vehicles.map((v) => (v.id === id ? data.vehicle : v)),
+      }));
+      return data.vehicle;
+    } catch (e) {
+      console.error("Failed to update vehicle via API:", e);
+      return null;
+    }
+  },
+
+  deleteVehicle: async (id) => {
+    try {
+      await apiDelete<{ ok: boolean }>(`/api/vehicles/${id}`);
+      set((state) => ({
+        vehicles: state.vehicles.filter((v) => v.id !== id),
+      }));
+      return true;
+    } catch (e) {
+      console.error("Failed to delete vehicle via API:", e);
+      return false;
+    }
   },
 }));

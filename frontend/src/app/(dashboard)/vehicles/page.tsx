@@ -110,6 +110,8 @@ export default function VehiclesPage() {
   const customers = useCustomerStore((s) => s.customers);
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const updateVehicle = useVehicleStore((s) => s.updateVehicle);
+  const deleteVehicle = useVehicleStore((s) => s.deleteVehicle);
   const fetchVehicles = useVehicleStore((s) => s.fetchVehicles);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -396,8 +398,8 @@ export default function VehiclesPage() {
           setExtraBrands={setExtraBrands}
           extraModels={extraModels}
           setExtraModels={setExtraModels}
-          onSave={(updated) => {
-            setVehicles((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
+          onSave={async (updated) => {
+            await updateVehicle(updated.id, updated);
             setEditingVehicle(null);
             toast.success("Vehicle updated", { description: `${updated.registrationNumber} has been updated.` });
           }}
@@ -430,9 +432,9 @@ export default function VehiclesPage() {
             <Button
               type="button"
               variant="destructive"
-              onClick={() => {
+              onClick={async () => {
                 if (deletingVehicle) {
-                  setVehicles((prev) => prev.filter((v) => v.id !== deletingVehicle.id));
+                  await deleteVehicle(deletingVehicle.id);
                   setDeletingVehicle(null);
                   toast.success("Vehicle deleted");
                 }

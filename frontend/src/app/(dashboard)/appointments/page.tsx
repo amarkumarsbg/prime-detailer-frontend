@@ -155,6 +155,8 @@ export default function AppointmentsPage() {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const addVehicle = useVehicleStore((s) => s.addVehicle);
+  const updateVehicle = useVehicleStore((s) => s.updateVehicle);
   const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
   const customers = useCustomerStore((s) => s.customers);
   const addCustomer = useCustomerStore((s) => s.addCustomer);
@@ -472,7 +474,7 @@ export default function AppointmentsPage() {
         year: new Date().getFullYear(),
         ...(Number.isFinite(odoParsed) && odoParsed > 0 ? { odometer: odoParsed } : {}),
       };
-      setVehicles((prev) => [newVehicle, ...prev]);
+      await addVehicle(newVehicle);
       customerId = custId;
       customerName = name;
       customerPhone = newCustomerPhone;
@@ -491,9 +493,7 @@ export default function AppointmentsPage() {
       odoParsedVisit > 0 &&
       formVehicleId
     ) {
-      setVehicles((prev) =>
-        prev.map((v) => (v.id === formVehicleId ? { ...v, odometer: odoParsedVisit } : v))
-      );
+      await updateVehicle(formVehicleId, { odometer: odoParsedVisit });
     }
 
     const mechanic = formMechanicId ? staff.find((s) => s.id === formMechanicId) : undefined;

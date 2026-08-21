@@ -266,6 +266,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const addVehicle = useVehicleStore((s) => s.addVehicle);
+  const updateVehicle = useVehicleStore((s) => s.updateVehicle);
   const {
     addCustomer,
     updateCustomer,
@@ -1716,49 +1718,39 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
 
     if (matchedVehicle) {
-      setVehicles((prev) =>
-        prev.map((v) =>
-          v.id === matchedVehicle!.id
-            ? {
-                ...v,
-                customerId: custId,
-                customerName: customerName.trim(),
-                registrationNumber: regStored,
-                make: vehicleBrand.trim(),
-                model: vehicleModel.trim() || "—",
-                segment: seg,
-                ...(odometerReading.trim()
-                  ? { odometer: Number.parseInt(odometerReading, 10) || v.odometer }
-                  : {}),
-              }
-            : v
-        )
-      );
+      await updateVehicle(matchedVehicle.id, {
+        customerId: custId,
+        customerName: customerName.trim(),
+        registrationNumber: regStored,
+        make: vehicleBrand.trim(),
+        model: vehicleModel.trim() || "—",
+        segment: seg,
+        ...(odometerReading.trim()
+          ? { odometer: Number.parseInt(odometerReading, 10) || matchedVehicle.odometer }
+          : {}),
+      });
     } else {
-      setVehicles((prev) => [
-        {
-          id: resolvedVehicleId,
-          customerId: custId,
-          customerName: customerName.trim(),
-          registrationNumber: regStored,
-          make: vehicleBrand.trim(),
-          model: vehicleModel.trim() || "—",
-          variant: vehicleVariant.trim() || undefined,
-          segment: seg,
-          fuelType: vehicleFuelType,
-          color: vehicleColor.trim() || "—",
-          year: Number(vehicleYear) || new Date().getFullYear(),
-          notes: vehicleNotes.trim() || undefined,
-          odometer: odometerReading.trim()
-            ? Number.parseInt(odometerReading, 10) || undefined
-            : undefined,
-          insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
-          insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
-          insuranceDueDate: vehicleInsuranceDueDate || undefined,
-          vinNumber: vehicleIdentifierType === "VIN" ? regStored : undefined,
-        },
-        ...prev,
-      ]);
+      await addVehicle({
+        id: resolvedVehicleId,
+        customerId: custId,
+        customerName: customerName.trim(),
+        registrationNumber: regStored,
+        make: vehicleBrand.trim(),
+        model: vehicleModel.trim() || "—",
+        variant: vehicleVariant.trim() || undefined,
+        segment: seg,
+        fuelType: vehicleFuelType,
+        color: vehicleColor.trim() || "—",
+        year: Number(vehicleYear) || new Date().getFullYear(),
+        notes: vehicleNotes.trim() || undefined,
+        odometer: odometerReading.trim()
+          ? Number.parseInt(odometerReading, 10) || undefined
+          : undefined,
+        insuranceProvider: vehicleInsuranceProvider.trim() || undefined,
+        insurancePolicyNumber: vehicleInsurancePolicyNumber.trim() || undefined,
+        insuranceDueDate: vehicleInsuranceDueDate || undefined,
+        vinNumber: vehicleIdentifierType === "VIN" ? regStored : undefined,
+      });
     }
 
     const bookingNote =
@@ -1929,7 +1921,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       createdAt: now,
       updatedAt: now,
     };
-    addJobCard(newJobCard);
+    await addJobCard(newJobCard);
 
     if (!isJobCard) {
       if (pickupRequired) {

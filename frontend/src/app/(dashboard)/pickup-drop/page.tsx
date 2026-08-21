@@ -138,6 +138,8 @@ export default function PickupDropPage() {
   const staff = useStaffStore((s) => s.staff);
   const appointments = useAppointmentStore((s) => s.appointments);
   const customers = useCustomerStore((s) => s.customers);
+  const addCustomer = useCustomerStore((s) => s.addCustomer);
+  const findByPhone = useCustomerStore((s) => s.findByPhone);
   const businessName = useSettingsStore((s) => s.businessName);
   const { selectedBranchId, viewingLabel } = useBranchScope();
 
@@ -152,6 +154,8 @@ export default function PickupDropPage() {
   const [currentStep, setCurrentStep] = useState<"customer" | "vehicle" | "details">("customer");
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
+  const addVehicle = useVehicleStore((s) => s.addVehicle);
+  const updateVehicle = useVehicleStore((s) => s.updateVehicle);
   const { getBrandNames, getModels, getModelSegment } = useVehicleCatalogStore();
 
   const [vehicleReg, setVehicleReg] = useState("");
@@ -479,7 +483,7 @@ export default function PickupDropPage() {
     setAddVehicleForExistingCustomerDialogOpen(false);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!pickupRequired && !dropRequired) {
       toast.error("Choose pickup, drop-off, or both.");
       return;
@@ -517,15 +521,25 @@ export default function PickupDropPage() {
     let vehicleMakeModelStr = "";
     let vehicleRegNumberStr = "";
     let regStored = "";
+    let custId = "";
+
+    const odoParsed = odometerReading.trim()
+      ? Number.parseInt(odometerReading, 10)
+      : NaN;
 
     if (hasExistingCustomer) {
       customerNameStr = selectedExistingCustomer!.name;
       customerPhoneStr = selectedExistingCustomer!.phone || "";
+      custId = selectedExistingCustomer!.id;
       const matchedVeh = vehicles.find((v) => v.id === selectedVehicleId);
       if (matchedVeh) {
         vehicleMakeModelStr = `${matchedVeh.make} ${matchedVeh.model}`.trim();
         vehicleRegNumberStr = matchedVeh.registrationNumber;
         regStored = normalizeRegistrationNumber(matchedVeh.registrationNumber);
+        
+        if (Number.isFinite(odoParsed) && odoParsed > 0) {
+          await updateVehicle(matchedVeh.id, { odometer: odoParsed });
+        }
       }
     } else {
       customerNameStr = newCustomerName.trim();
@@ -533,6 +547,69 @@ export default function PickupDropPage() {
       vehicleMakeModelStr = `${vehicleMake} ${vehicleModel}`.trim();
       vehicleRegNumberStr = vehicleReg.trim().toUpperCase();
       regStored = normalizeRegistrationNumber(vehicleReg);
+
+      if (!customerNameStr || customerPhoneStr.replace(/\D/g, "").length < 10) {
+        toast.error("Enter customer name and a valid 10-digit phone number.");
+        return;
+      }
+      if (!vehicleRegNumberStr || !vehicleMake || !vehicleModel) {
+        toast.error("Enter vehicle registration, make, and model.");
+        return;
+      }
+
+      // Check if customer already exists by phone
+      const existing = findByPhone(customerPhoneStr);
+      if (existing) {
+        custId = existing.id;
+      } else {
+        const newReferralCode = `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+        const createdCustomer = await addCustomer({
+          name: customerNameStr,
+          phone: customerPhoneStr,
+          email: `noemail+${customerPhoneStr.replace(/\D/g, "").slice(-10)}@customers.placeholder`,
+          address: pickupAddress.trim() || dropAddress.trim() || "",
+          referralCode: newReferralCode,
+          totalVisits: 0,
+          rewardPoints: 0,
+          walletBalance: 0,
+        });
+        if (!createdCustomer) {
+          toast.error("Could not create customer profile");
+          return;
+        }
+        custId = createdCustomer.id;
+      }
+
+      // Check if vehicle already exists for this customer
+      const existingVeh = vehicles.find(
+        (v) =>
+          v.customerId === custId &&
+          normalizeRegistrationNumber(v.registrationNumber) === regStored
+      );
+      if (existingVeh) {
+        if (Number.isFinite(odoParsed) && odoParsed > 0) {
+          await updateVehicle(existingVeh.id, { odometer: odoParsed });
+        }
+      } else {
+        const vehId = `veh-pnd-${Date.now()}`;
+        const added = await addVehicle({
+          id: vehId,
+          customerId: custId,
+          customerName: customerNameStr,
+          registrationNumber: vehicleRegNumberStr,
+          make: vehicleMake,
+          model: vehicleModel,
+          segment: vehicleSegment,
+          fuelType: "PETROL",
+          color: "—",
+          year: new Date().getFullYear(),
+          ...(Number.isFinite(odoParsed) && odoParsed > 0 ? { odometer: odoParsed } : {}),
+        });
+        if (!added) {
+          toast.error("Could not create vehicle record");
+          return;
+        }
+      }
     }
 
     // Lookup active job card for this vehicle!
@@ -576,26 +653,6 @@ export default function PickupDropPage() {
         ? Number.parseInt(odometerReading, 10) || undefined
         : undefined,
     };
-
-    // Persist visit odometer on the selected / matched vehicle when provided
-    const odoParsed = odometerReading.trim()
-      ? Number.parseInt(odometerReading, 10)
-      : NaN;
-    if (Number.isFinite(odoParsed) && odoParsed > 0) {
-      if (hasExistingCustomer && selectedVehicleId) {
-        setVehicles((prev) =>
-          prev.map((v) => (v.id === selectedVehicleId ? { ...v, odometer: odoParsed } : v))
-        );
-      } else if (regStored) {
-        setVehicles((prev) =>
-          prev.map((v) =>
-            normalizeRegistrationNumber(v.registrationNumber) === regStored
-              ? { ...v, odometer: odoParsed }
-              : v
-          )
-        );
-      }
-    }
 
     const pickupDriver =
       pickupDriverId !== "unassigned" ? staff.find((d) => d.id === pickupDriverId) : undefined;
