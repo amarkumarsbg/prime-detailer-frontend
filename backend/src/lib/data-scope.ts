@@ -15,7 +15,7 @@ const ORG_WIDE_BRANCH_ROLES: readonly UserRole[] = [
 ] as const;
 
 /** Singletons whose payload nests branch-tagged arrays. */
-const BRANCH_NESTED_SINGLETONS = new Set(["payroll", "cashBank", "membership"]);
+const BRANCH_NESTED_SINGLETONS = new Set(["payroll", "cashBank", "membership", "leaveConfig"]);
 
 const PAYROLL_NESTED_KEYS = [
   "salaryStructures",
@@ -110,6 +110,13 @@ export function filterNestedSingletonPayload(
     for (const key of CASH_BANK_NESTED_KEYS) {
       if (key in src) next[key] = filterNestedArrayByBranch(src[key], allowedBranchIds);
     }
+    return next;
+  }
+
+
+  if (collection === "leaveConfig") {
+    const next: Record<string, unknown> = { ...src };
+    if ("balances" in src) next.balances = filterNestedArrayByBranch(src.balances, allowedBranchIds);
     return next;
   }
 

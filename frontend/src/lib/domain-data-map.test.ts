@@ -13,7 +13,13 @@ describe("resourcesForPath", () => {
     const r = resourcesForPath("/payroll");
     expect(r).toContain("payroll");
     expect(r).toContain("staff");
+    expect(r).toContain("staffRewards");
     expect(r).not.toContain("cashBank");
+  });
+
+  it("maps rewards and includes staffRewards on performance", () => {
+    expect(resourcesForPath("/rewards")).toContain("staffRewards");
+    expect(resourcesForPath("/performance")).toContain("staffRewards");
   });
 
   it("prefers longest prefix", () => {

@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import type { User, UserRole, Customer } from "@/types";
 import { toast } from "sonner";
+import { pushActivityLog } from "@/lib/activity-log-helper";
 
 const ROLE_BADGE_MAP: Record<
   UserRole,
@@ -180,6 +181,11 @@ export default function StaffPage() {
   const [newBranchId, setNewBranchId] = useState(defaultBranchId);
   const [newBirthday, setNewBirthday] = useState("");
   const [newAnniversary, setNewAnniversary] = useState("");
+  const [newEmployeeCode, setNewEmployeeCode] = useState("");
+  const [newDesignation, setNewDesignation] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newJoiningDate, setNewJoiningDate] = useState("");
+  const [newNotes, setNewNotes] = useState("");
   const [newIsActive, setNewIsActive] = useState(true);
 
   const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole), [authRole]);
@@ -245,6 +251,11 @@ export default function StaffPage() {
     setNewBranchId(branchLocked && authUser?.branchId ? authUser.branchId : defaultBranchId);
     setNewBirthday("");
     setNewAnniversary("");
+    setNewEmployeeCode("");
+    setNewDesignation("");
+    setNewDepartment("");
+    setNewJoiningDate("");
+    setNewNotes("");
     setNewIsActive(true);
   };
 
@@ -287,11 +298,11 @@ export default function StaffPage() {
   const columns = useMemo(
     () => [
       {
-        key: "id",
-        label: "ID",
+        key: "employeeCode",
+        label: "Emp. Code",
         render: (item: User) => (
           <span className="font-mono text-xs text-muted-foreground">
-            #{item.id.replace(/\D/g, "").slice(-3) || item.id}
+            {item.employeeCode?.trim() || "—"}
           </span>
         ),
       },
@@ -337,6 +348,30 @@ export default function StaffPage() {
             </span>
           );
         },
+      },
+      {
+        key: "designation",
+        label: "Designation",
+        className: "hidden lg:table-cell",
+        render: (item: User) => (
+          <span className="text-sm">{item.designation?.trim() || "—"}</span>
+        ),
+      },
+      {
+        key: "department",
+        label: "Department",
+        className: "hidden xl:table-cell",
+        render: (item: User) => (
+          <span className="text-sm">{item.department?.trim() || "—"}</span>
+        ),
+      },
+      {
+        key: "joiningDate",
+        label: "Joined",
+        className: "hidden xl:table-cell",
+        render: (item: User) => (
+          <span className="text-sm tabular-nums">{item.joiningDate?.trim() || "—"}</span>
+        ),
       },
       {
         key: "branchId",
@@ -529,6 +564,18 @@ export default function StaffPage() {
         ...(pwd ? { password: pwd } : {}),
         ...(newBirthday.trim() ? { birthday: newBirthday.trim() } : {}),
         ...(newAnniversary.trim() ? { anniversary: newAnniversary.trim() } : {}),
+        ...(newEmployeeCode.trim() ? { employeeCode: newEmployeeCode.trim() } : {}),
+        ...(newDesignation.trim() ? { designation: newDesignation.trim() } : {}),
+        ...(newDepartment.trim() ? { department: newDepartment.trim() } : {}),
+        ...(newJoiningDate.trim() ? { joiningDate: newJoiningDate.trim() } : {}),
+        ...(newNotes.trim() ? { notes: newNotes.trim() } : {}),
+      });
+      pushActivityLog({
+        action: "CREATED",
+        entityType: "STAFF",
+        entityId: email,
+        entityLabel: name,
+        details: `Staff created${newEmployeeCode.trim() ? ` (${newEmployeeCode.trim()})` : ""}`,
       });
       if (temporaryPassword) {
         toast.success("User created.", {
@@ -728,7 +775,44 @@ export default function StaffPage() {
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="birthday">Birthday</Label>
+                          <Label htmlFor="employeeCode">Employee Code</Label>
+                          <Input
+                            id="employeeCode"
+                            placeholder="e.g. EMP-001"
+                            value={newEmployeeCode}
+                            onChange={(e) => setNewEmployeeCode(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="designation">Designation</Label>
+                          <Input
+                            id="designation"
+                            placeholder="e.g. Lead Detailer"
+                            value={newDesignation}
+                            onChange={(e) => setNewDesignation(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="department">Department</Label>
+                          <Input
+                            id="department"
+                            placeholder="e.g. Workshop"
+                            value={newDepartment}
+                            onChange={(e) => setNewDepartment(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="joiningDate">Joining Date</Label>
+                          <Input
+                            id="joiningDate"
+                            type="date"
+                            className="date-input-icon-end pr-9"
+                            value={newJoiningDate}
+                            onChange={(e) => setNewJoiningDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="birthday">Date of Birth</Label>
                           <Input
                             id="birthday"
                             type="date"
@@ -745,6 +829,15 @@ export default function StaffPage() {
                             className="date-input-icon-end pr-9"
                             value={newAnniversary}
                             onChange={(e) => setNewAnniversary(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="staffNotes">Notes</Label>
+                          <Input
+                            id="staffNotes"
+                            placeholder="Optional notes"
+                            value={newNotes}
+                            onChange={(e) => setNewNotes(e.target.value)}
                           />
                         </div>
                         <div className="flex items-center gap-2 sm:col-span-2 pt-1">

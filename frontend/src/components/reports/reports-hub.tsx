@@ -26,6 +26,7 @@ import {
   Sparkles,
   Star,
   Users,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -188,6 +189,35 @@ const CATALOG_SECTIONS: SectionDef[] = [
         label: "Sales Summary - Staff wise",
         href: "/reports/sales-summary-staff",
         filters: ["party", "summary", "invoice"],
+      },
+    ],
+  },
+
+  {
+    id: "hr",
+    title: "HR",
+    icon: ClipboardList,
+    collapseAt: 4,
+    items: [
+      {
+        label: "Attendance Summary",
+        href: "/reports/hr-attendance",
+        filters: ["summary"],
+      },
+      {
+        label: "Leave Report",
+        href: "/reports/hr-leave",
+        filters: ["summary"],
+      },
+      {
+        label: "Payroll Report",
+        href: "/reports/hr-payroll",
+        filters: ["summary"],
+      },
+      {
+        label: "Rewards Report",
+        href: "/reports/hr-rewards",
+        filters: ["summary"],
       },
     ],
   },
@@ -454,9 +484,9 @@ export function ReportsHub() {
           .map((s) => renderSectionCard(s))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 max-md:gap-3 max-md:grid-cols-1">
+      <div className="grid gap-4 lg:grid-cols-3 max-md:gap-3 max-md:grid-cols-1">
         {visibleSections
-          .filter((s) => ["item", "party"].includes(s.id))
+          .filter((s) => ["item", "party", "hr"].includes(s.id))
           .map((s) => renderSectionCard(s))}
       </div>
 

@@ -141,6 +141,7 @@ import {
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { useBranchScope } from "@/lib/branch-scope";
+import { useStaffRewardStore } from "@/store/staff-reward-store";
 import {
   buildDropRequestInput,
   getLinkedDropRequest,
@@ -166,6 +167,29 @@ const WORKFLOW_STATUSES: JobCardStatus[] = [
   "READY",
   "DELIVERED",
 ];
+
+/** Record staff rewards after a successful DELIVERED update; never throws into delivery UI. */
+function recordJobDeliveryRewardsSafe(job: JobCard): void {
+  try {
+    if (!job.mechanicId?.trim()) return;
+    useStaffRewardStore.getState().recordJobDeliveryRewards({
+      id: job.id,
+      jobNumber: job.jobNumber,
+      mechanicId: job.mechanicId,
+      mechanicName: job.mechanicName,
+      branchId: job.branchId,
+      estimatedAmount: job.estimatedAmount ?? 0,
+      incentivePercent: job.incentivePercent ?? 0,
+      incentiveAmount: job.incentiveAmount ?? 0,
+      actualDelivery: job.actualDelivery,
+      promisedDelivery: job.expectedDelivery,
+    });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("recordJobDeliveryRewards failed", err);
+    }
+  }
+}
 
 function formatSegmentLabel(segment: string): string {
   return segment
@@ -1374,6 +1398,7 @@ export default function JobCardDetailPage() {
           entityLabel: jobCard.jobNumber,
           details: `${jobCard.jobNumber} marked delivered`,
         });
+        recordJobDeliveryRewardsSafe(mergedJob);
       }
 
       toast.success("Status updated", {
@@ -1538,6 +1563,8 @@ export default function JobCardDetailPage() {
       entityLabel: jobCard.jobNumber,
       details: `${jobCard.jobNumber} marked delivered`,
     });
+
+    recordJobDeliveryRewardsSafe(deliveredJob);
 
     toast.success("Vehicle delivered", {
       description: `${jobCard.jobNumber} is now delivered.`,

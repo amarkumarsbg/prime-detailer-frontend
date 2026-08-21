@@ -32,6 +32,10 @@ import {
   type PerformancePeriod,
 } from "@/lib/performance-branch-metrics";
 import { getDemoBranchPerformance } from "@/lib/performance-demo-data";
+import { buildStaffPerformanceRows } from "@/lib/performance-staff-metrics";
+import { useStaffStore } from "@/store/staff-store";
+import { useStaffRewardStore } from "@/store/staff-reward-store";
+import { useAttendanceStore } from "@/store/attendance-store";
 import type { UserRole } from "@/types";
 import {
   Bar,
@@ -109,6 +113,10 @@ export default function PerformancePage() {
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, viewingLabel } = useBranchScope();
   const user = useAuthStore((s) => s.user);
+  const staff = useStaffStore((s) => s.staff);
+  const rewardLedger = useStaffRewardStore((s) => s.ledger);
+  const staffTargets = useStaffRewardStore((s) => s.targets);
+  const attendanceRecords = useAttendanceStore((s) => s.records);
 
   const range = useMemo(() => getPerformanceRange(period), [period]);
 
@@ -119,7 +127,11 @@ export default function PerformancePage() {
       range.start,
       range.end
     );
-    if (live.length > 0) {
+    const hasLiveJobs = live.some((r) => r.jobCount > 0);
+    // Prefer live metrics whenever job cards exist in scope (even if none fall in period).
+    const hasAnyJobCards = scopedJobCards.length > 0;
+
+    if (hasLiveJobs) {
       return { branchRows: live, usingDemo: false };
     }
     if (selectedBranchId) {
@@ -130,11 +142,56 @@ export default function PerformancePage() {
         usingDemo: false,
       };
     }
+    if (hasAnyJobCards) {
+      return {
+        branchRows: branches
+          .filter((b) => b.isActive !== false)
+          .map((b) => emptyBranchPerformanceMetrics(b.id, b.name)),
+        usingDemo: false,
+      };
+    }
+    // Demo only when org-wide view has no job cards at all.
     return {
       branchRows: getDemoBranchPerformance(branches, null),
       usingDemo: true,
     };
   }, [scopedJobCards, branches, range.start, range.end, selectedBranchId]);
+
+  const periodMonth = range.start.getMonth() + 1;
+  const periodYear = range.start.getFullYear();
+
+  const staffPerformanceRows = useMemo(
+    () =>
+      buildStaffPerformanceRows({
+        staff: staff.map((s) => ({
+          id: s.id,
+          name: s.name,
+          branchId: s.branchId,
+          isActive: s.isActive,
+        })),
+        jobCards: scopedJobCards,
+        ledger: rewardLedger,
+        targets: staffTargets,
+        rangeStart: range.start,
+        rangeEnd: range.end,
+        periodMonth,
+        periodYear,
+        branchId: selectedBranchId,
+        attendanceRecords,
+      }),
+    [
+      staff,
+      scopedJobCards,
+      rewardLedger,
+      staffTargets,
+      range.start,
+      range.end,
+      periodMonth,
+      periodYear,
+      selectedBranchId,
+      attendanceRecords,
+    ]
+  );
 
   const hasScopedJobData = useMemo(
     () => branchRows.some((r) => r.jobCount > 0),
@@ -598,6 +655,11 @@ export default function PerformancePage() {
             <Badge variant="success" className="font-semibold uppercase tracking-wide text-[10px]">
               {performanceDashboardBadge(user?.role)}
             </Badge>
+            {usingDemo && (
+              <Badge variant="warning" className="font-semibold uppercase tracking-wide text-[10px]">
+                Sample data
+              </Badge>
+            )}
             <span className="text-muted-foreground/80">•</span>
             <span>Performance &amp; Efficiency Metrics</span>
           </div>
@@ -645,6 +707,10 @@ export default function PerformancePage() {
           <TabsTrigger value="overview" className={tabTriggerClass}>
             <BarChart3 className="size-3.5 sm:size-4 opacity-90" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="staff" className={tabTriggerClass}>
+            <Users className="size-3.5 sm:size-4 opacity-90" />
+            Staff
           </TabsTrigger>
           <TabsTrigger value="branches" className={tabTriggerClass}>
             <Building2 className="size-3.5 sm:size-4 opacity-90" />
@@ -742,6 +808,114 @@ export default function PerformancePage() {
               tone="slate"
             />
           </div>
+        </TabsContent>
+
+        <TabsContent value="staff" className="mt-4 space-y-4">
+          <div>
+            <h3 className="text-base font-semibold">Staff performance</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Jobs, incentives, reward ledger, attendance, and target achievement ·{" "}
+              {staffPerformanceRows.length} staff
+            </p>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              {staffPerformanceRows.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  No staff performance rows for this period.
+                </p>
+              ) : (
+                <>
+                  <MobileCardList className="p-3">
+                    {staffPerformanceRows.map((row) => (
+                      <MobileRowCard key={row.staffId}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium">{row.staffName}</p>
+                          {row.targetAchievementPct != null && (
+                            <Badge variant="success" className="font-normal">
+                              {row.targetAchievementPct.toFixed(1)}% target
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Jobs</span>
+                            <p className="font-semibold tabular-nums">{row.jobsCompleted}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Job incentive</span>
+                            <p className="font-semibold tabular-nums">
+                              {formatCurrency(row.incentiveFromJobs)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Ledger rewards</span>
+                            <p className="font-semibold tabular-nums">
+                              {formatCurrency(row.rewardsFromLedger)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Present days</span>
+                            <p className="font-semibold tabular-nums">
+                              {row.presentDays == null ? "—" : row.presentDays}
+                            </p>
+                          </div>
+                        </div>
+                      </MobileRowCard>
+                    ))}
+                  </MobileCardList>
+                  <DesktopTableWrap>
+                    <table className="w-full text-sm min-w-[900px]">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="py-3 px-4 font-medium">Staff</th>
+                          <th className="py-3 px-4 font-medium text-right">Jobs completed</th>
+                          <th className="py-3 px-4 font-medium text-right">Job incentive</th>
+                          <th className="py-3 px-4 font-medium text-right">Ledger rewards</th>
+                          <th className="py-3 px-4 font-medium text-right">Present days</th>
+                          <th className="py-3 px-4 font-medium">Target</th>
+                          <th className="py-3 px-4 font-medium text-right">Achievement</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {staffPerformanceRows.map((row) => (
+                          <tr key={row.staffId} className="border-b border-border/70">
+                            <td className="py-3 px-4 font-medium">{row.staffName}</td>
+                            <td className="py-3 px-4 text-right tabular-nums">
+                              {row.jobsCompleted}
+                            </td>
+                            <td className="py-3 px-4 text-right tabular-nums">
+                              {formatCurrency(row.incentiveFromJobs)}
+                            </td>
+                            <td className="py-3 px-4 text-right tabular-nums">
+                              {formatCurrency(row.rewardsFromLedger)}
+                            </td>
+                            <td className="py-3 px-4 text-right tabular-nums">
+                              {row.presentDays == null ? "—" : row.presentDays}
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground text-xs">
+                              {row.targetMetric
+                                ? `${row.targetMetric.replace(/_/g, " ")} · ${row.targetValue}`
+                                : "—"}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {row.targetAchievementPct != null ? (
+                                <Badge variant="success" className="font-normal">
+                                  {row.targetAchievementPct.toFixed(1)}%
+                                </Badge>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </DesktopTableWrap>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="branches" className="mt-4 space-y-4">

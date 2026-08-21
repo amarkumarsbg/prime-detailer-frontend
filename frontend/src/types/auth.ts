@@ -42,10 +42,18 @@ export interface User {
   attendancePin?: string;
   totalJobsCompleted?: number;
   totalIncentiveEarned?: number;
-  /** ISO date yyyy-mm-dd (demo / HR fields) */
+  /** Unique staff employee code (optional; unique when set). */
+  employeeCode?: string;
+  /** Job title — distinct from role. */
+  designation?: string;
+  department?: string;
+  /** Employment start date yyyy-mm-dd (separate from birthday and anniversary). */
+  joiningDate?: string;
+  /** ISO date yyyy-mm-dd */
   birthday?: string;
-  /** Employment start or work anniversary, ISO yyyy-mm-dd */
+  /** Work anniversary yyyy-mm-dd (not joining date). */
   anniversary?: string;
+  notes?: string;
   /** Server sets true until the user completes an authenticated password change (onboarding). */
   mustChangePassword?: boolean;
   /** ISO timestamp when login password was last changed (server audit). */

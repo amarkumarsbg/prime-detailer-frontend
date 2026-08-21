@@ -28,6 +28,9 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { useStaffStore } from "@/store/staff-store";
 import { usePayrollStore } from "@/store/payroll-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useAttendanceStore } from "@/store/attendance-store";
+import { useLeaveStore } from "@/store/leave-store";
+import { useStaffRewardStore } from "@/store/staff-reward-store";
 import {
   applyBranchFilters,
   resolveBranchScopeLabel,
@@ -36,6 +39,7 @@ import {
 import { roleDisplayLabel } from "@/lib/rbac";
 import type {
   ExperienceBand,
+  PayrollRecord,
   PayrollRecordStatus,
   SalaryAdvance,
   SalaryStructure,
@@ -57,6 +61,8 @@ import {
   CheckCircle2,
   ChevronDown,
   Check,
+  Printer,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -108,6 +114,10 @@ export default function PayrollPage() {
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
   const staff = useStaffStore((s) => s.staff);
+  const attendanceRecords = useAttendanceStore((s) => s.records);
+  const leaveRequests = useLeaveStore((s) => s.requests);
+  const leaveTypes = useLeaveStore((s) => s.leaveTypes);
+  const rewardLedger = useStaffRewardStore((s) => s.ledger);
   const salaryStructures = usePayrollStore((s) => s.salaryStructures);
   const payrollRecords = usePayrollStore((s) => s.payrollRecords);
   const salaryAdvances = usePayrollStore((s) => s.salaryAdvances);
@@ -129,6 +139,7 @@ export default function PayrollPage() {
   const [statusFilter, setStatusFilter] = useState<PayrollRecordStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(10);
+  const [payslipRecord, setPayslipRecord] = useState<PayrollRecord | null>(null);
 
   const [structDialogOpen, setStructDialogOpen] = useState(false);
   const [editStructure, setEditStructure] = useState<SalaryStructure | null>(null);
@@ -352,6 +363,10 @@ export default function PayrollPage() {
       month: filterMonth,
       staff,
       branchId: branchFilterId,
+      attendanceRecords,
+      leaveRequests,
+      leaveTypes,
+      rewardLedger,
     });
     if (n === 0) {
       toast.message("No new records", {
@@ -540,34 +555,46 @@ export default function PayrollPage() {
                                 {MONTHS.find((m) => m.v === r.periodMonth)?.label.slice(0, 3)}{" "}
                                 {r.periodYear} · {r.attendanceDays} days
                               </span>
-                              {r.status === "PENDING" ? (
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 shrink-0 px-2.5 text-xs"
-                                    onClick={() => {
-                                      setRecordStatus(r.id, "PAID");
-                                      toast.success("Marked as paid.");
-                                    }}
-                                  >
-                                    Mark paid
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 shrink-0 px-2.5 text-xs text-rose-600"
-                                    onClick={() => {
-                                      setRecordStatus(r.id, "CANCELLED");
-                                      toast.success("Record cancelled.");
-                                    }}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              ) : null}
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 shrink-0 px-2.5 text-xs"
+                                  onClick={() => setPayslipRecord(r)}
+                                >
+                                  <FileText className="mr-1 h-3.5 w-3.5" />
+                                  Payslip
+                                </Button>
+                                {r.status === "PENDING" ? (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 shrink-0 px-2.5 text-xs"
+                                      onClick={() => {
+                                        setRecordStatus(r.id, "PAID");
+                                        toast.success("Marked as paid.");
+                                      }}
+                                    >
+                                      Mark paid
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 shrink-0 px-2.5 text-xs text-rose-600"
+                                      onClick={() => {
+                                        setRecordStatus(r.id, "CANCELLED");
+                                        toast.success("Record cancelled.");
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </>
+                                ) : null}
+                              </div>
                             </div>
                           </MobileRowCard>
                         ))}
@@ -633,6 +660,14 @@ export default function PayrollPage() {
                           </td>
                           <td className="px-3 py-3 align-middle">{statusBadge(r.status)}</td>
                           <td className="px-3 py-3 align-middle text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPayslipRecord(r)}
+                            >
+                              Payslip
+                            </Button>
                             {(r.status === "PENDING" || r.status === "PROCESSING") && (
                               <>
                                 <Button
@@ -1406,6 +1441,98 @@ export default function PayrollPage() {
           </Select>
         </div>
       </MobileFilterSheet>
+
+      <Dialog open={!!payslipRecord} onOpenChange={(open) => !open && setPayslipRecord(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader className="no-print">
+            <DialogTitle>Payslip</DialogTitle>
+          </DialogHeader>
+          {payslipRecord ? (
+            <div className="payslip-print space-y-3 text-sm">
+              <div>
+                <p className="text-lg font-semibold">{payslipRecord.employeeName}</p>
+                <p className="text-muted-foreground">
+                  {MONTHS.find((m) => m.v === payslipRecord.periodMonth)?.label}{" "}
+                  {payslipRecord.periodYear}
+                </p>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <dt className="text-muted-foreground">Attendance days</dt>
+                <dd className="text-right tabular-nums font-medium">
+                  {payslipRecord.attendanceDays}
+                </dd>
+                <dt className="text-muted-foreground">Paid leave</dt>
+                <dd className="text-right tabular-nums">
+                  {payslipRecord.paidLeaveDays ?? 0}
+                </dd>
+                <dt className="text-muted-foreground">Unpaid leave</dt>
+                <dd className="text-right tabular-nums">
+                  {payslipRecord.unpaidLeaveDays ?? 0}
+                </dd>
+                <dt className="text-muted-foreground">Base salary</dt>
+                <dd className="text-right tabular-nums">
+                  {formatCurrency(payslipRecord.baseSalary)}
+                </dd>
+                <dt className="text-muted-foreground">Presence pay</dt>
+                <dd className="text-right tabular-nums">
+                  {formatCurrency(payslipRecord.presencePayment)}
+                </dd>
+                <dt className="text-muted-foreground">Absence deduction</dt>
+                <dd className="text-right tabular-nums text-red-600/90">
+                  {formatCurrency(payslipRecord.absenceDeduction)}
+                </dd>
+                <dt className="text-muted-foreground">Rewards</dt>
+                <dd className="text-right tabular-nums">
+                  {formatCurrency(payslipRecord.rewardAmount ?? 0)}
+                </dd>
+                <dt className="text-muted-foreground">Advance deduction</dt>
+                <dd className="text-right tabular-nums text-rose-600/90">
+                  {formatCurrency(
+                    payslipRecord.status === "PAID"
+                      ? payslipRecord.advanceDeductionFinalized
+                      : payslipRecord.advanceDeductionPlanned
+                  )}
+                </dd>
+                <dt className="border-t pt-2 font-semibold">Net salary</dt>
+                <dd className="border-t pt-2 text-right tabular-nums font-semibold">
+                  {formatCurrency(payslipRecord.netSalary)}
+                </dd>
+              </dl>
+              <div className="no-print flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setPayslipRecord(null)}>
+                  Close
+                </Button>
+                <Button type="button" onClick={() => window.print()}>
+                  <Printer className="mr-1.5 h-4 w-4" />
+                  Print
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          .payslip-print,
+          .payslip-print * {
+            visibility: visible !important;
+          }
+          .payslip-print {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 24px;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
