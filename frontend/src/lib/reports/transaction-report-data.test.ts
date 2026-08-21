@@ -3,7 +3,7 @@ import {
   buildExpenseCategoryRows,
   buildExpenseTransactionRows,
 } from "@/lib/reports/transaction-report-data";
-import type { Expense } from "@/types";
+import type { Expense, ProductPurchase } from "@/types";
 
 function expense(partial: Partial<Expense> & Pick<Expense, "id" | "amount" | "paymentStatus">): Expense {
   return {
@@ -15,6 +15,19 @@ function expense(partial: Partial<Expense> & Pick<Expense, "id" | "amount" | "pa
     createdByName: "Staff",
     branchId: "br-1",
     createdAt: "2026-08-18T10:00:00.000Z",
+    ...partial,
+  };
+}
+
+function purchase(
+  partial: Partial<ProductPurchase> & Pick<ProductPurchase, "id">
+): ProductPurchase {
+  return {
+    partId: "part-1",
+    vendorName: "Vendor",
+    quantityMl: 0,
+    purchasedAt: "2026-08-18T10:00:00.000Z",
+    recordedBy: "u1",
     ...partial,
   };
 }
@@ -65,6 +78,51 @@ describe("buildExpenseTransactionRows", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.totalAmount).toBe(5900);
+  });
+
+  it("splits purchase vendor payments by method (cash + UPI)", () => {
+    const rows = buildExpenseTransactionRows(
+      [
+        expense({
+          id: "e1",
+          title: "Purchase PUR-2026-0001",
+          amount: 100,
+          amountPaid: 100,
+          paymentStatus: "PAID",
+          paymentMethod: "UPI",
+          purchaseId: "pur-1",
+        }),
+      ],
+      period,
+      "All Expense Categories",
+      [
+        purchase({
+          id: "pur-1",
+          purchaseNumber: "PUR-2026-0001",
+          amountPaid: 100,
+          payments: [
+            {
+              id: "pay-cash",
+              amount: 10,
+              method: "CASH",
+              paidAt: "2026-08-18T11:00:00.000Z",
+            },
+            {
+              id: "pay-upi",
+              amount: 90,
+              method: "UPI",
+              paidAt: "2026-08-18T11:00:00.000Z",
+            },
+          ],
+        }),
+      ]
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => ({ mode: r.paymentMode, amount: r.totalAmount }))).toEqual([
+      { mode: "CASH", amount: 10 },
+      { mode: "UPI", amount: 90 },
+    ]);
   });
 });
 

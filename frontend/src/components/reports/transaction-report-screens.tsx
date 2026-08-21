@@ -440,13 +440,14 @@ export function ExpenseCategoryReport() {
 
 export function ExpenseTransactionReport() {
   const expenses = useScopedExpenses();
+  const purchases = useInventoryStore((s) => s.productPurchases);
   const [period, setPeriod] = useState<string>(DEFAULT_REPORT_PERIOD);
   const [category, setCategory] = useState("All Expense Categories");
 
   const categoryOptions = useMemo(() => expenseCategoryFilterOptions(expenses), [expenses]);
   const rows = useMemo(
-    () => buildExpenseTransactionRows(expenses, period, category),
-    [expenses, period, category]
+    () => buildExpenseTransactionRows(expenses, period, category, purchases),
+    [expenses, period, category, purchases]
   );
   const totalCashPaid = useMemo(
     () => Math.round(rows.reduce((s, r) => s + r.totalAmount, 0) * 100) / 100,
@@ -493,7 +494,7 @@ export function ExpenseTransactionReport() {
             ) : (
               <>
                 {rows.map((r) => (
-                  <tr key={`${r.expenseNumber}-${r.date}`} className="border-b border-border/80 hover:bg-muted/10">
+                  <tr key={r.id} className="border-b border-border/80 hover:bg-muted/10">
                     <td className="px-2 py-2 whitespace-nowrap">{formatDate(r.date)}</td>
                     <td className="px-2 py-2 font-mono text-xs">{r.expenseNumber}</td>
                     <td className="px-2 py-2">{r.category}</td>

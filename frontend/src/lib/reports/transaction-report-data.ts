@@ -310,6 +310,8 @@ export function expenseCategoryFilterOptions(expenses: Expense[]): string[] {
 }
 
 export type ExpenseTransactionRow = {
+  /** Stable row key (expense id, or purchase payment id when split). */
+  id: string;
   date: string;
   expenseNumber: string;
   category: string;
@@ -317,27 +319,64 @@ export type ExpenseTransactionRow = {
   totalAmount: number;
 };
 
-/** Line-level cash paid on expenses (same basis as Accounting Total Expenses). */
+function paymentModeLabel(method: string): string {
+  return method.replace(/_/g, " ");
+}
+
+/**
+ * Line-level cash paid on expenses (same basis as Accounting Total Expenses).
+ * Purchase-linked vendor bills with split payments (e.g. cash + UPI) emit one
+ * row per payment line so modes are not clubbed under a single method.
+ */
 export function buildExpenseTransactionRows(
   expenses: Expense[],
   period: string,
-  categoryFilter: string
+  categoryFilter: string,
+  purchases: ProductPurchase[] = []
 ): ExpenseTransactionRow[] {
-  return expenses
-    .filter((e) => {
-      if (!dateInPreset(e.date, period)) return false;
-      if (expensePaidAmount(e) <= 0) return false;
-      if (categoryFilter === "All Expense Categories") return true;
-      return expenseCategoryLabel(e.category) === categoryFilter;
-    })
-    .map((e) => ({
+  const purchaseById = new Map(purchases.map((p) => [p.id, p]));
+  const rows: ExpenseTransactionRow[] = [];
+
+  for (const e of expenses) {
+    if (categoryFilter !== "All Expense Categories") {
+      if (expenseCategoryLabel(e.category) !== categoryFilter) continue;
+    }
+
+    const expenseNumber = e.title?.trim() || e.id;
+    const category = expenseCategoryLabel(e.category);
+    const purchase = e.purchaseId ? purchaseById.get(e.purchaseId) : undefined;
+    const payments = purchase?.payments ?? [];
+
+    if (e.purchaseId && payments.length > 0) {
+      for (const p of payments) {
+        if (!(p.amount > 0)) continue;
+        if (!dateInPreset(p.paidAt, period)) continue;
+        rows.push({
+          id: p.id,
+          date: p.paidAt.slice(0, 10),
+          expenseNumber,
+          category,
+          paymentMode: paymentModeLabel(p.method),
+          totalAmount: Math.round(p.amount * 100) / 100,
+        });
+      }
+      continue;
+    }
+
+    if (!dateInPreset(e.date, period)) continue;
+    const paid = expensePaidAmount(e);
+    if (paid <= 0) continue;
+    rows.push({
+      id: e.id,
       date: e.date,
-      expenseNumber: e.title?.trim() || e.id,
-      category: expenseCategoryLabel(e.category),
-      paymentMode: e.paymentMethod.replace(/_/g, " "),
-      totalAmount: expensePaidAmount(e),
-    }))
-    .sort((a, b) => b.date.localeCompare(a.date));
+      expenseNumber,
+      category,
+      paymentMode: paymentModeLabel(e.paymentMethod),
+      totalAmount: Math.round(paid * 100) / 100,
+    });
+  }
+
+  return rows.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
 }
 
 export function uniqueInvoiceCustomers(invoices: Invoice[]): { id: string; name: string }[] {
