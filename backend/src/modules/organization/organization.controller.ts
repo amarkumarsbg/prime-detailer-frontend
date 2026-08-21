@@ -1,10 +1,16 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import {
+  adminMarkSubscriptionPaid,
   getEntitlementForOrg,
   getOrganizationForPlatform,
+  getSubscriptionBill,
   listOrganizationsForPlatform,
+  listSubscriptionBills,
+  listSubscriptionPayments,
   patchOrganizationSubscription,
+  requestSubscriptionRenewal,
+  verifySubscriptionPayment,
 } from "./organization-subscription.service.js";
 import { AppHttpError } from "../../lib/app-http-error.js";
 import { parsePlanLimits } from "../../lib/plan-catalog.js";
@@ -18,6 +24,13 @@ async function resolveOrgId(req: Request): Promise<string | undefined> {
     select: { organizationId: true },
   });
   return row?.organizationId;
+}
+
+function actorFromReq(req: Request): string {
+  return (
+    (req as Request & { platformActor?: string }).platformActor ??
+    (req.auth ? `user:${req.auth.id}` : "unknown")
+  );
 }
 
 export async function getStudioSubscription(req: Request, res: Response, next: NextFunction) {
@@ -39,6 +52,55 @@ export async function getStudioSubscription(req: Request, res: Response, next: N
       return;
     }
     res.json({ data: entitlement, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function postStudioRenewRequest(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveOrgId(req);
+    if (!orgId) {
+      throw new AppHttpError(403, "Organization not found on user", "ORG_MISSING");
+    }
+    const body = z
+      .object({
+        notes: z.string().max(500).optional(),
+        method: z.string().max(64).optional(),
+      })
+      .parse(req.body ?? {});
+    const result = await requestSubscriptionRenewal(orgId, actorFromReq(req), body);
+    res.json({ data: result, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getStudioSubscriptionBills(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveOrgId(req);
+    if (!orgId) {
+      throw new AppHttpError(403, "Organization not found on user", "ORG_MISSING");
+    }
+    const bills = await listSubscriptionBills(orgId);
+    res.json({ data: { bills }, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getStudioSubscriptionBill(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveOrgId(req);
+    if (!orgId) {
+      throw new AppHttpError(403, "Organization not found on user", "ORG_MISSING");
+    }
+    const billId = Array.isArray(req.params.billId) ? req.params.billId[0]! : req.params.billId!;
+    const bill = await getSubscriptionBill(orgId, billId);
+    if (!bill) {
+      throw new AppHttpError(404, "Bill not found", "BILL_NOT_FOUND");
+    }
+    res.json({ data: bill, error: null });
   } catch (e) {
     next(e);
   }
@@ -66,7 +128,11 @@ export async function getPlatformOrganization(req: Request, res: Response, next:
       res.status(404).json({ data: null, error: { message: "Organization not found" } });
       return;
     }
-    res.json({ data: entitlement, error: null });
+    const [payments, bills] = await Promise.all([
+      listSubscriptionPayments(orgId),
+      listSubscriptionBills(orgId),
+    ]);
+    res.json({ data: { ...entitlement, payments, bills }, error: null });
   } catch (e) {
     next(e);
   }
@@ -87,6 +153,11 @@ const patchSchema = z.object({
   contactUsUrl: z.string().nullable().optional(),
   contactPhone: z.string().nullable().optional(),
   upgradeUrl: z.string().nullable().optional(),
+  termMonths: z.union([z.literal(12), z.literal(24), z.literal(36)]).optional(),
+  startsAt: z.string().datetime().nullable().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
+  paymentStatus: z.enum(["PAID", "PENDING", "PROCESSING", "FAILED"]).optional(),
+  lastPaymentTxnId: z.string().nullable().optional(),
 });
 
 export async function patchPlatformOrganizationSubscription(
@@ -97,16 +168,16 @@ export async function patchPlatformOrganizationSubscription(
   try {
     const orgId = paramOrgId(req);
     const body = patchSchema.parse(req.body);
-    const actor =
-      (req as Request & { platformActor?: string }).platformActor ??
-      (req.auth ? `user:${req.auth.id}` : "unknown");
     const entitlement = await patchOrganizationSubscription(
       orgId,
       {
         ...body,
         limits: body.limits ? parsePlanLimits(body.limits) : undefined,
+        startsAt: body.startsAt === undefined ? undefined : body.startsAt ? new Date(body.startsAt) : null,
+        expiresAt:
+          body.expiresAt === undefined ? undefined : body.expiresAt ? new Date(body.expiresAt) : null,
       },
-      actor
+      actorFromReq(req)
     );
     res.json({ data: entitlement, error: null });
   } catch (e) {
@@ -114,6 +185,43 @@ export async function patchPlatformOrganizationSubscription(
       next(e);
       return;
     }
+    next(e);
+  }
+}
+
+const verifySchema = z.object({
+  paymentId: z.string().min(1),
+  outcome: z.enum(["PAID", "FAILED"]),
+  txnReference: z.string().nullable().optional(),
+  amount: z.number().nonnegative().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export async function postPlatformVerifyPayment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = paramOrgId(req);
+    const body = verifySchema.parse(req.body);
+    const entitlement = await verifySubscriptionPayment(orgId, body, actorFromReq(req));
+    res.json({ data: entitlement, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+const markPaidSchema = z.object({
+  txnReference: z.string().nullable().optional(),
+  amount: z.number().nonnegative().nullable().optional(),
+  termMonths: z.union([z.literal(12), z.literal(24), z.literal(36)]).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export async function postPlatformMarkPaid(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = paramOrgId(req);
+    const body = markPaidSchema.parse(req.body ?? {});
+    const entitlement = await adminMarkSubscriptionPaid(orgId, actorFromReq(req), body);
+    res.json({ data: entitlement, error: null });
+  } catch (e) {
     next(e);
   }
 }

@@ -30,6 +30,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,6 +187,7 @@ export function AnalyticsReportsDashboard() {
   }, []);
 
   const onExport = () => {
+    if (!assertCanExportData()) return;
     toast.success("Report export queued.");
   };
 

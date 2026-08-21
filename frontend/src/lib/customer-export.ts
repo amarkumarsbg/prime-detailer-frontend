@@ -1,3 +1,4 @@
+import { requireCanExportData } from "@/lib/assert-can-export";
 import { format } from "date-fns";
 import type { Customer, Vehicle } from "@/types";
 import { formatCurrency } from "@/lib/utils";
@@ -95,6 +96,7 @@ function rowValues(row: CustomerExportRow): (string | number)[] {
 }
 
 export async function downloadCustomersExcel(rows: CustomerExportRow[]): Promise<void> {
+  requireCanExportData();
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Prime Detailers";
@@ -137,6 +139,7 @@ export async function downloadCustomersExcel(rows: CustomerExportRow[]): Promise
 }
 
 export async function downloadCustomersPdf(rows: CustomerExportRow[]): Promise<void> {
+  requireCanExportData();
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),

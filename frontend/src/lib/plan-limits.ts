@@ -1,4 +1,5 @@
 import type { OrganizationEntitlement } from "@/types";
+import { canExportData, isExportLocked } from "@/lib/subscription-export-lock";
 
 export function isUnlimitedBranches(max: number | null | undefined): boolean {
   return max === null;
@@ -23,6 +24,18 @@ export function isAtOrOverBranchLimit(
   const max = entitlement.subscription.effectiveMaxBranches;
   if (max === null || max === undefined) return false;
   return entitlement.usage.branchesUsed >= max;
+}
+
+export function canExportDataFromEntitlement(
+  entitlement: OrganizationEntitlement | null | undefined
+): boolean {
+  return canExportData(entitlement);
+}
+
+export function isExportLockedFromEntitlement(
+  entitlement: OrganizationEntitlement | null | undefined
+): boolean {
+  return isExportLocked(entitlement);
 }
 
 export function resolveContactUsUrl(entitlement: OrganizationEntitlement | null | undefined): string {

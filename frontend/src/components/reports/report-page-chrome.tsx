@@ -57,6 +57,7 @@ import {
   Star,
 } from "lucide-react";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 
 type ReportPageChromeProps = {
   title: string;
@@ -102,6 +103,7 @@ export function ReportPageChrome({
   };
 
   const printPdf = () => {
+    if (!assertCanExportData()) return;
     if (onPrintPdf) onPrintPdf();
     else {
       toast.message("Print PDF", {
@@ -112,6 +114,7 @@ export function ReportPageChrome({
   };
 
   const sendEmail = () => {
+    if (!assertCanExportData()) return;
     if (!emailYour.trim()) {
       toast.error("Enter your email.");
       return;
@@ -121,6 +124,7 @@ export function ReportPageChrome({
   };
 
   const downloadExcel = () => {
+    if (!assertCanExportData()) return;
     if (onDownloadCsv) onDownloadCsv();
     else toast.message("Nothing to export");
   };
