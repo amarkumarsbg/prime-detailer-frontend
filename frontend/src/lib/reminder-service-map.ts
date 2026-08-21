@@ -67,3 +67,42 @@ export function reminderTypesFromJobServices(
   }
   return [...out];
 }
+
+
+/** High-end categories use custom month schedules under High-End Services settings. */
+export function isHighEndReminderCategory(slug: string, name: string): boolean {
+  const hay = `${slug} ${name}`.toLowerCase();
+  return /\bppf\b|ceramic|paint\s*protection/.test(hay);
+}
+
+export type JobServiceCategoryRef = {
+  categoryId: string;
+  name: string;
+  slug: string;
+};
+
+/**
+ * Unique non–high-end service categories present on a job (from catalog category ids).
+ */
+export function serviceCategoriesFromJobServices(
+  services: ServiceItem[],
+  catalogById: Map<string, ServiceCatalogItem>,
+  categoryLabelById: Map<string, { name: string; slug: string }>
+): JobServiceCategoryRef[] {
+  const out = new Map<string, JobServiceCategoryRef>();
+  for (const line of services) {
+    const catalog = catalogById.get(line.serviceCatalogId);
+    if (!catalog || catalog.isHighEnd === true) continue;
+    const catId = catalog.category?.trim();
+    if (!catId) continue;
+    const meta = categoryLabelById.get(catId);
+    const name = meta?.name?.trim() || catId;
+    const slug = meta?.slug?.trim() || catId;
+    if (isHighEndReminderCategory(slug, name)) continue;
+    if (isHighEndReminderCategory(catId, name)) continue;
+    if (!out.has(catId)) {
+      out.set(catId, { categoryId: catId, name, slug });
+    }
+  }
+  return [...out.values()];
+}

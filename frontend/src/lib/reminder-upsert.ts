@@ -9,7 +9,10 @@ import {
 } from "@/lib/reminder-schedule";
 import { getCategoryReminderFrequency } from "@/store/settings-store";
 import type { SerializableAppSettings } from "@/store/settings-store";
-import { reminderTypesFromJobServices } from "@/lib/reminder-service-map";
+import {
+  mapServiceToReminderType,
+  serviceCategoriesFromJobServices,
+} from "@/lib/reminder-service-map";
 import type { ServiceCatalogItem } from "@/types";
 
 export function serviceReminderDedupeKey(input: {
@@ -37,15 +40,17 @@ export function findOpenServiceCategoryReminder(
   reminders: ServiceReminder[],
   customerId: string,
   vehicleId: string,
-  type: ReminderType
+  type: ReminderType,
+  serviceCategoryId?: string
 ): ServiceReminder | undefined {
-  return reminders.find(
-    (r) =>
-      isOpenServiceCategoryReminder(r) &&
-      r.customerId === customerId &&
-      r.vehicleId === vehicleId &&
-      r.type === type
-  );
+  return reminders.find((r) => {
+    if (!isOpenServiceCategoryReminder(r)) return false;
+    if (r.customerId !== customerId || r.vehicleId !== vehicleId) return false;
+    if (serviceCategoryId) {
+      return (r.serviceCategoryId ?? "") === serviceCategoryId;
+    }
+    return r.type === type && !r.serviceCategoryId;
+  });
 }
 
 export type UpsertServiceCategoryReminderInput = {
@@ -55,6 +60,8 @@ export type UpsertServiceCategoryReminderInput = {
   serviceDate: string;
   leadDays: number;
   existing: ServiceReminder[];
+  serviceCategoryId?: string;
+  serviceCategoryName?: string;
 };
 
 export type UpsertServiceCategoryReminderResult =
@@ -79,7 +86,8 @@ export function planServiceCategoryReminderUpsert(
     input.existing,
     input.job.customerId,
     input.job.vehicleId,
-    input.type
+    input.type,
+    input.serviceCategoryId
   );
 
   const baseFields = {
@@ -100,6 +108,8 @@ export function planServiceCategoryReminderUpsert(
     status,
     isHighEndService: false,
     notes: `Scheduled after job ${input.job.jobNumber}`,
+    serviceCategoryId: input.serviceCategoryId,
+    serviceCategoryName: input.serviceCategoryName,
   };
 
   if (open) {
@@ -178,25 +188,32 @@ export function planCategoryRemindersForDeliveredJob(
   const categoryLabelById = new Map(
     params.categories.map((c) => [c.id, { name: c.name, slug: c.slug }] as const)
   );
-  const types = reminderTypesFromJobServices(
+  const categories = serviceCategoriesFromJobServices(
     params.job.services ?? [],
     catalogById,
     categoryLabelById
   );
-  if (types.length === 0) return [];
+  if (categories.length === 0) return [];
 
   const results: UpsertServiceCategoryReminderResult[] = [];
   let working = [...params.existingReminders];
 
-  for (const type of types) {
-    const frequency = getCategoryReminderFrequency(params.settings, type);
+  for (const cat of categories) {
+    const frequency = getCategoryReminderFrequency(params.settings, cat.categoryId);
+    const mappedType =
+      mapServiceToReminderType({
+        categoryName: cat.name,
+        categorySlug: cat.slug,
+      }) ?? "GENERAL_SERVICE";
     const planned = planServiceCategoryReminderUpsert({
       job: params.job,
-      type,
+      type: mappedType,
       frequency,
       serviceDate: params.serviceDateIso,
       leadDays: params.settings.reminderLeadDays,
       existing: working,
+      serviceCategoryId: cat.categoryId,
+      serviceCategoryName: cat.name,
     });
     results.push(planned);
     if (planned.action === "create") {

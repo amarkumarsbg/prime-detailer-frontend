@@ -123,6 +123,7 @@ const ALL_FREQUENCIES: ReminderFrequency[] = [
 ];
 
 function serviceCategoryLabel(r: ServiceReminder): string {
+  if (r.serviceCategoryName?.trim()) return r.serviceCategoryName.trim();
   return SERVICE_TYPE_LABELS[r.type] ?? r.type;
 }
 

@@ -31,9 +31,9 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
+import { useServiceCategoryStore } from "@/store/service-category-store";
+import { isHighEndReminderCategory } from "@/lib/reminder-service-map";
 import {
-  CATEGORY_REMINDER_TYPES,
-  CATEGORY_REMINDER_TYPE_LABELS,
   REMINDER_FREQUENCY_LABELS,
   SCHEDULABLE_REMINDER_FREQUENCIES,
   type SchedulableReminderFrequency,
@@ -173,6 +173,10 @@ export default function SettingsPage() {
   const setReminderLeadDays = useSettingsStore((s) => s.setReminderLeadDays);
   const setReminderPaymentFrequency = useSettingsStore((s) => s.setReminderPaymentFrequency);
   const setReminderCategoryFrequency = useSettingsStore((s) => s.setReminderCategoryFrequency);
+  const serviceCategories = useServiceCategoryStore((s) => s.categories);
+  const reminderServiceCategories = [...serviceCategories]
+    .filter((c) => !isHighEndReminderCategory(c.slug, c.name))
+    .sort((a, b) => a.order - b.order);
 
   const [newHesName, setNewHesName] = useState("");
   const [newHesTotalYears, setNewHesTotalYears] = useState("5");
@@ -727,31 +731,51 @@ export default function SettingsPage() {
             <CardContent>
               <div className="space-y-5 max-w-xl">
                 <div className="space-y-3">
-                  <p className="text-sm font-medium">Default intervals by service category</p>
-                  <div className="grid gap-4">
-                    {CATEGORY_REMINDER_TYPES.map((type) => (
-                      <div key={type} className="flex items-center justify-between gap-4">
-                        <Label className="min-w-[160px]">{CATEGORY_REMINDER_TYPE_LABELS[type]}</Label>
-                        <Select
-                          value={reminderCategoryFrequencies[type] ?? "MONTHLY"}
-                          onValueChange={(v) =>
-                            setReminderCategoryFrequency(type, v as SchedulableReminderFrequency)
-                          }
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SCHEDULABLE_REMINDER_FREQUENCIES.map((f) => (
-                              <SelectItem key={f} value={f}>
-                                {REMINDER_FREQUENCY_LABELS[f]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Default intervals by service category</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Categories come from{" "}
+                        <Link href="/services" className="text-primary underline-offset-2 hover:underline">
+                          Services → Categories
+                        </Link>
+                        . PPF / Ceramic stay under High-End Services.
+                      </p>
+                    </div>
                   </div>
+                  {reminderServiceCategories.length === 0 ? (
+                    <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-6 text-center">
+                      No service categories yet. Create them under Services → Categories, then set reminder intervals here.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4">
+                      {reminderServiceCategories.map((cat) => (
+                        <div key={cat.id} className="flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <Label className="min-w-[160px]">{cat.name}</Label>
+                            <p className="text-[11px] text-muted-foreground truncate">{cat.slug}</p>
+                          </div>
+                          <Select
+                            value={reminderCategoryFrequencies[cat.id] ?? "MONTHLY"}
+                            onValueChange={(v) =>
+                              setReminderCategoryFrequency(cat.id, v as SchedulableReminderFrequency)
+                            }
+                          >
+                            <SelectTrigger className="w-[180px] shrink-0">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SCHEDULABLE_REMINDER_FREQUENCIES.map((f) => (
+                                <SelectItem key={f} value={f}>
+                                  {REMINDER_FREQUENCY_LABELS[f]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <Separator />
                 <div className="space-y-3">

@@ -239,7 +239,7 @@ describe("planCategoryRemindersForDeliveredJob", () => {
     }
   });
 
-  it("maps oil service and respects category frequency override", () => {
+  it("uses service category id frequency override on deliver", () => {
     const job = baseJob({
       services: [
         {
@@ -259,7 +259,7 @@ describe("planCategoryRemindersForDeliveredJob", () => {
         reminderLeadDays: 7,
         reminderCategoryFrequencies: {
           ...DEFAULT_REMINDER_CATEGORY_FREQUENCIES,
-          OIL_CHANGE: "QUARTERLY",
+          "cat-004": "QUARTERLY",
         },
       },
       catalog: [oilCatalog],
@@ -268,7 +268,8 @@ describe("planCategoryRemindersForDeliveredJob", () => {
     });
     expect(planned).toHaveLength(1);
     if (planned[0].action === "create") {
-      expect(planned[0].reminder.type).toBe("OIL_CHANGE");
+      expect(planned[0].reminder.serviceCategoryId).toBe("cat-004");
+      expect(planned[0].reminder.serviceCategoryName).toBe("Engine bay");
       expect(planned[0].reminder.frequency).toBe("QUARTERLY");
       expect(planned[0].reminder.dueDate).toBe("2026-11-21");
     }

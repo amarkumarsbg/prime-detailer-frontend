@@ -15,9 +15,8 @@ import {
 } from "@/lib/reminder-schedule";
 import type { ReminderType } from "@/types";
 
-export type ReminderCategoryFrequencies = Partial<
-  Record<(typeof CATEGORY_REMINDER_TYPES)[number], SchedulableReminderFrequency>
->;
+/** Keyed by Service Management category id (legacy ReminderType keys still accepted). */
+export type ReminderCategoryFrequencies = Record<string, SchedulableReminderFrequency>;
 
 export const DEFAULT_REMINDER_CATEGORY_FREQUENCIES: ReminderCategoryFrequencies = {
   GENERAL_SERVICE: "MONTHLY",
@@ -104,10 +103,9 @@ function normalizeCategoryFrequencies(raw: unknown): ReminderCategoryFrequencies
   const base: ReminderCategoryFrequencies = { ...DEFAULT_REMINDER_CATEGORY_FREQUENCIES };
   if (!raw || typeof raw !== "object") return base;
   const o = raw as Record<string, unknown>;
-  for (const type of CATEGORY_REMINDER_TYPES) {
-    const v = o[type];
-    if (typeof v === "string") {
-      base[type] = parseReminderFrequency(v, base[type] ?? "MONTHLY");
+  for (const [key, v] of Object.entries(o)) {
+    if (typeof v === "string" && key.trim()) {
+      base[key] = parseReminderFrequency(v, base[key] ?? "MONTHLY");
     }
   }
   return base;
@@ -252,7 +250,7 @@ interface SettingsState extends SerializableAppSettings {
   setReminderLeadDays: (days: number) => void;
   setReminderPaymentFrequency: (frequency: SchedulableReminderFrequency) => void;
   setReminderCategoryFrequency: (
-    type: (typeof CATEGORY_REMINDER_TYPES)[number],
+    categoryId: string,
     frequency: SchedulableReminderFrequency
   ) => void;
   setReminderCategoryFrequencies: (map: ReminderCategoryFrequencies) => void;
@@ -308,11 +306,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleAppSettingsSync(get);
   },
 
-  setReminderCategoryFrequency: (type, frequency) => {
+  setReminderCategoryFrequency: (categoryId, frequency) => {
+    const id = categoryId.trim();
+    if (!id) return;
     set((state) => ({
       reminderCategoryFrequencies: {
         ...state.reminderCategoryFrequencies,
-        [type]: frequency,
+        [id]: frequency,
       },
     }));
     scheduleAppSettingsSync(get);
@@ -337,14 +337,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 /** Resolve frequency for a service category from settings (with defaults). */
 export function getCategoryReminderFrequency(
   settings: Pick<SerializableAppSettings, "reminderCategoryFrequencies">,
-  type: ReminderType
+  categoryIdOrType: string
 ): SchedulableReminderFrequency {
-  if (!(CATEGORY_REMINDER_TYPES as readonly string[]).includes(type)) {
-    return "MONTHLY";
-  }
+  const key = categoryIdOrType.trim();
+  if (!key) return "MONTHLY";
   return (
-    settings.reminderCategoryFrequencies[type as (typeof CATEGORY_REMINDER_TYPES)[number]] ??
-    DEFAULT_REMINDER_CATEGORY_FREQUENCIES[type as (typeof CATEGORY_REMINDER_TYPES)[number]] ??
+    settings.reminderCategoryFrequencies[key] ??
+    DEFAULT_REMINDER_CATEGORY_FREQUENCIES[key] ??
     "MONTHLY"
   );
 }

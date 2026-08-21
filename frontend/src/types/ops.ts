@@ -81,6 +81,9 @@ export interface ServiceReminder {
   /** PAYMENT: outstanding snapshot at last sync */
   outstandingAmount?: number;
   partyId?: string;
+  /** Service Management category this reminder was scheduled for (non–high-end). */
+  serviceCategoryId?: string;
+  serviceCategoryName?: string;
 }
 
 
