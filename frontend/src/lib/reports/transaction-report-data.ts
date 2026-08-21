@@ -319,6 +319,11 @@ export type ExpenseTransactionRow = {
   totalAmount: number;
 };
 
+type ExpenseTransactionRowInternal = ExpenseTransactionRow & {
+  /** Full ISO time used for newest-first ordering (date column stays calendar day). */
+  sortAt: string;
+};
+
 function paymentModeLabel(method: string): string {
   return method.replace(/_/g, " ");
 }
@@ -327,6 +332,7 @@ function paymentModeLabel(method: string): string {
  * Line-level cash paid on expenses (same basis as Accounting Total Expenses).
  * Purchase-linked vendor bills with split payments (e.g. cash + UPI) emit one
  * row per payment line so modes are not clubbed under a single method.
+ * Rows are ordered by payment time (newest first), not only by calendar date.
  */
 export function buildExpenseTransactionRows(
   expenses: Expense[],
@@ -335,7 +341,7 @@ export function buildExpenseTransactionRows(
   purchases: ProductPurchase[] = []
 ): ExpenseTransactionRow[] {
   const purchaseById = new Map(purchases.map((p) => [p.id, p]));
-  const rows: ExpenseTransactionRow[] = [];
+  const rows: ExpenseTransactionRowInternal[] = [];
 
   for (const e of expenses) {
     if (categoryFilter !== "All Expense Categories") {
@@ -354,6 +360,7 @@ export function buildExpenseTransactionRows(
         rows.push({
           id: p.id,
           date: p.paidAt.slice(0, 10),
+          sortAt: p.paidAt,
           expenseNumber,
           category,
           paymentMode: paymentModeLabel(p.method),
@@ -366,9 +373,11 @@ export function buildExpenseTransactionRows(
     if (!dateInPreset(e.date, period)) continue;
     const paid = expensePaidAmount(e);
     if (paid <= 0) continue;
+    const sortAt = e.createdAt || `${e.date}T12:00:00.000Z`;
     rows.push({
       id: e.id,
       date: e.date,
+      sortAt,
       expenseNumber,
       category,
       paymentMode: paymentModeLabel(e.paymentMethod),
@@ -376,7 +385,9 @@ export function buildExpenseTransactionRows(
     });
   }
 
-  return rows.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
+  return rows
+    .sort((a, b) => b.sortAt.localeCompare(a.sortAt) || b.id.localeCompare(a.id))
+    .map(({ sortAt: _sortAt, ...row }) => row);
 }
 
 export function uniqueInvoiceCustomers(invoices: Invoice[]): { id: string; name: string }[] {
