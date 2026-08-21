@@ -11,7 +11,7 @@ export type JobCardStatus =
   | "DELIVERED"
   | "CANCELLED";
 
-export type InspectionPhotoType = "BEFORE" | "AFTER";
+export type InspectionPhotoType = "BEFORE" | "AFTER" | "before" | "after";
 
 export interface TimerAdjustment {
   adjustedBy: string;

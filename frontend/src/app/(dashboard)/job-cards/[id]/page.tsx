@@ -110,8 +110,18 @@ import {
   requestCameraStream,
 } from "@/components/job-cards/multi-photo-camera-capture";
 import { ApiError } from "@/lib/api-client";
+import { ensureDomainResources, invalidateDomainResources } from "@/lib/domain-data-loader";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
-import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
+import { uploadJobInspectionPhoto, refreshJobCardFromServer } from "@/lib/job-card-inspection-photo-upload";
+import {
+  hasAfterInspectionPhoto,
+  hasBeforeInspectionPhoto,
+  isAfterInspectionPhoto,
+  isBeforeInspectionPhoto,
+  mergeInspectionPhotosById,
+  normalizeInspectionPhotoKind,
+  toPersistedInspectionPhotoType,
+} from "@/lib/job-card-inspection-photos";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import {
   notifyHighEndAdvanceRecordedWhatsApp,
@@ -587,17 +597,21 @@ export default function JobCardDetailPage() {
       const ms = Date.parse(p.uploadedAt);
       return Number.isFinite(ms) ? ms : 0;
     };
-    const beforeSorted = photos.filter((p) => p.type === "BEFORE").sort((a, b) => photoTime(a) - photoTime(b));
-    const afterSorted = photos.filter((p) => p.type === "AFTER").sort((a, b) => photoTime(a) - photoTime(b));
+    const beforeSorted = photos
+      .filter((p) => isBeforeInspectionPhoto(p))
+      .sort((a, b) => photoTime(a) - photoTime(b));
+    const afterSorted = photos
+      .filter((p) => isAfterInspectionPhoto(p))
+      .sort((a, b) => photoTime(a) - photoTime(b));
     const ordered = [...beforeSorted, ...afterSorted];
     return ordered.map((p: InspectionPhoto) => {
       const raw = p.url;
-      const url =
-        raw.startsWith("blob:") ? raw : (resolveUploadsPublicUrl(raw) ?? raw);
+      const url = raw.startsWith("blob:") ? raw : (resolveUploadsPublicUrl(raw) ?? raw);
+      const kind = normalizeInspectionPhotoKind(p.type);
       return {
         id: p.id,
         url,
-        type: p.type,
+        type: (kind === "after" ? "AFTER" : "BEFORE") as "BEFORE" | "AFTER",
         label: p.caption ?? "Photo",
       };
     });
@@ -609,12 +623,12 @@ export default function JobCardDetailPage() {
   const detailPhotoCount = displayPhotos.length;
 
   const hasBeforePhoto = useMemo(
-    () => displayPhotos.some((p) => p.type === "BEFORE"),
-    [displayPhotos]
+    () => hasBeforeInspectionPhoto(jobCard?.inspectionPhotos),
+    [jobCard?.inspectionPhotos]
   );
   const hasAfterPhoto = useMemo(
-    () => displayPhotos.some((p) => p.type === "AFTER"),
-    [displayPhotos]
+    () => hasAfterInspectionPhoto(jobCard?.inspectionPhotos),
+    [jobCard?.inspectionPhotos]
   );
 
   /** Before photos: only while job is before QC (inspection / in service). */
@@ -691,13 +705,13 @@ export default function JobCardDetailPage() {
     if (normalizeJobCardStatus(jobCard.status) !== "AWAITING_SERVICE") return;
     if (!jobCard.mechanicId) return;
     const nowIso = new Date().toISOString();
-    updateJobCard(jobCard.id, {
+    void updateJobCard(jobCard.id, {
       ...initialServiceTimerPatch(jobCard.services, nowIso, {
         highEndServiceIds: jobCard.highEndServiceIds,
         highEndCompletionMinutesByServiceId: jobCard.highEndCompletionMinutesByServiceId,
       }),
       updatedAt: nowIso,
-    });
+    }).catch(() => undefined);
   }, [jobCard, updateJobCard]);
 
   useEffect(() => {
@@ -726,22 +740,23 @@ export default function JobCardDetailPage() {
       const jcNow = useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id);
       const base = [...(jcNow?.inspectionPhotos ?? [])];
       const added: InspectionPhoto[] = [];
+      const kind = type === "BEFORE" ? "before" : "after";
 
       try {
         for (const file of fileList) {
           const photoId = `ph-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-          const url = await uploadJobInspectionPhoto(jobCard.id, type, file, photoId);
+          const url = await uploadJobInspectionPhoto(jobCard.id, kind, file, photoId);
           const rawCaption = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
           const baseLabel = rawCaption || "Photo";
           const storedCaption =
-            type === "BEFORE"
+            kind === "before"
               ? baseLabel.toLowerCase() === "photo"
                 ? "Inspection"
                 : `Inspection · ${baseLabel}`
               : baseLabel;
           added.push({
             id: photoId,
-            type,
+            type: toPersistedInspectionPhotoType(kind),
             url,
             caption: storedCaption,
             uploadedAt: new Date().toISOString(),
@@ -749,7 +764,7 @@ export default function JobCardDetailPage() {
           });
         }
         await updateJobCard(jobCard.id, {
-          inspectionPhotos: [...base, ...added],
+          inspectionPhotos: mergeInspectionPhotosById(base, added),
           updatedAt: new Date().toISOString(),
         });
       } catch (e) {
@@ -1172,7 +1187,7 @@ export default function JobCardDetailPage() {
     });
   };
 
-  const handleUpdateStatus = () => {
+  const handleUpdateStatus = async () => {
     if (!jobCard || currentStatus === "DELIVERED" || currentStatus === "CANCELLED") return;
     if (advanceBlockedByMechanic) {
       toast.error("Assign a mechanic before moving to In Service", {
@@ -1186,7 +1201,18 @@ export default function JobCardDetailPage() {
       const nextStatus = WORKFLOW_STATUSES[nextIndex];
 
       if (currentStatus === "INSPECTION" && nextStatus === "AWAITING_SERVICE") {
-        if (!hasBeforePhoto) {
+        let photos =
+          useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id)?.inspectionPhotos ??
+          jobCard.inspectionPhotos;
+        if (!hasBeforeInspectionPhoto(photos)) {
+          try {
+            const fresh = await refreshJobCardFromServer(jobCard.id);
+            if (fresh) photos = fresh.inspectionPhotos;
+          } catch {
+            /* keep store photos */
+          }
+        }
+        if (!hasBeforeInspectionPhoto(photos)) {
           setPhotoTab("BEFORE");
           setBeforePhotoRequiredOpen(true);
           return;
@@ -1213,7 +1239,10 @@ export default function JobCardDetailPage() {
           setQualityCheckRequiredOpen(true);
           return;
         }
-        if (!hasAfterPhoto) {
+        const afterPhotos =
+          useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id)?.inspectionPhotos ??
+          jobCard.inspectionPhotos;
+        if (!hasAfterInspectionPhoto(afterPhotos)) {
           setDetailTab("photos");
           setPhotoTab("AFTER");
           setAfterPhotoRequiredOpen(true);
@@ -2835,7 +2864,7 @@ export default function JobCardDetailPage() {
                 </>
               )}
             </div>
-            {displayPhotos.filter((p) => p.type === "BEFORE").length > 0 ? (
+            {hasBeforeInspectionPhoto(jobCard?.inspectionPhotos) ? (
               <div className="grid grid-cols-2 gap-2">
                 {displayPhotos
                   .filter((p) => p.type === "BEFORE")
@@ -2871,17 +2900,22 @@ export default function JobCardDetailPage() {
               disabled={advanceBlockedByMechanic}
               title={updateStatusDisabledTitle}
               onClick={() => {
-                if (!displayPhotos.some((p) => p.type === "BEFORE")) {
+                const photos =
+                  useJobCardStore.getState().jobCards.find((j) => j.id === jobCard?.id)
+                    ?.inspectionPhotos ?? jobCard?.inspectionPhotos;
+                if (!hasBeforeInspectionPhoto(photos)) {
                   toast.error("Add at least one Before photo first");
                   return;
                 }
                 if (!hasMechanicAssigned) {
-                  toast.error("Assign a mechanic before moving to In Service");
+                  toast.error("Assign a mechanic before moving to In Service", {
+                    description: "Use Assign mechanic in the workflow bar above.",
+                  });
                   setShowQuickAssignDialog(true);
                   return;
                 }
                 setBeforePhotoRequiredOpen(false);
-                window.setTimeout(() => handleUpdateStatus(), 0);
+                void handleUpdateStatus();
               }}
             >
               Continue — update status

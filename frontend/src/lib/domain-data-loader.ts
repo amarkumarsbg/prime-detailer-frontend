@@ -5,6 +5,7 @@ import { normalizePartUnits } from "@/lib/inventory/multi-unit";
 import type { DomainResource } from "@/lib/domain-data-map";
 import { ensureHitechPartyProfile } from "@/lib/party/party-hitech-demo";
 import { reconcilePickupWithJobCards } from "@/lib/sync-pickup-from-job-card";
+import { mergeInspectionPhotosById } from "@/lib/job-card-inspection-photos";
 import type {
   ActivityLog,
   CustomerMessage,
@@ -189,8 +190,25 @@ async function loadOne(resource: DomainResource): Promise<void> {
     }
     case "jobCards": {
       const items = await getDocumentItems<JobCard>("jobCards");
-      useJobCardStore.setState({ jobCards: items });
-      void useAppointmentStore.getState().reconcileStaleAppointments(items);
+      const localById = new Map(
+        useJobCardStore.getState().jobCards.map((j) => [j.id, j] as const)
+      );
+      // Prefer merging inspection photos so a stale list response cannot wipe
+      // check-in photos that were just saved locally / mid-flight.
+      const merged = items.map((remote) => {
+        const local = localById.get(remote.id);
+        if (!local?.inspectionPhotos?.length) return remote;
+        const remotePhotos = remote.inspectionPhotos ?? [];
+        if (remotePhotos.length === 0) {
+          return { ...remote, inspectionPhotos: local.inspectionPhotos };
+        }
+        return {
+          ...remote,
+          inspectionPhotos: mergeInspectionPhotosById(remotePhotos, local.inspectionPhotos),
+        };
+      });
+      useJobCardStore.setState({ jobCards: merged });
+      void useAppointmentStore.getState().reconcileStaleAppointments(merged);
       return;
     }
     case "invoices": {

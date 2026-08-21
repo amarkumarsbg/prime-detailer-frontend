@@ -14,7 +14,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 interface JobCardStore {
   jobCards: JobCard[];
   addJobCard: (jobCard: JobCard) => Promise<void>;
-  updateJobCard: (id: string, updates: Partial<JobCard>) => Promise<void>;
+  updateJobCard: (id: string, updates: Partial<JobCard>) => Promise<boolean>;
   deleteJobCard: (id: string) => Promise<void>;
   getNextJobNumber: () => string;
 }
@@ -31,10 +31,10 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
 
   updateJobCard: async (id, updates) => {
     const prev = get().jobCards.find((jc) => jc.id === id);
-    if (!prev) return;
+    if (!prev) return false;
     if (!jobCardUpdateAllowed(prev, updates)) {
       toast.error("This job card can no longer be edited");
-      return;
+      return false;
     }
     const next = { ...prev, ...updates };
     const user = useAuthStore.getState().user;
@@ -51,7 +51,7 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
           ? "You do not have permission to change job card prices"
           : pricingDecision.message
       );
-      return;
+      return false;
     }
     // Apply locally first so same-click flows (e.g. deliver + invoice) see the new status.
     set((state) => ({
@@ -62,6 +62,7 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
     }
     try {
       await putCollectionDocument("jobCards", id, next);
+      return true;
     } catch (err) {
       set((state) => ({
         jobCards: state.jobCards.map((jc) => (jc.id === id ? prev : jc)),

@@ -10,6 +10,11 @@ import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
 import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
 import {
+  hasBeforeInspectionPhoto,
+  mergeInspectionPhotosById,
+  toPersistedInspectionPhotoType,
+} from "@/lib/job-card-inspection-photos";
+import {
   MultiPhotoCameraCapture,
   canUseLiveCameraPreview,
   requestCameraStream,
@@ -2085,22 +2090,28 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setCheckInSubmitting(true);
     try {
       for (const p of checkInPhotos) {
-        const url = await uploadJobInspectionPhoto(checkInJob.id, "BEFORE", p.file, p.id);
+        const url = await uploadJobInspectionPhoto(checkInJob.id, "before", p.file, p.id);
         uploaded.push({
           id: p.id,
-          type: "BEFORE",
+          type: toPersistedInspectionPhotoType("before"),
           url,
           caption: p.label.trim() ? `Check-in · ${p.label.trim()}` : "Check-in",
           uploadedAt: nowIso,
           uploadedBy: uploadUserId,
         });
       }
-      await updateJobCard(checkInJob.id, {
-        inspectionPhotos: [...existingPhotos, ...uploaded],
+      const nextPhotos = mergeInspectionPhotosById(existingPhotos, uploaded);
+      const savedOk = await updateJobCard(checkInJob.id, {
+        inspectionPhotos: nextPhotos,
         reportedIssues: reported,
         notes: mergedNotes || undefined,
         updatedAt: nowIso,
       });
+
+      const saved = useJobCardStore.getState().jobCards.find((j) => j.id === checkInJob.id);
+      if (!savedOk || !hasBeforeInspectionPhoto(saved?.inspectionPhotos)) {
+        throw new Error("Before photos did not save. Please try check-in again.");
+      }
     } catch (e) {
       const msg =
         e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Could not upload photos";

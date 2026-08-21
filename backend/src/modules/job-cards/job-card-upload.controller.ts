@@ -22,8 +22,9 @@ export async function postJobCardInspectionPhoto(req: Request, res: Response, ne
       return;
     }
 
-    const typeRaw = typeof req.query.type === "string" ? req.query.type.trim().toUpperCase() : "";
-    const typeParsed = photoTypeSchema.safeParse(typeRaw);
+    const typeRaw = typeof req.query.type === "string" ? req.query.type.trim() : "";
+    const typeNormalized = typeRaw.toUpperCase();
+    const typeParsed = photoTypeSchema.safeParse(typeNormalized);
     if (!typeParsed.success) {
       res.status(400).json({
         data: null,
