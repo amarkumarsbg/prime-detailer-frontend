@@ -101,9 +101,11 @@ export default function PublicInvoicePage() {
       color: vehicle?.color,
     });
     const odometerReading =
-      jobCard?.odometerReading != null && Number.isFinite(jobCard.odometerReading)
-        ? jobCard.odometerReading
-        : vehicle?.odometer;
+      invoice?.odometerReading != null && Number.isFinite(invoice.odometerReading)
+        ? invoice.odometerReading
+        : jobCard?.odometerReading != null && Number.isFinite(jobCard.odometerReading)
+          ? jobCard.odometerReading
+          : vehicle?.odometer;
 
     return buildTaxInvoicePrintHtml(
       {
@@ -194,11 +196,13 @@ export default function PublicInvoicePage() {
     color: vehicle?.color,
   });
   const odometerDisplay =
-    jobCard?.odometerReading != null
-      ? jobCard.odometerReading
-      : vehicle?.odometer != null
-        ? vehicle.odometer
-        : null;
+    invoice?.odometerReading != null
+      ? invoice.odometerReading
+      : jobCard?.odometerReading != null
+        ? jobCard.odometerReading
+        : vehicle?.odometer != null
+          ? vehicle.odometer
+          : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fbfbfe] text-slate-800 antialiased relative overflow-hidden pb-12">

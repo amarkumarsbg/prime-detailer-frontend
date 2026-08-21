@@ -219,6 +219,7 @@ export function buildInvoiceFromJobCard(
     customerName: job.customerName,
     customerPhone: job.customerPhone,
     vehicleRegNumber: job.vehicleRegNumber,
+    odometerReading: job.odometerReading,
     lineItems,
     subtotal,
     taxRate: effectiveTaxRate,

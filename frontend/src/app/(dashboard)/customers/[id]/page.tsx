@@ -660,6 +660,11 @@ export default function CustomerDetailPage() {
                                     </Badge>
                                   ) : null}
                                   <span className="text-xs tabular-nums text-muted-foreground">{vehicle.year}</span>
+                                  {vehicle.odometer != null ? (
+                                    <Badge variant="outline" className="font-normal text-muted-foreground">
+                                      {vehicle.odometer.toLocaleString("en-IN")} km
+                                    </Badge>
+                                  ) : null}
                                   <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <span
                                       className="size-3 shrink-0 rounded-full border border-border shadow-inner"

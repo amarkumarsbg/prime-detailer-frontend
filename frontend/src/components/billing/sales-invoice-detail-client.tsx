@@ -475,9 +475,11 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   );
 
   const odometerReading =
-    jobCard?.odometerReading != null && Number.isFinite(jobCard.odometerReading)
-      ? jobCard.odometerReading
-      : invoiceVehicle?.odometer;
+    invoice?.odometerReading != null && Number.isFinite(invoice.odometerReading)
+      ? invoice.odometerReading
+      : jobCard?.odometerReading != null && Number.isFinite(jobCard.odometerReading)
+        ? jobCard.odometerReading
+        : invoiceVehicle?.odometer;
 
   // Persist membership snapshot on older invoices so PDF / public share keep the ID.
   useEffect(() => {

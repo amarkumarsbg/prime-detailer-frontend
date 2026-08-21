@@ -169,6 +169,19 @@ export default function VehiclesPage() {
       ),
     },
     {
+      key: "odometer",
+      label: "Odometer",
+      sortable: true,
+      render: (item: Vehicle & Record<string, unknown>) => {
+        const v = item as Vehicle;
+        return (
+          <span className="tabular-nums text-muted-foreground">
+            {v.odometer != null ? `${v.odometer.toLocaleString("en-IN")} km` : "—"}
+          </span>
+        );
+      },
+    },
+    {
       key: "year",
       label: "Year",
       sortable: true,

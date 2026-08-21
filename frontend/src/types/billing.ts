@@ -103,6 +103,7 @@ export interface Invoice {
   customerName: string;
   customerPhone: string;
   vehicleRegNumber: string;
+  odometerReading?: number;
   lineItems: InvoiceLineItem[];
   subtotal: number;
   taxRate: number;
