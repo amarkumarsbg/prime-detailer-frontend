@@ -37,6 +37,8 @@ export function resolveUploadsPublicUrl(stored: string | undefined | null): stri
   if (stored == null || stored.trim() === "") return undefined;
   const s = stored.trim();
   if (ABS_URL_RE.test(s)) return s;
+  /** Inline avatars saved via staff profile edit (no separate upload API). */
+  if (s.startsWith("data:") || s.startsWith("blob:")) return s;
   const path = s.startsWith("/") ? s : `/${s}`;
   const raw = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
   const envBase = raw?.replace(/\/api$/i, "") ?? "";

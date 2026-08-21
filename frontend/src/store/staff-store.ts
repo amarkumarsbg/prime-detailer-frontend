@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { User, UserRole } from "@/types";
 import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api-client";
+import { normalizeStaffHrFields } from "@/lib/staff-hr-fields";
 
 function normalizePin(pin: string): string {
   return pin.trim().replace(/\D/g, "");
@@ -23,8 +24,13 @@ interface AddStaffInput {
   role: UserRole;
   branchId: string;
   isActive?: boolean;
+  employeeCode?: string;
+  designation?: string;
+  department?: string;
+  joiningDate?: string;
   birthday?: string;
   anniversary?: string;
+  notes?: string;
   /** Omit for server-generated temporary password (recommended). */
   password?: string;
 }
@@ -42,8 +48,17 @@ interface StaffStoreState {
   updateStaff: (
     id: string,
     updates: Partial<
-      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions">
-    >
+      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions" | "avatar">
+    > &
+      Partial<{
+        employeeCode: string | null;
+        designation: string | null;
+        department: string | null;
+        joiningDate: string | null;
+        birthday: string | null;
+        anniversary: string | null;
+        notes: string | null;
+      }>
   ) => Promise<UpdateStaffResult>;
   updateAttendancePin: (staffId: string, pin: string) => Promise<UpdatePinResult>;
   findByAttendancePin: (pin: string) => User | undefined;
@@ -83,8 +98,15 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
 
   addStaff: async (input) => {
     const list = get().staff;
-    const birthday = input.birthday?.trim();
-    const anniversary = input.anniversary?.trim();
+    const hr = normalizeStaffHrFields({
+      employeeCode: input.employeeCode,
+      designation: input.designation,
+      department: input.department,
+      joiningDate: input.joiningDate,
+      birthday: input.birthday,
+      anniversary: input.anniversary,
+      notes: input.notes,
+    });
     const id = nextStaffId(list);
     const pwd = input.password?.trim();
     const { user, temporaryPassword, credentialsEmailSent } = await apiPost<{
@@ -100,8 +122,13 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       branchId: input.branchId,
       isActive: input.isActive ?? true,
       attendancePin: allocateAttendancePin(() => get().staff),
-      birthday: birthday || null,
-      anniversary: anniversary || null,
+      employeeCode: hr.employeeCode ?? null,
+      designation: hr.designation ?? null,
+      department: hr.department ?? null,
+      joiningDate: hr.joiningDate ?? null,
+      birthday: hr.birthday ?? null,
+      anniversary: hr.anniversary ?? null,
+      notes: hr.notes ?? null,
       ...(pwd ? { password: pwd } : {}),
     });
     set({ staff: [user, ...list] });
@@ -122,6 +149,32 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       role: updates.role ?? current.role,
       branchId: updates.branchId ?? current.branchId,
       isActive: updates.isActive ?? current.isActive,
+      employeeCode:
+        updates.employeeCode !== undefined
+          ? updates.employeeCode?.trim() || undefined
+          : current.employeeCode,
+      designation:
+        updates.designation !== undefined
+          ? updates.designation?.trim() || undefined
+          : current.designation,
+      department:
+        updates.department !== undefined
+          ? updates.department?.trim() || undefined
+          : current.department,
+      joiningDate:
+        updates.joiningDate !== undefined
+          ? updates.joiningDate?.trim() || undefined
+          : current.joiningDate,
+      birthday:
+        updates.birthday !== undefined
+          ? updates.birthday?.trim() || undefined
+          : current.birthday,
+      anniversary:
+        updates.anniversary !== undefined
+          ? updates.anniversary?.trim() || undefined
+          : current.anniversary,
+      notes:
+        updates.notes !== undefined ? updates.notes?.trim() || undefined : current.notes,
     };
 
     if (
@@ -133,6 +186,15 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
     }
 
     try {
+      const hr = normalizeStaffHrFields({
+        employeeCode: next.employeeCode,
+        designation: next.designation,
+        department: next.department,
+        joiningDate: next.joiningDate,
+        birthday: next.birthday,
+        anniversary: next.anniversary,
+        notes: next.notes,
+      });
       const { user } = await apiPut<{ user: User }>(`/api/users/${id}`, {
         name: next.name,
         email: next.email,
@@ -141,6 +203,14 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
         branchId: next.branchId,
         isActive: next.isActive,
         permissions: next.permissions,
+        avatar: next.avatar ?? null,
+        employeeCode: hr.employeeCode ?? null,
+        designation: hr.designation ?? null,
+        department: hr.department ?? null,
+        joiningDate: hr.joiningDate ?? null,
+        birthday: hr.birthday ?? null,
+        anniversary: hr.anniversary ?? null,
+        notes: hr.notes ?? null,
       });
       set({
         staff: list.map((s) => (s.id === id ? user : s)),

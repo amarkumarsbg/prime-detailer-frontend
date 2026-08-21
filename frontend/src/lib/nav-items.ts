@@ -9,6 +9,7 @@ import {
   Package,
   Calendar,
   CalendarCheck,
+  CalendarOff,
   Truck,
   BarChart3,
   Banknote,
@@ -32,6 +33,7 @@ import {
   QrCode,
   IndianRupee,
   ShoppingCart,
+  Trophy,
 } from "lucide-react";
 
 export type NavItemDef = {
@@ -139,6 +141,21 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
     items: [
       { label: "Users & Staff", href: "/staff", icon: UserCog, roles: ["ADMIN", "MANAGER"], permissionKey: "STAFF" },
       { label: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"], permissionKey: "ATTENDANCE" },
+      { label: "Leave", href: "/leave", icon: CalendarOff, roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER", "SUPERVISOR", "RECEPTIONIST", "MECHANIC"], permissionKey: "LEAVE" },
+      {
+        label: "Rewards",
+        href: "/rewards",
+        icon: Trophy,
+        roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
+        permissionKey: "STAFF_REWARDS",
+      },
+      {
+        label: "Performance",
+        href: "/performance",
+        icon: TrendingUp,
+        roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
+        permissionKey: "PERFORMANCE",
+      },
       { label: "Salary & Payroll", href: "/payroll", icon: Wallet, roles: ["ADMIN", "MANAGER"], permissionKey: "PAYROLL" },
     ],
   },
@@ -151,13 +168,6 @@ export const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
         icon: Building2,
         roles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "BRANCH_MANAGER"],
         permissionKey: "BRANCHES",
-      },
-      {
-        label: "Performance",
-        href: "/performance",
-        icon: TrendingUp,
-        roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
-        permissionKey: "PERFORMANCE",
       },
       { label: "Mechanics", href: "/mechanics", icon: Gauge, roles: ["ADMIN", "MANAGER"], permissionKey: "MECHANICS" },
       { label: "Analytics", href: "/reports/analytics", icon: BarChart3, roles: ["ADMIN", "MANAGER"], permissionKey: "ANALYTICS" },
@@ -204,6 +214,8 @@ const NAV_DESCRIPTIONS: Record<string, string> = {
   "/shared-ledger": "Review receivables and payables across invoices and expenses",
   "/staff": "Manage staff accounts, roles, and attendance PINs",
   "/attendance": "Track QR and PIN punch, check-in/out, and working hours",
+  "/leave": "Apply for leave, review balances, and approve requests",
+  "/rewards": "Manage staff reward ledger, settings, and monthly targets",
   "/payroll": "Manage staff salaries, bonuses, and disbursements",
   "/services": "Manage service packages, add-ons, and categories",
   "/inventory": "Manage parts catalog, branch stock, transfers, purchases, and history",

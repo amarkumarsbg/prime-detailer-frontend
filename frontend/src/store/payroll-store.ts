@@ -2,20 +2,28 @@
 
 import { create } from "zustand";
 import { putSingletonDocument } from "@/lib/collection-sync";
+import { useStaffRewardStore } from "@/store/staff-reward-store";
 import type {
+  AttendanceRecord,
+  LeaveRequest,
+  LeaveType,
   PayrollRecord,
   PayrollRecordStatus,
   SalaryAdvance,
   SalaryAdvanceRecovery,
   SalaryStructure,
+  StaffRewardLedgerEntry,
   User,
 } from "@/types";
 import {
   buildRecoveryPlan,
   computeBaseFromStructure,
+  countAttendanceDaysForStaff,
+  countLeaveDaysForStaff,
   monthDays,
   pickStructure,
   round2,
+  sumApprovedRewardsForStaff,
   workingDaysInMonth,
 } from "@/lib/payroll/calculations";
 
@@ -113,11 +121,24 @@ function recalcRecordsForEmployee(opts: {
       if (r.employeeId !== employeeId) return r;
       const structure = structures.find((s) => s.id === r.salaryStructureId);
       if (!structure) return r;
+      const unpaidLeaveDays = r.unpaidLeaveDays ?? 0;
+      const payAttendanceDays = Math.max(0, r.attendanceDays - unpaidLeaveDays);
       const base = computeBaseFromStructure(
         structure,
-        r.attendanceDays,
+        payAttendanceDays,
         monthDays(r.periodYear, r.periodMonth)
       );
+      const rewardAmount = round2(r.rewardAmount ?? 0);
+      const grossEarnings = round2(base.grossEarnings + rewardAmount);
+      const netSalaryBeforeAdvance = Math.max(
+        0,
+        round2(base.netSalaryBeforeAdvance + rewardAmount)
+      );
+      const withRewards = {
+        ...base,
+        grossEarnings,
+        netSalaryBeforeAdvance,
+      };
 
       const finalizedForRecord = round2(
         recoveries
@@ -126,11 +147,14 @@ function recalcRecordsForEmployee(opts: {
       );
 
       if (r.status === "PAID") {
-        const totalDeductions = round2(base.absenceDeduction + finalizedForRecord);
-        const netSalary = Math.max(0, round2(base.netSalaryBeforeAdvance - finalizedForRecord));
+        const totalDeductions = round2(withRewards.absenceDeduction + finalizedForRecord);
+        const netSalary = Math.max(
+          0,
+          round2(withRewards.netSalaryBeforeAdvance - finalizedForRecord)
+        );
         return {
           ...r,
-          ...base,
+          ...withRewards,
           totalDeductions,
           netSalary,
           advanceDeductionPlanned: 0,
@@ -140,12 +164,12 @@ function recalcRecordsForEmployee(opts: {
       }
 
       if (r.status === "CANCELLED") {
-        const totalDeductions = round2(base.absenceDeduction);
+        const totalDeductions = round2(withRewards.absenceDeduction);
         return {
           ...r,
-          ...base,
+          ...withRewards,
           totalDeductions,
-          netSalary: base.netSalaryBeforeAdvance,
+          netSalary: withRewards.netSalaryBeforeAdvance,
           advanceDeductionPlanned: 0,
           advanceDeductionFinalized: 0,
           advanceOutstandingBefore: 0,
@@ -161,7 +185,7 @@ function recalcRecordsForEmployee(opts: {
         payrollRecordId: r.id,
         periodMonth: r.periodMonth,
         periodYear: r.periodYear,
-        netSalaryBeforeAdvance: base.netSalaryBeforeAdvance,
+        netSalaryBeforeAdvance: withRewards.netSalaryBeforeAdvance,
         advances,
         recoveries,
       });
@@ -181,11 +205,14 @@ function recalcRecordsForEmployee(opts: {
       }));
       recoveries = [...recoveries, ...createdRows];
 
-      const totalDeductions = round2(base.absenceDeduction + plan.deductionPlanned);
-      const netSalary = Math.max(0, round2(base.netSalaryBeforeAdvance - plan.deductionPlanned));
+      const totalDeductions = round2(withRewards.absenceDeduction + plan.deductionPlanned);
+      const netSalary = Math.max(
+        0,
+        round2(withRewards.netSalaryBeforeAdvance - plan.deductionPlanned)
+      );
       return {
         ...r,
-        ...base,
+        ...withRewards,
         totalDeductions,
         netSalary,
         advanceDeductionPlanned: plan.deductionPlanned,
@@ -223,6 +250,11 @@ function normalizeRecord(r: PayrollRecord): PayrollRecord {
         ? round2(r.advanceOutstandingAfterFinalized)
         : 0,
     advanceRecoveryRefs: Array.isArray(r.advanceRecoveryRefs) ? r.advanceRecoveryRefs : [],
+    paidLeaveDays: r.paidLeaveDays,
+    unpaidLeaveDays: r.unpaidLeaveDays,
+    rewardAmount:
+      typeof r.rewardAmount === "number" ? round2(r.rewardAmount) : undefined,
+    rewardLedgerRefs: Array.isArray(r.rewardLedgerRefs) ? r.rewardLedgerRefs : undefined,
   };
 }
 
@@ -248,6 +280,10 @@ interface PayrollStore {
     month: number;
     staff: User[];
     branchId: string | null;
+    attendanceRecords?: AttendanceRecord[];
+    leaveRequests?: LeaveRequest[];
+    leaveTypes?: LeaveType[];
+    rewardLedger?: StaffRewardLedgerEntry[];
   }) => number;
   recalculateAll: () => void;
   setRecordStatus: (id: string, status: PayrollRecordStatus) => void;
@@ -319,7 +355,16 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
     );
   },
 
-  generatePayroll: ({ year, month, staff, branchId }) => {
+  generatePayroll: ({
+    year,
+    month,
+    staff,
+    branchId,
+    attendanceRecords,
+    leaveRequests,
+    leaveTypes,
+    rewardLedger,
+  }) => {
     const structures = get().salaryStructures;
     if (structures.length === 0) return 0;
 
@@ -344,8 +389,32 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
       const structure = pickStructure(member, structures);
       if (!structure) continue;
 
-      const attendance = workingDaysInMonth(year, month);
-      const base = computeBaseFromStructure(structure, attendance, daysInMonth);
+      const presentLateHalf =
+        attendanceRecords != null
+          ? countAttendanceDaysForStaff(attendanceRecords, member.id, year, month)
+          : workingDaysInMonth(year, month);
+
+      const leaveCounts =
+        leaveRequests != null && leaveTypes != null
+          ? countLeaveDaysForStaff(leaveRequests, leaveTypes, member.id, year, month)
+          : { paidLeaveDays: 0, unpaidLeaveDays: 0 };
+
+      const attendanceDays = presentLateHalf + leaveCounts.paidLeaveDays;
+      const payAttendanceDays = Math.max(0, attendanceDays - leaveCounts.unpaidLeaveDays);
+
+      const rewards =
+        rewardLedger != null
+          ? sumApprovedRewardsForStaff(rewardLedger, member.id, year, month)
+          : { amount: 0, refs: [] as string[] };
+
+      const base = computeBaseFromStructure(structure, payAttendanceDays, daysInMonth);
+      const rewardAmount = round2(rewards.amount);
+      const grossEarnings = round2(base.grossEarnings + rewardAmount);
+      const netSalaryBeforeAdvance = Math.max(
+        0,
+        round2(base.netSalaryBeforeAdvance + rewardAmount)
+      );
+
       const now = new Date().toISOString();
       records.push({
         id: nextRecordId(records),
@@ -354,20 +423,26 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
         branchId: member.branchId,
         periodMonth: month,
         periodYear: year,
-        attendanceDays: attendance,
+        attendanceDays,
         salaryStructureId: structure.id,
         status: "PENDING",
         createdAt: now,
         updatedAt: now,
         ...base,
+        grossEarnings,
+        netSalaryBeforeAdvance,
         totalDeductions: base.absenceDeduction,
-        netSalary: base.netSalaryBeforeAdvance,
+        netSalary: netSalaryBeforeAdvance,
         advanceDeductionPlanned: 0,
         advanceDeductionFinalized: 0,
         advanceOutstandingBefore: 0,
         advanceOutstandingAfterPlanned: 0,
         advanceOutstandingAfterFinalized: 0,
         advanceRecoveryRefs: [],
+        paidLeaveDays: leaveCounts.paidLeaveDays,
+        unpaidLeaveDays: leaveCounts.unpaidLeaveDays,
+        rewardAmount,
+        rewardLedgerRefs: rewards.refs,
       });
       created++;
     }
@@ -432,6 +507,10 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
         if (r.state !== "PLANNED") return r;
         return { ...r, state: "FINALIZED" as const, recoveredAt: now };
       });
+      const rewardRefs = current.rewardLedgerRefs ?? [];
+      if (rewardRefs.length > 0) {
+        useStaffRewardStore.getState().markLedgerPaidInPayroll(rewardRefs);
+      }
     }
 
     if (current.status === "PAID" && status !== "PAID") {
@@ -440,6 +519,10 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
         if (r.state !== "FINALIZED") return r;
         return { ...r, state: "REVERSED" as const, recoveredAt: now };
       });
+      const rewardRefs = current.rewardLedgerRefs ?? [];
+      if (rewardRefs.length > 0) {
+        useStaffRewardStore.getState().revertLedgerPaidInPayroll(rewardRefs);
+      }
     }
 
     if (status === "CANCELLED") {

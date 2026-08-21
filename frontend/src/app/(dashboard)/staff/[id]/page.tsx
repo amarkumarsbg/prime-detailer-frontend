@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useState, useEffect } from "react";
+import { use, useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useStaffStore, generateRandomAttendancePin } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
@@ -14,7 +14,7 @@ import {
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -24,6 +24,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getInitials, formatDate, formatCurrency } from "@/lib/utils";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
+import {
+  STAFF_AVATAR_MAX_BYTES,
+  fileToStaffAvatarDataUrl,
+} from "@/lib/staff-avatar-file";
 import { JobCardStatusBadge } from "@/components/shared/status-badge";
 import {
   ArrowLeft,
@@ -37,15 +42,26 @@ import {
   IndianRupee,
   KeyRound,
   Pencil,
+  Briefcase,
+  Building2,
+  CalendarDays,
+  Hash,
+  Camera,
+  Copy,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { pushActivityLog } from "@/lib/activity-log-helper";
+import { apiPostForm, ApiError } from "@/lib/api-client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
 import { PERMISSIONS_FOR_UI } from "@/lib/permission-keys";
 import type { UpdatePinResult } from "@/store/staff-store";
-import type { User, UserRole } from "@/types";
+import type { Branch, User, UserRole } from "@/types";
+
+type AuthSessionResponse = { accessToken: string; user: User; branch: Branch | null };
 
 const ALL_PERMISSIONS = PERMISSIONS_FOR_UI;
 
@@ -141,10 +157,20 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [editRole, setEditRole] = useState<UserRole>("MECHANIC");
   const [editBranchId, setEditBranchId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
+  const [editEmployeeCode, setEditEmployeeCode] = useState("");
+  const [editDesignation, setEditDesignation] = useState("");
+  const [editDepartment, setEditDepartment] = useState("");
+  const [editJoiningDate, setEditJoiningDate] = useState("");
+  const [editBirthday, setEditBirthday] = useState("");
+  const [editAnniversary, setEditAnniversary] = useState("");
+  const [editNotes, setEditNotes] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
   const [permissions, setPermissions] = useState<string[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const applyAuthPayload = useAuthStore((s) => s.applyAuthPayload);
 
   useEffect(() => {
     if (member) {
@@ -187,6 +213,13 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditRole(member.role);
     setEditBranchId(member.branchId);
     setEditIsActive(member.isActive);
+    setEditEmployeeCode(member.employeeCode ?? "");
+    setEditDesignation(member.designation ?? "");
+    setEditDepartment(member.department ?? "");
+    setEditJoiningDate(member.joiningDate ?? "");
+    setEditBirthday(member.birthday ?? "");
+    setEditAnniversary(member.anniversary ?? "");
+    setEditNotes(member.notes ?? "");
   };
 
   const handleStartEditProfile = () => {
@@ -235,10 +268,75 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const branch = branches.find((b) => b.id === member.branchId);
+  const avatarSrc = resolveUploadsPublicUrl(member.avatar);
+  const displayName = editingProfile ? editName || member.name : member.name;
 
   const handleCancelEditProfile = () => {
     setEditingProfile(false);
     syncEditFromMember();
+  };
+
+
+  const copyToClipboard = async (value: string, label: string) => {
+    const textToCopy = value.trim();
+    if (!textToCopy) {
+      toast.error(`No ${label.toLowerCase()} to copy.`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Could not copy ${label.toLowerCase()}.`);
+    }
+  };
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !member) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file (JPEG, PNG, WebP, or GIF).");
+      return;
+    }
+    if (file.size > STAFF_AVATAR_MAX_BYTES) {
+      toast.error("Photo must be 5 MB or smaller.");
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      if (user?.id === member.id) {
+        const fd = new FormData();
+        fd.append("avatar", file);
+        const payload = await apiPostForm<AuthSessionResponse>("/api/auth/me/avatar", fd);
+        applyAuthPayload(payload);
+        useStaffStore.setState((s) => ({
+          staff: s.staff.map((row) =>
+            row.id === member.id ? { ...row, avatar: payload.user.avatar } : row
+          ),
+        }));
+        toast.success("Profile photo updated.");
+        return;
+      }
+
+      const dataUrl = await fileToStaffAvatarDataUrl(file);
+      const result = await updateStaff(member.id, { avatar: dataUrl });
+      if (!result.ok) {
+        toast.error("Could not update profile photo.");
+        return;
+      }
+      toast.success("Profile photo updated.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not upload photo."
+      );
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -261,7 +359,23 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       role: editRole,
       branchId: editBranchId,
       isActive: editIsActive,
+      employeeCode: editEmployeeCode.trim() || null,
+      designation: editDesignation.trim() || null,
+      department: editDepartment.trim() || null,
+      joiningDate: editJoiningDate.trim() || null,
+      birthday: editBirthday.trim() || null,
+      anniversary: editAnniversary.trim() || null,
+      notes: editNotes.trim() || null,
     });
+    if (result.ok) {
+      pushActivityLog({
+        action: "UPDATED",
+        entityType: "STAFF",
+        entityId: member.id,
+        entityLabel: name,
+        details: "Staff profile updated",
+      });
+    }
     if (!result.ok) {
       if (result.error === "DUPLICATE_EMAIL") {
         toast.error("Another staff member already uses this email.");
@@ -303,120 +417,79 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       ]} />
 
       <Card>
-        <CardContent className="!p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex flex-col sm:flex-row sm:items-center items-start gap-6 flex-1 min-w-0">
-                <Avatar className="w-20 h-20 shrink-0">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
-                    {getInitials(editingProfile ? editName || member.name : member.name)}
-                  </AvatarFallback>
-                </Avatar>
+        <CardContent className="!p-4 sm:!p-6">
+          <div className="flex flex-col gap-4 sm:gap-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <input
+                  ref={avatarFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={(e) => void handleAvatarFileChange(e)}
+                />
+                {editingProfile && canEditStaff ? (
+                  <div className="relative group shrink-0">
+                    <button
+                      type="button"
+                      disabled={avatarUploading}
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="relative rounded-full border-0 bg-transparent p-0 cursor-pointer disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label={avatarUploading ? "Uploading photo" : "Change profile photo"}
+                    >
+                      <Avatar className="h-12 w-12 sm:h-14 sm:w-14 pointer-events-none">
+                        {avatarSrc ? (
+                          <AvatarImage src={avatarSrc} alt="" className="object-cover" key={avatarSrc} />
+                        ) : null}
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                          {getInitials(displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span
+                        className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                        aria-hidden
+                      >
+                        {avatarUploading ? (
+                          <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <Camera className="h-4 w-4 text-white" />
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <Avatar className="h-12 w-12 sm:h-14 sm:w-14 shrink-0">
+                    {avatarSrc ? (
+                      <AvatarImage src={avatarSrc} alt="" className="object-cover" key={avatarSrc} />
+                    ) : null}
+                    <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                      {getInitials(displayName)}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
                 {!editingProfile ? (
-                  <div className="flex-1 space-y-3 min-w-0">
-                    <div>
-                      <h2 className="text-xl font-bold">{member.name}</h2>
-                      <span className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold truncate">{member.name}</h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                         <Shield className="w-3 h-3" />
                         {roleDisplayLabel(member.role)}
                       </span>
                       {!member.isActive && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
                           Inactive
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-                        <Mail className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{member.email}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="w-4 h-4 shrink-0" />
-                        {member.phone}
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-                        <MapPin className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{branch?.name ?? "—"}</span>
-                      </div>
-                    </div>
                   </div>
                 ) : (
-                  <div className="flex-1 w-full max-w-xl space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="staff-name">Name</Label>
-                        <Input
-                          id="staff-name"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          autoComplete="name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="staff-email">Email</Label>
-                        <Input
-                          id="staff-email"
-                          type="email"
-                          value={editEmail}
-                          onChange={(e) => setEditEmail(e.target.value)}
-                          autoComplete="email"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="staff-phone">Phone</Label>
-                        <Input
-                          id="staff-phone"
-                          value={editPhone}
-                          onChange={(e) => setEditPhone(e.target.value)}
-                          inputMode="tel"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Role</Label>
-                        <Select
-                          value={editRole}
-                          onValueChange={(v) => setEditRole(v as UserRole)}
-                          disabled={user?.role !== "SUPER_ADMIN"}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roleOptionsForSelect.map((r) => (
-                              <SelectItem key={r} value={r}>
-                                {roleDisplayLabel(r)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Branch</Label>
-                        <Select value={editBranchId} onValueChange={setEditBranchId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Branch" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {branchOptionsForEdit.map((b) => (
-                              <SelectItem key={b.id} value={b.id}>
-                                {b.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-center gap-2 sm:col-span-2 pt-2">
-                        <Checkbox
-                          id="staff-active"
-                          checked={editIsActive}
-                          onCheckedChange={(c) => setEditIsActive(c === true)}
-                        />
-                        <Label htmlFor="staff-active" className="text-sm font-normal cursor-pointer">
-                          Active (can log in and appear on rosters)
-                        </Label>
-                      </div>
-                    </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">Profile photo</p>
+                    <p className="text-xs text-muted-foreground">
+                      Click to upload · JPEG, PNG, WebP or GIF · max 5 MB
+                    </p>
                   </div>
                 )}
               </div>
@@ -432,7 +505,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                       <Button type="button" variant="outline" size="sm" onClick={handleCancelEditProfile}>
                         Cancel
                       </Button>
-                      <Button type="button" size="sm" onClick={handleSaveProfile}>
+                      <Button type="button" size="sm" onClick={() => void handleSaveProfile()}>
                         Save changes
                       </Button>
                     </>
@@ -440,6 +513,218 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
               )}
             </div>
+
+            {!editingProfile ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <Mail className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{member.email}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      aria-label="Copy email"
+                      onClick={() => void copyToClipboard(member.email, "Email")}
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <Phone className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{member.phone}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      aria-label="Copy phone number"
+                      onClick={() => void copyToClipboard(member.phone, "Phone")}
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{branch?.name ?? "—"}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <Hash className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Code: {member.employeeCode?.trim() || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <Briefcase className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{member.designation?.trim() || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <Building2 className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{member.department?.trim() || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <CalendarDays className="w-4 h-4 shrink-0" />
+                    Joined: {member.joiningDate?.trim() || "—"}
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <CalendarDays className="w-4 h-4 shrink-0" />
+                    DOB: {member.birthday?.trim() || "—"}
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <CalendarDays className="w-4 h-4 shrink-0" />
+                    Anniversary: {member.anniversary?.trim() || "—"}
+                  </div>
+                  {member.notes?.trim() ? (
+                    <div className="sm:col-span-2 lg:col-span-3 text-muted-foreground">
+                      Notes: {member.notes.trim()}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
+                <div className="space-y-2 sm:col-span-2 xl:col-span-3">
+                  <Label htmlFor="staff-name">Name</Label>
+                  <Input
+                    id="staff-name"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-email">Email</Label>
+                  <Input
+                    id="staff-email"
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-phone">Phone</Label>
+                  <Input
+                    id="staff-phone"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    inputMode="tel"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-employee-code">Employee Code</Label>
+                  <Input
+                    id="staff-employee-code"
+                    value={editEmployeeCode}
+                    onChange={(e) => setEditEmployeeCode(e.target.value)}
+                    placeholder="e.g. EMP-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-designation">Designation</Label>
+                  <Input
+                    id="staff-designation"
+                    value={editDesignation}
+                    onChange={(e) => setEditDesignation(e.target.value)}
+                    placeholder="e.g. Lead Detailer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-department">Department</Label>
+                  <Input
+                    id="staff-department"
+                    value={editDepartment}
+                    onChange={(e) => setEditDepartment(e.target.value)}
+                    placeholder="e.g. Workshop"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-joining-date">Joining Date</Label>
+                  <Input
+                    id="staff-joining-date"
+                    type="date"
+                    className="date-input-icon-end pr-9"
+                    value={editJoiningDate}
+                    onChange={(e) => setEditJoiningDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-birthday">Date of Birth</Label>
+                  <Input
+                    id="staff-birthday"
+                    type="date"
+                    className="date-input-icon-end pr-9"
+                    value={editBirthday}
+                    onChange={(e) => setEditBirthday(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-anniversary">Anniversary</Label>
+                  <Input
+                    id="staff-anniversary"
+                    type="date"
+                    className="date-input-icon-end pr-9"
+                    value={editAnniversary}
+                    onChange={(e) => setEditAnniversary(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2 xl:col-span-3">
+                  <Label htmlFor="staff-notes">Notes</Label>
+                  <Textarea
+                    id="staff-notes"
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Optional notes"
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select
+                    value={editRole}
+                    onValueChange={(v) => setEditRole(v as UserRole)}
+                    disabled={user?.role !== "SUPER_ADMIN"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roleOptionsForSelect.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {roleDisplayLabel(r)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select value={editBranchId} onValueChange={setEditBranchId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branchOptionsForEdit.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-3 pt-1">
+                  <Checkbox
+                    id="staff-active"
+                    checked={editIsActive}
+                    onCheckedChange={(c) => setEditIsActive(c === true)}
+                  />
+                  <Label htmlFor="staff-active" className="text-sm font-normal cursor-pointer">
+                    Active (can log in and appear on rosters)
+                  </Label>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

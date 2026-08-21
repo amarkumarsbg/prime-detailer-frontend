@@ -72,6 +72,14 @@ export interface PayrollRecord {
   salaryStructureId: string;
   createdAt: string;
   updatedAt: string;
+  /** Approved paid leave days overlapping the payroll month. */
+  paidLeaveDays?: number;
+  /** Approved unpaid leave days overlapping the payroll month. */
+  unpaidLeaveDays?: number;
+  /** Sum of APPROVED/PENDING reward ledger amounts included in gross/net. */
+  rewardAmount?: number;
+  /** Ledger entry ids included in `rewardAmount`. */
+  rewardLedgerRefs?: string[];
 }
 
 export interface SalaryStructure {
@@ -96,4 +104,135 @@ export interface AttendanceRecord {
   durationMinutes?: number;
   status: "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
   qrScanned: boolean;
+}
+
+export type LeaveRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+
+export interface LeaveType {
+  id: string;
+  name: string;
+  /** When true, days count against annual entitlement. */
+  paid: boolean;
+  /** When false (e.g. unpaid leave), balance checks are skipped. */
+  tracksBalance: boolean;
+  defaultDaysPerYear: number;
+  isActive: boolean;
+}
+
+export interface LeaveBalance {
+  id: string;
+  staffId: string;
+  leaveTypeId: string;
+  branchId: string;
+  year: number;
+  entitled: number;
+  used: number;
+  pending: number;
+}
+
+export interface LeaveRequest {
+  id: string;
+  staffId: string;
+  staffName: string;
+  leaveTypeId: string;
+  leaveTypeName: string;
+  branchId: string;
+  organizationId?: string;
+  fromDate: string;
+  toDate: string;
+  days: number;
+  reason: string;
+  status: LeaveRequestStatus;
+  appliedAt: string;
+  /** Approver / rejector / canceller user id when decided. */
+  decidedById?: string;
+  decidedByName?: string;
+  decidedAt?: string;
+  comments?: string;
+}
+
+/** Singleton `leaveConfig` document shape. */
+export interface LeaveConfig {
+  leaveTypes: LeaveType[];
+  balances: LeaveBalance[];
+}
+
+/** Staff rewards — tiers, ledger, and targets. */
+
+export type StaffRewardTier = "BRONZE" | "SILVER" | "GOLD" | "DIAMOND";
+
+export type StaffRewardMode = "PERCENT_OF_JOB" | "FIXED_PER_JOB";
+
+export type StaffRewardType =
+  | "JOB_INCENTIVE"
+  | "TIME_BONUS"
+  | "LATE_DEDUCTION"
+  | "MANUAL_CREDIT"
+  | "MANUAL_DEBIT"
+  | "TIER_BONUS";
+
+export type StaffRewardLedgerStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "PAID_IN_PAYROLL"
+  | "CANCELLED";
+
+export type StaffTargetMetric = "JOBS_COMPLETED" | "REVENUE" | "INCENTIVE";
+
+export interface StaffRewardTierRule {
+  id: string;
+  name: string;
+  tier: StaffRewardTier;
+  monthlyJobThreshold: number;
+  percentBonus: number;
+}
+
+/** Singleton `staffRewardSettings` document shape. */
+export interface StaffRewardSettings {
+  rewardMode: StaffRewardMode;
+  defaultPercent: number;
+  defaultFixedAmount: number;
+  tiersEnabled: boolean;
+  tiers: StaffRewardTierRule[];
+  timeBonusEnabled: boolean;
+  timeBonusMinutesThreshold: number;
+  timeBonusPercent: number;
+  lateDeductionEnabled: boolean;
+  lateDeductionPercent: number;
+  supervisorSharePercent: number;
+  applicatorSharePercent: number;
+  updatedAt: string;
+}
+
+export interface StaffRewardLedgerEntry {
+  id: string;
+  staffId: string;
+  staffName: string;
+  branchId: string;
+  jobCardId?: string;
+  jobNumber?: string;
+  rewardType: StaffRewardType;
+  amount: number;
+  status: StaffRewardLedgerStatus;
+  periodMonth: number;
+  periodYear: number;
+  reason?: string;
+  createdById?: string;
+  createdByName?: string;
+  createdAt: string;
+  idempotencyKey: string;
+}
+
+export interface StaffTarget {
+  id: string;
+  staffId: string;
+  staffName: string;
+  branchId: string;
+  periodMonth: number;
+  periodYear: number;
+  metric: StaffTargetMetric;
+  targetValue: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }

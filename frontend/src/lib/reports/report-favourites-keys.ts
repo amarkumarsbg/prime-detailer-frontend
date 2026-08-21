@@ -40,6 +40,11 @@ export const REPORT_FAVOURITE_KEY_BY_HREF: Record<string, string> = {
   "/reports/party/ledger": "prime-detailer-party-ledger-fav",
   "/reports/party/party-wise-outstanding": "prime-detailer-party-outstanding-fav",
   "/reports/party/sales-summary-category": "prime-detailer-sales-cat-wise-fav",
+  "/reports/hr-attendance": "prime-detailer-hr-attendance-favourite",
+  "/reports/hr-leave": "prime-detailer-hr-leave-favourite",
+  "/reports/hr-payroll": "prime-detailer-hr-payroll-favourite",
+  "/reports/hr-rewards": "prime-detailer-hr-rewards-favourite",
+
 };
 
 /** Reverse map: storage key → href */

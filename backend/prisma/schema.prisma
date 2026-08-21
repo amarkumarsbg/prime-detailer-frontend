@@ -220,6 +220,11 @@ model User {
   email                  String       @unique
   phone                  String
   employeeCode           String?      @unique
+  /** Job title (distinct from UserRole). */
+  designation            String?
+  department             String?
+  /** Employment start date (yyyy-MM-dd). Separate from birthday and anniversary. */
+  joiningDate            String?
   role                   UserRole
   branchId               String
   branch                 Branch       @relation(fields: [branchId], references: [id])
@@ -233,6 +238,8 @@ model User {
   totalIncentiveEarned   Int?
   birthday               String?
   anniversary            String?
+  /** Free-text HR notes (not used for auth). */
+  notes                  String?
   passwordHash           String
   permissions            String[]     @default([])
   /**

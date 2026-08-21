@@ -69,6 +69,83 @@ export const payrollPayloadSchema = z
   .passthrough();
 
 /** Singleton membership document (`entityId = default`). */
+
+/** Singleton leave config (`entityId = default`): types + balances. */
+export const leaveConfigPayloadSchema = z
+  .object({
+    leaveTypes: z.array(z.unknown()).optional(),
+    balances: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+/** Array leave request documents. */
+export const leaveRequestPayloadSchema = z
+  .object({
+    id: nonEmptyString,
+    staffId: nonEmptyString,
+    leaveTypeId: nonEmptyString,
+    fromDate: nonEmptyString,
+    toDate: nonEmptyString,
+    days: z.number(),
+    status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED"]),
+    branchId: nonEmptyString,
+  })
+  .passthrough();
+
+/** Singleton staff reward settings (`entityId = default`). */
+export const staffRewardSettingsPayloadSchema = z
+  .object({
+    rewardMode: z.enum(["PERCENT_OF_JOB", "FIXED_PER_JOB"]).optional(),
+    defaultPercent: z.number().optional(),
+    defaultFixedAmount: z.number().optional(),
+    tiersEnabled: z.boolean().optional(),
+    tiers: z.array(z.unknown()).optional(),
+    timeBonusEnabled: z.boolean().optional(),
+    lateDeductionEnabled: z.boolean().optional(),
+    supervisorSharePercent: z.number().optional(),
+    applicatorSharePercent: z.number().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .passthrough();
+
+/** Array staff reward ledger documents. */
+export const staffRewardLedgerPayloadSchema = z
+  .object({
+    id: nonEmptyString,
+    staffId: nonEmptyString,
+    staffName: z.string(),
+    branchId: nonEmptyString,
+    rewardType: z.enum([
+      "JOB_INCENTIVE",
+      "TIME_BONUS",
+      "LATE_DEDUCTION",
+      "MANUAL_CREDIT",
+      "MANUAL_DEBIT",
+      "TIER_BONUS",
+    ]),
+    amount: z.number(),
+    status: z.enum(["PENDING", "APPROVED", "PAID_IN_PAYROLL", "CANCELLED"]),
+    periodMonth: z.number(),
+    periodYear: z.number(),
+    idempotencyKey: nonEmptyString,
+    createdAt: nonEmptyString,
+  })
+  .passthrough();
+
+/** Array staff target documents. */
+export const staffTargetPayloadSchema = z
+  .object({
+    id: nonEmptyString,
+    staffId: nonEmptyString,
+    staffName: z.string(),
+    branchId: nonEmptyString,
+    periodMonth: z.number(),
+    periodYear: z.number(),
+    metric: z.enum(["JOBS_COMPLETED", "REVENUE", "INCENTIVE"]),
+    targetValue: z.number(),
+  })
+  .passthrough();
+
 export const membershipPayloadSchema = z
   .object({
     packages: z.array(z.unknown()).optional(),
@@ -82,6 +159,11 @@ const COLLECTION_PAYLOAD_SCHEMAS: Record<string, z.ZodType<object>> = {
   quotations: quotationPayloadSchema,
   payroll: payrollPayloadSchema,
   membership: membershipPayloadSchema,
+  leaveConfig: leaveConfigPayloadSchema,
+  leaveRequests: leaveRequestPayloadSchema,
+  staffRewardSettings: staffRewardSettingsPayloadSchema,
+  staffRewardLedger: staffRewardLedgerPayloadSchema,
+  staffTargets: staffTargetPayloadSchema,
 };
 
 export function parseCollectionPayload(collection: string, payload: unknown): object {
@@ -143,7 +225,13 @@ export function assertPayloadEntityIdMatch(
   entityId: string,
   payload: object
 ): void {
-  if (collection === "payroll" || collection === "membership") return;
+  if (
+    collection === "payroll" ||
+    collection === "membership" ||
+    collection === "leaveConfig" ||
+    collection === "staffRewardSettings"
+  )
+    return;
   if (!("id" in payload)) return;
   const id = (payload as { id?: unknown }).id;
   if (typeof id === "string" && id !== entityId) {

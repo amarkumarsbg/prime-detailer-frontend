@@ -6,6 +6,9 @@ export type ActivityEntityType =
   | "APPOINTMENT"
   | "INVENTORY"
   | "STAFF"
+  | "LEAVE"
+  | "PAYROLL"
+  | "STAFF_REWARD"
   | "QUOTATION"
   | "EXPENSE"
   | "WALLET";

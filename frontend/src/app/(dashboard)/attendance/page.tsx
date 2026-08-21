@@ -11,6 +11,7 @@ import {
 import { KPICard } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import { useAttendanceStore } from "@/store/attendance-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useLeaveStore } from "@/store/leave-store";
 import { AttendanceQrPanel } from "@/components/attendance/attendance-qr-panel";
 import { format } from "date-fns";
 import { roleDisplayLabel } from "@/lib/rbac";
@@ -32,10 +34,33 @@ import {
   UserX,
   AlertTriangle,
   Calendar,
+  Download,
 } from "lucide-react";
 import { getShiftStatusDisplay } from "@/lib/attendance-display";
 import { canViewStaffAttendanceDashboard } from "@/lib/attendance-access";
 import { useBranchScope } from "@/lib/branch-scope";
+import {
+  attendanceSummaryToCsv,
+  buildStaffAttendanceSummary,
+  monthDateRange,
+  type AttendanceSummaryStaff,
+} from "@/lib/attendance-reports";
+import { toast } from "sonner";
+
+const MONTH_OPTIONS = [
+  { v: 1, label: "January" },
+  { v: 2, label: "February" },
+  { v: 3, label: "March" },
+  { v: 4, label: "April" },
+  { v: 5, label: "May" },
+  { v: 6, label: "June" },
+  { v: 7, label: "July" },
+  { v: 8, label: "August" },
+  { v: 9, label: "September" },
+  { v: 10, label: "October" },
+  { v: 11, label: "November" },
+  { v: 12, label: "December" },
+];
 
 function formatDuration(minutes?: number): string {
   if (minutes == null) return "—";
@@ -57,6 +82,7 @@ export default function AttendancePage() {
   const { selectedBranchId, viewingLabel } = useBranchScope();
   const attendanceRecords = useAttendanceStore((s) => s.records);
   const staff = useStaffStore((s) => s.staff);
+  const leaveRequests = useLeaveStore((s) => s.requests);
 
   const qrDefaultBranchId = useMemo(() => {
     if (selectedBranchId) return selectedBranchId;
@@ -76,6 +102,9 @@ export default function AttendancePage() {
 
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
+  const now = new Date();
+  const [monthlyMonth, setMonthlyMonth] = useState(now.getMonth() + 1);
+  const [monthlyYear, setMonthlyYear] = useState(now.getFullYear());
 
   const dateOptions = useMemo(() => {
     const dates: string[] = [];
@@ -208,6 +237,52 @@ export default function AttendancePage() {
     });
   }, [selectedDate, attendanceRecords, selectedBranchId, staffForBranch]);
 
+  const approvedLeave = useMemo(
+    () => leaveRequests.filter((r) => r.status === "APPROVED"),
+    [leaveRequests]
+  );
+
+  const summaryStaff = useMemo((): AttendanceSummaryStaff[] => {
+    return staff.map((s) => ({
+      id: s.id,
+      name: s.name,
+      branchId: s.branchId,
+      isActive: s.isActive,
+    }));
+  }, [staff]);
+
+  const monthlySummary = useMemo(() => {
+    const { fromDate, toDate } = monthDateRange(monthlyYear, monthlyMonth);
+    return buildStaffAttendanceSummary({
+      attendance: attendanceRecords,
+      staff: summaryStaff,
+      approvedLeave,
+      fromDate,
+      toDate,
+      branchId: selectedBranchId,
+    });
+  }, [
+    attendanceRecords,
+    summaryStaff,
+    approvedLeave,
+    monthlyYear,
+    monthlyMonth,
+    selectedBranchId,
+  ]);
+
+  const downloadMonthlyCsv = () => {
+    const csv = attendanceSummaryToCsv(monthlySummary);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const monthLabel = String(monthlyMonth).padStart(2, "0");
+    a.download = `attendance-summary-${monthlyYear}-${monthLabel}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Export started.");
+  };
+
   if (!user) {
     return null;
   }
@@ -233,10 +308,11 @@ export default function AttendancePage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-xl grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="records">Records</TabsTrigger>
           <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="monthly">Monthly</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 sm:space-y-6">
@@ -547,6 +623,183 @@ export default function AttendancePage() {
               <p className="text-xs text-muted-foreground px-4 py-3 border-t border-border bg-muted/20">
                 P = Present · A = Absent · L = Late · H = Half day · Avg = mean hours when checked in (7-day window)
               </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="monthly" className="space-y-4 sm:space-y-6">
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border/80 bg-muted/20">
+              <div className="space-y-1 min-w-0">
+                <CardTitle className="text-base font-semibold">
+                  Monthly Staff Attendance
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Full-month rollup with approved leave and branch scope
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-2 shrink-0">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">Month</span>
+                  <Select
+                    value={String(monthlyMonth)}
+                    onValueChange={(v) => setMonthlyMonth(Number(v))}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTH_OPTIONS.map((m) => (
+                        <SelectItem key={m.v} value={String(m.v)}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">Year</span>
+                  <Select
+                    value={String(monthlyYear)}
+                    onValueChange={(v) => setMonthlyYear(Number(v))}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2024, 2025, 2026, 2027].map((y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={downloadMonthlyCsv}
+                  disabled={monthlySummary.length === 0}
+                >
+                  <Download className="w-4 h-4 mr-1.5" />
+                  CSV
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <MobileCardList className="p-3">
+                {monthlySummary.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No active staff for this period
+                  </p>
+                ) : (
+                  monthlySummary.map((row) => (
+                    <MobileRowCard key={row.staffId}>
+                      <p className="font-medium leading-snug">{row.staffName}</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
+                        <div>
+                          <span className="text-muted-foreground">Present</span>
+                          <p className="font-semibold tabular-nums">{row.presentDays}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Late</span>
+                          <p className="font-semibold tabular-nums">{row.lateDays}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Half</span>
+                          <p className="font-semibold tabular-nums">{row.halfDays}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Leave</span>
+                          <p className="font-semibold tabular-nums">{row.leaveDays}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Absent</span>
+                          <p className="font-semibold tabular-nums">{row.absentDays}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Avg hrs</span>
+                          <p className="font-semibold tabular-nums">
+                            {row.avgHours === 0 ? "—" : `${row.avgHours}h`}
+                          </p>
+                        </div>
+                      </div>
+                    </MobileRowCard>
+                  ))
+                )}
+              </MobileCardList>
+              <DesktopTableWrap>
+                <table className="w-full caption-bottom border-collapse text-sm tabular-nums">
+                  <caption className="sr-only">
+                    Monthly staff attendance summary including leave and average hours
+                  </caption>
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th
+                        scope="col"
+                        className="text-left py-3 px-4 font-semibold text-foreground min-w-[140px]"
+                      >
+                        Staff
+                      </th>
+                      <th scope="col" className="text-right py-3 px-3 font-semibold">
+                        Present
+                      </th>
+                      <th scope="col" className="text-right py-3 px-3 font-semibold">
+                        Late
+                      </th>
+                      <th scope="col" className="text-right py-3 px-3 font-semibold">
+                        Half
+                      </th>
+                      <th scope="col" className="text-right py-3 px-3 font-semibold">
+                        Leave
+                      </th>
+                      <th scope="col" className="text-right py-3 px-3 font-semibold">
+                        Absent
+                      </th>
+                      <th scope="col" className="text-right py-3 pr-4 pl-3 font-semibold">
+                        Avg hrs
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlySummary.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="py-8 text-center text-muted-foreground"
+                        >
+                          No active staff for this period
+                        </td>
+                      </tr>
+                    ) : (
+                      monthlySummary.map((row) => (
+                        <tr
+                          key={row.staffId}
+                          className="border-b border-border/70 odd:bg-muted/15 hover:bg-muted/35 transition-colors"
+                        >
+                          <td className="py-3 px-4 align-middle font-medium text-foreground">
+                            {row.staffName}
+                          </td>
+                          <td className="py-3 px-3 text-right align-middle">
+                            {row.presentDays}
+                          </td>
+                          <td className="py-3 px-3 text-right align-middle">{row.lateDays}</td>
+                          <td className="py-3 px-3 text-right align-middle">{row.halfDays}</td>
+                          <td className="py-3 px-3 text-right align-middle">{row.leaveDays}</td>
+                          <td className="py-3 px-3 text-right align-middle">
+                            {row.absentDays}
+                          </td>
+                          <td className="py-3 pr-4 pl-3 text-right align-middle font-medium">
+                            {row.avgHours === 0 ? "—" : `${row.avgHours}h`}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </DesktopTableWrap>
             </CardContent>
           </Card>
         </TabsContent>

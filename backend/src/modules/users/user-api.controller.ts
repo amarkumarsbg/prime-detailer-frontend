@@ -57,6 +57,11 @@ const createUserBodySchema = z.object({
   totalIncentiveEarned: z.number().nullable().optional(),
   birthday: z.string().nullable().optional(),
   anniversary: z.string().nullable().optional(),
+  employeeCode: z.string().nullable().optional(),
+  designation: z.string().nullable().optional(),
+  department: z.string().nullable().optional(),
+  joiningDate: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   permissions: z.array(z.string()).optional(),
 });
 
