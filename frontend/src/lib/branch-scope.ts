@@ -179,10 +179,20 @@ export function filterRemindersByBranch(
   if (!branchId) return reminders;
   const jobBranch = buildJobBranchMap(jobCards);
   return reminders.filter((r) => {
-    if (r.lastJobCardId) return jobBranch.get(r.lastJobCardId) === branchId;
-    return jobCards.some(
+    if (r.lastJobCardId) {
+      const linkedBranch = jobBranch.get(r.lastJobCardId);
+      // Job not in store yet (or deleted) — don't hide; use customer heuristic below
+      if (linkedBranch !== undefined) return linkedBranch === branchId;
+    }
+    const customerAtBranch = jobCards.some(
       (jc) => jc.customerId === r.customerId && jc.branchId === branchId
     );
+    if (customerAtBranch) return true;
+    // No job-card link resolved: keep visible so seed / payment rows aren't blanked out
+    // when job cards are still loading or the linked job is missing.
+    if (r.lastJobCardId && jobBranch.size === 0) return true;
+    if (!r.lastJobCardId) return true;
+    return false;
   });
 }
 

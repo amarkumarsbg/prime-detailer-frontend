@@ -72,6 +72,11 @@ const schema = z.object({
   S3_FORCE_PATH_STYLE: z.string().optional(),
   /** SaaS vendor platform API key (header X-Platform-Admin-Key). Optional in local if using PLATFORM_OWNER login. */
   PLATFORM_ADMIN_API_KEY: z.string().optional(),
+  /**
+   * Shared secret for external cron / job endpoints (header `X-Internal-Job-Key`).
+   * Required for production scheduled reminder processing.
+   */
+  INTERNAL_JOB_SECRET: z.string().optional(),
   /** Default Contact Us / Upgrade URLs stored on new subscriptions when not overridden. */
   DEFAULT_CONTACT_US_URL: z.string().optional(),
   DEFAULT_UPGRADE_URL: z.string().optional(),
@@ -99,6 +104,7 @@ export const env = schema.parse({
   S3_PUBLIC_BASE_URL: trimOpt(process.env.S3_PUBLIC_BASE_URL),
   S3_FORCE_PATH_STYLE: trimOpt(process.env.S3_FORCE_PATH_STYLE),
   PLATFORM_ADMIN_API_KEY: trimOpt(process.env.PLATFORM_ADMIN_API_KEY),
+  INTERNAL_JOB_SECRET: trimOpt(process.env.INTERNAL_JOB_SECRET),
   DEFAULT_CONTACT_US_URL: trimOpt(process.env.DEFAULT_CONTACT_US_URL),
   DEFAULT_UPGRADE_URL: trimOpt(process.env.DEFAULT_UPGRADE_URL),
 });

@@ -23,6 +23,7 @@ import { attendanceRouter } from "./routes/attendance.routes.js";
 import { partyRouter } from "./modules/parties/party.routes.js";
 import { organizationRouter } from "./modules/organization/organization.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
+import { jobsRouter } from "./modules/jobs/jobs.routes.js";
 import { isSwaggerEnabled, registerSwagger } from "./docs/register-swagger.js";
 
 import { prisma } from "./lib/prisma.js";
@@ -147,6 +148,7 @@ app.use("/api/attendance", attendanceRouter);
 app.use("/api/parties", partyRouter);
 app.use("/api/organization", organizationRouter);
 app.use("/api/platform", platformRouter);
+app.use("/api/jobs", jobsRouter);
 
 app.use(errorHandler);
 

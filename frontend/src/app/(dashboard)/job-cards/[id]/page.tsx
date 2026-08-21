@@ -94,6 +94,7 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useHighEndServiceStore } from "@/store/high-end-service-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useServiceCategoryStore } from "@/store/service-category-store";
 import { useMembershipStore } from "@/store/membership-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -282,10 +283,11 @@ export default function JobCardDetailPage() {
   }, [authUser?.role, canAdjustBuffer]);
 
   const { services: highEndServiceConfigs } = useHighEndServiceStore();
-  const { generateHighEndReminders } = useReminderStore();
+  const { generateHighEndReminders, applyCategoryRemindersOnDeliver } = useReminderStore();
   /** Fallback % for suggested advance copy on job card when creation left hint empty. */
   const effectiveAdvanceHintPercent = jobCard?.highEndAdvanceHintPercent ?? 30;
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
+  const serviceCategories = useServiceCategoryStore((s) => s.categories);
   const membershipPackages = useMembershipStore((s) => s.packages);
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
   const getUsedIncludedServiceCount = useMembershipStore((s) => s.getUsedIncludedServiceCount);
@@ -1187,6 +1189,31 @@ export default function JobCardDetailPage() {
     });
   };
 
+  const applyServiceRemindersOnDeliver = useCallback(
+    async (job: JobCard, serviceDateIso: string) => {
+      const settings = useSettingsStore.getState();
+      const created = await applyCategoryRemindersOnDeliver({
+        job,
+        serviceDateIso,
+        settings: {
+          reminderLeadDays: settings.reminderLeadDays,
+          reminderCategoryFrequencies: settings.reminderCategoryFrequencies,
+        },
+        catalog: serviceCatalog,
+        categories: serviceCategories,
+      });
+      if (created > 0) {
+        toast.success("Service reminders updated", {
+          description:
+            created === 1
+              ? "1 category reminder scheduled from this delivery"
+              : `${created} category reminders scheduled from this delivery`,
+        });
+      }
+    },
+    [applyCategoryRemindersOnDeliver, serviceCatalog, serviceCategories]
+  );
+
   const handleUpdateStatus = async () => {
     if (!jobCard || currentStatus === "DELIVERED" || currentStatus === "CANCELLED") return;
     if (advanceBlockedByMechanic) {
@@ -1308,7 +1335,7 @@ export default function JobCardDetailPage() {
               config.reminderIntervals[0] ??
               0;
             const intervals = buildHighEndReminderMonthIntervals(config.reminderIntervals, first);
-            generateHighEndReminders({
+            void generateHighEndReminders({
               jobCardId: jobCard.id,
               serviceName: config.name,
               serviceDate: now,
@@ -1325,6 +1352,10 @@ export default function JobCardDetailPage() {
         toast.success("Maintenance reminders created", {
           description: `Auto-generated reminders for ${jobCard.highEndServiceIds.length} high-end service(s)`,
         });
+      }
+
+      if (nextStatus === "DELIVERED") {
+        await applyServiceRemindersOnDeliver(jobCard, nowIso);
       }
 
       updateJobCard(jobCard.id, patch);
@@ -1462,7 +1493,7 @@ export default function JobCardDetailPage() {
             config.reminderIntervals[0] ??
             0;
           const intervals = buildHighEndReminderMonthIntervals(config.reminderIntervals, first);
-          generateHighEndReminders({
+          void generateHighEndReminders({
             jobCardId: jobCard.id,
             serviceName: config.name,
             serviceDate: nowIso,
@@ -1480,6 +1511,8 @@ export default function JobCardDetailPage() {
         description: `Auto-generated reminders for ${jobCard.highEndServiceIds.length} high-end service(s)`,
       });
     }
+
+    await applyServiceRemindersOnDeliver(jobCard, nowIso);
 
     try {
       await updateJobCard(jobCard.id, patch);

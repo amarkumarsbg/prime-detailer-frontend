@@ -21,11 +21,34 @@ export interface CustomerMessage {
 
 
 export type ReminderStatus = "UPCOMING" | "DUE" | "OVERDUE" | "COMPLETED" | "DISMISSED";
-export type ReminderType = "GENERAL_SERVICE" | "OIL_CHANGE" | "BRAKE_INSPECTION" | "TIRE_ROTATION" | "AC_SERVICE" | "BATTERY_CHECK" | "INSURANCE" | "PUC" | "PPF_MAINTENANCE" | "CERAMIC_MAINTENANCE";
-export type ReminderFrequency = "WEEKLY" | "MONTHLY" | "QUARTERLY" | "BIANNUAL" | "YEARLY" | "CUSTOM";
+export type ReminderType =
+  | "GENERAL_SERVICE"
+  | "OIL_CHANGE"
+  | "BRAKE_INSPECTION"
+  | "TIRE_ROTATION"
+  | "AC_SERVICE"
+  | "BATTERY_CHECK"
+  | "INSURANCE"
+  | "PUC"
+  | "PPF_MAINTENANCE"
+  | "CERAMIC_MAINTENANCE";
+/** Half-Yearly is stored as BIANNUAL (UI label: Half-Yearly). */
+export type ReminderFrequency =
+  | "WEEKLY"
+  | "MONTHLY"
+  | "QUARTERLY"
+  | "BIANNUAL"
+  | "YEARLY"
+  | "CUSTOM";
+export type ReminderKind = "SERVICE" | "PAYMENT";
 
 export interface ServiceReminder {
   id: string;
+  /**
+   * SERVICE = vehicle/service due; PAYMENT = outstanding invoice chase.
+   * Missing on legacy rows → treat as SERVICE.
+   */
+  kind?: ReminderKind;
   vehicleId: string;
   vehicleRegNumber: string;
   vehicleMakeModel: string;
@@ -48,6 +71,16 @@ export interface ServiceReminder {
   whatsappSent?: boolean;
   /** ISO timestamp when a customer reminder message was last sent (e.g. WhatsApp). */
   lastMessageSentAt?: string;
+  /** Stable period bucket for dedupe (e.g. 2026-W34, 2026-08, 2026-Q3, 2026-H1, 2026). */
+  periodKey?: string;
+  /** Preview of the following cycle after send/complete (optional). */
+  nextDueDate?: string;
+  /** PAYMENT: linked sales invoice */
+  invoiceId?: string;
+  invoiceNumber?: string;
+  /** PAYMENT: outstanding snapshot at last sync */
+  outstandingAmount?: number;
+  partyId?: string;
 }
 
 

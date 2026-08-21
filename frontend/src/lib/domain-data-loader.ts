@@ -6,6 +6,7 @@ import type { DomainResource } from "@/lib/domain-data-map";
 import { ensureHitechPartyProfile } from "@/lib/party/party-hitech-demo";
 import { reconcilePickupWithJobCards } from "@/lib/sync-pickup-from-job-card";
 import { mergeInspectionPhotosById } from "@/lib/job-card-inspection-photos";
+import { normalizeServiceReminders } from "@/lib/reminder-schedule";
 import type {
   ActivityLog,
   CustomerMessage,
@@ -261,8 +262,9 @@ async function loadOne(resource: DomainResource): Promise<void> {
       return;
     }
     case "serviceReminders": {
+      const items = await getCollectionItems<ServiceReminder>("serviceReminders");
       useReminderStore.setState({
-        reminders: await getCollectionItems<ServiceReminder>("serviceReminders"),
+        reminders: normalizeServiceReminders(items),
       });
       return;
     }

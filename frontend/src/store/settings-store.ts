@@ -8,6 +8,27 @@ import {
   normalizeLoginHeroFeatures,
   type LoginHeroFeature,
 } from "@/lib/login-hero-content";
+import {
+  CATEGORY_REMINDER_TYPES,
+  parseReminderFrequency,
+  type SchedulableReminderFrequency,
+} from "@/lib/reminder-schedule";
+import type { ReminderType } from "@/types";
+
+export type ReminderCategoryFrequencies = Partial<
+  Record<(typeof CATEGORY_REMINDER_TYPES)[number], SchedulableReminderFrequency>
+>;
+
+export const DEFAULT_REMINDER_CATEGORY_FREQUENCIES: ReminderCategoryFrequencies = {
+  GENERAL_SERVICE: "MONTHLY",
+  OIL_CHANGE: "QUARTERLY",
+  BRAKE_INSPECTION: "BIANNUAL",
+  TIRE_ROTATION: "QUARTERLY",
+  AC_SERVICE: "QUARTERLY",
+  BATTERY_CHECK: "BIANNUAL",
+  INSURANCE: "YEARLY",
+  PUC: "BIANNUAL",
+};
 
 export interface SerializableAppSettings {
   gstRegistrationStatus: "REGISTERED" | "NOT_REGISTERED";
@@ -29,6 +50,12 @@ export interface SerializableAppSettings {
   referralRewardAmount: number;
   newCustomerDiscount: number;
   whatsappReminderEnabled: boolean;
+  /** Days before due date when a reminder becomes DUE / eligible to send. */
+  reminderLeadDays: number;
+  /** Default cadence for pending-payment reminders. */
+  reminderPaymentFrequency: SchedulableReminderFrequency;
+  /** Default cadence per service category (high-end stays CUSTOM month lists). */
+  reminderCategoryFrequencies: ReminderCategoryFrequencies;
   /** Company-wide accent (#RRGGBB). Drives --primary / sidebar active. */
   brandPrimary: string;
   /** Login page left-panel background image URL (optional). */
@@ -63,12 +90,28 @@ export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
   referralRewardAmount: 500,
   newCustomerDiscount: 200,
   whatsappReminderEnabled: true,
+  reminderLeadDays: 7,
+  reminderPaymentFrequency: "MONTHLY",
+  reminderCategoryFrequencies: { ...DEFAULT_REMINDER_CATEGORY_FREQUENCIES },
   brandPrimary: DEFAULT_BRAND_PRIMARY,
   loginBackgroundImage: "",
   loginHeroHeading: "",
   loginHeroDescription: "",
   loginHeroFeatures: [...DEFAULT_LOGIN_HERO_FEATURES],
 };
+
+function normalizeCategoryFrequencies(raw: unknown): ReminderCategoryFrequencies {
+  const base: ReminderCategoryFrequencies = { ...DEFAULT_REMINDER_CATEGORY_FREQUENCIES };
+  if (!raw || typeof raw !== "object") return base;
+  const o = raw as Record<string, unknown>;
+  for (const type of CATEGORY_REMINDER_TYPES) {
+    const v = o[type];
+    if (typeof v === "string") {
+      base[type] = parseReminderFrequency(v, base[type] ?? "MONTHLY");
+    }
+  }
+  return base;
+}
 
 function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings {
   return {
@@ -91,6 +134,9 @@ function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings 
     referralRewardAmount: s.referralRewardAmount,
     newCustomerDiscount: s.newCustomerDiscount,
     whatsappReminderEnabled: s.whatsappReminderEnabled,
+    reminderLeadDays: s.reminderLeadDays,
+    reminderPaymentFrequency: s.reminderPaymentFrequency,
+    reminderCategoryFrequencies: { ...s.reminderCategoryFrequencies },
     brandPrimary: s.brandPrimary,
     loginBackgroundImage: s.loginBackgroundImage,
     loginHeroHeading: s.loginHeroHeading,
@@ -148,6 +194,14 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
   if (nd !== undefined) next.newCustomerDiscount = nd;
   const wa = bool("whatsappReminderEnabled");
   if (wa !== undefined) next.whatsappReminderEnabled = wa;
+  const lead = num("reminderLeadDays");
+  if (lead !== undefined) next.reminderLeadDays = Math.max(0, Math.floor(lead));
+  if (typeof o.reminderPaymentFrequency === "string") {
+    next.reminderPaymentFrequency = parseReminderFrequency(o.reminderPaymentFrequency, "MONTHLY");
+  }
+  if ("reminderCategoryFrequencies" in o) {
+    next.reminderCategoryFrequencies = normalizeCategoryFrequencies(o.reminderCategoryFrequencies);
+  }
   const brandRaw = str("brandPrimary");
   if (brandRaw !== undefined) {
     next.brandPrimary = normalizeHex(brandRaw) ?? DEFAULT_BRAND_PRIMARY;
@@ -195,6 +249,13 @@ interface SettingsState extends SerializableAppSettings {
   setReferralRewardAmount: (amount: number) => void;
   setNewCustomerDiscount: (amount: number) => void;
   setWhatsappReminderEnabled: (enabled: boolean) => void;
+  setReminderLeadDays: (days: number) => void;
+  setReminderPaymentFrequency: (frequency: SchedulableReminderFrequency) => void;
+  setReminderCategoryFrequency: (
+    type: (typeof CATEGORY_REMINDER_TYPES)[number],
+    frequency: SchedulableReminderFrequency
+  ) => void;
+  setReminderCategoryFrequencies: (map: ReminderCategoryFrequencies) => void;
   setBrandPrimary: (hex: string) => boolean;
   patchFromBootstrap: (patch: Partial<SerializableAppSettings>) => void;
 }
@@ -237,6 +298,33 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleAppSettingsSync(get);
   },
 
+  setReminderLeadDays: (days) => {
+    set({ reminderLeadDays: Math.max(0, Math.floor(days)) });
+    scheduleAppSettingsSync(get);
+  },
+
+  setReminderPaymentFrequency: (reminderPaymentFrequency) => {
+    set({ reminderPaymentFrequency });
+    scheduleAppSettingsSync(get);
+  },
+
+  setReminderCategoryFrequency: (type, frequency) => {
+    set((state) => ({
+      reminderCategoryFrequencies: {
+        ...state.reminderCategoryFrequencies,
+        [type]: frequency,
+      },
+    }));
+    scheduleAppSettingsSync(get);
+  },
+
+  setReminderCategoryFrequencies: (reminderCategoryFrequencies) => {
+    set({
+      reminderCategoryFrequencies: normalizeCategoryFrequencies(reminderCategoryFrequencies),
+    });
+    scheduleAppSettingsSync(get);
+  },
+
   setBrandPrimary: (hex) => {
     const normalized = normalizeHex(hex);
     if (!normalized) return false;
@@ -245,3 +333,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     return true;
   },
 }));
+
+/** Resolve frequency for a service category from settings (with defaults). */
+export function getCategoryReminderFrequency(
+  settings: Pick<SerializableAppSettings, "reminderCategoryFrequencies">,
+  type: ReminderType
+): SchedulableReminderFrequency {
+  if (!(CATEGORY_REMINDER_TYPES as readonly string[]).includes(type)) {
+    return "MONTHLY";
+  }
+  return (
+    settings.reminderCategoryFrequencies[type as (typeof CATEGORY_REMINDER_TYPES)[number]] ??
+    DEFAULT_REMINDER_CATEGORY_FREQUENCIES[type as (typeof CATEGORY_REMINDER_TYPES)[number]] ??
+    "MONTHLY"
+  );
+}

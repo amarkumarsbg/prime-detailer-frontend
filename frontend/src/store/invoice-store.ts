@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { Invoice, InvoiceStatus, Payment } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
+import { useReminderStore } from "@/store/reminder-store";
 
 interface InvoiceStore {
   invoices: Invoice[];
@@ -25,12 +26,23 @@ function computeInvoiceStatus(inv: Invoice, payments: Payment[]): InvoiceStatus 
   return inv.status;
 }
 
+/** Fire-and-forget payment reminder sync (Phase 3). Never throws into invoice flows. */
+function queuePaymentReminderSync(invoice: Invoice) {
+  void useReminderStore
+    .getState()
+    .syncPaymentReminderForInvoice(invoice)
+    .catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.error(err);
+    });
+}
+
 export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
   invoices: [],
 
   addInvoice: async (invoice) => {
     await putCollectionDocument("invoices", invoice.id, invoice);
     set((state) => ({ invoices: [invoice, ...state.invoices] }));
+    queuePaymentReminderSync(invoice);
   },
 
   getNextInvoiceNumber: () => {
@@ -50,6 +62,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     set((state) => ({
       invoices: state.invoices.map((inv) => (inv.id === id ? next : inv)),
     }));
+    queuePaymentReminderSync(next);
   },
 
   deleteInvoice: async (id) => {
@@ -82,6 +95,7 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     set((state) => ({
       invoices: state.invoices.map((i) => (i.id === invoiceId ? next : i)),
     }));
+    queuePaymentReminderSync(next);
     return { ok: true };
   },
 }));

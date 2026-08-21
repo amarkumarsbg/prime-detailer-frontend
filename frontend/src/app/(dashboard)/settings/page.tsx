@@ -31,6 +31,13 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
+import {
+  CATEGORY_REMINDER_TYPES,
+  CATEGORY_REMINDER_TYPE_LABELS,
+  REMINDER_FREQUENCY_LABELS,
+  SCHEDULABLE_REMINDER_FREQUENCIES,
+  type SchedulableReminderFrequency,
+} from "@/lib/reminder-schedule";
 import { useOrganizationStore } from "@/store/organization-store";
 import { useHighEndServiceStore, buildHighEndSegmentPricing, highEndDefaultEstimate } from "@/store/high-end-service-store";
 import {
@@ -160,11 +167,12 @@ export default function SettingsPage() {
   const [highEndIncentivePercent, setHighEndIncentivePercent] = useState("10");
   const [incentiveCapPerJob, setIncentiveCapPerJob] = useState("5000");
 
-  const [reminderGeneralService, setReminderGeneralService] = useState("monthly");
-  const [reminderOilChange, setReminderOilChange] = useState("3months");
-  const [reminderPpfMaintenance, setReminderPpfMaintenance] = useState("6months");
-  const [reminderCeramicMaintenance, setReminderCeramicMaintenance] = useState("6months");
-  const [reminderLeadDays, setReminderLeadDays] = useState("7");
+  const reminderLeadDays = useSettingsStore((s) => s.reminderLeadDays);
+  const reminderPaymentFrequency = useSettingsStore((s) => s.reminderPaymentFrequency);
+  const reminderCategoryFrequencies = useSettingsStore((s) => s.reminderCategoryFrequencies);
+  const setReminderLeadDays = useSettingsStore((s) => s.setReminderLeadDays);
+  const setReminderPaymentFrequency = useSettingsStore((s) => s.setReminderPaymentFrequency);
+  const setReminderCategoryFrequency = useSettingsStore((s) => s.setReminderCategoryFrequency);
 
   const [newHesName, setNewHesName] = useState("");
   const [newHesTotalYears, setNewHesTotalYears] = useState("5");
@@ -711,61 +719,67 @@ export default function SettingsPage() {
                 <CalendarClock className="w-4 h-4" />
                 Reminder Settings
               </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Defaults for service-category and pending-payment reminders. PPF / Ceramic schedules
+                stay under High-End Services (custom month intervals).
+              </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-5 max-w-xl">
                 <div className="space-y-3">
-                  <p className="text-sm font-medium">Default Reminder Intervals by Service Type</p>
+                  <p className="text-sm font-medium">Default intervals by service category</p>
                   <div className="grid gap-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <Label className="min-w-[160px]">General Service</Label>
-                      <Select value={reminderGeneralService} onValueChange={setReminderGeneralService}>
-                        <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                          <SelectItem value="3months">Every 3 months</SelectItem>
-                          <SelectItem value="6months">Every 6 months</SelectItem>
-                          <SelectItem value="yearly">Yearly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <Label className="min-w-[160px]">Oil Change</Label>
-                      <Select value={reminderOilChange} onValueChange={setReminderOilChange}>
-                        <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                          <SelectItem value="3months">Every 3 months</SelectItem>
-                          <SelectItem value="6months">Every 6 months</SelectItem>
-                          <SelectItem value="yearly">Yearly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <Label className="min-w-[160px]">PPF Maintenance</Label>
-                      <Select value={reminderPpfMaintenance} onValueChange={setReminderPpfMaintenance}>
-                        <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                          <SelectItem value="3months">Every 3 months</SelectItem>
-                          <SelectItem value="6months">Every 6 months</SelectItem>
-                          <SelectItem value="yearly">Yearly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <Label className="min-w-[160px]">Ceramic Maintenance</Label>
-                      <Select value={reminderCeramicMaintenance} onValueChange={setReminderCeramicMaintenance}>
-                        <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                          <SelectItem value="3months">Every 3 months</SelectItem>
-                          <SelectItem value="6months">Every 6 months</SelectItem>
-                          <SelectItem value="yearly">Yearly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {CATEGORY_REMINDER_TYPES.map((type) => (
+                      <div key={type} className="flex items-center justify-between gap-4">
+                        <Label className="min-w-[160px]">{CATEGORY_REMINDER_TYPE_LABELS[type]}</Label>
+                        <Select
+                          value={reminderCategoryFrequencies[type] ?? "MONTHLY"}
+                          onValueChange={(v) =>
+                            setReminderCategoryFrequency(type, v as SchedulableReminderFrequency)
+                          }
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SCHEDULABLE_REMINDER_FREQUENCIES.map((f) => (
+                              <SelectItem key={f} value={f}>
+                                {REMINDER_FREQUENCY_LABELS[f]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
                   </div>
+                </div>
+                <Separator />
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Pending payment reminders</p>
+                  <div className="flex items-center justify-between gap-4">
+                    <Label className="min-w-[160px]">Default frequency</Label>
+                    <Select
+                      value={reminderPaymentFrequency}
+                      onValueChange={(v) =>
+                        setReminderPaymentFrequency(v as SchedulableReminderFrequency)
+                      }
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SCHEDULABLE_REMINDER_FREQUENCIES.map((f) => (
+                          <SelectItem key={f} value={f}>
+                            {REMINDER_FREQUENCY_LABELS[f]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Used when an invoice is unpaid or partially paid. Reminders stop when outstanding
+                    is cleared.
+                  </p>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between py-4 border-b border-border">
@@ -773,7 +787,10 @@ export default function SettingsPage() {
                     <MessageCircle className="w-4 h-4" />
                     <div>
                       <p className="text-sm font-medium">WhatsApp Reminders</p>
-                      <p className="text-xs text-muted-foreground">Send service reminders via WhatsApp</p>
+                      <p className="text-xs text-muted-foreground">
+                        When enabled, due reminders may be sent automatically (manual send still
+                        available on the Reminders page)
+                      </p>
                     </div>
                   </div>
                   <ToggleSwitch
@@ -786,17 +803,25 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      value={reminderLeadDays}
-                      onChange={(e) => setReminderLeadDays(e.target.value)}
+                      min={0}
+                      value={String(reminderLeadDays)}
+                      onChange={(e) => setReminderLeadDays(Number(e.target.value) || 0)}
                       className="w-24"
                     />
                     <span className="text-sm text-muted-foreground">days before due date</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">How many days before the due date to send reminders</p>
+                  <p className="text-xs text-muted-foreground">
+                    How many days before the due date a reminder becomes Due / eligible to send
+                  </p>
                 </div>
                 <Separator />
-                <Button onClick={() => handleSave("Reminder settings")}>
-                  <Save className="w-4 h-4 mr-2" />Save Changes
+                <Button
+                  onClick={() => {
+                    toast.success("Reminder settings saved");
+                  }}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
                 </Button>
               </div>
             </CardContent>
