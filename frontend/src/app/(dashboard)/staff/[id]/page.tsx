@@ -280,14 +280,14 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const copyToClipboard = async (value: string, label: string) => {
     const textToCopy = value.trim();
     if (!textToCopy) {
-      toast.error(`No ${label.lower()} to copy.`);
+      toast.error(`No ${label.toLowerCase()} to copy.`);
       return;
     }
     try {
       await navigator.clipboard.writeText(textToCopy);
       toast.success(`${label} copied`);
     } catch {
-      toast.error(`Could not copy ${label.lower()}.`);
+      toast.error(`Could not copy ${label.toLowerCase()}.`);
     }
   };
 
