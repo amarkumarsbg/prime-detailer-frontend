@@ -24,6 +24,30 @@ export interface CashBankAccount {
   bankMeta?: CashBankBankMeta;
 }
 
+/** Canonical label for the primary cash (type=cash) account. */
+export const CASH_IN_HAND_LABEL = "Cash in Hand";
+
+const LEGACY_CASH_DISPLAY_NAMES = new Set([
+  "cash",
+  "petty cash",
+  "cash on hand",
+  "cash-in-hand",
+]);
+
+/** Normalize legacy cash account names (e.g. Petty Cash) to Cash in Hand. */
+export function normalizeCashAccountDisplayName(account: CashBankAccount): CashBankAccount {
+  if (account.type !== "cash") return account;
+  const key = account.displayName.trim().toLowerCase();
+  if (!key || LEGACY_CASH_DISPLAY_NAMES.has(key)) {
+    return { ...account, displayName: CASH_IN_HAND_LABEL };
+  }
+  return account;
+}
+
+export function normalizeCashBankAccounts(accounts: CashBankAccount[]): CashBankAccount[] {
+  return accounts.map(normalizeCashAccountDisplayName);
+}
+
 export type CashBankTxnRowType =
   | "OPENING"
   | "ADJUST_ADD"

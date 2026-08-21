@@ -331,7 +331,9 @@ export function CashBankClient() {
             </div>
             <ScrollArea className="max-h-[min(70vh,640px)]">
               <div className="px-2 py-2">
-                <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Cash</p>
+                <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Cash in Hand
+                </p>
                 {cashAccount && (
                   <button
                     type="button"

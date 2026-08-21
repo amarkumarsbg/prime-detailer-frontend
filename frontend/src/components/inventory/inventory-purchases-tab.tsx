@@ -89,7 +89,10 @@ export function InventoryPurchasesTab() {
   const [quickPartOpen, setQuickPartOpen] = useState(false);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const quickPartTargetKeyRef = useRef<string | null>(null);
-  const nestedDialogOpenRef = useRef(false);
+  /** Blocks purchase-dialog dismiss while a nested dialog is closing (Radix focus restore). */
+  const suppressPurchaseDismissRef = useRef(false);
+  const pendingCreatedPartRef = useRef<Part | null>(null);
+  const suppressDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [supplierName, setSupplierName] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -103,7 +106,40 @@ export function InventoryPurchasesTab() {
   const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
   const [payTarget, setPayTarget] = useState<ProductPurchase | null>(null);
 
-  nestedDialogOpenRef.current = quickPartOpen || vendorDialogOpen;
+  const beginNestedDialog = () => {
+    if (suppressDismissTimerRef.current) {
+      clearTimeout(suppressDismissTimerRef.current);
+      suppressDismissTimerRef.current = null;
+    }
+    suppressPurchaseDismissRef.current = true;
+  };
+
+  const endNestedDialogSoon = () => {
+    if (suppressDismissTimerRef.current) clearTimeout(suppressDismissTimerRef.current);
+    suppressDismissTimerRef.current = setTimeout(() => {
+      suppressPurchaseDismissRef.current = false;
+      suppressDismissTimerRef.current = null;
+    }, 200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (suppressDismissTimerRef.current) clearTimeout(suppressDismissTimerRef.current);
+    };
+  }, []);
+
+  // After "New part" closes, select the created part on the target purchase line.
+  useEffect(() => {
+    if (quickPartOpen) return;
+    const pending = pendingCreatedPartRef.current;
+    if (!pending) return;
+    pendingCreatedPartRef.current = null;
+    const fromStore =
+      useInventoryStore.getState().parts.find((p) => p.id === pending.id) ?? pending;
+    const targetKey = quickPartTargetKeyRef.current;
+    quickPartTargetKeyRef.current = null;
+    setItems((prev) => applyPartToDraftItems(prev, fromStore, targetKey));
+  }, [quickPartOpen, parts]);
 
   useEffect(() => {
     if (purchases.length === 0) return;
@@ -306,7 +342,12 @@ export function InventoryPurchasesTab() {
         open={open}
         onOpenChange={(v) => {
           // Nested catalog/vendor dialogs must not dismiss or reset the purchase form.
-          if (!v && nestedDialogOpenRef.current) return;
+          if (
+            !v &&
+            (quickPartOpen || vendorDialogOpen || suppressPurchaseDismissRef.current)
+          ) {
+            return;
+          }
           setOpen(v);
           if (!v) reset();
         }}
@@ -315,13 +356,19 @@ export function InventoryPurchasesTab() {
           className={cn(dialogMobileSheetContentClasses, "max-h-[min(92dvh,720px)] sm:max-w-3xl")}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => {
-            if (quickPartOpen || vendorDialogOpen) e.preventDefault();
+            if (quickPartOpen || vendorDialogOpen || suppressPurchaseDismissRef.current) {
+              e.preventDefault();
+            }
           }}
           onFocusOutside={(e) => {
-            if (quickPartOpen || vendorDialogOpen) e.preventDefault();
+            if (quickPartOpen || vendorDialogOpen || suppressPurchaseDismissRef.current) {
+              e.preventDefault();
+            }
           }}
           onInteractOutside={(e) => {
-            if (quickPartOpen || vendorDialogOpen) e.preventDefault();
+            if (quickPartOpen || vendorDialogOpen || suppressPurchaseDismissRef.current) {
+              e.preventDefault();
+            }
           }}
         >
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
@@ -363,7 +410,10 @@ export function InventoryPurchasesTab() {
                       type="button"
                       variant="outline"
                       className="shrink-0 gap-1 px-3"
-                      onClick={() => setVendorDialogOpen(true)}
+                      onClick={() => {
+                        beginNestedDialog();
+                        setVendorDialogOpen(true);
+                      }}
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Add
@@ -459,6 +509,7 @@ export function InventoryPurchasesTab() {
                       e.stopPropagation();
                       const empty = items.find((i) => !i.partId);
                       quickPartTargetKeyRef.current = empty?.key ?? items[0]?.key ?? null;
+                      beginNestedDialog();
                       setQuickPartOpen(true);
                     }}
                   >
@@ -503,7 +554,11 @@ export function InventoryPurchasesTab() {
                           }}
                         >
                           <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Select part" />
+                            <SelectValue placeholder="Select part">
+                              {item.partId
+                                ? partsForSelect.find((p) => p.id === item.partId)?.name
+                                : undefined}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {partsForSelect.map((p) => (
@@ -636,20 +691,30 @@ export function InventoryPurchasesTab() {
 
       <VendorFormDialog
         open={vendorDialogOpen}
-        onOpenChange={setVendorDialogOpen}
+        onOpenChange={(next) => {
+          if (next) beginNestedDialog();
+          setVendorDialogOpen(next);
+          if (!next) endNestedDialogSoon();
+        }}
         initialName={supplierName}
         onSave={handleAddSupplier}
       />
 
       <CatalogItemFormDialog
         open={quickPartOpen}
-        onOpenChange={setQuickPartOpen}
+        onOpenChange={(next) => {
+          if (next) beginNestedDialog();
+          setQuickPartOpen(next);
+          if (!next) {
+            if (!pendingCreatedPartRef.current) {
+              quickPartTargetKeyRef.current = null;
+            }
+            endNestedDialogSoon();
+          }
+        }}
         onCreated={(part) => {
-          const fromStore =
-            useInventoryStore.getState().parts.find((p) => p.id === part.id) ?? part;
-          const targetKey = quickPartTargetKeyRef.current;
-          quickPartTargetKeyRef.current = null;
-          setItems((prev) => applyPartToDraftItems(prev, fromStore, targetKey));
+          pendingCreatedPartRef.current = part;
+          beginNestedDialog();
         }}
       />
     </div>

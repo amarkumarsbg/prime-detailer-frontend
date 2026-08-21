@@ -255,12 +255,12 @@ export function buildCashBankReportRows(
 
 export function accountFilterOptions(accounts: CashBankAccount[]): { value: string; label: string }[] {
   return [
-    { value: "all", label: "All bank accounts" },
+    { value: "all", label: "All accounts" },
     ...accounts.map((a) => ({
       value: a.id,
       label:
         a.type === "cash"
-          ? a.displayName
+          ? a.displayName || "Cash in Hand"
           : `${a.bankMeta?.bankName ?? "Bank"} ${a.accountNumberDisplay ?? a.bankMeta?.accountNumber?.slice(-4) ?? ""}`.trim(),
     })),
   ];

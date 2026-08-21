@@ -50,7 +50,7 @@ import {
   useBalanceSheetLedgerStore,
 } from "@/store/balance-sheet-ledger-store";
 import type { CashBankAccount, CashBankTransaction } from "@/store/cash-bank-store";
-import { useCashBankStore } from "@/store/cash-bank-store";
+import { normalizeCashBankAccounts, useCashBankStore } from "@/store/cash-bank-store";
 import { useCommunicationStore } from "@/store/communication-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useDashboardStatsStore } from "@/store/dashboard-stats-store";
@@ -344,7 +344,9 @@ async function loadOne(resource: DomainResource): Promise<void> {
         transactions?: CashBankTransaction[];
       }>("cashBank");
       useCashBankStore.setState({
-        accounts: Array.isArray(cashBank?.accounts) ? cashBank.accounts : [],
+        accounts: Array.isArray(cashBank?.accounts)
+          ? normalizeCashBankAccounts(cashBank.accounts)
+          : [],
         transactions: Array.isArray(cashBank?.transactions) ? cashBank.transactions : [],
       });
       return;

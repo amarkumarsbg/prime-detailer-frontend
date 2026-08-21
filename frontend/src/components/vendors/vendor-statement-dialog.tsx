@@ -26,6 +26,7 @@ import {
   expensePayableAmount,
   type VendorSummary,
 } from "@/lib/vendors/vendor-metrics";
+import { buildVendorLedgerTransactions } from "@/lib/vendors/vendor-ledger-txns";
 
 export function VendorStatementDialog({
   vendor,
@@ -45,29 +46,12 @@ export function VendorStatementDialog({
     );
   }, [vendor]);
 
-  const ledger = useMemo(() => {
+  const ledgerTxns = useMemo(() => {
     if (!vendor) return [];
-    const purchaseRows = vendor.purchases.map((p) => ({
-      id: p.id,
-      at: p.purchasedAt,
-      kind: "Purchase" as const,
-      ref: p.purchaseNumber ?? p.reference ?? p.id,
-      total: purchaseGrandTotal(p),
-      paid: purchaseAmountPaid(p),
-      due: purchaseDue(p),
-    }));
-    const expenseRows = vendor.expenses.map((e) => ({
-      id: e.id,
-      at: e.date,
-      kind: "Expense" as const,
-      ref: e.title,
-      total: e.amount,
-      paid: expensePaidAmount(e),
-      due: expensePayableAmount(e),
-    }));
-    return [...purchaseRows, ...expenseRows].sort(
-      (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
-    );
+    return buildVendorLedgerTransactions({
+      purchases: vendor.purchases,
+      expenses: vendor.expenses,
+    });
   }, [vendor]);
 
   if (!vendor) return null;
@@ -179,34 +163,38 @@ export function VendorStatementDialog({
               </TabsContent>
 
               <TabsContent value="ledger" className="mt-4">
-                {ledger.length === 0 ? (
+                {ledgerTxns.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">No ledger entries yet.</p>
                 ) : (
                   <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
                     <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full min-w-[640px] text-sm">
+                    <table className="w-full min-w-[720px] text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
                           <th className="whitespace-nowrap px-3 py-2 font-medium">Date</th>
                           <th className="whitespace-nowrap px-3 py-2 font-medium">Type</th>
                           <th className="whitespace-nowrap px-3 py-2 font-medium">Reference</th>
-                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Total</th>
-                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Paid</th>
-                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Due</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-medium">Detail</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Debit</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Credit</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Balance</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {ledger.map((row) => (
-                          <tr key={`${row.kind}-${row.id}`} className="border-b border-border/60 last:border-0">
+                        {ledgerTxns.map((row) => (
+                          <tr key={row.id} className="border-b border-border/60 last:border-0">
                             <td className="px-3 py-2 text-muted-foreground">{formatDate(row.at)}</td>
-                            <td className="px-3 py-2">{row.kind}</td>
-                            <td className="px-3 py-2 font-medium">{row.ref}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.total)}</td>
+                            <td className="px-3 py-2">{row.type}</td>
+                            <td className="px-3 py-2 font-medium">{row.reference}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{row.detail ?? "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {row.debit > 0.01 ? formatCurrency(row.debit) : "—"}
+                            </td>
                             <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
-                              {formatCurrency(row.paid)}
+                              {row.credit > 0.01 ? formatCurrency(row.credit) : "—"}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
-                              {formatCurrency(row.due)}
+                              {formatCurrency(row.balance)}
                             </td>
                           </tr>
                         ))}
