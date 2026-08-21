@@ -82,7 +82,9 @@ export type JobServiceCategoryRef = {
 };
 
 /**
- * Unique non–high-end service categories present on a job (from catalog category ids).
+ * Unique service categories on a job (from catalog category ids).
+ * Skips catalog rows flagged `isHighEnd` (those use High-End Services month schedules).
+ * Category name alone (e.g. PPF / Ceramic) does not exclude a non–high-end service.
  */
 export function serviceCategoriesFromJobServices(
   services: ServiceItem[],
@@ -98,8 +100,6 @@ export function serviceCategoriesFromJobServices(
     const meta = categoryLabelById.get(catId);
     const name = meta?.name?.trim() || catId;
     const slug = meta?.slug?.trim() || catId;
-    if (isHighEndReminderCategory(slug, name)) continue;
-    if (isHighEndReminderCategory(catId, name)) continue;
     if (!out.has(catId)) {
       out.set(catId, { categoryId: catId, name, slug });
     }

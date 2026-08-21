@@ -107,7 +107,8 @@ import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
-import { useSettingsStore } from "@/store/settings-store";
+import { useSettingsStore } from "@/store/settings-store"
+import { averageServiceRewardPercent } from "@/lib/reward-category-rates";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -269,6 +270,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   } = useSettingsStore();
   const isGstRegistered = isGstRegisteredStatus(gstRegistrationStatus);
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
+
+  const rewardCategoryIncentivePercents = useSettingsStore((s) => s.rewardCategoryIncentivePercents);
+  const defaultMechanicIncentivePercent = useSettingsStore((s) => s.defaultMechanicIncentivePercent);
+  const highEndIncentivePercent = useSettingsStore((s) => s.highEndIncentivePercent);
+  const incentiveCapPerJob = useSettingsStore((s) => s.incentiveCapPerJob);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const addVehicle = useVehicleStore((s) => s.addVehicle);
@@ -1117,12 +1123,16 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   }, [serviceCatalog, selectedMainIds, selectedAddonIds]);
 
   const catalogAvgIncentivePercent = useMemo(() => {
-    if (selectedCatalogItems.length === 0) return 0;
-    return (
-      selectedCatalogItems.reduce((sum, s) => sum + s.incentivePercent, 0) /
-      selectedCatalogItems.length
-    );
-  }, [selectedCatalogItems]);
+    return averageServiceRewardPercent(selectedCatalogItems, rewardCategoryIncentivePercents, {
+      fallbackPercent: defaultMechanicIncentivePercent,
+      highEndPercent: highEndIncentivePercent,
+    });
+  }, [
+    selectedCatalogItems,
+    rewardCategoryIncentivePercents,
+    defaultMechanicIncentivePercent,
+    highEndIncentivePercent,
+  ]);
 
   useEffect(() => {
     setMechanicIncentivePercentOverride("");
@@ -1895,7 +1905,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       parts: jobCardPartItems.length > 0 ? jobCardPartItems : undefined,
       estimatedAmount,
       incentivePercent: Math.round(incentivePercentFinal * 100) / 100,
-      incentiveAmount: Math.round((estimatedAmount * incentivePercentFinal) / 100 * 100) / 100,
+      incentiveAmount: Math.min(
+        incentiveCapPerJob,
+        Math.round((estimatedAmount * incentivePercentFinal) / 100 * 100) / 100
+      ),
       termsAndConditions: termsWithAdvanceNote,
       notes: bookingNote,
       highEndServiceIds: selectedHighEndIds.length > 0 ? selectedHighEndIds : undefined,

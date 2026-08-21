@@ -170,10 +170,6 @@ export default function SettingsPage() {
 
   const [termsText, setTermsText] = useState(DEFAULT_TERMS);
 
-  const [mechanicIncentivePercent, setMechanicIncentivePercent] = useState("5");
-  const [highEndIncentivePercent, setHighEndIncentivePercent] = useState("10");
-  const [incentiveCapPerJob, setIncentiveCapPerJob] = useState("5000");
-
   const reminderLeadDays = useSettingsStore((s) => s.reminderLeadDays);
   const reminderPaymentFrequency = useSettingsStore((s) => s.reminderPaymentFrequency);
   const reminderCategoryFrequencies = useSettingsStore((s) => s.reminderCategoryFrequencies);
@@ -181,9 +177,18 @@ export default function SettingsPage() {
   const setReminderPaymentFrequency = useSettingsStore((s) => s.setReminderPaymentFrequency);
   const setReminderCategoryFrequency = useSettingsStore((s) => s.setReminderCategoryFrequency);
   const serviceCategories = useServiceCategoryStore((s) => s.categories);
-  const reminderServiceCategories = [...serviceCategories]
-    .filter((c) => !isHighEndReminderCategory(c.slug, c.name))
-    .sort((a, b) => a.order - b.order);
+  /** All Service → Categories rows (including PPF / Ceramic). */
+  const reminderServiceCategories = [...serviceCategories].sort((a, b) => a.order - b.order);
+
+  const rewardCategoryIncentivePercents = useSettingsStore((s) => s.rewardCategoryIncentivePercents);
+  const defaultMechanicIncentivePercent = useSettingsStore((s) => s.defaultMechanicIncentivePercent);
+  const highEndIncentivePercent = useSettingsStore((s) => s.highEndIncentivePercent);
+  const incentiveCapPerJobStored = useSettingsStore((s) => s.incentiveCapPerJob);
+  const setRewardCategoryIncentivePercent = useSettingsStore((s) => s.setRewardCategoryIncentivePercent);
+  const setDefaultMechanicIncentivePercent = useSettingsStore((s) => s.setDefaultMechanicIncentivePercent);
+  const setHighEndIncentivePercentStore = useSettingsStore((s) => s.setHighEndIncentivePercent);
+  const setIncentiveCapPerJobStore = useSettingsStore((s) => s.setIncentiveCapPerJob);
+  const rewardServiceCategories = [...serviceCategories].sort((a, b) => a.order - b.order);
 
   const [newHesName, setNewHesName] = useState("");
   const [newHesTotalYears, setNewHesTotalYears] = useState("5");
@@ -671,7 +676,63 @@ export default function SettingsPage() {
                     Worth ₹{(5000 / 100 * Number(earningRate) * Number(redemptionValue)).toFixed(2)} discount
                   </p>
                 </div>
-                <Button onClick={() => handleSave("Rewards configuration")}>
+                <Separator />
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Rewards by service category</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Staff incentive % applied to jobs that include services in each category.
+                      Categories come from{" "}
+                      <Link href="/services" className="text-primary underline-offset-2 hover:underline">
+                        Services → Categories
+                      </Link>
+                      . Per-service incentive on the catalog is used only when a category has no rate here.
+                    </p>
+                  </div>
+                  {rewardServiceCategories.length === 0 ? (
+                    <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-6 text-center">
+                      No service categories yet. Create them under Services → Categories to link rewards.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      {rewardServiceCategories.map((cat) => (
+                        <div
+                          key={cat.id}
+                          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-border/80 px-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{cat.name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{cat.slug}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                              className="w-24"
+                              value={String(
+                                rewardCategoryIncentivePercents[cat.id] ??
+                                  (isHighEndReminderCategory(cat.slug, cat.name)
+                                    ? highEndIncentivePercent
+                                    : defaultMechanicIncentivePercent)
+                              )}
+                              onChange={(e) =>
+                                setRewardCategoryIncentivePercent(cat.id, Number(e.target.value) || 0)
+                              }
+                            />
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">% incentive</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={() => {
+                    toast.success("Rewards configuration saved");
+                  }}
+                >
                   <Save className="w-4 h-4 mr-2" />Save Changes
                 </Button>
               </div>
@@ -721,16 +782,16 @@ export default function SettingsPage() {
                     <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />Default Mechanic Incentive (%)</Label>
                     <Input
                       type="number"
-                      value={mechanicIncentivePercent}
-                      onChange={(e) => setMechanicIncentivePercent(e.target.value)}
+                      value={String(defaultMechanicIncentivePercent)}
+                      onChange={(e) => setDefaultMechanicIncentivePercent(Number(e.target.value) || 0)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />High-end Service Incentive (%)</Label>
                     <Input
                       type="number"
-                      value={highEndIncentivePercent}
-                      onChange={(e) => setHighEndIncentivePercent(e.target.value)}
+                      value={String(highEndIncentivePercent)}
+                      onChange={(e) => setHighEndIncentivePercentStore(Number(e.target.value) || 0)}
                     />
                   </div>
                 </div>
@@ -738,10 +799,15 @@ export default function SettingsPage() {
                   <Label className="flex items-center gap-1.5"><IndianRupee className="w-3.5 h-3.5" />Incentive Cap per Job (₹)</Label>
                   <Input
                     type="number"
-                    value={incentiveCapPerJob}
-                    onChange={(e) => setIncentiveCapPerJob(e.target.value)}
+                    value={String(incentiveCapPerJobStored)}
+                    onChange={(e) => setIncentiveCapPerJobStore(Number(e.target.value) || 0)}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Per-category staff reward rates are configured under the{" "}
+                  <span className="font-medium text-foreground">Rewards</span> tab
+                  (Rewards by service category). Defaults above apply when a category has no rate.
+                </p>
                 <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-3 space-y-1.5 sm:col-span-2">
                   <Label className="flex items-center gap-1.5">
                     <Gift className="w-3.5 h-3.5" />
@@ -773,8 +839,8 @@ export default function SettingsPage() {
                 Reminder Settings
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Defaults for service-category and pending-payment reminders. PPF / Ceramic schedules
-                stay under High-End Services (custom month intervals).
+                Defaults for service-category and pending-payment reminders. Individual high-end
+                services can still use custom month schedules under High-End Services.
               </p>
             </CardHeader>
             <CardContent>
@@ -784,11 +850,11 @@ export default function SettingsPage() {
                     <div>
                       <p className="text-sm font-medium">Default intervals by service category</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Categories come from{" "}
+                        Shows every category from{" "}
                         <Link href="/services" className="text-primary underline-offset-2 hover:underline">
                           Services → Categories
                         </Link>
-                        . PPF / Ceramic stay under High-End Services.
+                        . High-end flagged services still use High-End Services schedules when delivered.
                       </p>
                     </div>
                   </div>

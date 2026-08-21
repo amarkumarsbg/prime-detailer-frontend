@@ -14,6 +14,10 @@ import {
   type SchedulableReminderFrequency,
 } from "@/lib/reminder-schedule";
 import type { ReminderType } from "@/types";
+import {
+  normalizeRewardCategoryIncentivePercents,
+  type RewardCategoryIncentivePercents,
+} from "@/lib/reward-category-rates";
 
 /** Keyed by Service Management category id (legacy ReminderType keys still accepted). */
 export type ReminderCategoryFrequencies = Record<string, SchedulableReminderFrequency>;
@@ -55,6 +59,14 @@ export interface SerializableAppSettings {
   reminderPaymentFrequency: SchedulableReminderFrequency;
   /** Default cadence per service category (high-end stays CUSTOM month lists). */
   reminderCategoryFrequencies: ReminderCategoryFrequencies;
+  /** Staff reward / incentive % keyed by Service Management category id. */
+  rewardCategoryIncentivePercents: RewardCategoryIncentivePercents;
+  /** Fallback mechanic incentive % when a category has no rate. */
+  defaultMechanicIncentivePercent: number;
+  /** Fallback incentive % for high-end services without a category rate. */
+  highEndIncentivePercent: number;
+  /** Cap on incentive amount per job (₹). */
+  incentiveCapPerJob: number;
   /** Company-wide accent (#RRGGBB). Drives --primary / sidebar active. */
   brandPrimary: string;
   /** Login page left-panel background image URL (optional). */
@@ -92,6 +104,10 @@ export const DEFAULT_SERIALIZABLE_APP_SETTINGS: SerializableAppSettings = {
   reminderLeadDays: 7,
   reminderPaymentFrequency: "MONTHLY",
   reminderCategoryFrequencies: { ...DEFAULT_REMINDER_CATEGORY_FREQUENCIES },
+  rewardCategoryIncentivePercents: {},
+  defaultMechanicIncentivePercent: 5,
+  highEndIncentivePercent: 10,
+  incentiveCapPerJob: 5000,
   brandPrimary: DEFAULT_BRAND_PRIMARY,
   loginBackgroundImage: "",
   loginHeroHeading: "",
@@ -135,6 +151,10 @@ function sliceSerializable(s: SerializableAppSettings): SerializableAppSettings 
     reminderLeadDays: s.reminderLeadDays,
     reminderPaymentFrequency: s.reminderPaymentFrequency,
     reminderCategoryFrequencies: { ...s.reminderCategoryFrequencies },
+    rewardCategoryIncentivePercents: { ...s.rewardCategoryIncentivePercents },
+    defaultMechanicIncentivePercent: s.defaultMechanicIncentivePercent,
+    highEndIncentivePercent: s.highEndIncentivePercent,
+    incentiveCapPerJob: s.incentiveCapPerJob,
     brandPrimary: s.brandPrimary,
     loginBackgroundImage: s.loginBackgroundImage,
     loginHeroHeading: s.loginHeroHeading,
@@ -200,6 +220,17 @@ export function mergeAppSettingsPayload(raw: unknown): Partial<SerializableAppSe
   if ("reminderCategoryFrequencies" in o) {
     next.reminderCategoryFrequencies = normalizeCategoryFrequencies(o.reminderCategoryFrequencies);
   }
+  if ("rewardCategoryIncentivePercents" in o) {
+    next.rewardCategoryIncentivePercents = normalizeRewardCategoryIncentivePercents(
+      o.rewardCategoryIncentivePercents
+    );
+  }
+  const dmi = num("defaultMechanicIncentivePercent");
+  if (dmi !== undefined) next.defaultMechanicIncentivePercent = Math.min(100, Math.max(0, dmi));
+  const hei = num("highEndIncentivePercent");
+  if (hei !== undefined) next.highEndIncentivePercent = Math.min(100, Math.max(0, hei));
+  const cap = num("incentiveCapPerJob");
+  if (cap !== undefined) next.incentiveCapPerJob = Math.max(0, cap);
   const brandRaw = str("brandPrimary");
   if (brandRaw !== undefined) {
     next.brandPrimary = normalizeHex(brandRaw) ?? DEFAULT_BRAND_PRIMARY;
@@ -254,6 +285,10 @@ interface SettingsState extends SerializableAppSettings {
     frequency: SchedulableReminderFrequency
   ) => void;
   setReminderCategoryFrequencies: (map: ReminderCategoryFrequencies) => void;
+  setRewardCategoryIncentivePercent: (categoryId: string, percent: number) => void;
+  setDefaultMechanicIncentivePercent: (percent: number) => void;
+  setHighEndIncentivePercent: (percent: number) => void;
+  setIncentiveCapPerJob: (amount: number) => void;
   setBrandPrimary: (hex: string) => boolean;
   patchFromBootstrap: (patch: Partial<SerializableAppSettings>) => void;
 }
@@ -322,6 +357,41 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({
       reminderCategoryFrequencies: normalizeCategoryFrequencies(reminderCategoryFrequencies),
     });
+    scheduleAppSettingsSync(get);
+  },
+
+  setRewardCategoryIncentivePercent: (categoryId, percent) => {
+    const id = categoryId.trim();
+    if (!id) return;
+    const n = Math.min(100, Math.max(0, Math.round(Number(percent) * 100) / 100));
+    if (!Number.isFinite(n)) return;
+    set((state) => ({
+      rewardCategoryIncentivePercents: {
+        ...state.rewardCategoryIncentivePercents,
+        [id]: n,
+      },
+    }));
+    scheduleAppSettingsSync(get);
+  },
+
+  setDefaultMechanicIncentivePercent: (percent) => {
+    const n = Math.min(100, Math.max(0, Math.round(Number(percent) * 100) / 100));
+    if (!Number.isFinite(n)) return;
+    set({ defaultMechanicIncentivePercent: n });
+    scheduleAppSettingsSync(get);
+  },
+
+  setHighEndIncentivePercent: (percent) => {
+    const n = Math.min(100, Math.max(0, Math.round(Number(percent) * 100) / 100));
+    if (!Number.isFinite(n)) return;
+    set({ highEndIncentivePercent: n });
+    scheduleAppSettingsSync(get);
+  },
+
+  setIncentiveCapPerJob: (amount) => {
+    const n = Math.max(0, Math.round(Number(amount) * 100) / 100);
+    if (!Number.isFinite(n)) return;
+    set({ incentiveCapPerJob: n });
     scheduleAppSettingsSync(get);
   },
 
