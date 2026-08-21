@@ -2150,8 +2150,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (!isJobCard) {
       s.push("pickupDrop");
     }
-    s.push("mechanic");
     if (isJobCard) {
+      s.push("mechanic");
       s.push("notesAndJobDetails", "jobSummary");
     } else {
       s.push("notes", "jobSummary");
@@ -2499,22 +2499,24 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           </div>
         )}
 
-        <div className="rounded-lg border border-border/80 bg-card p-3">
-          <div className="mb-1.5 flex items-start justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mechanic</p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => goToJobWizardStep("mechanic")}
-            >
-              <Pencil className="mr-1 h-3 w-3" />
-              Edit
-            </Button>
+        {isJobCard && (
+          <div className="rounded-lg border border-border/80 bg-card p-3">
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mechanic</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => goToJobWizardStep("mechanic")}
+              >
+                <Pencil className="mr-1 h-3 w-3" />
+                Edit
+              </Button>
+            </div>
+            <p>{selectedMechanicName}</p>
           </div>
-          <p>{selectedMechanicName}</p>
-        </div>
+        )}
 
         {!isJobCard && (
           <div className="rounded-lg border border-border/80 bg-card p-3">

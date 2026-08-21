@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
+import { AddVehicleInlineForm, type AddVehicleInlineFormHandle } from "@/components/vehicles/add-vehicle-inline-form";
+import type { AddVehicleFormData } from "@/components/vehicles/add-vehicle-form-types";
 import { PageSkeleton } from "@/components/shared/skeleton-loader";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { Button } from "@/components/ui/button";
@@ -163,6 +165,7 @@ export default function PickupDropPage() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment>("HATCHBACK");
   const [odometerReading, setOdometerReading] = useState("");
+  const inlineVehicleFormRef = useRef<AddVehicleInlineFormHandle | null>(null);
 
   const [extraBrands, setExtraBrands] = useState<string[]>([]);
   const [extraModelsByBrand, setExtraModelsByBrand] = useState<Record<string, string[]>>({});
@@ -203,7 +206,7 @@ export default function PickupDropPage() {
     return true;
   };
 
-  const validateVehicleStep = () => {
+  const validateVehicleStep = async () => {
     if (hasExistingCustomer) {
       if (!selectedVehicleId) {
         toast.error("Select a vehicle or add a new one.");
@@ -211,20 +214,36 @@ export default function PickupDropPage() {
       }
       return true;
     }
-    const reg = vehicleReg.trim().toUpperCase();
-    const make = vehicleMake.trim();
-    const model = vehicleModel.trim();
-    if (!reg || !make || !model) {
-      toast.error("Enter vehicle registration, make, and model.");
-      return false;
-    }
-    if (!isValidIndianVehicleRegistration(reg)) {
-      toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
-      return false;
-    }
-    const dup = findVehicleByNormalizedReg(vehicles, reg);
-    if (dup) {
-      toast.error(`${dup.registrationNumber} is already in the system.`);
+
+    if (inlineVehicleFormRef.current) {
+      const ok = await inlineVehicleFormRef.current.validate();
+      if (!ok) {
+        toast.error("Complete vehicle details to continue.");
+        return false;
+      }
+      const vals = inlineVehicleFormRef.current.getValues();
+      const reg = vals.registrationNumber.trim().toUpperCase();
+      if (!reg || !vals.make.trim() || !vals.model.trim()) {
+        toast.error("Enter vehicle registration, make, and model.");
+        return false;
+      }
+      if (!vals.isVin && !isValidIndianVehicleRegistration(reg)) {
+        toast.error("Invalid vehicle registration", { description: INDIAN_VEHICLE_REG_HINT });
+        return false;
+      }
+      const dup = findVehicleByNormalizedReg(vehicles, reg);
+      if (dup) {
+        toast.error(`${dup.registrationNumber} is already in the system.`);
+        return false;
+      }
+      setNewVehicleFormData(vals);
+      setVehicleReg(reg);
+      setVehicleMake(vals.make);
+      setVehicleModel(vals.model);
+      setVehicleSegment(vals.segment);
+      setOdometerReading(vals.odometer ? String(vals.odometer) : "");
+    } else {
+      toast.error("Vehicle details form not loaded.");
       return false;
     }
     return true;
@@ -245,6 +264,7 @@ export default function PickupDropPage() {
 
   const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [newVehicleFormData, setNewVehicleFormData] = useState<any | null>(null);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
@@ -596,13 +616,18 @@ export default function PickupDropPage() {
           id: vehId,
           customerId: custId,
           customerName: customerNameStr,
-          registrationNumber: vehicleRegNumberStr,
-          make: vehicleMake,
-          model: vehicleModel,
-          segment: vehicleSegment,
-          fuelType: "PETROL",
-          color: "—",
-          year: new Date().getFullYear(),
+          registrationNumber: newVehicleFormData?.registrationNumber || vehicleRegNumberStr,
+          make: newVehicleFormData?.make || vehicleMake,
+          model: newVehicleFormData?.model || vehicleModel,
+          segment: newVehicleFormData?.segment || vehicleSegment,
+          fuelType: newVehicleFormData?.fuelType || "PETROL",
+          color: newVehicleFormData?.color || "—",
+          year: newVehicleFormData?.year != null ? Number(newVehicleFormData.year) : new Date().getFullYear(),
+          notes: newVehicleFormData?.notes || undefined,
+          insuranceProvider: newVehicleFormData?.insuranceProvider || undefined,
+          insurancePolicyNumber: newVehicleFormData?.insurancePolicyNumber || undefined,
+          insuranceDueDate: newVehicleFormData?.insuranceDueDate || undefined,
+          ...(newVehicleFormData?.isVin ? { vinNumber: newVehicleFormData.registrationNumber } : {}),
           ...(Number.isFinite(odoParsed) && odoParsed > 0 ? { odometer: odoParsed } : {}),
         });
         if (!added) {
@@ -1171,128 +1196,11 @@ export default function PickupDropPage() {
                 ) : (
                   <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
                     <p className="text-sm font-semibold">New Vehicle Details</p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <Label htmlFor="pd-new-reg" className="text-xs">Registration Number *</Label>
-                        <Input
-                          id="pd-new-reg"
-                          value={vehicleReg}
-                          onChange={(e) => setVehicleReg(e.target.value.toUpperCase())}
-                          placeholder="e.g. KA01AB1234"
-                          maxLength={16}
-                          className="font-mono uppercase h-9 border-input"
-                        />
-                        <p className="text-[10px] text-muted-foreground">{INDIAN_VEHICLE_REG_HINT}</p>
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <Label htmlFor="pd-new-odometer" className="text-xs">
-                          Odometer (km)
-                        </Label>
-                        <Input
-                          id="pd-new-odometer"
-                          type="number"
-                          inputMode="numeric"
-                          placeholder="e.g. 45200"
-                          value={odometerReading}
-                          onChange={(e) => setOdometerReading(e.target.value)}
-                          className="h-9 max-w-xs border-input"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="pd-new-seg" className="text-xs">Type</Label>
-                        <Select
-                          value={vehicleSegment}
-                          onValueChange={(v) => setVehicleSegment(v as VehicleSegment)}
-                        >
-                          <SelectTrigger id="pd-new-seg" className="h-9 border-input">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="HATCHBACK">Hatchback</SelectItem>
-                            <SelectItem value="SEDAN">Sedan</SelectItem>
-                            <SelectItem value="COMPACT_SUV">Compact SUV</SelectItem>
-                            <SelectItem value="SUV">SUV</SelectItem>
-                            <SelectItem value="LUXURY">Luxury</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <Label htmlFor="pd-new-make" className="text-xs">Brand *</Label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-6 shrink-0 border-sky-300 bg-white px-2 text-[10px] font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-                            onClick={() => {
-                              setNewBrandOpen(true);
-                              setNewBrandDraft("");
-                            }}
-                          >
-                            + New
-                          </Button>
-                        </div>
-                        <Select
-                          value={vehicleMake || undefined}
-                          onValueChange={(value) => {
-                            setVehicleMake(value);
-                            setVehicleModel("");
-                          }}
-                        >
-                          <SelectTrigger id="pd-new-make" className="h-9 border-input">
-                            <SelectValue placeholder="Select brand" />
-                          </SelectTrigger>
-                          <SelectContent className={selectContentClass}>
-                            {allBrandsSorted.map((brand) => (
-                              <SelectItem key={brand} value={brand}>
-                                {brand}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <Label htmlFor="pd-new-model" className="text-xs">Model *</Label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={!vehicleMake}
-                            className="h-6 shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
-                            onClick={() => {
-                              if (!vehicleMake) return;
-                              setNewModelOpen(true);
-                              setNewModelDraft("");
-                            }}
-                          >
-                            + New
-                          </Button>
-                        </div>
-                        <Select
-                          value={vehicleModel || undefined}
-                          onValueChange={(value) => {
-                            setVehicleModel(value);
-                            const inferredSegment = getModelSegment(vehicleMake, value);
-                            if (inferredSegment) {
-                              setVehicleSegment(inferredSegment);
-                            }
-                          }}
-                          disabled={!vehicleMake}
-                        >
-                          <SelectTrigger id="pd-new-model" className="h-9 border-input">
-                            <SelectValue placeholder={vehicleMake ? "Select model" : "Select brand first"} />
-                          </SelectTrigger>
-                          <SelectContent className={selectContentClass}>
-                            {allModelsSorted.map((model) => (
-                              <SelectItem key={model} value={model}>
-                                {model}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                    <AddVehicleInlineForm
+                      lockedCustomerId={existingCustomerId ?? ""}
+                      idPrefix="pd-inline-veh"
+                      formRef={inlineVehicleFormRef}
+                    />
                   </div>
                 )}
               </div>
@@ -1549,8 +1457,9 @@ export default function PickupDropPage() {
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => {
-                    if (validateVehicleStep()) {
+                  onClick={async () => {
+                    const isValid = await validateVehicleStep();
+                    if (isValid) {
                       const addr = fallbackCustomerAddress;
                       if (addr) {
                         setPickupAddress((prev) => prev.trim() || addr);
