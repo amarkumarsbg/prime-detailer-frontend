@@ -163,6 +163,11 @@ async function main() {
       status: "ACTIVE",
       limits: { maxBranches: maxBranchesForDemo },
       maxBranchesOverride: null,
+      termMonths: 12,
+      startsAt: new Date(),
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      paymentStatus: "PAID",
       contactUsUrl:
         process.env.DEFAULT_CONTACT_US_URL?.trim() ||
         "mailto:support@primedetailers.in?subject=Branch%20limit%20help",
@@ -177,6 +182,8 @@ async function main() {
       status: "ACTIVE",
       limits: { maxBranches: maxBranchesForDemo },
       maxBranchesOverride: null,
+      termMonths: 12,
+      paymentStatus: "PAID",
       contactUsUrl:
         process.env.DEFAULT_CONTACT_US_URL?.trim() ||
         "mailto:support@primedetailers.in?subject=Branch%20limit%20help",
@@ -187,6 +194,22 @@ async function main() {
     },
   });
 
+  // Ensure demo org always has a usable expiry window (do not wipe a shorter admin-set window).
+  const demoSub = await prisma.organizationSubscription.findUnique({
+    where: { organizationId: orgId },
+  });
+  if (demoSub && !demoSub.expiresAt && !demoSub.currentPeriodEnd) {
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    await prisma.organizationSubscription.update({
+      where: { organizationId: orgId },
+      data: {
+        startsAt: demoSub.startsAt ?? new Date(),
+        expiresAt,
+        currentPeriodEnd: expiresAt,
+        termMonths: demoSub.termMonths || 12,
+      },
+    });
+  }
   for (const b of seedBranches) {
     await prisma.branch.upsert({
       where: { id: b.id },
@@ -246,7 +269,9 @@ async function main() {
     "VENDORS",
     "STAFF",
     "ATTENDANCE",
+    "LEAVE",
     "PAYROLL",
+    "STAFF_REWARDS",
     "SERVICES",
     "INVENTORY",
     "BRANCHES",

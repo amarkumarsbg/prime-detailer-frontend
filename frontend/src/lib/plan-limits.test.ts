@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   branchLimitLabel,
   canCreateBranchFromEntitlement,
+  canExportDataFromEntitlement,
   isAtOrOverBranchLimit,
   isUnlimitedBranches,
 } from "./plan-limits";
@@ -12,10 +13,12 @@ function entitlement(
     max?: number | null;
     used?: number;
     canCreate?: boolean;
+    exportLocked?: boolean;
   }
 ): OrganizationEntitlement {
   const max = partial.max === undefined ? 1 : partial.max;
   const used = partial.used ?? 0;
+  const exportLocked = partial.exportLocked ?? false;
   return {
     organization: { id: "org-1", name: "Studio", slug: "studio" },
     subscription: {
@@ -29,9 +32,12 @@ function entitlement(
       contactPhone: null,
       upgradeUrl: null,
       currentPeriodEnd: null,
+      expiresAt: null,
+      exportLocked,
     },
     usage: { branchesUsed: used },
     canCreateBranch: partial.canCreate ?? (max === null || used < max),
+    canExportData: !exportLocked,
     ...partial,
   };
 }
@@ -63,5 +69,10 @@ describe("plan-limits", () => {
   it("fails closed when entitlement missing", () => {
     expect(canCreateBranchFromEntitlement(null)).toBe(false);
     expect(isAtOrOverBranchLimit(null)).toBe(true);
+  });
+
+  it("gates exports from entitlement", () => {
+    expect(canExportDataFromEntitlement(entitlement({ exportLocked: false }))).toBe(true);
+    expect(canExportDataFromEntitlement(entitlement({ exportLocked: true }))).toBe(false);
   });
 });

@@ -20,6 +20,9 @@ export const ARRAY_JSON_COLLECTIONS = [
   "notifications",
   "pickupDropRequests",
   "communications",
+  "leaveRequests",
+  "staffRewardLedger",
+  "staffTargets",
 ] as const;
 
 export type ArrayJsonCollection = (typeof ARRAY_JSON_COLLECTIONS)[number];
@@ -37,6 +40,8 @@ export const SINGLETON_COLLECTIONS = [
   "highEndServices",
   "reportSchedules",
   "vehicleCatalog",
+  "leaveConfig",
+  "staffRewardSettings",
 ] as const;
 
 export type SingletonCollection = (typeof SINGLETON_COLLECTIONS)[number];

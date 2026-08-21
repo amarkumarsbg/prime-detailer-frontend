@@ -64,6 +64,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 import type { Party, PartyTransactionRow } from "@/types/party";
 import { appendReturnTo, partyDetailReturnPath } from "@/lib/navigation/return-to";
 import {
@@ -175,6 +176,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   );
 
   const downloadCsv = () => {
+    if (!assertCanExportData()) return;
     if (!party || !statement.length) {
       toast.error("Nothing to export");
       return;
@@ -197,6 +199,7 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
   };
 
   const downloadItemWiseCsv = () => {
+    if (!assertCanExportData()) return;
     if (!party || itemWise.length === 0) {
       toast.error("Nothing to export");
       return;
@@ -496,7 +499,10 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                   variant="outline"
                   size="sm"
                   className="h-9 flex-1 sm:flex-none sm:w-auto"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (!assertCanExportData()) return;
+                    window.print();
+                  }}
                 >
                   <Printer className="mr-1 h-4 w-4" />
                   Print
@@ -607,7 +613,10 @@ export function PartyDetailClient({ partyId }: PartyDetailClientProps) {
                   variant="outline"
                   size="sm"
                   className="h-9 flex-1 sm:flex-none"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (!assertCanExportData()) return;
+                    window.print();
+                  }}
                 >
                   <Printer className="mr-1 h-4 w-4" />
                   Print

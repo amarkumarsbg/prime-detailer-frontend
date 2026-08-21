@@ -55,6 +55,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 
 function categoryLabel(c: string): string {
   if (/^[A-Z_]+$/.test(c)) {
@@ -86,6 +87,7 @@ function statusBadgeVariant(
 }
 
 function exportCsv(rows: Expense[]) {
+  if (!assertCanExportData()) return;
   const headers = [
     "Date",
     "Title",

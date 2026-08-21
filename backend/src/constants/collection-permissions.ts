@@ -39,6 +39,11 @@ export const COLLECTION_PERMISSION_MAP: Record<string, string> = {
   highEndServices: "SERVICES",
   reportSchedules: "ADVANCED_REPORTS",
   vehicleCatalog: "VEHICLES",
+  leaveRequests: "LEAVE",
+  leaveConfig: "LEAVE",
+  staffRewardLedger: "STAFF_REWARDS",
+  staffTargets: "STAFF_REWARDS",
+  staffRewardSettings: "STAFF_REWARDS",
 };
 
 /** Returns the permission key for a known collection, or null if unmapped/unknown. */

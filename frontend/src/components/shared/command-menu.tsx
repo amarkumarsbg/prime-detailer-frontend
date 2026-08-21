@@ -25,11 +25,13 @@ import {
   Package,
   Search,
   QrCode,
+  CalendarOff,
   TrendingUp,
   FileBarChart,
   Gift,
   Building2,
   IndianRupee,
+  Trophy,
 } from "lucide-react";
 
 interface CommandMenuProps {
@@ -63,7 +65,21 @@ const NAV_PAGES: NavPageItem[] = [
     permissionKey: "REPORTS",
   },
   { name: "Appointments", href: "/appointments", icon: Calendar, permissionKey: "APPOINTMENTS" },
-  { name: "Attendance", href: "/attendance", icon: QrCode, roles: ["ADMIN", "MANAGER"], permissionKey: "ATTENDANCE" },
+  {
+    name: "Attendance",
+    href: "/attendance",
+    icon: QrCode,
+    roles: ["ADMIN", "MANAGER"],
+    permissionKey: "ATTENDANCE",
+  },
+  { name: "Leave", href: "/leave", icon: CalendarOff, permissionKey: "LEAVE" },
+  {
+    name: "Rewards",
+    href: "/rewards",
+    icon: Trophy,
+    roles: ["ADMIN", "MANAGER", "BRANCH_MANAGER"],
+    permissionKey: "STAFF_REWARDS",
+  },
   {
     name: "Performance",
     href: "/performance",

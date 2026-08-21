@@ -28,6 +28,7 @@ import { customerPartyId } from "@/lib/share-customer-ledger";
 import { cn, formatInrTable } from "@/lib/utils";
 import type { PaymentMethod } from "@/types";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 
 function formatPaymentDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -109,7 +110,10 @@ export function PaymentInDetailClient({ paymentId }: PaymentInDetailClientProps)
 
   const bankLabel = payment.method === "CASH" ? "—" : receivedIn;
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    if (!assertCanExportData()) return;
+    window.print();
+  };
 
   return (
     <div className="space-y-4 print:space-y-2">

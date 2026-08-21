@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import type { Customer, Invoice, JobCard } from "@/types";
 import { formatInrFull } from "@/lib/utils";
+import { requireCanExportData } from "@/lib/assert-can-export";
 
 const NAVY: [number, number, number] = [26, 35, 74];
 const KPI_BLUE: [number, number, number] = [79, 70, 186];
@@ -44,6 +45,7 @@ export function downloadRevenuePerformancePdf(opts: {
   rangeEnd?: Date;
   jobCards: JobCard[];
 }): void {
+  requireCanExportData();
   const { businessName, jobCards } = opts;
   const end = new Date(opts.rangeEnd ?? new Date());
   end.setHours(23, 59, 59, 999);
@@ -189,6 +191,7 @@ export function downloadCustomerLifetimeAnalysisPdf(opts: {
   invoices: Invoice[];
   jobCards: JobCard[];
 }): void {
+  requireCanExportData();
   const { businessName, activeOnly, customers, invoices, jobCards } = opts;
 
   const totalDatabase = customers.length;
@@ -324,6 +327,7 @@ export function downloadSimpleTablePdf(opts: {
   kpis?: { label: string; value: string }[];
   fileSlug: string;
 }): void {
+  requireCanExportData();
   const { businessName, title, periodNote, columns, rows, kpis, fileSlug } = opts;
   const generatedLabel = `${format(new Date(), "dd MMMM, yyyy · hh:mm a")}`;
   const doc = new jsPDF({ unit: "mm", format: "a4" });

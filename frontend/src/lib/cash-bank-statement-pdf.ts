@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import type { CashBankTransaction } from "@/store/cash-bank-store";
+import { requireCanExportData } from "@/lib/assert-can-export";
 
 const SLATE: [number, number, number] = [15, 23, 42];
 const MUTED: [number, number, number] = [71, 85, 105];
@@ -69,6 +70,7 @@ export function downloadCashBankStatementPdf(opts: {
   /** Used when there are no transactions in range (opening row only). */
   fallbackBalance: number;
 }): void {
+  requireCanExportData();
   const {
     businessName,
     businessPhone,

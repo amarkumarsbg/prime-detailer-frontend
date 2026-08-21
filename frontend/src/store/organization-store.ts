@@ -3,7 +3,11 @@
 import { create } from "zustand";
 import type { OrganizationEntitlement } from "@/types";
 import { apiGet } from "@/lib/api-client";
-import { canCreateBranchFromEntitlement, isAtOrOverBranchLimit } from "@/lib/plan-limits";
+import {
+  canCreateBranchFromEntitlement,
+  canExportDataFromEntitlement,
+  isAtOrOverBranchLimit,
+} from "@/lib/plan-limits";
 
 interface OrganizationStore {
   entitlement: OrganizationEntitlement | null;
@@ -11,6 +15,7 @@ interface OrganizationStore {
   refreshEntitlement: () => Promise<OrganizationEntitlement | null>;
   canAddBranch: () => boolean;
   isAtBranchLimit: () => boolean;
+  canExport: () => boolean;
 }
 
 export const useOrganizationStore = create<OrganizationStore>((set, get) => ({
@@ -32,4 +37,6 @@ export const useOrganizationStore = create<OrganizationStore>((set, get) => ({
   canAddBranch: () => canCreateBranchFromEntitlement(get().entitlement),
 
   isAtBranchLimit: () => isAtOrOverBranchLimit(get().entitlement),
+
+  canExport: () => canExportDataFromEntitlement(get().entitlement),
 }));

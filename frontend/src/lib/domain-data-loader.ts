@@ -71,6 +71,16 @@ import {
 import type { Notification } from "@/store/notification-store";
 import { useNotificationStore } from "@/store/notification-store";
 import { usePayrollStore } from "@/store/payroll-store";
+import { hydrateLeaveStore } from "@/store/leave-store";
+import { hydrateStaffRewardStore } from "@/store/staff-reward-store";
+import type {
+  LeaveBalance,
+  LeaveRequest,
+  LeaveType,
+  StaffRewardLedgerEntry,
+  StaffRewardSettings,
+  StaffTarget,
+} from "@/types";
 import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useQuotationStore } from "@/store/quotation-store";
 import {
@@ -409,6 +419,30 @@ async function loadOne(resource: DomainResource): Promise<void> {
       });
       return;
     }
+
+    case "leave": {
+      const [config, requests] = await Promise.all([
+        getSingleton<{ leaveTypes?: LeaveType[]; balances?: LeaveBalance[] }>("leaveConfig"),
+        getCollectionItems<LeaveRequest>("leaveRequests"),
+      ]);
+      hydrateLeaveStore({
+        leaveTypes: config?.leaveTypes,
+        balances: config?.balances,
+        requests,
+      });
+      break;
+    }
+
+    case "staffRewards": {
+      const [settings, ledger, targets] = await Promise.all([
+        getSingleton<StaffRewardSettings>("staffRewardSettings"),
+        getCollectionItems<StaffRewardLedgerEntry>("staffRewardLedger"),
+        getCollectionItems<StaffTarget>("staffTargets"),
+      ]);
+      hydrateStaffRewardStore({ settings, ledger, targets });
+      break;
+    }
+
     case "membership": {
       const membership = await getSingleton<{
         packages?: MembershipPackage[];

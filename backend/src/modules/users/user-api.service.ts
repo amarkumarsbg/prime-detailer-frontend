@@ -34,12 +34,25 @@ export function generateTemporaryPassword(): string {
   return chars.join("");
 }
 
+
+/** Trim; empty string becomes null (clears optional HR fields / unique employeeCode). */
+function nullIfEmpty(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 export function toApiUser(u: PrismaUser) {
   return {
     id: u.id,
     name: u.name,
     email: u.email,
     phone: u.phone,
+    employeeCode: u.employeeCode ?? undefined,
+    designation: u.designation ?? undefined,
+    department: u.department ?? undefined,
+    joiningDate: u.joiningDate ?? undefined,
     role: u.role,
     branchId: u.branchId,
     organizationId: u.organizationId,
@@ -51,6 +64,7 @@ export function toApiUser(u: PrismaUser) {
     totalIncentiveEarned: u.totalIncentiveEarned ?? undefined,
     birthday: u.birthday ?? undefined,
     anniversary: u.anniversary ?? undefined,
+    notes: u.notes ?? undefined,
     mustChangePassword: u.mustChangePassword === true ? true : undefined,
     passwordCreatedBy: u.passwordCreatedBy ?? undefined,
     passwordUpdatedAt: u.passwordUpdatedAt?.toISOString(),
@@ -127,6 +141,11 @@ export async function createUserApi(input: {
   totalIncentiveEarned?: number | null;
   birthday?: string | null;
   anniversary?: string | null;
+  employeeCode?: string | null;
+  designation?: string | null;
+  department?: string | null;
+  joiningDate?: string | null;
+  notes?: string | null;
   /** Creator `User.id` when provisioned by an authenticated admin. */
   createdById?: string | null;
   permissions?: string[];
@@ -163,10 +182,23 @@ export async function createUserApi(input: {
     attendancePin: input.attendancePin ?? null,
     totalJobsCompleted: input.totalJobsCompleted ?? null,
     totalIncentiveEarned: input.totalIncentiveEarned ?? null,
-    birthday: input.birthday ?? null,
-    anniversary: input.anniversary ?? null,
+    birthday: nullIfEmpty(input.birthday) ?? null,
+    anniversary: nullIfEmpty(input.anniversary) ?? null,
+    employeeCode: nullIfEmpty(input.employeeCode) ?? null,
+    designation: nullIfEmpty(input.designation) ?? null,
+    department: nullIfEmpty(input.department) ?? null,
+    joiningDate: nullIfEmpty(input.joiningDate) ?? null,
+    notes: nullIfEmpty(input.notes) ?? null,
     permissions: input.permissions ?? [],
   };
+
+  const code = data.employeeCode as string | null;
+  if (code) {
+    const clash = await prisma.user.findFirst({ where: { employeeCode: code } });
+    if (clash) {
+      throw AppError.validation("Employee code is already in use.");
+    }
+  }
 
   const row = await prisma.user.create({ data });
   return {
@@ -191,20 +223,41 @@ export async function updateUserApi(
     totalIncentiveEarned: number | null;
     birthday: string | null;
     anniversary: string | null;
+    employeeCode: string | null;
+    designation: string | null;
+    department: string | null;
+    joiningDate: string | null;
+    notes: string | null;
     permissions: string[];
   }>
 ): Promise<ReturnType<typeof toApiUser> | null> {
   try {
     const data: Prisma.UserUncheckedUpdateInput = { ...patch };
     if (patch.email !== undefined) data.email = patch.email.toLowerCase();
+    if (patch.employeeCode !== undefined) data.employeeCode = nullIfEmpty(patch.employeeCode) ?? null;
+    if (patch.designation !== undefined) data.designation = nullIfEmpty(patch.designation) ?? null;
+    if (patch.department !== undefined) data.department = nullIfEmpty(patch.department) ?? null;
+    if (patch.joiningDate !== undefined) data.joiningDate = nullIfEmpty(patch.joiningDate) ?? null;
+    if (patch.notes !== undefined) data.notes = nullIfEmpty(patch.notes) ?? null;
+    if (patch.birthday !== undefined) data.birthday = nullIfEmpty(patch.birthday) ?? null;
+    if (patch.anniversary !== undefined) data.anniversary = nullIfEmpty(patch.anniversary) ?? null;
     if (patch.branchId !== undefined) {
       const branch = await prisma.branch.findUnique({ where: { id: patch.branchId } });
       if (!branch) return null;
       data.organizationId = branch.organizationId;
     }
+    if (typeof data.employeeCode === "string" && data.employeeCode) {
+      const clash = await prisma.user.findFirst({
+        where: { employeeCode: data.employeeCode, NOT: { id } },
+      });
+      if (clash) {
+        throw AppError.validation("Employee code is already in use.");
+      }
+    }
     const row = await prisma.user.update({ where: { id }, data });
     return toApiUser(row);
-  } catch {
+  } catch (e) {
+    if (e && typeof e === "object" && "statusCode" in e) throw e;
     return null;
   }
 }

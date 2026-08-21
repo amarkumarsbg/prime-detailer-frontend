@@ -32,6 +32,8 @@ export type DomainResource =
   | "expenseMeta"
   | "cashBank"
   | "payroll"
+  | "leave"
+  | "staffRewards"
   | "membership"
   | "appSettings"
   | "referralProgram"
@@ -71,10 +73,12 @@ const OPS_CORE: DomainResource[] = [
 
 /** Longest-prefix wins. */
 const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
-  { prefix: "/payroll", resources: ["payroll", "staff", "staffDirectory"] },
+  { prefix: "/payroll", resources: ["payroll", "staff", "staffDirectory", "staffRewards"] },
   { prefix: "/cash-bank", resources: ["cashBank", "invoices", "expenses"] },
   { prefix: "/staff", resources: ["staff", "customers", "jobCards"] },
   { prefix: "/attendance", resources: ["staffDirectory", "staff"] },
+  { prefix: "/leave", resources: ["leave", "staff", "staffDirectory"] },
+  { prefix: "/rewards", resources: ["staffRewards", "staff", "staffDirectory", "jobCards"] },
   { prefix: "/settings", resources: ["appSettings", "vehicleCatalog"] },
   {
     prefix: "/shared-ledger",
@@ -104,6 +108,10 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "cashBank",
       "balanceSheetManual",
       "staffDirectory",
+      "staff",
+      "leave",
+      "payroll",
+      "staffRewards",
     ],
   },
   {
@@ -197,7 +205,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
     resources: ["staffDirectory", "jobCards", "expenses", "pickupDropRequests", "payroll"],
   },
   { prefix: "/mechanics", resources: ["staffDirectory", "jobCards"] },
-  { prefix: "/performance", resources: ["staffDirectory", "jobCards"] },
+  { prefix: "/performance", resources: ["staffDirectory", "jobCards", "staffRewards"] },
   {
     prefix: "/notifications",
     resources: ["notifications", "jobCards", "invoices", "expenses", "pickupDropRequests"],
