@@ -40,6 +40,7 @@ import { PartiesListLoading } from "@/components/parties/party-loading-states";
 import { formatCurrency, formatInrTable } from "@/lib/utils";
 import { useBranchScope } from "@/lib/branch-scope";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -175,6 +176,7 @@ export function PartiesPageClient() {
   };
 
   const exportFilteredCsv = () => {
+    if (!assertCanExportData()) return;
     const rows = filtered.length ? filtered : partiesWithBalance;
     const header = "Party Name,Category,Mobile,Party Type,Balance\n";
     const body = rows

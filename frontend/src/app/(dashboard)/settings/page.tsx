@@ -29,7 +29,7 @@ import {
   dialogMobileSheetContentClasses,
   dialogMobileSheetHeaderClasses,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
 import {
   CATEGORY_REMINDER_TYPES,
@@ -80,7 +80,13 @@ import {
   resolveContactUsUrl,
   resolveSupportPhone,
 } from "@/lib/plan-limits";
+import {
+  formatPaymentStatus,
+  termLabelFromMonths,
+} from "@/lib/subscription-export-lock";
 import { PlanCtaButton } from "@/components/billing/plan-cta-link";
+import { SubscriptionBillsSection } from "@/components/billing/subscription-bills-section";
+import { SubscriptionRenewDialog } from "@/components/billing/subscription-renew-banner";
 
 const DEFAULT_TERMS = `1. Vehicle will be kept in secure parking during service.
 2. Not responsible for valuables left in vehicle.
@@ -119,6 +125,7 @@ export default function SettingsPage() {
   const settings = useSettingsStore();
   const entitlement = useOrganizationStore((s) => s.entitlement);
   const refreshEntitlement = useOrganizationStore((s) => s.refreshEntitlement);
+  const [renewOpen, setRenewOpen] = useState(false);
   const highEndStore = useHighEndServiceStore();
   const vehicleCatalog = useVehicleCatalogStore();
   const [newBrandName, setNewBrandName] = useState("");
@@ -372,10 +379,28 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               {entitlement ? (
                 <>
-                  <div className="grid gap-3 sm:grid-cols-3 text-sm">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
                     <div>
                       <p className="text-muted-foreground">Current plan</p>
                       <p className="font-medium">{entitlement.subscription.planName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Term</p>
+                      <p className="font-medium">
+                        {termLabelFromMonths(entitlement.subscription.termMonths ?? 12)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Expires</p>
+                      <p className="font-medium">
+                        {entitlement.subscription.expiresAt ||
+                        entitlement.subscription.currentPeriodEnd
+                          ? formatDate(
+                              entitlement.subscription.expiresAt ??
+                                entitlement.subscription.currentPeriodEnd!
+                            )
+                          : "—"}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Branch usage</p>
@@ -385,15 +410,29 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Status</p>
-                      <p className="font-medium">{entitlement.subscription.status}</p>
+                      <p className="text-muted-foreground">Payment status</p>
+                      <p className="font-medium">
+                        {formatPaymentStatus(entitlement.subscription.paymentStatus)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Exports</p>
+                      <p className="font-medium">
+                        {entitlement.canExportData === false ||
+                        entitlement.subscription.exportLocked
+                          ? "Locked"
+                          : "Available"}
+                      </p>
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Plan limits are managed by your software provider. Contact support to add
-                    branches or upgrade.
+                    Your business data is never deleted when a subscription expires. Exports lock
+                    when 30 days or fewer remain until expiry.
                   </p>
                   <div className="flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => setRenewOpen(true)}>
+                      Renew subscription / Pay now
+                    </Button>
                     <PlanCtaButton
                       href={resolveContactUsUrl(entitlement)}
                       phone={resolveSupportPhone(entitlement)}
@@ -401,7 +440,15 @@ export default function SettingsPage() {
                     >
                       Contact support
                     </PlanCtaButton>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void refreshEntitlement()}
+                    >
+                      Refresh status
+                    </Button>
                   </div>
+                  <SubscriptionRenewDialog open={renewOpen} onOpenChange={setRenewOpen} />
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -495,6 +542,8 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+                <Separator />
+                <SubscriptionBillsSection />
                 <Separator />
                 <Button onClick={() => handleSave("Business profile")}>
                   <Save className="w-4 h-4 mr-2" />Save Changes

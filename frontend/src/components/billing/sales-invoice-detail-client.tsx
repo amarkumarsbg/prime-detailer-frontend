@@ -100,6 +100,7 @@ import { useReferralSettingsStore } from "@/store/referral-settings-store";
 import { DEFAULT_GST_RATE, isGstRegistered } from "@/lib/gst-tax";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
+import { assertCanExportData } from "@/lib/assert-can-export";
 import type { Invoice, InvoiceLineItem, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -1190,6 +1191,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   };
 
   const handlePrint = () => {
+    if (!assertCanExportData()) return;
     if (!invoicePdfOpts) return;
     const printWindow = window.open("", "_blank");
     if (!printWindow) {

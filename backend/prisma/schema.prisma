@@ -33,6 +33,13 @@ enum SubscriptionStatus {
   CANCELLED
 }
 
+enum SubscriptionPaymentStatus {
+  PAID
+  PENDING
+  PROCESSING
+  FAILED
+}
+
 model Organization {
   id                String                    @id
   name              String
@@ -57,6 +64,8 @@ model Organization {
   parties           Party[]
   appJsonRows       AppJsonRow[]
   platformAuditLogs PlatformAuditLog[]
+  subscriptionPayments SubscriptionPayment[]
+  subscriptionBills    SubscriptionBill[]
 }
 
 model PlatformAuditLog {
@@ -73,12 +82,12 @@ model PlatformAuditLog {
 }
 
 model OrganizationSubscription {
-  id                  String             @id @default(cuid())
-  organizationId      String             @unique
-  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                  String                    @id @default(cuid())
+  organizationId      String                    @unique
+  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   planCode            PlanCode
   planName            String
-  status              SubscriptionStatus @default(ACTIVE)
+  status              SubscriptionStatus        @default(ACTIVE)
   /**
    * Extensible caps; maxBranches null = unlimited
    */
@@ -90,9 +99,72 @@ model OrganizationSubscription {
    */
   contactPhone        String?
   upgradeUrl          String?
+  /**
+   * Term length in months: 12 / 24 / 36
+   */
+  termMonths          Int                       @default(12)
+  startsAt            DateTime?
+  /**
+   * End of paid period. Export lock when ≤30 days remain.
+   */
+  expiresAt           DateTime?
+  /**
+   * Legacy alias mirrored from expiresAt for older clients.
+   */
   currentPeriodEnd    DateTime?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  paymentStatus       SubscriptionPaymentStatus @default(PAID)
+  lastPaymentTxnId    String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  payments            SubscriptionPayment[]
+  bills               SubscriptionBill[]
+}
+
+model SubscriptionPayment {
+  id             String                    @id @default(cuid())
+  organizationId String
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   OrganizationSubscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  amount         Float?
+  currency       String                    @default("INR")
+  status         SubscriptionPaymentStatus @default(PENDING)
+  txnReference   String?
+  method         String?
+  notes          String?
+  recordedBy     String?
+  verifiedAt     DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  bill           SubscriptionBill?
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, createdAt])
+}
+
+model SubscriptionBill {
+  id             String                   @id @default(cuid())
+  organizationId String
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   OrganizationSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  paymentId      String?                  @unique
+  payment        SubscriptionPayment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  billNumber     String
+  planName       String
+  termMonths     Int
+  /**
+   * Human label e.g. "1 year", "2 years", "3 years"
+   */
+  termLabel      String
+  periodStart    DateTime
+  periodEnd      DateTime
+  amount         Float?
+  currency       String                   @default("INR")
+  createdAt      DateTime                 @default(now())
+
+  @@unique([organizationId, billNumber])
+  @@index([organizationId, createdAt])
 }
 
 enum VehicleSegment {

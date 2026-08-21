@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import type { StockMovement, Part } from "@/types";
 import { movementKindLabel } from "@/lib/inventory/movement-labels";
+import { requireCanExportData } from "@/lib/assert-can-export";
 
 export type InventoryHistoryExportRow = {
   date: string;
@@ -72,6 +73,7 @@ export function buildInventoryHistoryExportRows(
 }
 
 export async function downloadInventoryHistoryExcel(rows: InventoryHistoryExportRow[]): Promise<void> {
+  requireCanExportData();
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Prime Detailers";
@@ -107,6 +109,7 @@ export async function downloadInventoryHistoryExcel(rows: InventoryHistoryExport
 }
 
 export async function downloadInventoryHistoryPdf(rows: InventoryHistoryExportRow[]): Promise<void> {
+  requireCanExportData();
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),

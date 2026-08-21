@@ -7,6 +7,7 @@ import {
   getStoredPdfAttachment,
   persistInvoicePdf,
 } from "@/lib/invoice-pdf-storage";
+import { requireCanExportData } from "@/lib/assert-can-export";
 
 export type InvoicePdfOpts = TaxInvoiceDocumentOpts;
 
@@ -151,6 +152,7 @@ export async function buildInvoicePdfAttachment(opts: InvoicePdfOpts): Promise<{
 }
 
 export async function downloadInvoicePdf(opts: InvoicePdfOpts): Promise<void> {
+  requireCanExportData();
   const { filename, content } = await buildInvoicePdfAttachment(opts);
   const binary = atob(content);
   const bytes = new Uint8Array(binary.length);

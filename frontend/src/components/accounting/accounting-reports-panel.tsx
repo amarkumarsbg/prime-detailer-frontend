@@ -13,6 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { assertCanExportData } from "@/lib/assert-can-export";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
@@ -85,6 +86,7 @@ export function AccountingReportsPanel({
   const closingCash = Math.round((openingCashBalance + netOperating) * 100) / 100;
 
   const exportStub = (kind: "pdf" | "excel") => {
+    if (!assertCanExportData()) return;
     toast.success(kind === "pdf" ? "Export PDF queued." : "Export Excel queued.");
   };
 

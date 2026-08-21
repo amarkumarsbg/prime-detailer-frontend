@@ -16,6 +16,7 @@ import { NAV_GROUPS } from "@/lib/nav-items";
 import { canAccessNavItem } from "@/lib/rbac";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { cn } from "@/lib/utils";
+import { SubscriptionRenewBanner } from "@/components/billing/subscription-renew-banner";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -150,6 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       >
         <Header />
+        <SubscriptionRenewBanner />
         <main
           ref={mainScrollRef}
           className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 [scrollbar-gutter:stable]"
