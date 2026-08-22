@@ -434,25 +434,25 @@ export function getCompanyTargetResults(args: {
     const startYear = args.year;
     const QUARTERS = [
       {
-        label: "Monthly (Jan-Mar)",
+        label: "Monthly (January)",
         start: new Date(Date.UTC(startYear, 0, 1, 0, 0, 0, 0)),
         end: new Date(Date.UTC(startYear, 2, 31, 23, 59, 59, 999)),
         configKey: "MONTHLY",
       },
       {
-        label: "Quarterly (Apr-Jun)",
+        label: "Quarterly",
         start: new Date(Date.UTC(startYear, 3, 1, 0, 0, 0, 0)),
         end: new Date(Date.UTC(startYear, 5, 30, 23, 59, 59, 999)),
         configKey: "QUARTERLY",
       },
       {
-        label: "Half Yearly (Jul-Sep)",
+        label: "Half Yearly",
         start: new Date(Date.UTC(startYear, 6, 1, 0, 0, 0, 0)),
         end: new Date(Date.UTC(startYear, 8, 30, 23, 59, 59, 999)),
         configKey: "HALF_YEARLY",
       },
       {
-        label: "Yearly (Oct-Dec)",
+        label: "Yearly",
         start: new Date(Date.UTC(startYear, 9, 1, 0, 0, 0, 0)),
         end: new Date(Date.UTC(startYear, 11, 31, 23, 59, 59, 999)),
         configKey: "YEARLY",
@@ -543,11 +543,10 @@ export function getCompanyTargetResults(args: {
     const endMs = periodEnd.getTime() - 1;
 
     const actualEnd = new Date(endMs);
-    let label = "";
-    if (F === 1 && getMonthName(periodStart) === getMonthName(actualEnd)) {
-      label = `${slot.labelPrefix} (${getMonthName(periodStart)})`;
-    } else {
-      label = `${slot.labelPrefix} (${getMonthName(periodStart)}-${getMonthName(actualEnd)})`;
+    let label = slot.labelPrefix;
+    if (slot.configKey === "MONTHLY") {
+      const monthsFull = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      label = `${slot.labelPrefix} (${monthsFull[periodStart.getUTCMonth()]})`;
     }
 
     let notEligible = isNotJoinedYet;

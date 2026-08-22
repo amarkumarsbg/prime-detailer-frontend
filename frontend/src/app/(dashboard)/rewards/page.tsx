@@ -935,20 +935,7 @@ export default function RewardsPage() {
 
               <div className="space-y-1.5 col-span-2 sm:col-span-1">
                 <Label>Period Frequency</Label>
-                <Select
-                  value={settingsDraft.companyTargetPeriod || "MONTHLY"}
-                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                  onValueChange={(v) =>
-                    patchSettingsDraft("companyTargetPeriod", v as any)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MONTHLY">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input value="Monthly" disabled className="bg-muted" />
               </div>
 
               <div className="col-span-2 space-y-4">

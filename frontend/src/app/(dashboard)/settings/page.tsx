@@ -899,18 +899,7 @@ export default function SettingsPage() {
 
                     <div className="space-y-1.5">
                       <Label>Period Frequency</Label>
-                      <Select
-                        value={companyTargetPeriod}
-                        disabled={!companyTargetEnabled}
-                        onValueChange={(v) => setCompanyTargetPeriod(v as any)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="MONTHLY">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Input value="Monthly" disabled className="bg-muted" />
                     </div>
                   </div>
 

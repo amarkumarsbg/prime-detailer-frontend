@@ -17,6 +17,7 @@ import type {
   StaffRewardSettings,
   StaffTarget,
 } from "@/types";
+import { useStaffStore } from "@/store/staff-store";
 
 function persistSettings(settings: StaffRewardSettings): void {
   void putSingletonDocument("staffRewardSettings", settings).catch((err) => {
@@ -259,7 +260,16 @@ export const useStaffRewardStore = create<StaffRewardStoreState>((set, get) => (
     const toAdd: StaffRewardLedgerEntry[] = [];
     let skipped = 0;
 
+    const staffStoreStaff = useStaffStore.getState().staff;
+    const superAdminIds = new Set(
+      staffStoreStaff.filter((s) => s.role === "SUPER_ADMIN").map((s) => s.id)
+    );
+
     for (const draft of drafts) {
+      if (superAdminIds.has(draft.staffId)) {
+        skipped += 1;
+        continue;
+      }
       if (existingKeys.has(draft.idempotencyKey)) {
         skipped += 1;
         continue;

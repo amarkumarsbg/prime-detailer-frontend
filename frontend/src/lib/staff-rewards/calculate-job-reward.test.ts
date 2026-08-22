@@ -111,7 +111,7 @@ describe("getCompanyTargetResults", () => {
     });
 
     expect(results).toHaveLength(4);
-    expect(results[0].periodLabel).toBe("Monthly (Jan-Mar)");
+    expect(results[0].periodLabel).toBe("Monthly (January)");
     expect(results[0].revenue).toBe(10000);
     expect(results[0].rewardPercent).toBe(10);
     expect(results[0].totalReward).toBe(1000);
@@ -141,11 +141,11 @@ describe("getCompanyTargetResults", () => {
     });
 
     expect(results).toHaveLength(4);
-    expect(results[0].periodLabel).toBe("Monthly (Aug)");
+    expect(results[0].periodLabel).toBe("Monthly (August)");
     expect(results[0].notEligible).toBeUndefined();
-    expect(results[1].periodLabel).toBe("Quarterly (Aug-Oct)");
-    expect(results[2].periodLabel).toBe("Half Yearly (Aug-Jan)");
-    expect(results[3].periodLabel).toBe("Yearly (Aug-Jul)");
+    expect(results[1].periodLabel).toBe("Quarterly");
+    expect(results[2].periodLabel).toBe("Half Yearly");
+    expect(results[3].periodLabel).toBe("Yearly");
   });
 
   it("Joining 15 Aug 2026", () => {
@@ -160,11 +160,11 @@ describe("getCompanyTargetResults", () => {
     });
 
     expect(results).toHaveLength(4);
-    expect(results[0].periodLabel).toBe("Monthly (Aug-Sep)");
+    expect(results[0].periodLabel).toBe("Monthly (August)");
     expect(results[0].notEligible).toBe(true);
-    expect(results[1].periodLabel).toBe("Quarterly (Aug-Nov)");
-    expect(results[2].periodLabel).toBe("Half Yearly (Aug-Feb)");
-    expect(results[3].periodLabel).toBe("Yearly (Aug-Aug)");
+    expect(results[1].periodLabel).toBe("Quarterly");
+    expect(results[2].periodLabel).toBe("Half Yearly");
+    expect(results[3].periodLabel).toBe("Yearly");
   });
 
   it("Joining 31 Aug 2026", () => {
@@ -179,11 +179,11 @@ describe("getCompanyTargetResults", () => {
     });
 
     expect(results).toHaveLength(4);
-    expect(results[0].periodLabel).toBe("Monthly (Aug-Sep)");
+    expect(results[0].periodLabel).toBe("Monthly (August)");
     expect(results[0].notEligible).toBe(true);
-    expect(results[1].periodLabel).toBe("Quarterly (Aug-Nov)");
-    expect(results[2].periodLabel).toBe("Half Yearly (Aug-Feb)");
-    expect(results[3].periodLabel).toBe("Yearly (Aug-Aug)");
+    expect(results[1].periodLabel).toBe("Quarterly");
+    expect(results[2].periodLabel).toBe("Half Yearly");
+    expect(results[3].periodLabel).toBe("Yearly");
   });
 
   it("Quarterly rollover Aug-Oct -> Nov-Jan", () => {
@@ -197,7 +197,7 @@ describe("getCompanyTargetResults", () => {
       joiningDate: "2026-08-01",
       evaluationDate: new Date(Date.UTC(2026, 7, 15)),
     });
-    expect(resultsBefore[1].periodLabel).toBe("Quarterly (Aug-Oct)");
+    expect(resultsBefore[1].periodLabel).toBe("Quarterly");
 
     // After rollover (Nov 15)
     const resultsAfter = getCompanyTargetResults({
@@ -209,7 +209,7 @@ describe("getCompanyTargetResults", () => {
       joiningDate: "2026-08-01",
       evaluationDate: new Date(Date.UTC(2026, 10, 15)),
     });
-    expect(resultsAfter[1].periodLabel).toBe("Quarterly (Nov-Jan)");
+    expect(resultsAfter[1].periodLabel).toBe("Quarterly");
   });
 
   it("Half-yearly rollover Aug-Jan -> Feb-Jul", () => {
@@ -223,7 +223,7 @@ describe("getCompanyTargetResults", () => {
       joiningDate: "2026-08-01",
       evaluationDate: new Date(Date.UTC(2026, 7, 15)),
     });
-    expect(resultsBefore[2].periodLabel).toBe("Half Yearly (Aug-Jan)");
+    expect(resultsBefore[2].periodLabel).toBe("Half Yearly");
 
     // After rollover (Feb 15)
     const resultsAfter = getCompanyTargetResults({
@@ -235,7 +235,7 @@ describe("getCompanyTargetResults", () => {
       joiningDate: "2026-08-01",
       evaluationDate: new Date(Date.UTC(2027, 1, 15)),
     });
-    expect(resultsAfter[2].periodLabel).toBe("Half Yearly (Feb-Jul)");
+    expect(resultsAfter[2].periodLabel).toBe("Half Yearly");
   });
 
   it("Yearly rollover Aug-Jul -> next Aug", () => {
@@ -249,7 +249,7 @@ describe("getCompanyTargetResults", () => {
       joiningDate: "2026-08-01",
       evaluationDate: new Date(Date.UTC(2026, 7, 15)),
     });
-    expect(resultsBefore[3].periodLabel).toBe("Yearly (Aug-Jul)");
+    expect(resultsBefore[3].periodLabel).toBe("Yearly");
 
     // After rollover (Aug 15, 2027)
     const resultsAfter = getCompanyTargetResults({
@@ -261,7 +261,7 @@ describe("getCompanyTargetResults", () => {
       joiningDate: "2026-08-01",
       evaluationDate: new Date(Date.UTC(2027, 7, 15)),
     });
-    expect(resultsAfter[3].periodLabel).toBe("Yearly (Aug-Jul)");
+    expect(resultsAfter[3].periodLabel).toBe("Yearly");
   });
 
   it("Leap year/date boundaries", () => {
@@ -276,7 +276,7 @@ describe("getCompanyTargetResults", () => {
     });
 
     // 12 months after 29 Feb 2024 should be 28 Feb 2025 (non-leap year)
-    expect(results[3].periodLabel).toBe("Yearly (Feb-Feb)");
+    expect(results[3].periodLabel).toBe("Yearly");
   });
 
   it("Employee A and Employee B with different joining dates having different target periods", () => {
@@ -300,10 +300,10 @@ describe("getCompanyTargetResults", () => {
       evaluationDate: new Date(Date.UTC(2026, 8, 15)),
     });
 
-    expect(resultsA[0].periodLabel).toBe("Monthly (Aug)");
-    expect(resultsB[0].periodLabel).toBe("Monthly (Sep)");
+    expect(resultsA[0].periodLabel).toBe("Monthly (August)");
+    expect(resultsB[0].periodLabel).toBe("Monthly (September)");
 
-    expect(resultsA[1].periodLabel).toBe("Quarterly (Aug-Oct)");
-    expect(resultsB[1].periodLabel).toBe("Quarterly (Sep-Nov)");
+    expect(resultsA[1].periodLabel).toBe("Quarterly");
+    expect(resultsB[1].periodLabel).toBe("Quarterly");
   });
 });

@@ -167,7 +167,14 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     return [y - 1, y, y + 1];
   }, [today]);
 
-  const activeStaffCount = useMemo(() => staff.filter((s) => s.isActive).length, [staff]);
+  const activeStaffCount = useMemo(
+    () =>
+      staff.filter(
+        (s) =>
+          s.isActive && s.role !== "SUPER_ADMIN"
+      ).length,
+    [staff]
+  );
   const companyTargetResults = useMemo(() => {
     const allResults = getCompanyTargetResults({
       jobCards,

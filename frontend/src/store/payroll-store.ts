@@ -404,6 +404,7 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
     const daysInMonth = monthDays(year, month);
     const targetStaff = staff.filter((u) => {
       if (!u.isActive) return false;
+      if (u.role === "SUPER_ADMIN") return false;
       if (branchId && u.branchId !== branchId) return false;
       return true;
     });
@@ -541,7 +542,11 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
     let recoveries = [...get().salaryAdvanceRecoveries];
     const advances = get().salaryAdvances.map(normalizeAdvance);
 
-    const employees = Array.from(new Set(records.map((r) => r.employeeId)));
+    const staffStoreStaff = useStaffStore.getState().staff;
+    const employees = Array.from(new Set(records.map((r) => r.employeeId))).filter((id) => {
+      const user = staffStoreStaff.find((s) => s.id === id);
+      return user?.role !== "SUPER_ADMIN";
+    });
     for (const employeeId of employees) {
       const next = recalcRecordsForEmployee({
         employeeId,
