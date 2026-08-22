@@ -3274,13 +3274,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </CardHeader>
             <CardContent>
               <div className="min-w-0 max-w-md space-y-2">
-                <Label className="md:hidden">Booking Date & Time</Label>
+
                 <Label htmlFor="schedule-booking-when" className="hidden md:inline-flex">
                   Booking Date & Time
                 </Label>
-                <div className="min-w-0 space-y-3 md:hidden">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="schedule-booking-date" className="text-xs text-muted-foreground">
+                <div className="min-w-0 grid grid-cols-2 gap-3 md:hidden">
+                  <div className="space-y-1.5 min-w-0">
+                    <Label htmlFor="schedule-booking-date" className="text-xs text-muted-foreground truncate">
                       Date
                     </Label>
                     <Input
@@ -3304,8 +3304,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       className={cn("h-10 w-full min-w-0 max-w-full", MOBILE_DATE_TIME_INPUT_ICON_END)}
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="schedule-booking-time" className="text-xs text-muted-foreground">
+                  <div className="space-y-1.5 min-w-0">
+                    <Label htmlFor="schedule-booking-time" className="text-xs text-muted-foreground truncate">
                       Time
                     </Label>
                     <Input

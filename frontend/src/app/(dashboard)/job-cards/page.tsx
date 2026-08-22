@@ -126,6 +126,16 @@ const KANBAN_COLORS: Record<JobCardStatus, string> = {
   CANCELLED: "border-t-red-500",
 };
 
+const STATUS_BADGE_STYLES: Record<JobCardStatus, string> = {
+  DELIVERED: "bg-green-50 text-green-700 border-green-200/50 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/30",
+  RECEIVED: "bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/30",
+  INSPECTION: "bg-blue-50 text-blue-700 border-blue-200/50 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/30",
+  AWAITING_SERVICE: "bg-blue-50 text-blue-700 border-blue-200/50 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/30",
+  QUALITY_CHECK: "bg-blue-50 text-blue-700 border-blue-200/50 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/30",
+  READY: "bg-purple-50 text-purple-700 border-purple-200/50 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-900/30",
+  CANCELLED: "bg-red-50 text-red-700 border-red-200/50 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/30",
+};
+
 export default function JobCardsPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
@@ -781,8 +791,8 @@ export default function JobCardsPage() {
 
                       {/* Top-Right Badge & Three dots dropdown */}
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Status Badge in light yellow styling */}
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
+                        {/* Status Badge */}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${STATUS_BADGE_STYLES[jc.status]}`}>
                           {TAB_LABELS[jc.status]}
                         </span>
                         

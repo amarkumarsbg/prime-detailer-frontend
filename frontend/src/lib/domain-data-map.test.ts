@@ -38,4 +38,14 @@ describe("resourcesForPath", () => {
     expect(resourcesForPath("/customers")).toContain("appSettings");
     expect(resourcesForPath("/parties")).toContain("appSettings");
   });
+
+  it("loads accounting income dependencies including membership and payroll", () => {
+    const r = resourcesForPath("/accounting");
+    expect(r).toContain("invoices");
+    expect(r).toContain("expenses");
+    expect(r).toContain("jobCards");
+    expect(r).toContain("productPurchases");
+    expect(r).toContain("membership");
+    expect(r).toContain("payroll");
+  });
 });

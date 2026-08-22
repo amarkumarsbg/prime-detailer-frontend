@@ -8,9 +8,16 @@ import {
   areDomainResourcesReady,
   ensureDomainResources,
 } from "@/lib/domain-data-loader";
+import {
+  maybeRevalidateRouteDomainDataFromVisibility,
+  revalidateRouteDomainData,
+  revalidateRouteDomainDataFromPageShow,
+} from "@/lib/domain-route-revalidate";
 
 /**
  * Loads permission-scoped domain data for the active dashboard route into Zustand.
+ * Revalidates on navigation and on mobile resume (iOS + Android) so pages like
+ * Accounting always see fresh API data without a hard refresh.
  */
 export function DomainDataSync() {
   const pathname = usePathname();
@@ -18,9 +25,36 @@ export function DomainDataSync() {
 
   useEffect(() => {
     if (!shellReady) return;
-    const resources = resourcesForPath(pathname);
-    // Always hydrate GST / business settings before any pricing UI can run.
-    void ensureDomainResources(["appSettings", ...resources]);
+    void revalidateRouteDomainData(pathname);
+  }, [pathname, shellReady]);
+
+  useEffect(() => {
+    if (!shellReady) return;
+
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      maybeRevalidateRouteDomainDataFromVisibility(pathname);
+    };
+
+    /** Fallback for some Android WebViews that omit visibilitychange on resume. */
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      maybeRevalidateRouteDomainDataFromVisibility(pathname);
+    };
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      revalidateRouteDomainDataFromPageShow(pathname, event);
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onPageShow);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, [pathname, shellReady]);
 
   return null;

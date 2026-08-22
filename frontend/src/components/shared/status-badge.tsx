@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { normalizeJobCardStatus } from "@/lib/job-card-status";
 import type { JobCardStatus, InvoiceStatus, QuotationStatus } from "@/types";
 
-const JOB_CARD_STATUS_CONFIG: Record<JobCardStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }> = {
-  RECEIVED: { label: "Received", variant: "info" },
-  INSPECTION: { label: "Inspection", variant: "default" },
-  AWAITING_SERVICE: { label: "Awaiting Service", variant: "warning" },
-  QUALITY_CHECK: { label: "Quality Check", variant: "secondary" },
-  READY: { label: "Ready", variant: "success" },
+const JOB_CARD_STATUS_CONFIG: Record<JobCardStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" | "purple" }> = {
+  RECEIVED: { label: "Received", variant: "warning" },
+  INSPECTION: { label: "Inspection", variant: "info" },
+  AWAITING_SERVICE: { label: "Awaiting Service", variant: "info" },
+  QUALITY_CHECK: { label: "Quality Check", variant: "info" },
+  READY: { label: "Ready", variant: "purple" },
   DELIVERED: { label: "Delivered", variant: "success" },
   CANCELLED: { label: "Cancelled", variant: "destructive" },
 };

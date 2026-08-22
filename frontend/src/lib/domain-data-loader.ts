@@ -106,6 +106,8 @@ type LoadState = "idle" | "loading" | "ready" | "forbidden" | "error";
 
 const stateByResource = new Map<DomainResource, LoadState>();
 const inflight = new Map<DomainResource, Promise<void>>();
+/** Bumped on invalidate so late responses cannot overwrite newer route data. */
+const loadGeneration = new Map<DomainResource, number>();
 
 async function getCollectionItems<T>(collection: string): Promise<T[]> {
   const data = await apiGet<{ items: T[] }>(`/api/collections/${collection}`);
@@ -532,11 +534,14 @@ export async function ensureDomainResources(resources: DomainResource[]): Promis
         return;
       }
       const run = (async () => {
+        const generationAtStart = loadGeneration.get(resource) ?? 0;
         stateByResource.set(resource, "loading");
         try {
           await loadOne(resource);
+          if ((loadGeneration.get(resource) ?? 0) !== generationAtStart) return;
           stateByResource.set(resource, "ready");
         } catch (e) {
+          if ((loadGeneration.get(resource) ?? 0) !== generationAtStart) return;
           if (isForbidden(e)) {
             stateByResource.set(resource, "forbidden");
             return;
@@ -559,10 +564,24 @@ export async function ensureDomainResources(resources: DomainResource[]): Promis
 export function invalidateDomainResources(resources?: DomainResource[]): void {
   if (!resources) {
     stateByResource.clear();
+    inflight.clear();
+    for (const r of loadGeneration.keys()) {
+      loadGeneration.set(r, (loadGeneration.get(r) ?? 0) + 1);
+    }
     return;
   }
   for (const r of resources) {
     stateByResource.delete(r);
     inflight.delete(r);
+    loadGeneration.set(r, (loadGeneration.get(r) ?? 0) + 1);
   }
+}
+
+/** Invalidate cache then load — use on route focus / manual refresh. */
+export async function revalidateDomainResources(
+  resources: DomainResource[]
+): Promise<void> {
+  const unique = [...new Set(resources)];
+  invalidateDomainResources(unique);
+  await ensureDomainResources(unique);
 }

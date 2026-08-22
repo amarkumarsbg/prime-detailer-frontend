@@ -94,6 +94,8 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "customers",
       "balanceSheetManual",
       "productPurchases",
+      "membership",
+      "payroll",
     ],
   },
   {

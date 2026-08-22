@@ -79,6 +79,7 @@ import {
 import { expenseOutstanding, invoicePaidTotal } from "@/lib/party/ledger-math";
 import { useAuthStore } from "@/store/auth-store";
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
+import { revalidateRouteDomainData } from "@/lib/domain-route-revalidate";
 import { useBranchStore } from "@/store/branch-store";
 import { useCashBankStore } from "@/store/cash-bank-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -123,7 +124,9 @@ export function AccountingDashboard() {
   const customers = useCustomerStore((s) => s.customers);
   const cashAccounts = useCashBankStore((s) => s.accounts);
   const bootstrapRefresh = useAppBootstrapStore((s) => s.refresh);
-  const refreshing = useAppBootstrapStore((s) => s.refreshing);
+  const bootstrapRefreshing = useAppBootstrapStore((s) => s.refreshing);
+  const [domainRefreshing, setDomainRefreshing] = useState(false);
+  const refreshing = bootstrapRefreshing || domainRefreshing;
 
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
   const branchScoped = user?.role === "BRANCH_MANAGER";
@@ -349,11 +352,17 @@ export function AccountingDashboard() {
   };
 
   const handleRefresh = async () => {
+    setDomainRefreshing(true);
     try {
-      await bootstrapRefresh();
+      await Promise.all([
+        bootstrapRefresh(),
+        revalidateRouteDomainData("/accounting"),
+      ]);
       toast.success("Accounting data refreshed");
     } catch {
       toast.error("Could not refresh data");
+    } finally {
+      setDomainRefreshing(false);
     }
   };
 

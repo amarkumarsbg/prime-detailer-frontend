@@ -154,7 +154,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <SubscriptionRenewBanner />
         <main
           ref={mainScrollRef}
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 [scrollbar-gutter:stable]"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 md:[scrollbar-gutter:stable]"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {bootstrapError ? (
