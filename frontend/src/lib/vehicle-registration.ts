@@ -43,9 +43,16 @@ export function compactRegistrationForValidation(reg: string): string {
  * - Bharat: DD + BH + 4 digits + LL (e.g. 22BH5678KA)
  */
 export function isValidIndianVehicleRegistration(reg: string): boolean {
-  const c = compactRegistrationForValidation(reg);
-  if (c.length < 8 || c.length > 13) return false;
-  const standard = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$/;
-  const bhSeries = /^[0-9]{2}BH[0-9]{4}[A-Z]{2}$/;
+  if (!reg || typeof reg !== "string") return false;
+  const trimmed = reg.trim();
+  // Allow only letters, digits, and hyphens (no spaces in the middle, no other special characters)
+  if (!/^[A-Za-z0-9-]+$/.test(trimmed)) return false;
+
+  const c = trimmed.toUpperCase().replace(/-/g, "");
+  // Allow 9-character and 10-character patterns, but keep typical limits (e.g. 7 to 13 characters)
+  if (c.length < 7 || c.length > 13) return false;
+
+  const standard = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{1,4}[A-Z0-9]?$/;
+  const bhSeries = /^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/;
   return standard.test(c) || bhSeries.test(c);
 }

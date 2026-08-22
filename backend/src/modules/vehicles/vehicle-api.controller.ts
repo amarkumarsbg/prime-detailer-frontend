@@ -10,6 +10,22 @@ import {
 } from "./vehicle-api.service.js";
 import { FuelType, VehicleSegment } from "@prisma/client";
 import { resolveBranchScope } from "../../lib/data-scope.js";
+import { prisma } from "../../lib/prisma.js";
+
+export function isValidIndianVehicleRegistration(reg: string): boolean {
+  if (!reg || typeof reg !== "string") return false;
+  const trimmed = reg.trim();
+  // Allow only letters, digits, and hyphens (no spaces in the middle, no other special characters)
+  if (!/^[A-Za-z0-9-]+$/.test(trimmed)) return false;
+
+  const c = trimmed.toUpperCase().replace(/-/g, "");
+  // Allow 9-character and 10-character patterns, but keep typical limits (e.g. 7 to 13 characters)
+  if (c.length < 7 || c.length > 13) return false;
+
+  const standard = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{1,4}[A-Z0-9]?$/;
+  const bhSeries = /^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/;
+  return standard.test(c) || bhSeries.test(c);
+}
 
 function paramId(req: Request): string {
   const raw = req.params.id;
@@ -96,6 +112,11 @@ export async function postVehicle(req: Request, res: Response, next: NextFunctio
       return;
     }
     const body = vehicleSchema.parse(req.body);
+    const isVin = body.vinNumber && body.registrationNumber === body.vinNumber;
+    if (!isVin && !isValidIndianVehicleRegistration(body.registrationNumber)) {
+      res.status(400).json({ data: null, error: { message: "Invalid registration number format" } });
+      return;
+    }
     const vehicle = await createVehicleApi({
       ...body,
       organizationId: scope.organizationId,
@@ -120,6 +141,13 @@ export async function postVehiclesBulk(req: Request, res: Response, next: NextFu
       return;
     }
     const body = bulkSchema.parse(req.body);
+    // Validate each vehicle in bulk import
+    for (const v of body.vehicles) {
+      if (!isValidIndianVehicleRegistration(v.registrationNumber)) {
+        res.status(400).json({ data: null, error: { message: `Invalid registration number format: ${v.registrationNumber}` } });
+        return;
+      }
+    }
     const yearDefault = new Date().getFullYear();
     const result = await createVehiclesBulk(
       scope.organizationId,
@@ -160,6 +188,18 @@ export async function putVehicle(req: Request, res: Response, next: NextFunction
     }
     const id = paramId(req);
     const body = patchVehicleSchema.parse(req.body);
+    if (body.registrationNumber !== undefined) {
+      const existing = await prisma.vehicle.findFirst({ where: { id, organizationId: scope.organizationId } });
+      if (existing) {
+        const vinNumber = body.vinNumber !== undefined ? body.vinNumber : existing.vinNumber;
+        const regNumber = body.registrationNumber;
+        const isVin = vinNumber && regNumber === vinNumber;
+        if (!isVin && !isValidIndianVehicleRegistration(regNumber)) {
+          res.status(400).json({ data: null, error: { message: "Invalid registration number format" } });
+          return;
+        }
+      }
+    }
     const vehicle = await updateVehicleApi(id, scope.organizationId, {
       ...body,
       segment: body.segment as VehicleSegment | undefined,
@@ -205,6 +245,13 @@ export async function postVehicleSnapshot(req: Request, res: Response, next: Nex
       return;
     }
     const body = snapshotBodySchema.parse(req.body);
+    for (const v of body.vehicles) {
+      const isVin = v.vinNumber && v.registrationNumber === v.vinNumber;
+      if (!isVin && !isValidIndianVehicleRegistration(v.registrationNumber)) {
+        res.status(400).json({ data: null, error: { message: `Invalid registration number format for ${v.registrationNumber}` } });
+        return;
+      }
+    }
     await replaceAllVehiclesApi(
       scope.organizationId,
       body.vehicles.map((v) => ({
