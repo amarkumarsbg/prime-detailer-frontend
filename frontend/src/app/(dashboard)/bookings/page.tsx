@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
+import { useCustomerStore } from "@/store/customer-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
@@ -55,6 +56,12 @@ import {
   Loader2,
   CalendarRange,
   Pencil,
+  Phone,
+  Car,
+  CheckCircle2,
+  Calendar,
+  Wrench,
+  User,
 } from "lucide-react";
 
 function compactRegForSearch(s: string): string {
@@ -125,6 +132,11 @@ export default function BookingsPage() {
   const appointments = useAppointmentStore((s) => s.appointments);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const catalog = useServiceCatalogStore((s) => s.catalog);
+  const customers = useCustomerStore((s) => s.customers);
+  const customerById = useMemo(
+    () => Object.fromEntries(customers.map((c) => [c.id, c])),
+    [customers]
+  );
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -440,69 +452,171 @@ export default function BookingsPage() {
         </Card>
       </div>
 
-      <Card className="min-w-0 border-border/80 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">All bookings</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Pre-service reservations — create a job card when the customer arrives.
-          </p>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {bookingReservations.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">No bookings yet. Use New Booking to add one.</p>
-          ) : (
-            <div className="divide-y divide-border rounded-lg border border-border">
-              {bookingReservations.map((apt) => (
-                <div key={apt.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="font-mono text-xs font-semibold text-primary">{getAppointmentDisplayId(apt)}</p>
-                    <p className="font-medium mt-1">{apt.customerName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {apt.date} · {apt.time} · {apt.serviceType}
-                    </p>
-                    {apt.jobCardId ? (
-                      <p className="text-xs text-emerald-600 mt-1">Converted to job card</p>
-                    ) : null}
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold">All bookings</h2>
+            <p className="text-sm text-muted-foreground">
+              Pre-service reservations — create a job card when the customer arrives.
+            </p>
+          </div>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {bookingReservations.length} booking{bookingReservations.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {bookingReservations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/85 py-16 text-muted-foreground">
+            <CalendarRange className="h-8 w-8 opacity-40" />
+            <p className="text-sm font-medium">No bookings yet</p>
+            <Button size="sm" asChild>
+              <Link href="/bookings/walk-in">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Create booking
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {bookingReservations.map((apt) => {
+              const isElapsed = isAppointmentSlotElapsed(apt.date, apt.time);
+              const isConverted = !!apt.jobCardId;
+              const initials = apt.customerName
+                .trim()
+                .split(/\s+/)
+                .map((w) => w[0]?.toUpperCase() ?? "")
+                .slice(0, 2)
+                .join("");
+              const customerAvatar = apt.customerId ? customerById[apt.customerId]?.avatar : null;
+              const accentColor = isConverted
+                ? "bg-emerald-500"
+                : isElapsed
+                ? "bg-rose-400"
+                : "bg-primary";
+              const avatarBg = isConverted
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                : isElapsed
+                ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+                : "bg-primary/10 text-primary";
+
+              return (
+                <div
+                  key={apt.id}
+                  className="group relative flex flex-col rounded-2xl border border-border/70 bg-card overflow-hidden shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-200"
+                >
+                  {/* Left accent */}
+                  <div className={`absolute inset-y-0 left-0 w-[3px] ${accentColor}`} />
+
+                  <div className="flex-1 px-5 pt-4 pb-3 space-y-3.5">
+                    {/* Row 1: booking ID + status pill */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+                        {getAppointmentDisplayId(apt)}
+                      </span>
+                      {isConverted ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Converted
+                        </span>
+                      ) : isElapsed ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/50 dark:text-rose-400">
+                          <Clock className="h-3 w-3" />
+                          Elapsed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
+                          <Calendar className="h-3 w-3" />
+                          Upcoming
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row 2: avatar + customer info */}
+                    <div className="flex items-center gap-3">
+                      <div className={`h-10 w-10 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold ${customerAvatar ? "" : avatarBg}`}>
+                        {customerAvatar ? (
+                          <img src={customerAvatar} alt={apt.customerName} className="h-full w-full object-cover" />
+                        ) : (
+                          initials || <User className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm leading-snug truncate">{apt.customerName}</p>
+                        {apt.customerPhone && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            {apt.customerPhone}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 3: chips */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        {apt.date}{apt.time ? ` · ${apt.time}` : ""}
+                      </span>
+                      {apt.serviceType && (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground max-w-[160px]">
+                          <Wrench className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{apt.serviceType}</span>
+                        </span>
+                      )}
+                      {apt.vehicleRegNumber && (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted/80 border border-border/60 px-2.5 py-1 font-mono text-[11px] text-muted-foreground">
+                          <Car className="h-3 w-3 shrink-0" />
+                          {apt.vehicleRegNumber}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {appointmentIsEditable(apt) ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
+
+                  {/* Footer */}
+                  <div className="mx-5 border-t border-border/50 py-3 flex items-center gap-2">
+                    {appointmentIsEditable(apt) && (
+                      <button
+                        type="button"
+                        className="flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
                         onClick={() => {
                           setEditingReservation(apt);
                           setEditReservationOpen(true);
                         }}
                       >
-                        <Pencil className="w-4 h-4 mr-1" />
+                        <Pencil className="h-3.5 w-3.5" />
                         Edit
-                      </Button>
-                    ) : null}
-                    {apt.jobCardId ? (
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href={`/job-cards/${apt.jobCardId}`}>View job</Link>
-                      </Button>
+                      </button>
+                    )}
+                    {isConverted ? (
+                      <Link
+                        href={`/job-cards/${apt.jobCardId}`}
+                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View job card
+                      </Link>
                     ) : (
-                      <Button
-                        size="sm"
+                      <button
+                        type="button"
                         disabled={creatingFromAppointmentId === apt.id}
+                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:pointer-events-none"
                         onClick={() => void createJobFromAppointment(apt)}
                       >
                         {creatingFromAppointmentId === apt.id ? (
-                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <Plus className="w-4 h-4 mr-1" />
+                          <Plus className="h-3.5 w-3.5" />
                         )}
                         Create job card
-                      </Button>
+                      </button>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 hidden">
         <Card className="border-emerald-200/60 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/40 h-full">
