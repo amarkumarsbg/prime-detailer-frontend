@@ -386,6 +386,7 @@ export function getCompanyTargetResults(args: {
   settings: StaffRewardSettings;
   year: number;
   joiningDate?: string;
+  evaluationDate?: Date;
 }): CompanyTargetPeriodResult[] {
   if (!args.settings.companyTargetEnabled) {
     return [];
@@ -401,7 +402,7 @@ export function getCompanyTargetResults(args: {
       jobRev = args.jobCards
         .filter((jc) => {
           if (jc.status !== "DELIVERED") return false;
-          const dateStr = jc.createdAt;
+          const dateStr = jc.actualDelivery || jc.createdAt;
           if (!dateStr) return false;
           const time = Date.parse(dateStr);
           if (Number.isNaN(time)) return false;
@@ -428,46 +429,134 @@ export function getCompanyTargetResults(args: {
     return jobRev + invRev;
   };
 
-  const startYear = args.year;
-  const QUARTERS = [
-    {
-      label: "Monthly (Jan-Mar)",
-      start: new Date(Date.UTC(startYear, 0, 1, 0, 0, 0, 0)),
-      end: new Date(Date.UTC(startYear, 2, 31, 23, 59, 59, 999)),
-      configKey: "MONTHLY",
-    },
-    {
-      label: "Quarterly (Apr-Jun)",
-      start: new Date(Date.UTC(startYear, 3, 1, 0, 0, 0, 0)),
-      end: new Date(Date.UTC(startYear, 5, 30, 23, 59, 59, 999)),
-      configKey: "QUARTERLY",
-    },
-    {
-      label: "Half Yearly (Jul-Sep)",
-      start: new Date(Date.UTC(startYear, 6, 1, 0, 0, 0, 0)),
-      end: new Date(Date.UTC(startYear, 8, 30, 23, 59, 59, 999)),
-      configKey: "HALF_YEARLY",
-    },
-    {
-      label: "Yearly (Oct-Dec)",
-      start: new Date(Date.UTC(startYear, 9, 1, 0, 0, 0, 0)),
-      end: new Date(Date.UTC(startYear, 11, 31, 23, 59, 59, 999)),
-      configKey: "YEARLY",
-    },
-  ];
+  if (!args.joiningDate) {
+    const startYear = args.year;
+    const QUARTERS = [
+      {
+        label: "Monthly (Jan-Mar)",
+        start: new Date(Date.UTC(startYear, 0, 1, 0, 0, 0, 0)),
+        end: new Date(Date.UTC(startYear, 2, 31, 23, 59, 59, 999)),
+        configKey: "MONTHLY",
+      },
+      {
+        label: "Quarterly (Apr-Jun)",
+        start: new Date(Date.UTC(startYear, 3, 1, 0, 0, 0, 0)),
+        end: new Date(Date.UTC(startYear, 5, 30, 23, 59, 59, 999)),
+        configKey: "QUARTERLY",
+      },
+      {
+        label: "Half Yearly (Jul-Sep)",
+        start: new Date(Date.UTC(startYear, 6, 1, 0, 0, 0, 0)),
+        end: new Date(Date.UTC(startYear, 8, 30, 23, 59, 59, 999)),
+        configKey: "HALF_YEARLY",
+      },
+      {
+        label: "Yearly (Oct-Dec)",
+        start: new Date(Date.UTC(startYear, 9, 1, 0, 0, 0, 0)),
+        end: new Date(Date.UTC(startYear, 11, 31, 23, 59, 59, 999)),
+        configKey: "YEARLY",
+      },
+    ];
 
-  const joinTime = args.joiningDate ? Date.parse(args.joiningDate) : NaN;
-  const hasJoin = !Number.isNaN(joinTime);
+    const results: CompanyTargetPeriodResult[] = [];
+
+    for (const q of QUARTERS) {
+      const startMs = q.start.getTime();
+      const endMs = q.end.getTime();
+      const revenue = getRevenueInTimeRange(startMs, endMs);
+
+      const configTiers = freqTiersMap[q.configKey] || [];
+      const tiers = configTiers.length > 0 ? configTiers : (args.settings.companyTargetTiers || []);
+
+      let achievedTierIndex = -1;
+      let maxAchievedTarget = -1;
+
+      for (let i = 0; i < tiers.length; i++) {
+        const t = tiers[i];
+        if (t && t.targetAmount > 0 && revenue >= t.targetAmount) {
+          if (t.targetAmount > maxAchievedTarget) {
+            maxAchievedTarget = t.targetAmount;
+            achievedTierIndex = i;
+          }
+        }
+      }
+
+      const t = achievedTierIndex !== -1 ? tiers[achievedTierIndex] : null;
+      const targetAmount = t ? t.targetAmount : 0;
+      const rewardPercent = t ? t.rewardPercent : 0;
+      const totalReward = roundReward(revenue * (rewardPercent / 100));
+      const sharePerStaff = roundReward(totalReward / staffCount);
+
+      results.push({
+        periodLabel: q.label,
+        revenue: roundReward(revenue),
+        achievedTierIndex,
+        targetAmount,
+        rewardPercent,
+        totalReward,
+        sharePerStaff,
+      });
+    }
+
+    return results;
+  }
+
+  // Joining date anchored cycle logic
+  const J = parseUTCDate(args.joiningDate);
+  let refDate: Date;
+  if (args.evaluationDate) {
+    refDate = args.evaluationDate;
+  } else {
+    const today = new Date();
+    if (today.getFullYear() === args.year) {
+      refDate = today;
+    } else {
+      refDate = new Date(Date.UTC(args.year, today.getMonth(), today.getDate(), today.getHours(), today.getMinutes(), today.getSeconds(), today.getMilliseconds()));
+    }
+  }
+
+  const isNotJoinedYet = refDate.getTime() < J.getTime();
+  const evaluationRef = isNotJoinedYet ? J : refDate;
+
+  const slots = [
+    { configKey: "MONTHLY", months: 1, labelPrefix: "Monthly" },
+    { configKey: "QUARTERLY", months: 3, labelPrefix: "Quarterly" },
+    { configKey: "HALF_YEARLY", months: 6, labelPrefix: "Half Yearly" },
+    { configKey: "YEARLY", months: 12, labelPrefix: "Yearly" },
+  ];
 
   const results: CompanyTargetPeriodResult[] = [];
 
-  for (const q of QUARTERS) {
-    const startMs = q.start.getTime();
-    const endMs = q.end.getTime();
+  for (const slot of slots) {
+    const F = slot.months;
 
-    if (hasJoin && joinTime > endMs) {
+    let periodStart = J;
+    let periodEnd = addMonthsUTC(periodStart, F);
+
+    while (evaluationRef.getTime() >= periodEnd.getTime()) {
+      periodStart = periodEnd;
+      periodEnd = addMonthsUTC(periodStart, F);
+    }
+
+    const startMs = periodStart.getTime();
+    const endMs = periodEnd.getTime() - 1;
+
+    const actualEnd = new Date(endMs);
+    let label = "";
+    if (F === 1 && getMonthName(periodStart) === getMonthName(actualEnd)) {
+      label = `${slot.labelPrefix} (${getMonthName(periodStart)})`;
+    } else {
+      label = `${slot.labelPrefix} (${getMonthName(periodStart)}-${getMonthName(actualEnd)})`;
+    }
+
+    let notEligible = isNotJoinedYet;
+    if (!notEligible && slot.configKey === "MONTHLY" && J.getUTCDate() > 5 && periodStart.getTime() === J.getTime()) {
+      notEligible = true;
+    }
+
+    if (notEligible) {
       results.push({
-        periodLabel: q.label,
+        periodLabel: label,
         revenue: 0,
         achievedTierIndex: -1,
         targetAmount: 0,
@@ -479,10 +568,9 @@ export function getCompanyTargetResults(args: {
       continue;
     }
 
-    const effectiveStartMs = hasJoin && joinTime > startMs ? joinTime : startMs;
-    const revenue = getRevenueInTimeRange(effectiveStartMs, endMs);
+    const revenue = getRevenueInTimeRange(startMs, endMs);
 
-    const configTiers = freqTiersMap[q.configKey] || [];
+    const configTiers = freqTiersMap[slot.configKey] || [];
     const tiers = configTiers.length > 0 ? configTiers : (args.settings.companyTargetTiers || []);
 
     let achievedTierIndex = -1;
@@ -505,7 +593,7 @@ export function getCompanyTargetResults(args: {
     const sharePerStaff = roundReward(totalReward / staffCount);
 
     results.push({
-      periodLabel: q.label,
+      periodLabel: label,
       revenue: roundReward(revenue),
       achievedTierIndex,
       targetAmount,
@@ -516,4 +604,30 @@ export function getCompanyTargetResults(args: {
   }
 
   return results;
+}
+
+function parseUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day!));
+}
+
+function addMonthsUTC(startDate: Date, months: number): Date {
+  const year = startDate.getUTCFullYear();
+  const month = startDate.getUTCMonth();
+  const day = startDate.getUTCDate();
+
+  const targetMonth = month + months;
+  const tempDate = new Date(Date.UTC(year, targetMonth, 1));
+  const targetYear = tempDate.getUTCFullYear();
+  const targetMonthActual = tempDate.getUTCMonth();
+
+  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonthActual + 1, 0)).getUTCDate();
+  const finalDay = Math.min(day, daysInTargetMonth);
+
+  return new Date(Date.UTC(targetYear, targetMonthActual, finalDay));
+}
+
+function getMonthName(date: Date): string {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return months[date.getUTCMonth()] || "";
 }

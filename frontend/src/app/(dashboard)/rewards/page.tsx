@@ -947,9 +947,6 @@ export default function RewardsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MONTHLY">Monthly</SelectItem>
-                    <SelectItem value="QUARTERLY">Quarterly</SelectItem>
-                    <SelectItem value="HALF_YEARLY">Half Yearly</SelectItem>
-                    <SelectItem value="YEARLY">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

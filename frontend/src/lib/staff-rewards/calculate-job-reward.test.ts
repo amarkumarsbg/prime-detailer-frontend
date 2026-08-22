@@ -129,141 +129,181 @@ describe("getCompanyTargetResults", () => {
     expect(results[3].rewardPercent).toBe(10);
   });
 
-  it("handles joining before the year", () => {
+  it("Joining 1 Aug 2026", () => {
     const results = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2025-12-31",
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2026, 7, 15)), // 15 Aug 2026
     });
 
+    expect(results).toHaveLength(4);
+    expect(results[0].periodLabel).toBe("Monthly (Aug)");
     expect(results[0].notEligible).toBeUndefined();
-    expect(results[0].revenue).toBe(10000);
-    expect(results[1].notEligible).toBeUndefined();
-    expect(results[1].revenue).toBe(20000);
+    expect(results[1].periodLabel).toBe("Quarterly (Aug-Oct)");
+    expect(results[2].periodLabel).toBe("Half Yearly (Aug-Jan)");
+    expect(results[3].periodLabel).toBe("Yearly (Aug-Jul)");
   });
 
-  it("handles joining in Q1", () => {
-    // Joins on Feb 20, Job 1 (Feb 15) is excluded.
+  it("Joining 15 Aug 2026", () => {
     const results = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2026-02-20",
+      joiningDate: "2026-08-15",
+      evaluationDate: new Date(Date.UTC(2026, 7, 20)), // 20 Aug 2026
     });
 
-    expect(results[0].notEligible).toBeUndefined();
-    expect(results[0].revenue).toBe(0);
-    expect(results[0].rewardPercent).toBe(0);
-    expect(results[0].sharePerStaff).toBe(0);
-
-    // Q2 should be normal
-    expect(results[1].notEligible).toBeUndefined();
-    expect(results[1].revenue).toBe(20000);
-  });
-
-  it("handles joining in Q2", () => {
-    // Joins on May 10, Q1 is not eligible. Job 2 (May 15) is included in Q2.
-    const results = getCompanyTargetResults({
-      jobCards,
-      invoices: [],
-      activeStaffCount: 2,
-      settings,
-      year: 2026,
-      joiningDate: "2026-05-10",
-    });
-
+    expect(results).toHaveLength(4);
+    expect(results[0].periodLabel).toBe("Monthly (Aug-Sep)");
     expect(results[0].notEligible).toBe(true);
-    expect(results[1].notEligible).toBeUndefined();
-    expect(results[1].revenue).toBe(20000);
-    expect(results[1].sharePerStaff).toBe(1000);
+    expect(results[1].periodLabel).toBe("Quarterly (Aug-Nov)");
+    expect(results[2].periodLabel).toBe("Half Yearly (Aug-Feb)");
+    expect(results[3].periodLabel).toBe("Yearly (Aug-Aug)");
   });
 
-  it("handles joining in Q3", () => {
-    // Joins on Aug 20, Q1 and Q2 not eligible. Job 3 (Aug 15) is excluded.
+  it("Joining 31 Aug 2026", () => {
     const results = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2026-08-20",
+      joiningDate: "2026-08-31",
+      evaluationDate: new Date(Date.UTC(2026, 8, 10)), // 10 Sep 2026
     });
 
+    expect(results).toHaveLength(4);
+    expect(results[0].periodLabel).toBe("Monthly (Aug-Sep)");
     expect(results[0].notEligible).toBe(true);
-    expect(results[1].notEligible).toBe(true);
-    expect(results[2].notEligible).toBeUndefined();
-    expect(results[2].revenue).toBe(0);
+    expect(results[1].periodLabel).toBe("Quarterly (Aug-Nov)");
+    expect(results[2].periodLabel).toBe("Half Yearly (Aug-Feb)");
+    expect(results[3].periodLabel).toBe("Yearly (Aug-Aug)");
   });
 
-  it("handles joining in Q4", () => {
-    // Joins on Nov 20, Q1, Q2, Q3 not eligible. Job 4 (Nov 15) is excluded.
-    const results = getCompanyTargetResults({
+  it("Quarterly rollover Aug-Oct -> Nov-Jan", () => {
+    // Before rollover (Aug 15)
+    const resultsBefore = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2026-11-20",
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2026, 7, 15)),
     });
+    expect(resultsBefore[1].periodLabel).toBe("Quarterly (Aug-Oct)");
 
-    expect(results[0].notEligible).toBe(true);
-    expect(results[1].notEligible).toBe(true);
-    expect(results[2].notEligible).toBe(true);
-    expect(results[3].notEligible).toBeUndefined();
-    expect(results[3].revenue).toBe(0);
-  });
-
-  it("handles joining exactly on period start", () => {
-    // Joins on April 1 (start of Q2)
-    const results = getCompanyTargetResults({
+    // After rollover (Nov 15)
+    const resultsAfter = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2026-04-01",
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2026, 10, 15)),
     });
-
-    expect(results[0].notEligible).toBe(true);
-    expect(results[1].notEligible).toBeUndefined();
-    expect(results[1].revenue).toBe(20000);
+    expect(resultsAfter[1].periodLabel).toBe("Quarterly (Nov-Jan)");
   });
 
-  it("handles joining exactly on period end", () => {
-    // Joins on June 30 (end of Q2)
-    const results = getCompanyTargetResults({
+  it("Half-yearly rollover Aug-Jan -> Feb-Jul", () => {
+    // Before rollover (Aug 15)
+    const resultsBefore = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2026-06-30",
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2026, 7, 15)),
     });
+    expect(resultsBefore[2].periodLabel).toBe("Half Yearly (Aug-Jan)");
 
-    expect(results[0].notEligible).toBe(true);
-    expect(results[1].notEligible).toBeUndefined();
-    expect(results[1].revenue).toBe(0);
-  });
-
-  it("handles joining after period end", () => {
-    // Joins on July 1 (after Q2 end)
-    const results = getCompanyTargetResults({
+    // After rollover (Feb 15)
+    const resultsAfter = getCompanyTargetResults({
       jobCards,
       invoices: [],
       activeStaffCount: 2,
       settings,
       year: 2026,
-      joiningDate: "2026-07-01",
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2027, 1, 15)),
+    });
+    expect(resultsAfter[2].periodLabel).toBe("Half Yearly (Feb-Jul)");
+  });
+
+  it("Yearly rollover Aug-Jul -> next Aug", () => {
+    // Before rollover (Aug 15, 2026)
+    const resultsBefore = getCompanyTargetResults({
+      jobCards,
+      invoices: [],
+      activeStaffCount: 2,
+      settings,
+      year: 2026,
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2026, 7, 15)),
+    });
+    expect(resultsBefore[3].periodLabel).toBe("Yearly (Aug-Jul)");
+
+    // After rollover (Aug 15, 2027)
+    const resultsAfter = getCompanyTargetResults({
+      jobCards,
+      invoices: [],
+      activeStaffCount: 2,
+      settings,
+      year: 2027,
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2027, 7, 15)),
+    });
+    expect(resultsAfter[3].periodLabel).toBe("Yearly (Aug-Jul)");
+  });
+
+  it("Leap year/date boundaries", () => {
+    const results = getCompanyTargetResults({
+      jobCards,
+      invoices: [],
+      activeStaffCount: 2,
+      settings,
+      year: 2024,
+      joiningDate: "2024-02-29", // Leap year
+      evaluationDate: new Date(Date.UTC(2024, 1, 29)),
     });
 
-    expect(results[0].notEligible).toBe(true);
-    expect(results[1].notEligible).toBe(true);
-    expect(results[2].notEligible).toBeUndefined();
-    expect(results[2].revenue).toBe(30000);
+    // 12 months after 29 Feb 2024 should be 28 Feb 2025 (non-leap year)
+    expect(results[3].periodLabel).toBe("Yearly (Feb-Feb)");
+  });
+
+  it("Employee A and Employee B with different joining dates having different target periods", () => {
+    const resultsA = getCompanyTargetResults({
+      jobCards,
+      invoices: [],
+      activeStaffCount: 2,
+      settings,
+      year: 2026,
+      joiningDate: "2026-08-01",
+      evaluationDate: new Date(Date.UTC(2026, 7, 15)),
+    });
+
+    const resultsB = getCompanyTargetResults({
+      jobCards,
+      invoices: [],
+      activeStaffCount: 2,
+      settings,
+      year: 2026,
+      joiningDate: "2026-09-01",
+      evaluationDate: new Date(Date.UTC(2026, 8, 15)),
+    });
+
+    expect(resultsA[0].periodLabel).toBe("Monthly (Aug)");
+    expect(resultsB[0].periodLabel).toBe("Monthly (Sep)");
+
+    expect(resultsA[1].periodLabel).toBe("Quarterly (Aug-Oct)");
+    expect(resultsB[1].periodLabel).toBe("Quarterly (Sep-Nov)");
   });
 });
