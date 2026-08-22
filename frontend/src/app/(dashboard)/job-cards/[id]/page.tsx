@@ -125,6 +125,7 @@ import {
 } from "@/lib/job-card-inspection-photos";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import {
+  notifyBeforePhotosReadyWhatsApp,
   notifyHighEndAdvanceRecordedWhatsApp,
   notifyInvoiceCreatedWhatsApp,
   notifyJobDeliveredWhatsApp,
@@ -362,6 +363,9 @@ export default function JobCardDetailPage() {
   const beforePhotoModalInputRef = useRef<HTMLInputElement>(null);
   const [afterPhotoRequiredOpen, setAfterPhotoRequiredOpen] = useState(false);
   const afterPhotoModalInputRef = useRef<HTMLInputElement>(null);
+  // Tracks whether before-photos WhatsApp was already sent in this session to prevent duplicates
+  // (fires at INSPECTION if photos exist, or at AWAITING_SERVICE as fallback — but never both).
+  const beforePhotosWhatsAppSentRef = useRef(false);
   const [multiCamOpen, setMultiCamOpen] = useState(false);
   const [multiCamType, setMultiCamType] = useState<"BEFORE" | "AFTER">("BEFORE");
   const [multiCamStreamPromise, setMultiCamStreamPromise] = useState<Promise<MediaStream> | null>(
@@ -1385,6 +1389,19 @@ export default function JobCardDetailPage() {
       updateJobCard(jobCard.id, patch);
 
       const mergedJob: JobCard = { ...jobCard, ...patch };
+
+      // Send before-photos WhatsApp when vehicle is received in for inspection (INSPECTION)
+      // or as a guaranteed fallback at AWAITING_SERVICE (where before photos are required).
+      // The ref ensures we send at most once per session, avoiding double messages.
+      if (nextStatus === "INSPECTION" || nextStatus === "AWAITING_SERVICE") {
+        const latestPhotos =
+          useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id)?.inspectionPhotos ??
+          mergedJob.inspectionPhotos;
+        if (hasBeforeInspectionPhoto(latestPhotos) && !beforePhotosWhatsAppSentRef.current) {
+          beforePhotosWhatsAppSentRef.current = true;
+          notifyBeforePhotosReadyWhatsApp(mergedJob, businessName);
+        }
+      }
 
       if (nextStatus === "READY") {
         notifyJobReadyWhatsApp(mergedJob, businessName);

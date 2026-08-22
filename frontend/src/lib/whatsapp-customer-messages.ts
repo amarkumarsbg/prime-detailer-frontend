@@ -642,6 +642,29 @@ export function buildJobReadyForPickupWhatsAppMessage(
     .join("\n");
 }
 
+export function buildBeforePhotosReadyWhatsAppMessage(
+  job: JobCard,
+  opts: { businessName: string; customerPhotosLink: string }
+): string {
+  const firstName = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
+  const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
+
+  return [
+    `Hi *${firstName}*,`,
+    ``,
+    `Your *${vehicle}* has been received at *${opts.businessName}*.`,
+    `Job: *${job.jobNumber}*`,
+    ``,
+    `📸 *Before photos* have been taken and are ready for your review.`,
+    `View Check-In Photos:`,
+    opts.customerPhotosLink,
+    ``,
+    `Your vehicle is now with our team. We’ll notify you once it’s ready for pickup.`,
+    ``,
+    `— ${opts.businessName}`,
+  ].join("\n");
+}
+
 export function buildJobDeliveredWhatsAppMessage(
   job: JobCard,
   opts: { businessName: string; customerPhotosLink?: string | null }
@@ -655,7 +678,8 @@ export function buildJobDeliveredWhatsAppMessage(
     `Thank you for choosing *${opts.businessName}*.`,
     `Your job *${job.jobNumber}* is marked *delivered* for ${vehicle}.`,
     ``,
-    opts.customerPhotosLink ? `📸 *View Before & After Comparison:*` : null,
+    opts.customerPhotosLink ? `📸 *Your Before & After Transformation is ready!*` : null,
+    opts.customerPhotosLink ? `(View Before photos, After photos & Before vs After comparison)` : null,
     opts.customerPhotosLink || null,
     opts.customerPhotosLink ? `` : null,
     `We hope you’re happy with the work. For invoice / warranty questions, reply here or visit the workshop.`,

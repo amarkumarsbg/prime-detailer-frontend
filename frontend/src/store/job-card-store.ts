@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import type { JobCard } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
+import { refreshJobCardFromServer } from "@/lib/job-card-inspection-photo-upload";
 import { syncPickupFromJobCard } from "@/lib/sync-pickup-from-job-card";
 import { jobCardUpdateAllowed } from "@/lib/job-card-edit-policy";
 import { evaluateJobCardPricingWrite } from "@/lib/job-card-pricing-rbac";
@@ -27,6 +28,11 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
     set((state) => ({
       jobCards: [jobCard, ...state.jobCards.filter((jc) => jc.id !== jobCard.id)],
     }));
+    // Re-fetch from server so secureToken (server-signed) is populated immediately,
+    // enabling "Customer Photos" sharing without requiring a page reload.
+    refreshJobCardFromServer(jobCard.id).catch(() => {
+      // Non-critical: token will be available on next full page load
+    });
   },
 
   updateJobCard: async (id, updates) => {

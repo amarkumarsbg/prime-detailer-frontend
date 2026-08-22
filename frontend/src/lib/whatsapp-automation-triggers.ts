@@ -12,6 +12,7 @@ import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
 import { getAppointmentDisplayId } from "@/lib/appointment-ids";
 import { reminderMessageFor } from "@/lib/appointment-reminders";
 import {
+  buildBeforePhotosReadyWhatsAppMessage,
   buildInvoiceWhatsAppMessage,
   buildJobDeliveredWhatsAppMessage,
   buildJobReadyForPickupWhatsAppMessage,
@@ -27,6 +28,35 @@ import { useJobCardStore } from "@/store/job-card-store";
 function branchIdForJobCardId(jobCardId: string | undefined): string | undefined {
   if (!jobCardId) return undefined;
   return useJobCardStore.getState().jobCards.find((j) => j.id === jobCardId)?.branchId;
+}
+
+export function notifyBeforePhotosReadyWhatsApp(job: JobCard, businessName: string): void {
+  const phone = job.customerPhone?.trim();
+  if (!phone) return;
+  // Always read from store so we get the latest secureToken (server-signed)
+  const storedJob = useJobCardStore.getState().jobCards.find((j) => j.id === job.id);
+  const secureToken = (storedJob ?? job).secureToken;
+  if (!secureToken) return; // Skip if token not yet available
+  const appUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "");
+  const customerPhotosLink = `${appUrl}/customer/job-card/${secureToken}/photos`;
+  const message = buildBeforePhotosReadyWhatsAppMessage(job, { businessName, customerPhotosLink });
+  void executeCustomerWhatsAppAutomation({
+    phone,
+    message,
+    titles: {
+      api: "Check-in photos — WhatsApp sent",
+      composer: "Check-in photos — WhatsApp composer",
+    },
+    notificationSummary: `${job.jobNumber} → ${phone}`,
+    href: `/job-cards/${job.id}`,
+    branchId: job.branchId,
+    activityLog: {
+      entityType: "JOB_CARD",
+      entityId: job.id,
+      entityLabel: job.jobNumber,
+      details: `Before photos WhatsApp sent to ${job.customerName}`,
+    },
+  });
 }
 
 export function notifyJobReadyWhatsApp(job: JobCard, businessName: string): void {
