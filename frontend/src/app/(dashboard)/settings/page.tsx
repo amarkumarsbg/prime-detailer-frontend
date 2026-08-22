@@ -310,6 +310,9 @@ export default function SettingsPage() {
       HATCHBACK: sp?.HATCHBACK ? String(sp.HATCHBACK) : fallback,
       SEDAN: sp?.SEDAN ? String(sp.SEDAN) : fallback,
       SUV: sp?.SUV ? String(sp.SUV) : fallback,
+      LUXURY: sp?.LUXURY ? String(sp.LUXURY) : fallback,
+      MUV: sp?.MUV ? String(sp.MUV) : fallback,
+      COMPACT_SUV: sp?.COMPACT_SUV ? String(sp.COMPACT_SUV) : fallback,
       BIKE: sp?.BIKE ? String(sp.BIKE) : fallback,
     });
     setEditHesIntervalMonths(String(inferredIntervalMonths(svc.reminderIntervals)));
@@ -1602,7 +1605,18 @@ export default function SettingsPage() {
                         <SelectItem value="1">1 year</SelectItem>
                         <SelectItem value="2">2 years</SelectItem>
                         <SelectItem value="3">3 years</SelectItem>
+                        <SelectItem value="4">4 years</SelectItem>
                         <SelectItem value="5">5 years</SelectItem>
+                        <SelectItem value="6">6 years</SelectItem>
+                        <SelectItem value="7">7 years</SelectItem>
+                        <SelectItem value="8">8 years</SelectItem>
+                        <SelectItem value="9">9 years</SelectItem>
+                        <SelectItem value="10">10 years</SelectItem>
+                        <SelectItem value="11">11 years</SelectItem>
+                        <SelectItem value="12">12 years</SelectItem>
+                        <SelectItem value="13">13 years</SelectItem>
+                        <SelectItem value="14">14 years</SelectItem>
+                        <SelectItem value="15">15 years</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

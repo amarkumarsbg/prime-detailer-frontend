@@ -16,14 +16,17 @@ export interface HighEndServiceConfig {
 }
 
 export const HIGH_END_PRICE_SEGMENTS: {
-  key: keyof Pick<SegmentPricing, "HATCHBACK" | "SEDAN" | "SUV" | "BIKE">;
+  key: keyof SegmentPricing;
   label: string;
   hint: string;
   icon: string;
 }[] = [
   { key: "HATCHBACK", label: "Hatchback", hint: "Small cars", icon: "🚗" },
   { key: "SEDAN", label: "Sedan", hint: "Mid-size", icon: "🚙" },
+  { key: "COMPACT_SUV", label: "Compact SUV", hint: "Small SUVs", icon: "🚙" },
   { key: "SUV", label: "SUV", hint: "Large", icon: "🚐" },
+  { key: "MUV", label: "MUV", hint: "Multi-utility", icon: "🚐" },
+  { key: "LUXURY", label: "Luxury", hint: "Premium cars", icon: "🏎️" },
   { key: "BIKE", label: "Bike", hint: "Two-wheeler", icon: "🏍️" },
 ];
 

@@ -401,7 +401,7 @@ export function getCompanyTargetResults(args: {
       jobRev = args.jobCards
         .filter((jc) => {
           if (jc.status !== "DELIVERED") return false;
-          const dateStr = jc.actualDelivery || jc.updatedAt || jc.createdAt;
+          const dateStr = jc.createdAt;
           if (!dateStr) return false;
           const time = Date.parse(dateStr);
           if (Number.isNaN(time)) return false;

@@ -16,9 +16,38 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useStaffStore } from "@/store/staff-store";
+import { useInvoiceStore } from "@/store/invoice-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { useCustomerStore } from "@/store/customer-store";
+import { useVehicleStore } from "@/store/vehicle-store";
+import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
+import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
+import { buildJobCardTemplateMessage, defaultWhatsAppTemplateForStatus } from "@/lib/job-card-whatsapp-templates";
+import { sendCustomerWhatsApp } from "@/lib/whatsapp-send";
+import { downloadInvoicePdf, type InvoicePdfOpts } from "@/lib/invoice-pdf";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
 import {
@@ -28,11 +57,11 @@ import {
   jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, cn, formatCurrency } from "@/lib/utils";
 import { jobNumberSortKey, sortJobCardsByNumberThenCreated } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
-import { Plus, LayoutGrid, List, ChevronDown } from "lucide-react";
+import { Plus, LayoutGrid, List, ChevronDown, MoreVertical, Eye, Pencil, Trash2, Download, Clock, FileText, Wrench, Calendar, User, Car, CreditCard } from "lucide-react";
 
 const TAB_STATUSES: (JobCardStatus | "ALL")[] = [
   "ALL",
@@ -100,14 +129,151 @@ const KANBAN_COLORS: Record<JobCardStatus, string> = {
 export default function JobCardsPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
-  const { jobCards } = useJobCardStore();
+  const { jobCards, updateJobCard, deleteJobCard } = useJobCardStore();
+  const invoices = useInvoiceStore((s) => s.invoices);
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId } = useBranchScope();
+
+  const handleDownloadInvoiceForJobCard = async (jc: JobCard) => {
+    const invoices = useInvoiceStore.getState().invoices;
+    const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+    if (!invoice) {
+      toast.error("Invoice not available yet");
+      return;
+    }
+
+    const settingsStore = useSettingsStore.getState();
+    const customerStore = useCustomerStore.getState();
+    const vehicleStore = useVehicleStore.getState();
+
+    const customer = customerStore.customers.find((c) => c.id === invoice.customerId) || {
+      id: invoice.customerId,
+      name: invoice.customerName,
+      phone: invoice.customerPhone,
+      email: "",
+      address: "",
+    };
+
+    const vehicle = vehicleStore.vehicles.find((v) => v.id === jc.vehicleId);
+    const resolvedVehicleMakeModel = vehicle
+      ? `${vehicle.make} ${vehicle.model}`
+      : jc.vehicleMakeModel || "Vehicle";
+    const vehicleDetailsLine = vehicle
+      ? `${vehicle.year ? `${vehicle.year} ` : ""}${vehicle.color ? `${vehicle.color} ` : ""}${vehicle.vinNumber ? `(VIN: ${vehicle.vinNumber})` : ""}`
+      : undefined;
+
+    const sanitizedInvoice = {
+      ...invoice,
+      rewardDiscount: (invoice.rewardDiscount || 0) > 200 ? 0 : invoice.rewardDiscount,
+    };
+
+    const invoicePdfOpts: InvoicePdfOpts = {
+      invoice: sanitizedInvoice,
+      jobCard: jc,
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
+      customerEmail: customer.email?.trim() ?? "",
+      customerAddress: customer.address ?? "",
+      vehicleMakeModel: resolvedVehicleMakeModel,
+      vehicleDetailsLine: vehicleDetailsLine || undefined,
+      odometerReading: jc.odometerReading ?? undefined,
+      business: {
+        businessName: settingsStore.businessName,
+        businessTagline: settingsStore.businessTagline,
+        businessAddress: settingsStore.businessAddress,
+        businessPhone: settingsStore.businessPhone,
+        businessWhatsApp: settingsStore.businessWhatsApp,
+        businessEmail: settingsStore.businessEmail,
+        businessWebsite: settingsStore.businessWebsite,
+        gstRegistrationStatus: settingsStore.gstRegistrationStatus,
+        gstin: settingsStore.gstin,
+        companyPan: settingsStore.companyPan,
+        bankName: settingsStore.bankName,
+        bankBranch: settingsStore.bankBranch,
+        bankAccountNumber: settingsStore.bankAccountNumber,
+        bankIfsc: settingsStore.bankIfsc,
+        bankUpi: settingsStore.bankUpi,
+      },
+      payments: invoice.payments || [],
+      totalPaid: (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0),
+      remainingBalance: invoice.grandTotal - ((invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)),
+      referralCode: "referralCode" in customer ? customer.referralCode : undefined,
+      referralRewardAmount: settingsStore.referralRewardAmount,
+      newCustomerDiscount: settingsStore.newCustomerDiscount,
+    };
+
+    const toastId = toast.loading("Generating PDF...");
+    try {
+      await downloadInvoicePdf(invoicePdfOpts);
+      toast.success("PDF downloaded successfully.", { id: toastId });
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to download PDF.", { id: toastId });
+    }
+  };
+
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [recordPaymentInvoiceId, setRecordPaymentInvoiceId] = useState<string | null>(null);
+
+  const handleOpenRecordPayment = (jc: JobCard) => {
+    let invoice = useInvoiceStore.getState().invoices.find((inv) => inv.jobCardId === jc.id);
+    if (!invoice) {
+      const tempJc = { ...jc, status: "READY" as const };
+      const result = createOrGetInvoiceForJob(jc.id, tempJc);
+      if (result.ok) {
+        invoice = useInvoiceStore.getState().invoices.find((i) => i.id === result.invoiceId);
+      }
+    }
+    if (invoice) {
+      setRecordPaymentInvoiceId(invoice.id);
+      setRecordPaymentOpen(true);
+    } else {
+      toast.error("Failed to generate or find invoice for payment recording");
+    }
+  };
+
+  const handleSendWhatsApp = async (jc: JobCard) => {
+    const businessName = useSettingsStore.getState().businessName;
+    const invoices = useInvoiceStore.getState().invoices;
+    const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+    const buildOpts = {
+      businessName: businessName || "Prime Detailers",
+      invoiceNumber: invoice ? invoice.invoiceNumber : null,
+      customerLoginUrl: typeof window !== "undefined" ? window.location.origin : null,
+    };
+    const templateId = defaultWhatsAppTemplateForStatus(jc.status);
+    const body = buildJobCardTemplateMessage(templateId, jc, buildOpts);
+    const phone = jc.customerPhone?.trim() ?? "";
+    if (!phone) {
+      toast.error("Customer phone number is missing");
+      return;
+    }
+
+    const toastId = toast.loading("Sending WhatsApp message...");
+    try {
+      await sendCustomerWhatsApp(phone, body);
+      toast.success("WhatsApp message sent successfully", { id: toastId });
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to send WhatsApp message", { id: toastId });
+    }
+  };
+
   const showBranchColumn = !selectedBranchId;
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [dateFilter, setDateFilter] = useState<string>("");
+  const [mechanicFilter, setMechanicFilter] = useState<string>("ALL");
+
+  const staff = useStaffStore((s) => s.staff);
+  const mechanics = useMemo(() => {
+    return staff.filter((m) => m.role === "MECHANIC" || !m.role);
+  }, [staff]);
+
   const [activeTab, setActiveTab] = useState<string>("ALL");
-  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [collapsedKanbanSections, setCollapsedKanbanSections] = useState<Set<JobCardStatus>>(
     () => new Set(KANBAN_COLUMNS.slice(1))
   );
@@ -149,6 +315,35 @@ export default function JobCardsPage() {
     }
     return sortJobCardsByNumberThenCreated(list);
   }, [branchScopedJobCards, activeFilter]);
+
+  const filteredJobCards = useMemo(() => {
+    return jobCardsForView.filter((jc) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matches = jobCardMatchesSearch(jc, q);
+        if (!matches) return false;
+      }
+      if (statusFilter !== "ALL" && jc.status !== statusFilter) {
+        return false;
+      }
+      if (dateFilter) {
+        const jcDateStr = jc.createdAt ? jc.createdAt.slice(0, 10) : "";
+        if (jcDateStr !== dateFilter) {
+          const expectedStr = jc.expectedDelivery ? jc.expectedDelivery.slice(0, 10) : "";
+          if (expectedStr !== dateFilter) return false;
+        }
+      }
+      if (mechanicFilter !== "ALL") {
+        const mechName = jc.mechanicName || "";
+        const mechId = jc.mechanicId || "";
+        if (mechName !== mechanicFilter && mechId !== mechanicFilter) {
+          const mechObj = staff.find((s) => s.id === mechanicFilter);
+          if (!mechObj || mechName !== mechObj.name) return false;
+        }
+      }
+      return true;
+    });
+  }, [jobCardsForView, searchQuery, statusFilter, dateFilter, mechanicFilter, staff]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: jobCardsForView.length };
@@ -195,7 +390,7 @@ export default function JobCardsPage() {
         type="button"
         onClick={() => setViewMode("kanban")}
         aria-pressed={viewMode === "kanban"}
-        title="Board view"
+        title="Grid view"
         className={`flex h-8 w-8 items-center justify-center transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
       >
         <LayoutGrid className="w-3.5 h-3.5" />
@@ -228,8 +423,27 @@ export default function JobCardsPage() {
   }, [kanbanData]);
 
   const filteredJobCardsForListTab = useMemo(() => {
-    if (activeTab === "ALL") return jobCardsForView;
-    return jobCardsForView.filter((jc) => jc.status === activeTab);
+    const base = jobCardsForView.filter((jc) => {
+      if (dateFilter) {
+        const jcDateStr = jc.createdAt ? jc.createdAt.slice(0, 10) : "";
+        if (jcDateStr !== dateFilter) {
+          const expectedStr = jc.expectedDelivery ? jc.expectedDelivery.slice(0, 10) : "";
+          if (expectedStr !== dateFilter) return false;
+        }
+      }
+      if (mechanicFilter !== "ALL") {
+        const mechName = jc.mechanicName || "";
+        const mechId = jc.mechanicId || "";
+        if (mechName !== mechanicFilter && mechId !== mechanicFilter) {
+          const mechObj = staff.find((s) => s.id === mechanicFilter);
+          if (!mechObj || mechName !== mechObj.name) return false;
+        }
+      }
+      return true;
+    });
+
+    if (activeTab === "ALL") return base;
+    return base.filter((jc) => jc.status === activeTab);
   }, [jobCardsForView, activeTab]);
 
   const columns = useMemo(
@@ -469,100 +683,350 @@ export default function JobCardsPage() {
           </CardContent>
         </Card>
       ) : (
-        <>
-          {/* Mobile: stacked full-width stage columns; md+: horizontal board */}
-          <div className="flex flex-col gap-4 md:flex-row md:gap-3 md:overflow-x-auto pb-4 -mx-1 px-1">
-          {KANBAN_COLUMNS.map((status) => {
-            const sectionJobs = kanbanData[status] ?? [];
-            const sectionCount = sectionJobs.length;
-            const isCollapsed = collapsedKanbanSections.has(status);
-
-            return (
-            <div
-              key={status}
-              className={cn(
-                "w-full md:shrink-0 md:w-[280px]",
-                sectionCount === 0 && "max-md:hidden"
-              )}
-            >
-              <div className={`rounded-xl border border-border/80 bg-card shadow-sm border-t-4 ${KANBAN_COLORS[status]}`}>
-                <button
-                  type="button"
-                  onClick={() => toggleKanbanSection(status)}
-                  aria-expanded={!isCollapsed}
-                  className="md:hidden flex w-full items-center justify-between px-3 py-2.5 border-b border-border/80 bg-muted/20 text-left transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                        isCollapsed && "-rotate-90"
-                      )}
-                    />
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground truncate">
-                      {TAB_LABELS[status]}
-                    </h3>
-                  </div>
-                  <span className="flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-background border border-border text-xs font-semibold tabular-nums shrink-0">
-                    {sectionCount}
-                  </span>
-                </button>
-                <div className="hidden md:flex items-center justify-between px-3 py-2.5 border-b border-border/80 bg-muted/20">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                    {TAB_LABELS[status]}
-                  </h3>
-                  <span className="flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-background border border-border text-xs font-semibold tabular-nums">
-                    {sectionCount}
-                  </span>
-                </div>
-                <div
-                  className={cn(
-                    "p-2 space-y-2 md:max-h-[calc(100vh-260px)] md:overflow-y-auto",
-                    isCollapsed && "max-md:hidden"
-                  )}
-                >
-                  {sectionCount === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-1 py-10 text-xs text-muted-foreground">
-                      <span>No jobs in this stage</span>
-                    </div>
-                  ) : (
-                    sectionJobs.map((jc) => (
-                      <div
-                        key={jc.id}
-                        onClick={() => router.push(`/job-cards/${jc.id}`)}
-                        className="rounded-lg border border-border bg-card p-3 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all"
-                      >
-                        <div className="flex items-center justify-between mb-1.5 gap-2">
-                          <span className="font-mono text-xs font-semibold text-primary">{jc.jobNumber}</span>
-                          {showBranchColumn && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[48%]">
-                              {renderBranchLabel(jc.branchId)}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm font-medium leading-tight">{jc.customerName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{jc.vehicleRegNumber} &middot; {jc.vehicleMakeModel}</p>
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                          <span className="text-[10px] text-muted-foreground">
-                            {jc.mechanicName ?? "Unassigned"}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {jc.status === "DELIVERED"
-                              ? formatDate(jc.actualDelivery ?? jc.updatedAt)
-                              : formatDate(jc.expectedDelivery)}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+        <div className="space-y-4">
+          {/* Simple Filters above the grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-sm">
+            {/* Search */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Search</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search jobs, customers, vehicles..."
+                className="w-full h-10 px-3 py-2 text-sm bg-background border border-border/85 rounded-lg placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              />
             </div>
-            );
-          })}
+            
+            {/* Status */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full h-10 bg-background border-border/85 text-sm">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Statuses</SelectItem>
+                  {KANBAN_COLUMNS.map((st) => (
+                    <SelectItem key={st} value={st}>
+                      {TAB_LABELS[st]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</label>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full h-10 px-3 py-2 text-sm bg-background border border-border/85 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+              />
+            </div>
+
+            {/* Mechanic */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mechanic</label>
+              <Select value={mechanicFilter} onValueChange={setMechanicFilter}>
+                <SelectTrigger className="w-full h-10 bg-background border-border/85 text-sm">
+                  <SelectValue placeholder="All Mechanics" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Mechanics</SelectItem>
+                  {mechanics.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </>
+
+          {/* Unified Grid */}
+          {filteredJobCards.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-1 py-16 border border-dashed border-border/85 rounded-xl bg-card text-muted-foreground">
+              <span className="text-sm font-medium">No job cards match your filters</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredJobCards.map((jc) => (
+                <div
+                  key={jc.id}
+                  className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 w-full"
+                >
+                  {/* Top Section */}
+                  <div className="p-4 bg-background space-y-3.5 pb-3">
+                    {/* Plate & Status & Dropdown row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1.5 min-w-0">
+                        {/* Indian License Plate */}
+                        <div className="inline-flex items-stretch border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-background h-8">
+                          <div className="bg-[#0b5cda] flex flex-col items-center justify-center px-2 py-0.5 text-white shrink-0 select-none">
+                            <span className="w-1.5 h-1.5 rounded-full border border-white mb-0.5" />
+                            <span className="text-[7px] font-bold leading-none tracking-wider">IND</span>
+                          </div>
+                          <div className="flex items-center justify-center px-3 py-0.5 font-mono text-[11px] font-black text-foreground tracking-wider uppercase">
+                            {jc.vehicleRegNumber}
+                          </div>
+                        </div>
+                        {/* Vehicle Make/Model */}
+                        <p className="text-[#0b5cda] dark:text-[#3b82f6] font-bold text-sm leading-tight truncate">
+                          {jc.vehicleMakeModel}
+                        </p>
+                      </div>
+
+                      {/* Top-Right Badge & Three dots dropdown */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Status Badge in light yellow styling */}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
+                          {TAB_LABELS[jc.status]}
+                        </span>
+                        
+                        {/* Dropdown menu trigger (top right) */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/job-cards/${jc.id}`);
+                              }}
+                              className="gap-2 text-xs"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                              Edit Job Card
+                            </DropdownMenuItem>
+                            {(() => {
+                              const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+                              const paid = invoice
+                                ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
+                                : (jc.paidAmount ?? 0);
+                              const due = invoice
+                                ? invoice.grandTotal - paid
+                                : jc.estimatedAmount - paid;
+                              if (due <= 0.01) return null;
+                              return (
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenRecordPayment(jc);
+                                  }}
+                                  className="gap-2 text-xs"
+                                >
+                                  <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
+                                  Record Payment
+                                </DropdownMenuItem>
+                              );
+                            })()}
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger className="gap-2 text-xs">
+                                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                                Change Status
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuPortal>
+                                <DropdownMenuSubContent>
+                                  {KANBAN_COLUMNS.map((st) => (
+                                    <DropdownMenuItem
+                                      key={st}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const ok = await updateJobCard(jc.id, { status: st });
+                                        if (ok) {
+                                          toast.success(`Job card status updated to ${TAB_LABELS[st]}`);
+                                        }
+                                      }}
+                                      className="text-xs"
+                                    >
+                                      {TAB_LABELS[st]}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuPortal>
+                            </DropdownMenuSub>
+                            <DropdownMenuItem
+                              disabled={!invoices.some((inv) => inv.jobCardId === jc.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadInvoiceForJobCard(jc);
+                              }}
+                              className="gap-2 text-xs"
+                            >
+                              <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                              Download Invoice
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const hasInvoice = invoices.some((inv) => inv.jobCardId === jc.id);
+                                const confirmMsg = hasInvoice 
+                                  ? "This job card has an invoice. Deleting it may impact billing records. Are you sure you want to delete this job card?"
+                                  : "Are you sure you want to delete this job card?";
+                                if (window.confirm(confirmMsg)) {
+                                  await deleteJobCard(jc.id);
+                                  toast.success("Job card deleted successfully.");
+                                }
+                              }}
+                              className="gap-2 text-xs text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+
+                    {/* Badges Row */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
+                        <Car className="w-3 h-3 shrink-0" />
+                        {jc.vehicleSegment}
+                      </span>
+
+                      {(() => {
+                        const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+                        const paid = invoice
+                          ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
+                          : (jc.paidAmount ?? 0);
+                        const due = invoice
+                          ? invoice.grandTotal - paid
+                          : jc.estimatedAmount - paid;
+
+                        let badgeColor = "bg-red-50 text-red-700 border-red-200/50 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/30";
+                        let statusLabel = "UNPAID";
+                        if (paid > 0) {
+                          if (due <= 0.01) {
+                            badgeColor = "bg-green-50 text-green-700 border-green-200/50 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/30";
+                            statusLabel = "PAID";
+                          } else {
+                            badgeColor = "bg-blue-50 text-blue-700 border-blue-200/50 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/30";
+                            statusLabel = "PARTIALLY PAID";
+                          }
+                        }
+                        return (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${badgeColor}`}>
+                            <CreditCard className="w-3 h-3 shrink-0" />
+                            {statusLabel}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Customer Section */}
+                  <div className="px-4 py-3 border-t border-border/40 flex items-center justify-between gap-2 bg-background">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate leading-snug">{jc.customerName}</p>
+                        <p className="text-[11px] font-mono text-muted-foreground mt-0.5 leading-none">{jc.customerPhone}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleSendWhatsApp(jc);
+                      }}
+                      className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-[#25D366] rounded-xl border border-border/60 bg-muted/20 transition-colors shrink-0"
+                      title="Chat on WhatsApp"
+                    >
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008 0c3.202.001 6.212 1.248 8.477 3.517 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.588 1.485 5.412 1.486 5.49.003 9.953-4.461 9.957-9.954.002-2.66-1.033-5.161-2.91-7.04C17.229 1.767 14.73 1.733 12.01 1.73c-5.49.005-9.956 4.467-9.96 9.961-.002 1.9.497 3.754 1.445 5.378L2.43 21.72l4.217-1.106zM17.487 14.4c-.299-.149-1.778-.878-2.057-.98-.279-.1-.484-.149-.688.15-.204.3-.79.98-.969 1.18-.18.2-.359.224-.658.075-.3-.15-1.265-.467-2.41-1.485-.89-.795-1.49-1.777-1.665-2.076-.175-.3-.019-.462.13-.611.135-.133.3-.349.45-.523.15-.174.2-.3.3-.499.1-.2.05-.374-.025-.524-.075-.15-.688-1.66-.942-2.272-.247-.597-.5-.515-.688-.525-.179-.01-.383-.01-.588-.01-.204 0-.538.077-.82.385-.282.309-1.078 1.053-1.078 2.569 0 1.515 1.102 2.982 1.256 3.187.154.205 2.167 3.31 5.25 4.643.734.316 1.307.505 1.753.647.737.234 1.407.2 1.938.12.59-.09 1.778-.727 2.028-1.43.25-.702.25-1.3.176-1.43-.075-.13-.279-.23-.579-.38z" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Mechanic & Expected Delivery Row */}
+                  <div className="px-4 py-3 border-t border-border/40 grid grid-cols-2 gap-4 bg-background text-xs">
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground font-medium">Assigned Mechanic</p>
+                      <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                        <Wrench className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{jc.mechanicName ?? "Unassigned"}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground font-medium">Expected Delivery</p>
+                      <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                        <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{formatDate(jc.expectedDelivery)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Total Cost & Compact Created On Section */}
+                  <div className="px-4 py-3 border-t border-border/40 space-y-1.5 bg-background">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground font-semibold">
+                        Created {formatDate(jc.createdAt || jc.expectedDelivery)}
+                      </span>
+                      <span className="text-base font-black text-foreground tabular-nums">
+                        {formatCurrency(jc.estimatedAmount)}
+                      </span>
+                    </div>
+                    {(() => {
+                      const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+                      const paid = invoice
+                        ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
+                        : (jc.paidAmount ?? 0);
+                      const due = invoice
+                        ? invoice.grandTotal - paid
+                        : jc.estimatedAmount - paid;
+                      
+                      if (paid <= 0) return null;
+                      return (
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pt-0.5">
+                          <span>Paid: <span className="text-foreground font-semibold">{formatCurrency(paid)}</span></span>
+                          <span>Due: <span className="text-foreground font-semibold">{formatCurrency(Math.max(0, due))}</span></span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Bottom Actions Grid */}
+                  <div className="px-4 py-3 bg-muted/10 border-t border-border/40 flex text-xs font-semibold">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-1.5 h-9 text-[#0b5cda] border-[#0b5cda]/30 hover:border-[#0b5cda] hover:bg-blue-50/20 font-bold"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/job-cards/${jc.id}`);
+                      }}
+                    >
+                      <Eye className="w-3.5 h-3.5 text-[#0b5cda]" />
+                      View Details
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
+
+      <RecordPaymentDialog
+        open={recordPaymentOpen}
+        onOpenChange={setRecordPaymentOpen}
+        invoiceId={recordPaymentInvoiceId}
+      />
     </div>
   );
 }

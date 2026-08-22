@@ -124,12 +124,37 @@ export default function RewardsPage() {
   const [manualAmount, setManualAmount] = useState("");
   const [manualReason, setManualReason] = useState("");
 
-  const [settingsDraft, setSettingsDraft] = useState(settings);
+  const emptyTiers = () => [
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+  ];
+
+  const getMigratedSettings = (rawSettings: typeof settings) => {
+    const currentPeriod = rawSettings.companyTargetPeriod || "MONTHLY";
+    const loadedFreqTiers = rawSettings.companyTargetFrequencyTiers || {} as any;
+    const legacyTiers = rawSettings.companyTargetTiers || [];
+
+    const migratedFrequencyTiers = {
+      MONTHLY: loadedFreqTiers.MONTHLY || (currentPeriod === "MONTHLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+      QUARTERLY: loadedFreqTiers.QUARTERLY || (currentPeriod === "QUARTERLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+      HALF_YEARLY: loadedFreqTiers.HALF_YEARLY || (currentPeriod === "HALF_YEARLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+      YEARLY: loadedFreqTiers.YEARLY || (currentPeriod === "YEARLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+    };
+
+    return {
+      ...rawSettings,
+      companyTargetFrequencyTiers: migratedFrequencyTiers,
+    };
+  };
+
+  const [settingsDraft, setSettingsDraft] = useState(() => getMigratedSettings(settings));
   const [settingsDirty, setSettingsDirty] = useState(false);
 
   useEffect(() => {
     if (!settingsDirty) {
-      setSettingsDraft(settings);
+      setSettingsDraft(getMigratedSettings(settings));
     }
   }, [settings, settingsDirty]);
 
@@ -311,8 +336,10 @@ export default function RewardsPage() {
     toast.success("Entry cancelled.");
   };
 
+
+
   const syncSettingsDraft = () => {
-    setSettingsDraft(settings);
+    setSettingsDraft(getMigratedSettings(settings));
     setSettingsDirty(false);
   };
 
@@ -329,21 +356,23 @@ export default function RewardsPage() {
     field: "targetAmount" | "rewardPercent",
     value: number
   ) => {
-    const currentTiers = settingsDraft.companyTargetTiers || [
-      { targetAmount: 0, rewardPercent: 0 },
-      { targetAmount: 0, rewardPercent: 0 },
-      { targetAmount: 0, rewardPercent: 0 },
-      { targetAmount: 0, rewardPercent: 0 },
-    ];
-    const updatedTiers = [...currentTiers];
-    updatedTiers[index] = {
-      ...updatedTiers[index],
+    const currentPeriod = settingsDraft.companyTargetPeriod || "MONTHLY";
+    const copyAll = { ...(settingsDraft.companyTargetFrequencyTiers || {}) as any };
+    const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
+    if (!copyTiers[index]) {
+      copyTiers[index] = { targetAmount: 0, rewardPercent: 0 };
+    }
+    copyTiers[index] = {
+      ...copyTiers[index],
       [field]: value,
     };
-    patchSettingsDraft("companyTargetTiers", updatedTiers);
+    copyAll[currentPeriod] = copyTiers;
+    patchSettingsDraft("companyTargetFrequencyTiers", copyAll);
   };
 
   const handleSaveSettings = () => {
+    const currentPeriod = settingsDraft.companyTargetPeriod || "MONTHLY";
+    const currentTiers = (settingsDraft.companyTargetFrequencyTiers || {} as any)[currentPeriod] || [];
     updateSettings({
       rewardMode: settingsDraft.rewardMode,
       defaultPercent: settingsDraft.defaultPercent,
@@ -359,7 +388,8 @@ export default function RewardsPage() {
       companyTargetEnabled: settingsDraft.companyTargetEnabled,
       companyTargetRevenueType: settingsDraft.companyTargetRevenueType,
       companyTargetPeriod: settingsDraft.companyTargetPeriod,
-      companyTargetTiers: settingsDraft.companyTargetTiers,
+      companyTargetTiers: currentTiers,
+      companyTargetFrequencyTiers: settingsDraft.companyTargetFrequencyTiers,
     });
     setSettingsDirty(false);
     toast.success("Reward settings saved.");
@@ -929,7 +959,9 @@ export default function RewardsPage() {
                 <h4 className="text-sm font-semibold text-foreground">Target Tiers Configuration</h4>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {[0, 1, 2, 3].map((idx) => {
-                    const tier = settingsDraft.companyTargetTiers?.[idx] || { targetAmount: 0, rewardPercent: 0 };
+                    const currentFreq = settingsDraft.companyTargetPeriod || "MONTHLY";
+                    const currentFreqTiers = (settingsDraft.companyTargetFrequencyTiers as any)?.[currentFreq] || [];
+                    const tier = currentFreqTiers[idx] || { targetAmount: 0, rewardPercent: 0 };
                     return (
                       <div key={idx} className="space-y-2 rounded-lg border p-3 bg-muted/20">
                         <p className="text-xs font-semibold text-muted-foreground uppercase">

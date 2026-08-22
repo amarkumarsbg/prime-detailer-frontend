@@ -6,12 +6,15 @@ import { Label } from "@/components/ui/label";
 import { HIGH_END_PRICE_SEGMENTS } from "@/store/high-end-service-store";
 import type { SegmentPricing } from "@/types";
 
-export type HighEndPriceDraft = Pick<SegmentPricing, "HATCHBACK" | "SEDAN" | "SUV" | "BIKE">;
+export type HighEndPriceDraft = Record<keyof SegmentPricing, string>;
 
-export const EMPTY_HIGH_END_PRICE_DRAFT: Record<keyof HighEndPriceDraft, string> = {
+export const EMPTY_HIGH_END_PRICE_DRAFT: HighEndPriceDraft = {
   HATCHBACK: "",
   SEDAN: "",
+  COMPACT_SUV: "",
   SUV: "",
+  MUV: "",
+  LUXURY: "",
   BIKE: "",
 };
 

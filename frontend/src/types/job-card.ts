@@ -160,6 +160,14 @@ export interface JobCard {
     keysDelivered: boolean;
     finalWalkthrough: boolean;
   };
+  payments?: {
+    id: string;
+    amount: number;
+    method: "Cash" | "UPI" | "Card" | "Bank Transfer";
+    date: string;
+    notes?: string;
+  }[];
+  paidAmount?: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

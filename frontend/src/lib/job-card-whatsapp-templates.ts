@@ -194,14 +194,12 @@ export function buildJobCardTemplateMessage(
 
     case "job_closed":
       return joinMessage([
-        `Hi ${name}! 🔓 Thank you for choosing *${biz}*.`,
+        `Hi ${name},`,
         ``,
-        `Your job *${job.jobNumber}* is marked delivered for ${vehicle}.`,
-        services ? `✅ Completed: ${services}` : null,
-        login ? `🔗 *Your Customer Login*` : null,
-        login || null,
+        `Thank you for choosing ${biz}.`,
+        `Your job ${job.jobNumber} is marked delivered for ${job.vehicleMakeModel} (${job.vehicleRegNumber}).`,
         ``,
-        `We hope you’re happy with the work. Reply here anytime.`,
+        `We hope you’re happy with the work. For invoice / warranty questions, reply here or visit the workshop.`,
         ``,
         `— ${biz}`,
       ]);
