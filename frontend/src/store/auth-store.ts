@@ -81,6 +81,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const res = await fetch(buildApiUrl("/api/auth/me"), {
             headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
           });
           const body = (await res.json()) as {
             data?: { user: User; branch: Branch | null } | null;

@@ -57,6 +57,7 @@ export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(buildApiUrl(path), {
     method: "GET",
     headers: authHeaders(),
+    cache: "no-store",
   });
   return parseResponse<T>(res);
 }

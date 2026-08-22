@@ -32,10 +32,30 @@ describe("pickup and drop WhatsApp messages", () => {
 
   it("writes a drop-off delivered confirmation", () => {
     const text = buildPickupDropWhatsAppMessage(
-      { ...pickup, type: "DROP", status: "DELIVERED" },
-      { businessName: "Prime Detailers" }
+      {
+        ...pickup,
+        customerName: "Jaimaiki",
+        vehicleMakeModel: "Kia EV6",
+        vehicleRegNumber: "UP93BB2222",
+        jobNumber: "JC-2026-0203",
+        notes: "Auto-created when job reached Ready and pickup is at workshop",
+        type: "DROP",
+        status: "DELIVERED"
+      },
+      { businessName: "Prime Detailerss" }
     );
-    expect(text).toMatch(/has been \*delivered\*/i);
+    expect(text).toBe(
+      "Hi *Jaimaiki*,\n" +
+      "\n" +
+      "Your vehicle has been *delivered*.\n" +
+      "\n" +
+      "Vehicle: Kia EV6 (UP93BB2222)\n" +
+      "Job Card: *JC-2026-0203*\n" +
+      "\n" +
+      "Thank you for choosing *Prime Detailerss*.\n" +
+      "\n" +
+      "— Prime Detailerss"
+    );
   });
 
   it("combines pickup and drop-off when both are created", () => {

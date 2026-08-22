@@ -143,6 +143,25 @@ export function buildPickupDropWhatsAppMessage(
   opts: { branchName?: string; businessName?: string } = {}
 ): string {
   const biz = opts.businessName?.trim() || "Prime Detailers";
+  const mm = req.vehicleMakeModel?.trim();
+  const reg = req.vehicleRegNumber?.trim();
+
+  if (req.type === "DROP" && req.status === "DELIVERED") {
+    const vehicleDetail = mm && reg ? `${mm} (${reg})` : mm || reg || "—";
+    return [
+      `Hi *${req.customerName}*,`,
+      ``,
+      `Your vehicle has been *delivered*.`,
+      ``,
+      `Vehicle: ${vehicleDetail}`,
+      `Job Card: *${req.jobNumber}*`,
+      ``,
+      `Thank you for choosing *${biz}*.`,
+      ``,
+      `— ${biz}`,
+    ].join("\n");
+  }
+
   const first = req.customerName.trim().split(/\s+/)[0] ?? req.customerName;
   const when = (() => {
     try {
@@ -153,8 +172,6 @@ export function buildPickupDropWhatsAppMessage(
   })();
   const branchLine = opts.branchName?.trim() ? `Workshop: *${opts.branchName.trim()}*` : "";
   const driverLine = req.driverName?.trim() ? `Driver: *${req.driverName.trim()}*` : "";
-  const mm = req.vehicleMakeModel?.trim();
-  const reg = req.vehicleRegNumber?.trim();
   const vehicleLine =
     mm && reg ? `Vehicle: ${mm} (${reg})` : mm ? `Vehicle: ${mm}` : reg ? `Vehicle: ${reg}` : "";
   const jobLine =

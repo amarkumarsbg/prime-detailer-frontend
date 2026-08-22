@@ -140,8 +140,19 @@ export function JobCardPartsPicker({
     }
     const part = partsById.get(partId);
     if (!part) return;
-    const unit = getSelectableUnits(part)[0] || part.primaryUnit || "Piece";
-    if (!checkBranchStockAvailable(part, 1, unit)) {
+    const units = getSelectableUnits(part);
+    let unit = units[0] || part.primaryUnit || "Piece";
+    let hasStock = checkBranchStockAvailable(part, 1, unit);
+    if (!hasStock && units.length > 1) {
+      for (const u of units.slice(1)) {
+        if (checkBranchStockAvailable(part, 1, u)) {
+          unit = u;
+          hasStock = true;
+          break;
+        }
+      }
+    }
+    if (!hasStock) {
       const canonical = getBranchCanonicalQty(branchStocks, part, branchId);
       const qtyVal = canonicalSecondaryToUnitQty(part, canonical, unit);
       const formatted = Number.isInteger(qtyVal) ? qtyVal.toLocaleString("en-IN") : qtyVal.toLocaleString("en-IN", { maximumFractionDigits: 2 });
