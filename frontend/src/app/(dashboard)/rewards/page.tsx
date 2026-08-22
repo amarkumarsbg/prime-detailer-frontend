@@ -324,6 +324,25 @@ export default function RewardsPage() {
     setSettingsDirty(true);
   };
 
+  const patchCompanyTargetTier = (
+    index: number,
+    field: "targetAmount" | "rewardPercent",
+    value: number
+  ) => {
+    const currentTiers = settingsDraft.companyTargetTiers || [
+      { targetAmount: 0, rewardPercent: 0 },
+      { targetAmount: 0, rewardPercent: 0 },
+      { targetAmount: 0, rewardPercent: 0 },
+      { targetAmount: 0, rewardPercent: 0 },
+    ];
+    const updatedTiers = [...currentTiers];
+    updatedTiers[index] = {
+      ...updatedTiers[index],
+      [field]: value,
+    };
+    patchSettingsDraft("companyTargetTiers", updatedTiers);
+  };
+
   const handleSaveSettings = () => {
     updateSettings({
       rewardMode: settingsDraft.rewardMode,
@@ -337,6 +356,10 @@ export default function RewardsPage() {
       lateDeductionPercent: settingsDraft.lateDeductionPercent,
       supervisorSharePercent: settingsDraft.supervisorSharePercent,
       applicatorSharePercent: settingsDraft.applicatorSharePercent,
+      companyTargetEnabled: settingsDraft.companyTargetEnabled,
+      companyTargetRevenueType: settingsDraft.companyTargetRevenueType,
+      companyTargetPeriod: settingsDraft.companyTargetPeriod,
+      companyTargetTiers: settingsDraft.companyTargetTiers,
     });
     setSettingsDirty(false);
     toast.success("Reward settings saved.");
@@ -840,6 +863,111 @@ export default function RewardsPage() {
                     )
                   }
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 gap-3">
+              <div className="space-y-0.5">
+                <CardTitle className="text-base">Company Target-Based Rewards</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Enable rewards based on company-wide target achievements
+                </p>
+              </div>
+              <Switch
+                checked={!!settingsDraft.companyTargetEnabled}
+                disabled={!canManage}
+                onCheckedChange={(v) => patchSettingsDraft("companyTargetEnabled", v)}
+              />
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+
+              <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                <Label>Target Type</Label>
+                <Select
+                  value={settingsDraft.companyTargetRevenueType || "SERVICES"}
+                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                  onValueChange={(v) =>
+                    patchSettingsDraft("companyTargetRevenueType", v as any)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SERVICES">Services</SelectItem>
+                    <SelectItem value="COUNTER_SALE">Counter Sale (Parts)</SelectItem>
+                    <SelectItem value="BOTH">Services + Counter Sale</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                <Label>Period Frequency</Label>
+                <Select
+                  value={settingsDraft.companyTargetPeriod || "MONTHLY"}
+                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                  onValueChange={(v) =>
+                    patchSettingsDraft("companyTargetPeriod", v as any)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MONTHLY">Monthly</SelectItem>
+                    <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                    <SelectItem value="HALF_YEARLY">Half Yearly</SelectItem>
+                    <SelectItem value="YEARLY">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="col-span-2 space-y-4">
+                <hr className="border-t border-border" />
+                <h4 className="text-sm font-semibold text-foreground">Target Tiers Configuration</h4>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[0, 1, 2, 3].map((idx) => {
+                    const tier = settingsDraft.companyTargetTiers?.[idx] || { targetAmount: 0, rewardPercent: 0 };
+                    return (
+                      <div key={idx} className="space-y-2 rounded-lg border p-3 bg-muted/20">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">
+                          Tier {idx + 1}
+                        </p>
+                        <div className="space-y-2">
+                          <div>
+                            <Label className="text-xs">Target Amount (₹)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                              value={tier.targetAmount || ""}
+                              placeholder="e.g. 500000"
+                              onChange={(e) =>
+                                patchCompanyTargetTier(idx, "targetAmount", Number(e.target.value) || 0)
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Reward %</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.1"
+                              disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                              value={tier.rewardPercent || ""}
+                              placeholder="e.g. 2.5"
+                              onChange={(e) =>
+                                patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </CardContent>
           </Card>

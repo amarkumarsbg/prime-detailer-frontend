@@ -75,11 +75,11 @@ const OPS_CORE: DomainResource[] = [
 const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   { prefix: "/payroll", resources: ["payroll", "staff", "staffDirectory", "staffRewards"] },
   { prefix: "/cash-bank", resources: ["cashBank", "invoices", "expenses"] },
-  { prefix: "/staff", resources: ["staff", "customers", "jobCards"] },
+  { prefix: "/staff", resources: ["staff", "customers", "jobCards", "staffRewards", "invoices"] },
   { prefix: "/attendance", resources: ["staffDirectory", "staff"] },
   { prefix: "/leave", resources: ["leave", "staff", "staffDirectory"] },
   { prefix: "/rewards", resources: ["staffRewards", "staff", "staffDirectory", "jobCards"] },
-  { prefix: "/settings", resources: ["appSettings", "vehicleCatalog"] },
+  { prefix: "/settings", resources: ["appSettings", "vehicleCatalog", "staffRewards", "highEndServices"] },
   {
     prefix: "/shared-ledger",
     resources: ["balanceSheetManual", "invoices", "expenses", "cashBank", "customers"],

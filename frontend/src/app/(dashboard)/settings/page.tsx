@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -32,7 +32,7 @@ import {
 import { cn, formatDate } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
-import { isHighEndReminderCategory } from "@/lib/reminder-service-map";
+import { useStaffRewardStore } from "@/store/staff-reward-store";
 import {
   REMINDER_FREQUENCY_LABELS,
   SCHEDULABLE_REMINDER_FREQUENCIES,
@@ -46,6 +46,7 @@ import {
 } from "@/components/settings/high-end-segment-pricing-fields";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { BrandingThemePanel } from "@/components/settings/branding-theme-panel";
+import { useDomainDataReady } from "@/components/layout/domain-data-sync";
 import type { VehicleSegment } from "@/types";
 import {
   Building2,
@@ -74,6 +75,7 @@ import {
   Car,
   Pencil,
   CreditCard,
+  Target,
 } from "lucide-react";
 import {
   branchLimitLabel,
@@ -180,15 +182,90 @@ export default function SettingsPage() {
   /** All Service → Categories rows (including PPF / Ceramic). */
   const reminderServiceCategories = [...serviceCategories].sort((a, b) => a.order - b.order);
 
-  const rewardCategoryIncentivePercents = useSettingsStore((s) => s.rewardCategoryIncentivePercents);
   const defaultMechanicIncentivePercent = useSettingsStore((s) => s.defaultMechanicIncentivePercent);
   const highEndIncentivePercent = useSettingsStore((s) => s.highEndIncentivePercent);
   const incentiveCapPerJobStored = useSettingsStore((s) => s.incentiveCapPerJob);
-  const setRewardCategoryIncentivePercent = useSettingsStore((s) => s.setRewardCategoryIncentivePercent);
   const setDefaultMechanicIncentivePercent = useSettingsStore((s) => s.setDefaultMechanicIncentivePercent);
   const setHighEndIncentivePercentStore = useSettingsStore((s) => s.setHighEndIncentivePercent);
   const setIncentiveCapPerJobStore = useSettingsStore((s) => s.setIncentiveCapPerJob);
-  const rewardServiceCategories = [...serviceCategories].sort((a, b) => a.order - b.order);
+
+  const staffRewardSettings = useStaffRewardStore((s) => s.settings);
+  const updateStaffRewardSettings = useStaffRewardStore((s) => s.updateSettings);
+
+  const emptyTiers = () => [
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+  ];
+
+  const dataReady = useDomainDataReady();
+  const hasInitializedRef = useRef(false);
+
+  const [companyTargetEnabled, setCompanyTargetEnabled] = useState(false);
+  const [companyTargetRevenueType, setCompanyTargetRevenueType] = useState<"SERVICES" | "COUNTER_SALE" | "BOTH">("SERVICES");
+  const [companyTargetPeriod, setCompanyTargetPeriod] = useState<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY">("MONTHLY");
+  const [companyTargetFrequencyTiers, setCompanyTargetFrequencyTiers] = useState<
+    Record<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY", { targetAmount: number; rewardPercent: number }[]>
+  >({
+    MONTHLY: emptyTiers(),
+    QUARTERLY: emptyTiers(),
+    HALF_YEARLY: emptyTiers(),
+    YEARLY: emptyTiers(),
+  });
+
+  useEffect(() => {
+    if (dataReady && staffRewardSettings && !hasInitializedRef.current) {
+      setCompanyTargetEnabled(!!staffRewardSettings.companyTargetEnabled);
+      setCompanyTargetRevenueType(staffRewardSettings.companyTargetRevenueType || "SERVICES");
+      
+      const currentPeriod = staffRewardSettings.companyTargetPeriod || "MONTHLY";
+      setCompanyTargetPeriod(currentPeriod);
+      
+      const loadedFreqTiers = staffRewardSettings.companyTargetFrequencyTiers || {} as any;
+      const legacyTiers = staffRewardSettings.companyTargetTiers || [];
+      
+      setCompanyTargetFrequencyTiers({
+        MONTHLY: loadedFreqTiers.MONTHLY || (currentPeriod === "MONTHLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+        QUARTERLY: loadedFreqTiers.QUARTERLY || (currentPeriod === "QUARTERLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+        HALF_YEARLY: loadedFreqTiers.HALF_YEARLY || (currentPeriod === "HALF_YEARLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+        YEARLY: loadedFreqTiers.YEARLY || (currentPeriod === "YEARLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+      });
+      hasInitializedRef.current = true;
+    }
+  }, [dataReady, staffRewardSettings]);
+
+  const patchCompanyTargetTier = (
+    index: number,
+    field: "targetAmount" | "rewardPercent",
+    value: number
+  ) => {
+    setCompanyTargetFrequencyTiers((prev) => {
+      const copyAll = { ...prev };
+      const currentPeriod = companyTargetPeriod;
+      const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
+      if (!copyTiers[index]) {
+        copyTiers[index] = { targetAmount: 0, rewardPercent: 0 };
+      }
+      copyTiers[index] = {
+        ...copyTiers[index]!,
+        [field]: value,
+      };
+      copyAll[currentPeriod] = copyTiers;
+      return copyAll;
+    });
+  };
+
+  const handleSaveCompanyTargets = () => {
+    updateStaffRewardSettings({
+      companyTargetEnabled,
+      companyTargetRevenueType,
+      companyTargetPeriod,
+      companyTargetTiers: companyTargetFrequencyTiers[companyTargetPeriod],
+      companyTargetFrequencyTiers,
+    });
+    toast.success("Company target rewards settings saved.");
+  };
 
   const [newHesName, setNewHesName] = useState("");
   const [newHesTotalYears, setNewHesTotalYears] = useState("5");
@@ -676,58 +753,7 @@ export default function SettingsPage() {
                     Worth ₹{(5000 / 100 * Number(earningRate) * Number(redemptionValue)).toFixed(2)} discount
                   </p>
                 </div>
-                <Separator />
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium">Rewards by service category</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Staff incentive % applied to jobs that include services in each category.
-                      Categories come from{" "}
-                      <Link href="/services" className="text-primary underline-offset-2 hover:underline">
-                        Services → Categories
-                      </Link>
-                      . Per-service incentive on the catalog is used only when a category has no rate here.
-                    </p>
-                  </div>
-                  {rewardServiceCategories.length === 0 ? (
-                    <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-6 text-center">
-                      No service categories yet. Create them under Services → Categories to link rewards.
-                    </p>
-                  ) : (
-                    <div className="grid gap-3">
-                      {rewardServiceCategories.map((cat) => (
-                        <div
-                          key={cat.id}
-                          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-border/80 px-3 py-2.5"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{cat.name}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">{cat.slug}</p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={0.1}
-                              className="w-24"
-                              value={String(
-                                rewardCategoryIncentivePercents[cat.id] ??
-                                  (isHighEndReminderCategory(cat.slug, cat.name)
-                                    ? highEndIncentivePercent
-                                    : defaultMechanicIncentivePercent)
-                              )}
-                              onChange={(e) =>
-                                setRewardCategoryIncentivePercent(cat.id, Number(e.target.value) || 0)
-                              }
-                            />
-                            <span className="text-sm text-muted-foreground whitespace-nowrap">% incentive</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+
                 <Button
                   onClick={() => {
                     toast.success("Rewards configuration saved");
@@ -768,67 +794,181 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="incentives">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Award className="w-4 h-4" />
-                Incentive Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-5 max-w-xl">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />Default Mechanic Incentive (%)</Label>
-                    <Input
-                      type="number"
-                      value={String(defaultMechanicIncentivePercent)}
-                      onChange={(e) => setDefaultMechanicIncentivePercent(Number(e.target.value) || 0)}
-                    />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Award className="w-4 h-4" />
+                  Incentive Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />Default Mechanic Incentive (%)</Label>
+                      <Input
+                        type="number"
+                        value={String(defaultMechanicIncentivePercent)}
+                        onChange={(e) => setDefaultMechanicIncentivePercent(Number(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />High-end Service Incentive (%)</Label>
+                      <Input
+                        type="number"
+                        value={String(highEndIncentivePercent)}
+                        onChange={(e) => setHighEndIncentivePercentStore(Number(e.target.value) || 0)}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />High-end Service Incentive (%)</Label>
+                    <Label className="flex items-center gap-1.5"><IndianRupee className="w-3.5 h-3.5" />Incentive Cap per Job (₹)</Label>
                     <Input
                       type="number"
-                      value={String(highEndIncentivePercent)}
-                      onChange={(e) => setHighEndIncentivePercentStore(Number(e.target.value) || 0)}
+                      value={String(incentiveCapPerJobStored)}
+                      onChange={(e) => setIncentiveCapPerJobStore(Number(e.target.value) || 0)}
                     />
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Per-category staff reward rates are configured under the{" "}
+                    <span className="font-medium text-foreground">Rewards</span> tab
+                    (Rewards by service category). Defaults above apply when a category has no rate.
+                  </p>
+                  <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 space-y-1">
+                    <Label className="flex items-center gap-1.5">
+                      <Gift className="w-3.5 h-3.5" />
+                      Referral wallet rewards
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Referrer and new-customer wallet amounts, % of job, minimum job total, and
+                      program on/off are configured on the{" "}
+                      <Link href="/referrals" className="font-medium text-primary underline-offset-2 hover:underline">
+                        Referrals
+                      </Link>{" "}
+                      page. Changes there apply immediately to pre-invoice and payment credits.
+                    </p>
+                  </div>
+                  <Separator />
+                  <Button onClick={() => handleSave("Incentive settings")}>
+                    <Save className="w-4 h-4 mr-2" />Save Changes
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><IndianRupee className="w-3.5 h-3.5" />Incentive Cap per Job (₹)</Label>
-                  <Input
-                    type="number"
-                    value={String(incentiveCapPerJobStored)}
-                    onChange={(e) => setIncentiveCapPerJobStore(Number(e.target.value) || 0)}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Per-category staff reward rates are configured under the{" "}
-                  <span className="font-medium text-foreground">Rewards</span> tab
-                  (Rewards by service category). Defaults above apply when a category has no rate.
-                </p>
-                <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-3 space-y-1.5 sm:col-span-2">
-                  <Label className="flex items-center gap-1.5">
-                    <Gift className="w-3.5 h-3.5" />
-                    Referral wallet rewards
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Referrer and new-customer wallet amounts, % of job, minimum job total, and
-                    program on/off are configured on the{" "}
-                    <Link href="/referrals" className="font-medium text-primary underline-offset-2 hover:underline">
-                      Referrals
-                    </Link>{" "}
-                    page. Changes there apply immediately to pre-invoice and payment credits.
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="space-y-0.5">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Target className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                    Company Target-Based Rewards
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Enable rewards based on company-wide target achievements
                   </p>
                 </div>
-                <Separator />
-                <Button onClick={() => handleSave("Incentive settings")}>
-                  <Save className="w-4 h-4 mr-2" />Save Changes
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                <ToggleSwitch
+                  enabled={companyTargetEnabled}
+                  onToggle={() => setCompanyTargetEnabled(!companyTargetEnabled)}
+                />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Target Type</Label>
+                      <Select
+                        value={companyTargetRevenueType}
+                        disabled={!companyTargetEnabled}
+                        onValueChange={(v) => setCompanyTargetRevenueType(v as any)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="SERVICES">Services</SelectItem>
+                          <SelectItem value="COUNTER_SALE">Counter Sale (Parts)</SelectItem>
+                          <SelectItem value="BOTH">Services + Counter Sale</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Period Frequency</Label>
+                      <Select
+                        value={companyTargetPeriod}
+                        disabled={!companyTargetEnabled}
+                        onValueChange={(v) => setCompanyTargetPeriod(v as any)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="MONTHLY">Monthly</SelectItem>
+                          <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                          <SelectItem value="HALF_YEARLY">Half Yearly</SelectItem>
+                          <SelectItem value="YEARLY">Yearly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <hr className="border-t border-border" />
+                    <h4 className="text-sm font-semibold text-foreground">Target Tiers Configuration</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[0, 1, 2, 3].map((idx) => {
+                        const currentFreqTiers = companyTargetFrequencyTiers[companyTargetPeriod] || [];
+                        const tier = currentFreqTiers[idx] || { targetAmount: 0, rewardPercent: 0 };
+                        return (
+                          <div key={idx} className="space-y-1.5 rounded-lg border p-2 px-3 bg-muted/20">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase">
+                              Tier {idx + 1}
+                            </p>
+                            <div className="space-y-1">
+                              <div>
+                                <Label className="text-[11px] font-medium">Target Amount (₹)</Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  disabled={!companyTargetEnabled}
+                                  value={tier.targetAmount || ""}
+                                  placeholder="e.g. 500000"
+                                  onChange={(e) =>
+                                    patchCompanyTargetTier(idx, "targetAmount", Number(e.target.value) || 0)
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-[11px] font-medium">Reward %</Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.1"
+                                  disabled={!companyTargetEnabled}
+                                  value={tier.rewardPercent || ""}
+                                  placeholder="e.g. 2.5"
+                                  onChange={(e) =>
+                                    patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+                  <Button onClick={handleSaveCompanyTargets}>
+                    <Save className="w-4 h-4 mr-2" />Save Changes
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="reminders">

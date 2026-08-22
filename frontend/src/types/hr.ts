@@ -201,6 +201,17 @@ export interface StaffRewardSettings {
   lateDeductionPercent: number;
   supervisorSharePercent: number;
   applicatorSharePercent: number;
+  companyTargetEnabled?: boolean;
+  companyTargetRevenueType?: "SERVICES" | "COUNTER_SALE" | "BOTH";
+  companyTargetPeriod?: "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY";
+  companyTargetTiers?: {
+    targetAmount: number;
+    rewardPercent: number;
+  }[];
+  companyTargetFrequencyTiers?: Record<
+    "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY",
+    { targetAmount: number; rewardPercent: number }[]
+  >;
   updatedAt: string;
 }
 

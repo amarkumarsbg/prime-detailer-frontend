@@ -104,6 +104,28 @@ export const staffRewardSettingsPayloadSchema = z
     lateDeductionEnabled: z.boolean().optional(),
     supervisorSharePercent: z.number().optional(),
     applicatorSharePercent: z.number().optional(),
+    companyTargetEnabled: z.boolean().optional(),
+    companyTargetRevenueType: z.enum(["SERVICES", "COUNTER_SALE", "BOTH"]).optional(),
+    companyTargetPeriod: z.enum(["MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"]).optional(),
+    companyTargetTiers: z
+      .array(
+        z.object({
+          targetAmount: z.number(),
+          rewardPercent: z.number(),
+        })
+      )
+      .optional(),
+    companyTargetFrequencyTiers: z
+      .record(
+        z.enum(["MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"]),
+        z.array(
+          z.object({
+            targetAmount: z.number(),
+            rewardPercent: z.number(),
+          })
+        )
+      )
+      .optional(),
     updatedAt: z.string().optional(),
   })
   .passthrough();

@@ -4,8 +4,11 @@ import { use, useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useStaffStore, generateRandomAttendancePin } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
+import { useInvoiceStore } from "@/store/invoice-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useStaffRewardStore } from "@/store/staff-reward-store";
+import { getCompanyTargetResults } from "@/lib/staff-rewards/calculate-job-reward";
 import {
   canManageStaffUsers,
   getAssignableStaffRoles,
@@ -48,10 +51,12 @@ import {
   Hash,
   Camera,
   Copy,
+  Target,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { apiPostForm, ApiError } from "@/lib/api-client";
@@ -150,6 +155,33 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const updateAttendancePin = useStaffStore((s) => s.updateAttendancePin);
   const updateStaff = useStaffStore((s) => s.updateStaff);
   const jobCards = useJobCardStore((s) => s.jobCards);
+  const invoices = useInvoiceStore((s) => s.invoices);
+
+  const settings = useStaffRewardStore((s) => s.settings);
+  const staff = useStaffStore((s) => s.staff);
+
+  const today = new Date();
+  const [targetYear, setTargetYear] = useState(today.getFullYear());
+  const years = useMemo(() => {
+    const y = today.getFullYear();
+    return [y - 1, y, y + 1];
+  }, [today]);
+
+  const activeStaffCount = useMemo(() => staff.filter((s) => s.isActive).length, [staff]);
+  const companyTargetResults = useMemo(() => {
+    return getCompanyTargetResults({
+      jobCards,
+      invoices,
+      activeStaffCount,
+      settings,
+      year: targetYear,
+      joiningDate: member?.joiningDate || undefined,
+    });
+  }, [jobCards, invoices, activeStaffCount, settings, targetYear, member?.joiningDate]);
+
+  const totalCompanyTargetIncentive = useMemo(() => {
+    return companyTargetResults.reduce((sum, r) => sum + r.sharePerStaff, 0);
+  }, [companyTargetResults]);
 
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -729,7 +761,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
             <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30">
@@ -778,7 +810,103 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
             </CardContent>
           </Card>
         )}
+        <Card>
+          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30">
+              <Target className="w-6 h-6 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(totalCompanyTargetIncentive)}
+              </p>
+              <p className="text-sm text-muted-foreground">Company Target ({targetYear})</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {settings.companyTargetEnabled && (
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                Company Target Achieved Incentive
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Incentives earned when the company achieves its tier-wise targets. Shared equally among active staff.
+              </p>
+            </div>
+            <div className="w-32">
+              <Select value={String(targetYear)} onValueChange={(v) => setTargetYear(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {companyTargetResults.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No company target results available.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                      <th className="py-2.5 px-4 font-medium">Period</th>
+                      <th className="py-2.5 px-4 font-medium text-right">Company Revenue</th>
+                      <th className="py-2.5 px-4 font-medium px-6 text-center">Target Achieved</th>
+                      <th className="py-2.5 px-4 font-medium text-right">Reward %</th>
+                      <th className="py-2.5 px-4 font-medium text-right">Total Incentive</th>
+                      <th className="py-2.5 px-4 font-medium text-right text-emerald-600 dark:text-emerald-400">Your Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companyTargetResults.map((r, idx) => {
+                      const isNotEligible = r.notEligible;
+                      return (
+                        <tr key={idx} className="border-b border-border/70 hover:bg-muted/10 transition-colors">
+                          <td className="py-2.5 px-4 font-medium">{r.periodLabel}</td>
+                          <td className="py-2.5 px-4 text-right tabular-nums">
+                            {isNotEligible ? "—" : formatCurrency(r.revenue)}
+                          </td>
+                          <td className="py-2.5 px-4 text-center">
+                            {!isNotEligible && r.achievedTierIndex !== -1 ? (
+                              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-none font-semibold">
+                                Tier {r.achievedTierIndex + 1}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 text-right tabular-nums">
+                            {!isNotEligible && r.rewardPercent > 0 ? `${r.rewardPercent}%` : "—"}
+                          </td>
+                          <td className="py-2.5 px-4 text-right tabular-nums">
+                            {!isNotEligible && r.totalReward > 0 ? formatCurrency(r.totalReward) : "—"}
+                          </td>
+                          <td className={`py-2.5 px-4 text-right tabular-nums font-semibold ${!isNotEligible && r.sharePerStaff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                            {!isNotEligible && r.sharePerStaff > 0 ? formatCurrency(r.sharePerStaff) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {canEditAttendancePin && (
         <StaffAttendancePinCard

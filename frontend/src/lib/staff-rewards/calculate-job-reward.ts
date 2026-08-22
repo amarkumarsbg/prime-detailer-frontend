@@ -94,6 +94,41 @@ export function defaultStaffRewardSettings(
     lateDeductionPercent: 10,
     supervisorSharePercent: 30,
     applicatorSharePercent: 70,
+    companyTargetEnabled: false,
+    companyTargetRevenueType: "SERVICES",
+    companyTargetPeriod: "MONTHLY",
+    companyTargetTiers: [
+      { targetAmount: 0, rewardPercent: 0 },
+      { targetAmount: 0, rewardPercent: 0 },
+      { targetAmount: 0, rewardPercent: 0 },
+      { targetAmount: 0, rewardPercent: 0 },
+    ],
+    companyTargetFrequencyTiers: {
+      MONTHLY: [
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+      ],
+      QUARTERLY: [
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+      ],
+      HALF_YEARLY: [
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+      ],
+      YEARLY: [
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+        { targetAmount: 0, rewardPercent: 0 },
+      ],
+    },
     updatedAt: now,
   };
 }
@@ -320,4 +355,165 @@ export function calculateJobReward(opts: {
   }
 
   return drafts;
+}
+
+export interface CompanyTargetPeriodResult {
+  periodLabel: string;
+  revenue: number;
+  achievedTierIndex: number;
+  targetAmount: number;
+  rewardPercent: number;
+  totalReward: number;
+  sharePerStaff: number;
+  notEligible?: boolean;
+}
+
+export function getCompanyTargetResults(args: {
+  jobCards: {
+    status: string;
+    estimatedAmount?: number;
+    actualDelivery?: string;
+    updatedAt?: string;
+    createdAt?: string;
+  }[];
+  invoices: {
+    source?: string;
+    grandTotal?: number;
+    createdAt?: string;
+    status?: string;
+  }[];
+  activeStaffCount: number;
+  settings: StaffRewardSettings;
+  year: number;
+  joiningDate?: string;
+}): CompanyTargetPeriodResult[] {
+  if (!args.settings.companyTargetEnabled) {
+    return [];
+  }
+
+  const revenueType = args.settings.companyTargetRevenueType || "SERVICES";
+  const freqTiersMap = (args.settings.companyTargetFrequencyTiers || {}) as Record<string, any>;
+  const staffCount = args.activeStaffCount > 0 ? args.activeStaffCount : 1;
+
+  const getRevenueInTimeRange = (startTimeMs: number, endTimeMs: number) => {
+    let jobRev = 0;
+    if (revenueType === "SERVICES" || revenueType === "BOTH") {
+      jobRev = args.jobCards
+        .filter((jc) => {
+          if (jc.status !== "DELIVERED") return false;
+          const dateStr = jc.actualDelivery || jc.updatedAt || jc.createdAt;
+          if (!dateStr) return false;
+          const time = Date.parse(dateStr);
+          if (Number.isNaN(time)) return false;
+          return time >= startTimeMs && time <= endTimeMs;
+        })
+        .reduce((sum, jc) => sum + (jc.estimatedAmount ?? 0), 0);
+    }
+
+    let invRev = 0;
+    if (revenueType === "COUNTER_SALE" || revenueType === "BOTH") {
+      invRev = args.invoices
+        .filter((inv) => {
+          if (inv.status === "CANCELLED") return false;
+          if (inv.source !== "COUNTER_SALE") return false;
+          const dateStr = inv.createdAt;
+          if (!dateStr) return false;
+          const time = Date.parse(dateStr);
+          if (Number.isNaN(time)) return false;
+          return time >= startTimeMs && time <= endTimeMs;
+        })
+        .reduce((sum, inv) => sum + (inv.grandTotal ?? 0), 0);
+    }
+
+    return jobRev + invRev;
+  };
+
+  const startYear = args.year;
+  const QUARTERS = [
+    {
+      label: "Monthly (Jan-Mar)",
+      start: new Date(Date.UTC(startYear, 0, 1, 0, 0, 0, 0)),
+      end: new Date(Date.UTC(startYear, 2, 31, 23, 59, 59, 999)),
+      configKey: "MONTHLY",
+    },
+    {
+      label: "Quarterly (Apr-Jun)",
+      start: new Date(Date.UTC(startYear, 3, 1, 0, 0, 0, 0)),
+      end: new Date(Date.UTC(startYear, 5, 30, 23, 59, 59, 999)),
+      configKey: "QUARTERLY",
+    },
+    {
+      label: "Half Yearly (Jul-Sep)",
+      start: new Date(Date.UTC(startYear, 6, 1, 0, 0, 0, 0)),
+      end: new Date(Date.UTC(startYear, 8, 30, 23, 59, 59, 999)),
+      configKey: "HALF_YEARLY",
+    },
+    {
+      label: "Yearly (Oct-Dec)",
+      start: new Date(Date.UTC(startYear, 9, 1, 0, 0, 0, 0)),
+      end: new Date(Date.UTC(startYear, 11, 31, 23, 59, 59, 999)),
+      configKey: "YEARLY",
+    },
+  ];
+
+  const joinTime = args.joiningDate ? Date.parse(args.joiningDate) : NaN;
+  const hasJoin = !Number.isNaN(joinTime);
+
+  const results: CompanyTargetPeriodResult[] = [];
+
+  for (const q of QUARTERS) {
+    const startMs = q.start.getTime();
+    const endMs = q.end.getTime();
+
+    if (hasJoin && joinTime > endMs) {
+      results.push({
+        periodLabel: q.label,
+        revenue: 0,
+        achievedTierIndex: -1,
+        targetAmount: 0,
+        rewardPercent: 0,
+        totalReward: 0,
+        sharePerStaff: 0,
+        notEligible: true,
+      });
+      continue;
+    }
+
+    const effectiveStartMs = hasJoin && joinTime > startMs ? joinTime : startMs;
+    const revenue = getRevenueInTimeRange(effectiveStartMs, endMs);
+
+    const configTiers = freqTiersMap[q.configKey] || [];
+    const tiers = configTiers.length > 0 ? configTiers : (args.settings.companyTargetTiers || []);
+
+    let achievedTierIndex = -1;
+    let maxAchievedTarget = -1;
+
+    for (let i = 0; i < tiers.length; i++) {
+      const t = tiers[i];
+      if (t && t.targetAmount > 0 && revenue >= t.targetAmount) {
+        if (t.targetAmount > maxAchievedTarget) {
+          maxAchievedTarget = t.targetAmount;
+          achievedTierIndex = i;
+        }
+      }
+    }
+
+    const t = achievedTierIndex !== -1 ? tiers[achievedTierIndex] : null;
+    const targetAmount = t ? t.targetAmount : 0;
+    const rewardPercent = t ? t.rewardPercent : 0;
+    const totalReward = roundReward(revenue * (rewardPercent / 100));
+    const sharePerStaff = roundReward(totalReward / staffCount);
+
+    results.push({
+      periodLabel: q.label,
+      revenue: roundReward(revenue),
+      achievedTierIndex,
+      targetAmount,
+      rewardPercent,
+      totalReward,
+      sharePerStaff,
+    });
+  }
+
+  return results;
 }
