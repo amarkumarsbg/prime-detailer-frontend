@@ -196,6 +196,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [editBirthday, setEditBirthday] = useState("");
   const [editAnniversary, setEditAnniversary] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editIsAttendanceTracked, setEditIsAttendanceTracked] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +253,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditBirthday(member.birthday ?? "");
     setEditAnniversary(member.anniversary ?? "");
     setEditNotes(member.notes ?? "");
+    setEditIsAttendanceTracked(member.isAttendanceTracked ?? true);
   };
 
   const handleStartEditProfile = () => {
@@ -398,6 +400,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       birthday: editBirthday.trim() || null,
       anniversary: editAnniversary.trim() || null,
       notes: editNotes.trim() || null,
+      isAttendanceTracked: editIsAttendanceTracked,
     });
     if (result.ok) {
       pushActivityLog({
@@ -753,6 +756,16 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                   />
                   <Label htmlFor="staff-active" className="text-sm font-normal cursor-pointer">
                     Active (can log in and appear on rosters)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-3 pt-1">
+                  <Checkbox
+                    id="staff-track-attendance"
+                    checked={editIsAttendanceTracked}
+                    onCheckedChange={(c) => setEditIsAttendanceTracked(c === true)}
+                  />
+                  <Label htmlFor="staff-track-attendance" className="text-sm font-normal cursor-pointer">
+                    Track Attendance for Payroll
                   </Label>
                 </div>
               </div>

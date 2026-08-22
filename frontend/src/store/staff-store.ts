@@ -31,6 +31,7 @@ interface AddStaffInput {
   birthday?: string;
   anniversary?: string;
   notes?: string;
+  isAttendanceTracked?: boolean;
   /** Omit for server-generated temporary password (recommended). */
   password?: string;
 }
@@ -48,7 +49,7 @@ interface StaffStoreState {
   updateStaff: (
     id: string,
     updates: Partial<
-      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions" | "avatar">
+      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions" | "avatar" | "isAttendanceTracked">
     > &
       Partial<{
         employeeCode: string | null;
@@ -121,6 +122,7 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       role: input.role,
       branchId: input.branchId,
       isActive: input.isActive ?? true,
+      isAttendanceTracked: input.isAttendanceTracked ?? true,
       attendancePin: allocateAttendancePin(() => get().staff),
       employeeCode: hr.employeeCode ?? null,
       designation: hr.designation ?? null,
@@ -175,6 +177,8 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
           : current.anniversary,
       notes:
         updates.notes !== undefined ? updates.notes?.trim() || undefined : current.notes,
+      isAttendanceTracked:
+        updates.isAttendanceTracked !== undefined ? updates.isAttendanceTracked : current.isAttendanceTracked,
     };
 
     if (

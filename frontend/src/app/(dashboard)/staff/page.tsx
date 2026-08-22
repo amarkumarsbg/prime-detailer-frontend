@@ -187,6 +187,7 @@ export default function StaffPage() {
   const [newJoiningDate, setNewJoiningDate] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [newIsActive, setNewIsActive] = useState(true);
+  const [newIsAttendanceTracked, setNewIsAttendanceTracked] = useState(true);
 
   const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole), [authRole]);
 
@@ -257,6 +258,7 @@ export default function StaffPage() {
     setNewJoiningDate("");
     setNewNotes("");
     setNewIsActive(true);
+    setNewIsAttendanceTracked(true);
   };
 
   const filteredStaff = useMemo(() => {
@@ -552,6 +554,21 @@ export default function StaffPage() {
       toast.error("A staff member with this email already exists.");
       return;
     }
+    let finalEmployeeCode = newEmployeeCode.trim();
+    if (!finalEmployeeCode) {
+      let maxNumber = 0;
+      for (const s of staff) {
+        if (s.employeeCode && s.employeeCode.startsWith("EMP-")) {
+          const numStr = s.employeeCode.replace("EMP-", "");
+          const num = parseInt(numStr, 10);
+          if (!Number.isNaN(num) && num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      }
+      finalEmployeeCode = `EMP-${String(maxNumber + 1).padStart(3, "0")}`;
+    }
+
     const branchId = branchLocked && authUser?.branchId ? authUser.branchId : newBranchId;
     try {
       const { temporaryPassword, credentialsEmailSent } = await addStaff({
@@ -564,11 +581,12 @@ export default function StaffPage() {
         ...(pwd ? { password: pwd } : {}),
         ...(newBirthday.trim() ? { birthday: newBirthday.trim() } : {}),
         ...(newAnniversary.trim() ? { anniversary: newAnniversary.trim() } : {}),
-        ...(newEmployeeCode.trim() ? { employeeCode: newEmployeeCode.trim() } : {}),
+        employeeCode: finalEmployeeCode,
         ...(newDesignation.trim() ? { designation: newDesignation.trim() } : {}),
         ...(newDepartment.trim() ? { department: newDepartment.trim() } : {}),
         ...(newJoiningDate.trim() ? { joiningDate: newJoiningDate.trim() } : {}),
         ...(newNotes.trim() ? { notes: newNotes.trim() } : {}),
+        isAttendanceTracked: newIsAttendanceTracked,
       });
       pushActivityLog({
         action: "CREATED",
@@ -848,6 +866,16 @@ export default function StaffPage() {
                           />
                           <Label htmlFor="new-active" className="text-sm font-normal cursor-pointer">
                             Active account
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2 sm:col-span-2 pt-1">
+                          <Checkbox
+                            id="new-track-attendance"
+                            checked={newIsAttendanceTracked}
+                            onCheckedChange={(c) => setNewIsAttendanceTracked(c === true)}
+                          />
+                          <Label htmlFor="new-track-attendance" className="text-sm font-normal cursor-pointer">
+                            Track Attendance for Payroll
                           </Label>
                         </div>
                       </div>

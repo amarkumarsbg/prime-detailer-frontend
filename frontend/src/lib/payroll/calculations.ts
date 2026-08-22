@@ -47,27 +47,48 @@ export function pickStructure(
   );
 }
 
+export function countWorkingDaysInRange(start: Date, end: Date): number {
+  let count = 0;
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  cur.setHours(0, 0, 0, 0);
+  const normalizedEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  normalizedEnd.setHours(0, 0, 0, 0);
+
+  while (cur <= normalizedEnd) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) { // Exclude Sunday (0) and Saturday (6)
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 export function workingDaysInMonth(year: number, month: number): number {
-  const days = new Date(year, month, 0).getDate();
-  return Math.min(26, Math.max(22, days - 8));
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0);
+  return countWorkingDaysInRange(start, end);
 }
 
 export function monthDays(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/** PRESENT=1, LATE=1, HALF_DAY=0.5 for a staff member in the given month. */
+/** PRESENT=1, LATE=1, HALF_DAY=0.5 for a staff member in the given month on/after joiningDate. */
 export function countAttendanceDaysForStaff(
   records: AttendanceRecord[],
   staffId: string,
   year: number,
-  month: number
+  month: number,
+  joiningDateStr?: string
 ): number {
   const { fromDate, toDate } = monthDateRange(year, month);
+  const filterFromDate = joiningDateStr && joiningDateStr > fromDate ? joiningDateStr : fromDate;
+
   let days = 0;
   for (const r of records) {
     if (r.staffId !== staffId) continue;
-    if (r.date < fromDate || r.date > toDate) continue;
+    if (r.date < filterFromDate || r.date > toDate) continue;
     if (r.status === "PRESENT" || r.status === "LATE") days += 1;
     else if (r.status === "HALF_DAY") days += 0.5;
   }
@@ -75,17 +96,18 @@ export function countAttendanceDaysForStaff(
 }
 
 /**
- * Count APPROVED leave days overlapping the month, split by leave type paid flag.
- * Multi-day requests are pro-rated to days that fall inside the month.
+ * Count APPROVED leave days overlapping the month on/after joiningDate, split by leave type paid flag.
  */
 export function countLeaveDaysForStaff(
   requests: LeaveRequest[],
   leaveTypes: LeaveType[],
   staffId: string,
   year: number,
-  month: number
+  month: number,
+  joiningDateStr?: string
 ): { paidLeaveDays: number; unpaidLeaveDays: number } {
   const { fromDate, toDate } = monthDateRange(year, month);
+  const filterFromDate = joiningDateStr && joiningDateStr > fromDate ? joiningDateStr : fromDate;
   const typeById = new Map(leaveTypes.map((t) => [t.id, t]));
   let paidLeaveDays = 0;
   let unpaidLeaveDays = 0;
@@ -93,9 +115,9 @@ export function countLeaveDaysForStaff(
   for (const req of requests) {
     if (req.staffId !== staffId) continue;
     if (req.status !== "APPROVED") continue;
-    if (!rangesOverlap(fromDate, toDate, req.fromDate, req.toDate)) continue;
+    if (!rangesOverlap(filterFromDate, toDate, req.fromDate, req.toDate)) continue;
 
-    const overlapFrom = req.fromDate > fromDate ? req.fromDate : fromDate;
+    const overlapFrom = req.fromDate > filterFromDate ? req.fromDate : filterFromDate;
     const overlapTo = req.toDate < toDate ? req.toDate : toDate;
     const days = eachDateInRange(overlapFrom, overlapTo).length;
     if (days <= 0) continue;
@@ -109,45 +131,73 @@ export function countLeaveDaysForStaff(
 }
 
 /**
- * Sum reward amounts for payroll inclusion: APPROVED or PENDING only
- * (excludes CANCELLED and PAID_IN_PAYROLL).
+ * Sum reward amounts for payroll inclusion on/after joiningDate: APPROVED or PENDING only.
  */
 export function sumApprovedRewardsForStaff(
   ledger: StaffRewardLedgerEntry[],
   staffId: string,
   year: number,
-  month: number
+  month: number,
+  joiningDateStr?: string
 ): { amount: number; refs: string[] } {
   let amount = 0;
   const refs: string[] = [];
+  const joinTime = joiningDateStr ? Date.parse(joiningDateStr) : NaN;
+  const hasJoin = !Number.isNaN(joinTime);
+
   for (const e of ledger) {
     if (e.staffId !== staffId) continue;
     if (e.periodYear !== year || e.periodMonth !== month) continue;
     if (e.status !== "APPROVED" && e.status !== "PENDING") continue;
+
+    if (hasJoin) {
+      const entryTime = e.createdAt ? Date.parse(e.createdAt) : NaN;
+      if (!Number.isNaN(entryTime) && entryTime < joinTime) {
+        continue;
+      }
+    }
+
     amount = round2(amount + e.amount);
     refs.push(e.id);
   }
   return { amount: round2(amount), refs };
 }
 
-export function computeBaseFromStructure(
-  structure: SalaryStructure,
-  attendanceDays: number,
-  daysInMonth: number
-): Pick<
-  PayrollRecord,
-  | "presencePayment"
-  | "baseSalary"
-  | "absenceDeduction"
-  | "grossEarnings"
-  | "netSalaryBeforeAdvance"
-> {
-  const baseSalary = round2(structure.baseSalary);
-  const presencePayment = round2(attendanceDays * structure.attendanceBonusPerDay);
-  const absenceDays = Math.max(0, daysInMonth - attendanceDays);
-  const absenceDeduction = round2(absenceDays * structure.absenceDeductionPerDay);
+export function computeBaseFromStructure(args: {
+  structure: SalaryStructure;
+  paidAttendanceDays: number;
+  eligibleWorkingDays: number;
+  eligibleWorkingDaysInFullMonth: number;
+  isJoiningMonth: boolean;
+  isTracked: boolean;
+}): {
+  baseSalary: number;
+  presencePayment: number;
+  absenceDeduction: number;
+  grossEarnings: number;
+  netSalaryBeforeAdvance: number;
+} {
+  let baseSalary = 0;
+  if (args.isTracked) {
+    if (args.paidAttendanceDays > 0 && args.eligibleWorkingDaysInFullMonth > 0) {
+      const dailyRate = args.structure.baseSalary / args.eligibleWorkingDaysInFullMonth;
+      baseSalary = round2(dailyRate * args.paidAttendanceDays);
+    }
+  } else {
+    if (args.eligibleWorkingDays > 0 && args.eligibleWorkingDaysInFullMonth > 0) {
+      baseSalary = round2(
+        args.isJoiningMonth
+          ? (args.structure.baseSalary / args.eligibleWorkingDaysInFullMonth) * args.eligibleWorkingDays
+          : args.structure.baseSalary
+      );
+    }
+  }
+
+  const presencePayment = round2(args.paidAttendanceDays * args.structure.attendanceBonusPerDay);
+  const absenceDeduction = 0;
   const grossEarnings = round2(baseSalary + presencePayment);
   const netSalaryBeforeAdvance = Math.max(0, round2(grossEarnings - absenceDeduction));
+
   return {
     baseSalary,
     presencePayment,

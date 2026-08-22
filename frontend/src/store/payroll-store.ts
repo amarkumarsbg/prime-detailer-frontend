@@ -15,6 +15,7 @@ import type {
   StaffRewardLedgerEntry,
   User,
 } from "@/types";
+import { useStaffStore } from "@/store/staff-store";
 import {
   buildRecoveryPlan,
   computeBaseFromStructure,
@@ -25,6 +26,7 @@ import {
   round2,
   sumApprovedRewardsForStaff,
   workingDaysInMonth,
+  countWorkingDaysInRange,
 } from "@/lib/payroll/calculations";
 
 function nextRecordId(existing: PayrollRecord[]): string {
@@ -119,15 +121,46 @@ function recalcRecordsForEmployee(opts: {
     })
     .map((r) => {
       if (r.employeeId !== employeeId) return r;
+      const member = useStaffStore.getState().staff.find((s) => s.id === employeeId);
+      const joiningDateStr = member?.joiningDate;
+
+      let isJoiningMonth = false;
+      const eligibleWorkingDaysInFullMonth = workingDaysInMonth(r.periodYear, r.periodMonth);
+      let eligibleWorkingDays = eligibleWorkingDaysInFullMonth;
+
+      if (joiningDateStr) {
+        const jd = new Date(joiningDateStr);
+        if (!Number.isNaN(jd.getTime())) {
+          const jdYear = jd.getFullYear();
+          const jdMonth = jd.getMonth() + 1;
+          const targetYear = r.periodYear;
+          const targetMonth = r.periodMonth;
+
+          if (jdYear === targetYear && jdMonth === targetMonth) {
+            isJoiningMonth = true;
+            const endOfMonth = new Date(targetYear, targetMonth, 0);
+            eligibleWorkingDays = Math.min(
+              eligibleWorkingDaysInFullMonth,
+              countWorkingDaysInRange(jd, endOfMonth)
+            );
+          } else if (jdYear > targetYear || (jdYear === targetYear && jdMonth > targetMonth)) {
+            eligibleWorkingDays = 0;
+          }
+        }
+      }
+
       const structure = structures.find((s) => s.id === r.salaryStructureId);
       if (!structure) return r;
-      const unpaidLeaveDays = r.unpaidLeaveDays ?? 0;
-      const payAttendanceDays = Math.max(0, r.attendanceDays - unpaidLeaveDays);
-      const base = computeBaseFromStructure(
+
+      const isTracked = member?.isAttendanceTracked ?? true;
+      const base = computeBaseFromStructure({
         structure,
-        payAttendanceDays,
-        monthDays(r.periodYear, r.periodMonth)
-      );
+        paidAttendanceDays: r.attendanceDays,
+        eligibleWorkingDays,
+        eligibleWorkingDaysInFullMonth,
+        isJoiningMonth,
+        isTracked,
+      });
       const rewardAmount = round2(r.rewardAmount ?? 0);
       const grossEarnings = round2(base.grossEarnings + rewardAmount);
       const netSalaryBeforeAdvance = Math.max(
@@ -382,32 +415,68 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
 
     for (const member of targetStaff) {
       const dup = records.some(
-        (r) => r.employeeId === member.id && r.periodYear === year && r.periodMonth === month
+        (r) => r.employeeId === member.id && r.periodYear === year && r.periodMonth === month && r.status !== "CANCELLED"
       );
       if (dup) continue;
 
       const structure = pickStructure(member, structures);
       if (!structure) continue;
 
-      const presentLateHalf =
-        attendanceRecords != null
-          ? countAttendanceDaysForStaff(attendanceRecords, member.id, year, month)
-          : workingDaysInMonth(year, month);
+      let isJoiningMonth = false;
+      const eligibleWorkingDaysInFullMonth = workingDaysInMonth(year, month);
+      let eligibleWorkingDays = eligibleWorkingDaysInFullMonth;
+
+      const joiningDateStr = member.joiningDate;
+      if (joiningDateStr) {
+        const jd = new Date(joiningDateStr);
+        if (!Number.isNaN(jd.getTime())) {
+          const jdYear = jd.getFullYear();
+          const jdMonth = jd.getMonth() + 1;
+
+          if (jdYear === year && jdMonth === month) {
+            isJoiningMonth = true;
+            const endOfMonth = new Date(year, month, 0);
+            eligibleWorkingDays = Math.min(
+              eligibleWorkingDaysInFullMonth,
+              countWorkingDaysInRange(jd, endOfMonth)
+            );
+          } else if (jdYear > year || (jdYear === year && jdMonth > month)) {
+            eligibleWorkingDays = 0;
+          }
+        }
+      }
+
+      if (eligibleWorkingDays === 0) continue;
 
       const leaveCounts =
         leaveRequests != null && leaveTypes != null
-          ? countLeaveDaysForStaff(leaveRequests, leaveTypes, member.id, year, month)
+          ? countLeaveDaysForStaff(leaveRequests, leaveTypes, member.id, year, month, joiningDateStr)
           : { paidLeaveDays: 0, unpaidLeaveDays: 0 };
 
-      const attendanceDays = presentLateHalf + leaveCounts.paidLeaveDays;
-      const payAttendanceDays = Math.max(0, attendanceDays - leaveCounts.unpaidLeaveDays);
+      let presentDays = 0;
+      const isTracked = member.isAttendanceTracked ?? true;
+      if (isTracked && attendanceRecords != null) {
+        presentDays = countAttendanceDaysForStaff(attendanceRecords, member.id, year, month, joiningDateStr);
+      } else {
+        presentDays = Math.max(0, eligibleWorkingDays - leaveCounts.paidLeaveDays - leaveCounts.unpaidLeaveDays);
+      }
+
+      const paidAttendanceDays = presentDays + leaveCounts.paidLeaveDays;
 
       const rewards =
         rewardLedger != null
-          ? sumApprovedRewardsForStaff(rewardLedger, member.id, year, month)
+          ? sumApprovedRewardsForStaff(rewardLedger, member.id, year, month, joiningDateStr)
           : { amount: 0, refs: [] as string[] };
 
-      const base = computeBaseFromStructure(structure, payAttendanceDays, daysInMonth);
+      const base = computeBaseFromStructure({
+        structure,
+        paidAttendanceDays,
+        eligibleWorkingDays,
+        eligibleWorkingDaysInFullMonth,
+        isJoiningMonth,
+        isTracked,
+      });
+
       const rewardAmount = round2(rewards.amount);
       const grossEarnings = round2(base.grossEarnings + rewardAmount);
       const netSalaryBeforeAdvance = Math.max(
@@ -423,7 +492,7 @@ export const usePayrollStore = create<PayrollStore>((set, get) => ({
         branchId: member.branchId,
         periodMonth: month,
         periodYear: year,
-        attendanceDays,
+        attendanceDays: paidAttendanceDays,
         salaryStructureId: structure.id,
         status: "PENDING",
         createdAt: now,

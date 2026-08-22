@@ -61,4 +61,6 @@ export interface User {
   /** Staff user id who provisioned this account password (server audit). */
   passwordCreatedBy?: string;
   permissions?: string[];
+  /** Whether the payroll system should strictly deduct absence based on missed punches. Default: true */
+  isAttendanceTracked?: boolean;
 }
