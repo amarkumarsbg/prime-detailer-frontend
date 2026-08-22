@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail, Trash2, Camera, X } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +20,11 @@ import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  STAFF_AVATAR_MAX_BYTES,
+  fileToStaffAvatarDataUrl,
+} from "@/lib/staff-avatar-file";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { JobCardStatusBadge, InvoiceStatusBadge } from "@/components/shared/status-badge";
@@ -263,6 +267,54 @@ export default function CustomerDetailPage() {
   const [editEmail, setEditEmail] = useState("");
   const [editAddress, setEditAddress] = useState("");
 
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !customer) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file (JPEG, PNG, WebP, or GIF).");
+      return;
+    }
+    if (file.size > STAFF_AVATAR_MAX_BYTES) {
+      toast.error("Photo must be 10 MB or smaller.");
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const dataUrl = await fileToStaffAvatarDataUrl(file);
+      const ok = await updateCustomer(customer.id, { avatar: dataUrl });
+      if (!ok) {
+        toast.error("Could not update profile photo.");
+        return;
+      }
+      toast.success("Profile photo updated.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not upload photo."
+      );
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!customer) return;
+    const ok = await updateCustomer(customer.id, { avatar: null });
+    if (!ok) {
+      toast.error("Could not remove photo.");
+    } else {
+      toast.success("Profile photo removed.");
+    }
+  };
+
   const startEditing = () => {
     if (!customer) return;
     setEditName(customer.name);
@@ -401,11 +453,67 @@ export default function CustomerDetailPage() {
         <CardContent className="!p-6">
           <div className="space-y-4">
             <div className="flex items-start gap-4 sm:gap-6">
-              <Avatar className="mt-0.5 h-16 w-16 shrink-0">
-                <AvatarFallback className="text-lg">
-                  {getInitials(customer.name)}
-                </AvatarFallback>
-              </Avatar>
+              {/* Avatar with camera badge and remove option */}
+              <div className="mt-0.5 shrink-0 flex flex-col items-center gap-1.5">
+                <input
+                  ref={avatarFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={(e) => void handleAvatarFileChange(e)}
+                />
+                {/* Avatar + camera badge */}
+                <div className="relative">
+                  {/* Clicking the avatar opens the full-size preview */}
+                  <button
+                    type="button"
+                    onClick={() => customer.avatar && setPhotoPreviewOpen(true)}
+                    className={cn(
+                      "rounded-full border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      customer.avatar ? "cursor-zoom-in" : "cursor-default pointer-events-none"
+                    )}
+                    aria-label={customer.avatar ? "View profile photo" : undefined}
+                    tabIndex={customer.avatar ? 0 : -1}
+                  >
+                    <Avatar className="h-16 w-16 pointer-events-none">
+                      {customer.avatar ? (
+                        <AvatarImage src={customer.avatar} alt="" className="object-cover" key={customer.avatar} />
+                      ) : null}
+                      <AvatarFallback className="text-lg">
+                        {getInitials(customer.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                  {/* Camera badge — bottom-right, always visible */}
+                  <button
+                    type="button"
+                    disabled={avatarUploading}
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md border-2 border-background hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                    aria-label={avatarUploading ? "Uploading photo…" : customer.avatar ? "Change profile photo" : "Upload profile photo"}
+                  >
+                    {avatarUploading ? (
+                      <span className="h-3 w-3 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    ) : (
+                      <Camera className="h-3 w-3" />
+                    )}
+                  </button>
+                </div>
+                {/* Remove photo — only shown when a photo exists */}
+                {customer.avatar && !avatarUploading && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveAvatar()}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive transition-colors focus-visible:outline-none focus-visible:underline"
+                    aria-label="Remove profile photo"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                    Remove
+                  </button>
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <h1 className="text-2xl font-bold tracking-tight break-words">
                   {customer.name}
@@ -1187,6 +1295,30 @@ export default function CustomerDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Full-size photo preview lightbox */}
+      {photoPreviewOpen && customer.avatar && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPhotoPreviewOpen(false)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={customer.avatar}
+              alt={customer.name}
+              className="max-h-[90dvh] max-w-[90dvw] rounded-xl object-contain shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setPhotoPreviewOpen(false)}
+              className="absolute -right-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-black shadow-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Close photo preview"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

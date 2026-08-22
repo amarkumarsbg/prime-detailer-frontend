@@ -112,6 +112,7 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
         ...(updates.lastVisitDate !== undefined && { lastVisitDate: updates.lastVisitDate }),
         ...(updates.isInactive !== undefined && { isInactive: updates.isInactive }),
         ...(updates.emailVerified !== undefined && { emailVerified: updates.emailVerified }),
+        ...(updates.avatar !== undefined && { avatar: updates.avatar ?? null }),
       });
       set((state) => ({
         customers: state.customers.map((c) => (c.id === id ? data.customer : c)),

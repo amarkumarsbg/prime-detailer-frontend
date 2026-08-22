@@ -42,6 +42,7 @@ export function toApiCustomer(row: CustomerRow) {
     lastVisitDate: row.lastVisitDate ?? undefined,
     isInactive: row.isInactive || undefined,
     emailVerified: row.emailVerified || undefined,
+    avatar: row.avatar ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -137,6 +138,7 @@ export async function updateCustomer(
     lastVisitDate: string | null;
     isInactive: boolean;
     emailVerified: boolean;
+    avatar: string | null;
   }>
 ) {
   if (data.phone !== undefined) {
@@ -181,6 +183,7 @@ export async function updateCustomer(
       ...(data.lastVisitDate !== undefined && { lastVisitDate: data.lastVisitDate }),
       ...(data.isInactive !== undefined && { isInactive: data.isInactive }),
       ...(data.emailVerified !== undefined && { emailVerified: data.emailVerified }),
+      ...(data.avatar !== undefined && { avatar: data.avatar ?? null }),
     },
   });
   return toApiCustomer(row);

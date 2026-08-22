@@ -1,5 +1,5 @@
 /** Max raw file size before client-side resize (matches My Profile). */
-export const STAFF_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+export const STAFF_AVATAR_MAX_BYTES = 10 * 1024 * 1024;
 
 const MAX_EDGE = 512;
 const JPEG_QUALITY = 0.85;
@@ -31,7 +31,7 @@ export async function fileToStaffAvatarDataUrl(file: File): Promise<string> {
     throw new Error("Choose an image file (JPEG, PNG, WebP, or GIF).");
   }
   if (file.size > STAFF_AVATAR_MAX_BYTES) {
-    throw new Error("Photo must be 5 MB or smaller.");
+    throw new Error("Photo must be 10 MB or smaller.");
   }
 
   const img = await loadImageFromFile(file);

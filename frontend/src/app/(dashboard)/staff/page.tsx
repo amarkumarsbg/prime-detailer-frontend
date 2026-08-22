@@ -22,7 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getInitials } from "@/lib/utils";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
@@ -314,6 +315,9 @@ export default function StaffPage() {
         render: (item: User) => (
           <div className="flex items-center gap-3">
             <Avatar className="w-8 h-8">
+              {resolveUploadsPublicUrl(item.avatar) ? (
+                <AvatarImage src={resolveUploadsPublicUrl(item.avatar)!} alt="" className="object-cover" />
+              ) : null}
               <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                 {getInitials(item.name)}
               </AvatarFallback>
@@ -938,6 +942,9 @@ export default function StaffPage() {
                   <>
                     <div className="flex items-center gap-2.5">
                       <Avatar className="size-8 shrink-0">
+                        {resolveUploadsPublicUrl(u.avatar) ? (
+                          <AvatarImage src={resolveUploadsPublicUrl(u.avatar)!} alt="" className="object-cover" />
+                        ) : null}
                         <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
                           {getInitials(u.name)}
                         </AvatarFallback>

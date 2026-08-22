@@ -12,8 +12,8 @@ export interface Customer {
   lastVisitDate?: string;
   isInactive?: boolean;
   /** Demo: counts toward “verified email” on users overview */
-  emailVerified?: boolean;
-  createdAt: string;
+  emailVerified?: boolean;  /** Profile photo stored as a data URL (same format as User.avatar). */
+  avatar?: string | null;  createdAt: string;
 }
 
 export interface WalletTransaction {

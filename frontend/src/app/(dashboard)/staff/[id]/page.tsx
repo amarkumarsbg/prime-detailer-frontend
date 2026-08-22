@@ -52,6 +52,7 @@ import {
   Camera,
   Copy,
   Target,
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -207,6 +208,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [editIsAttendanceTracked, setEditIsAttendanceTracked] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -342,7 +344,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       return;
     }
     if (file.size > STAFF_AVATAR_MAX_BYTES) {
-      toast.error("Photo must be 5 MB or smaller.");
+      toast.error("Photo must be 10 MB or smaller.");
       return;
     }
     setAvatarUploading(true);
@@ -503,14 +505,22 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                     </button>
                   </div>
                 ) : (
-                  <Avatar className="h-12 w-12 sm:h-14 sm:w-14 shrink-0">
-                    {avatarSrc ? (
-                      <AvatarImage src={avatarSrc} alt="" className="object-cover" key={avatarSrc} />
-                    ) : null}
-                    <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
-                      {getInitials(displayName)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <button
+                    type="button"
+                    onClick={() => avatarSrc && setPhotoPreviewOpen(true)}
+                    className={avatarSrc ? "rounded-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : "rounded-full cursor-default pointer-events-none"}
+                    aria-label={avatarSrc ? "View profile photo" : undefined}
+                    tabIndex={avatarSrc ? 0 : -1}
+                  >
+                    <Avatar className="h-12 w-12 sm:h-14 sm:w-14 pointer-events-none">
+                      {avatarSrc ? (
+                        <AvatarImage src={avatarSrc} alt="" className="object-cover" key={avatarSrc} />
+                      ) : null}
+                      <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                        {getInitials(displayName)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
                 )}
                 {!editingProfile ? (
                   <div className="min-w-0">
@@ -531,7 +541,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">Profile photo</p>
                     <p className="text-xs text-muted-foreground">
-                      Click to upload · JPEG, PNG, WebP or GIF · max 5 MB
+                      Click to upload · JPEG, PNG, WebP or GIF · max 10 MB
                     </p>
                   </div>
                 )}
@@ -1034,6 +1044,30 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
             </Tabs>
           </CardContent>
         </Card>
+      )}
+
+      {/* Full-size photo preview lightbox */}
+      {photoPreviewOpen && avatarSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPhotoPreviewOpen(false)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={avatarSrc}
+              alt={member.name}
+              className="max-h-[90dvh] max-w-[90dvw] rounded-xl object-contain shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setPhotoPreviewOpen(false)}
+              className="absolute -right-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-black shadow-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Close photo preview"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

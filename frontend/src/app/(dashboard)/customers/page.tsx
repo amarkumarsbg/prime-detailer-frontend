@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Upload, UserX, Download, ChevronDown, Loader2 } from "lucide-react";
+import {
+  Plus, Upload, UserX, Download, ChevronDown, Loader2,
+  Search, Car, Star, Wallet, CalendarDays, ArrowRight, Phone, Mail,
+  LayoutGrid, List,
+} from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -13,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -78,6 +83,8 @@ export default function CustomersPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const tableData = useMemo(() => {
     const source =
@@ -95,6 +102,7 @@ export default function CustomersPage() {
         name: c.name,
         phone: c.phone,
         email: c.email,
+        avatar: c.avatar ?? null,
         vehiclesCount,
         totalVisits: c.totalVisits,
         rewardPoints: c.rewardPoints,
@@ -108,6 +116,27 @@ export default function CustomersPage() {
     }) as Record<string, unknown>[];
   }, [customers, vehicles, activeFilter]);
 
+  const filteredData = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tableData;
+    return tableData.filter((item) => {
+      const name = String(item.name ?? "").toLowerCase();
+      const phone = String(item.phone ?? "").toLowerCase();
+      const email = String(item.email ?? "").toLowerCase();
+      if (name.includes(q) || phone.includes(q) || email.includes(q)) return true;
+      const qReg = normalizeVehicleToken(q);
+      if (qReg.length < 2) return false;
+      const blob = String(item._vehicleRegSearch ?? "");
+      return blob.split(",").some((reg) => reg.includes(qReg));
+    });
+  }, [tableData, searchQuery]);
+
+  /** Hide noemail placeholder addresses from display. */
+  function displayEmail(email: string): string | null {
+    if (!email || email.includes("@customers.placeholder")) return null;
+    return email;
+  }
+
   const columns = [
     {
       key: "name",
@@ -115,6 +144,9 @@ export default function CustomersPage() {
       render: (item: Record<string, unknown>) => (
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
+            {(item.avatar as string | null | undefined) ? (
+              <AvatarImage src={item.avatar as string} alt="" className="object-cover" />
+            ) : null}
             <AvatarFallback className="text-xs">
               {getInitials((item.name as string) ?? "")}
             </AvatarFallback>
@@ -362,90 +394,221 @@ export default function CustomersPage() {
         />
       )}
 
-      <DataTable
-        data={tableData}
-        columns={columns}
-        defaultSortKey="memberSince"
-        defaultSortDir="desc"
-        searchPlaceholder="Search by name, phone, email, or vehicle number..."
-        searchKeys={["name", "phone", "email"]}
-        searchMatch={(item, q) => {
-          const name = String(item.name ?? "").toLowerCase();
-          const phone = String(item.phone ?? "").toLowerCase();
-          const email = String(item.email ?? "").toLowerCase();
-          if (name.includes(q) || phone.includes(q) || email.includes(q)) return true;
-          const qReg = normalizeVehicleToken(q);
-          if (qReg.length < 2) return false;
-          const blob = String(item._vehicleRegSearch ?? "");
-          if (!blob) return false;
-          return blob.split(",").some((reg) => reg.includes(qReg));
-        }}
-        onRowClick={handleRowClick}
-        renderMobileCard={(item) => (
-          <>
-            <div className="flex items-center gap-2.5">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="text-[10px]">
-                  {getInitials(String(item.name ?? ""))}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-medium leading-tight">{String(item.name)}</p>
-                  {Boolean(item.isInactive) ? (
-                    <Badge variant="secondary" className="h-5 shrink-0 gap-0.5 px-1.5 text-[10px]">
-                      <UserX className="h-2.5 w-2.5" />
-                      Inactive
-                    </Badge>
-                  ) : null}
+      {/* Search bar + view toggle */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name, phone, email, or vehicle number\u2026"
+            className="w-full rounded-xl border border-border/80 bg-background py-2.5 pl-9 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+          />
+        </div>
+        {/* View mode toggle */}
+        <div className="flex items-center rounded-xl border border-border/80 bg-background overflow-hidden shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`flex h-10 w-10 items-center justify-center transition-colors ${
+              viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+            }`}
+            aria-label="Grid view"
+            title="Grid view"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`flex h-10 w-10 items-center justify-center transition-colors ${
+              viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+            }`}
+            aria-label="List view"
+            title="List view"
+          >
+            <List className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Results count */}
+      <p className="text-xs text-muted-foreground">
+        {filteredData.length} customer{filteredData.length !== 1 ? "s" : ""}
+      </p>
+
+      {/* Card grid / List view */}
+      {filteredData.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/85 py-16 text-muted-foreground">
+          <p className="text-sm font-medium">No customers found</p>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-xs text-primary hover:underline"
+            >
+              Clear search
+            </button>
+          )}
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredData.map((item) => {
+            const avatarSrc = item.avatar as string | null | undefined;
+            const email = displayEmail(String(item.email ?? ""));
+            return (
+              <Link
+                key={String(item.id)}
+                href={`/customers/${String(item.id)}`}
+                className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200"
+              >
+                {/* Header: avatar + name + contact */}
+                <div className="p-4 flex items-start gap-3">
+                  <Avatar className="h-12 w-12 shrink-0 ring-2 ring-border/50">
+                    {avatarSrc ? (
+                      <AvatarImage src={avatarSrc} alt="" className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="text-sm font-semibold">
+                      {getInitials(String(item.name ?? ""))}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="font-semibold text-sm leading-snug truncate">
+                        {String(item.name)}
+                      </p>
+                      {Boolean(item.isInactive) && (
+                        <Badge variant="secondary" className="shrink-0 gap-1 px-1.5 py-0 text-[10px] h-4">
+                          <UserX className="h-2.5 w-2.5" />
+                          Inactive
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Phone className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{String(item.phone)}</span>
+                    </div>
+                    {email && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{email}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <a
-                  href={`tel:${String(item.phone).replace(/\s/g, "")}`}
-                  className="text-[11px] text-primary leading-tight"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {String(item.phone)}
-                </a>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 bg-muted/20">
+                  <div className="flex flex-col items-center py-2.5 gap-0.5">
+                    <div className="flex items-center gap-1">
+                      <Car className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm font-bold tabular-nums">{String(item.vehiclesCount)}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Vehicles</span>
+                  </div>
+                  <div className="flex flex-col items-center py-2.5 gap-0.5">
+                    <span className="text-sm font-bold tabular-nums">{String(item.totalVisits)}</span>
+                    <span className="text-[10px] text-muted-foreground">Visits</span>
+                  </div>
+                  <div className="flex flex-col items-center py-2.5 gap-0.5">
+                    <div className="flex items-center gap-1">
+                      <Star className="h-3 w-3 text-amber-500" />
+                      <span className="text-sm font-bold tabular-nums">{String(item.rewardPoints)}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">Points</span>
+                  </div>
+                </div>
+
+                {/* Footer: wallet + last visit + arrow */}
+                <div className="px-4 py-2.5 border-t border-border/60 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-1 text-xs">
+                      <Wallet className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="font-semibold tabular-nums">
+                        {formatCurrency((item.walletBalance as number) ?? 0)}
+                      </span>
+                    </div>
+                    {item.lastVisitDate ? (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+                        <CalendarDays className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{formatDate(String(item.lastVisitDate))}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        /* ── List view — original DataTable ── */
+        <DataTable
+          data={filteredData}
+          columns={columns}
+          defaultSortKey="memberSince"
+          defaultSortDir="desc"
+          searchPlaceholder="Search by name, phone, email, or vehicle number..."
+          searchKeys={["name", "phone", "email"]}
+          searchMatch={(item, q) => {
+            const name = String(item.name ?? "").toLowerCase();
+            const phone = String(item.phone ?? "").toLowerCase();
+            const email = String(item.email ?? "").toLowerCase();
+            if (name.includes(q) || phone.includes(q) || email.includes(q)) return true;
+            const qReg = normalizeVehicleToken(q);
+            if (qReg.length < 2) return false;
+            const blob = String(item._vehicleRegSearch ?? "");
+            if (!blob) return false;
+            return blob.split(",").some((reg) => reg.includes(qReg));
+          }}
+          onRowClick={(item) => router.push(`/customers/${String(item.id)}`)}
+          renderMobileCard={(item) => (
+            <>
+              <div className="flex items-center gap-2.5">
+                <Avatar className="h-8 w-8 shrink-0">
+                  {(item.avatar as string | null | undefined) ? (
+                    <AvatarImage src={item.avatar as string} alt="" className="object-cover" />
+                  ) : null}
+                  <AvatarFallback className="text-[10px]">
+                    {getInitials(String(item.name ?? ""))}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-medium leading-tight">{String(item.name)}</p>
+                    {Boolean(item.isInactive) ? (
+                      <Badge variant="secondary" className="h-5 shrink-0 gap-0.5 px-1.5 text-[10px]">
+                        <UserX className="h-2.5 w-2.5" />
+                        Inactive
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <a
+                    href={`tel:${String(item.phone).replace(/\s/g, "")}`}
+                    className="text-[11px] text-primary leading-tight"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {String(item.phone)}
+                  </a>
+                </div>
               </div>
-            </div>
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-muted-foreground">
-              <span>
-                <span className="font-medium text-foreground tabular-nums">{String(item.vehiclesCount)}</span>{" "}
-                veh
-              </span>
-              <span aria-hidden className="text-border/80">
-                ·
-              </span>
-              <span>
-                <span className="font-medium text-foreground tabular-nums">{String(item.totalVisits)}</span>{" "}
-                visits
-              </span>
-              <span aria-hidden className="text-border/80">
-                ·
-              </span>
-              <span>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {formatCurrency((item.walletBalance as number) ?? 0)}
-                </span>
-              </span>
-              <span aria-hidden className="text-border/80">
-                ·
-              </span>
-              <span>
-                <span className="font-medium text-foreground tabular-nums">{String(item.rewardPoints)}</span> pts
-              </span>
-              {item.lastVisitDate ? (
-                <>
-                  <span aria-hidden className="text-border/80">
-                    ·
-                  </span>
-                  <span>Last {formatDate(String(item.lastVisitDate))}</span>
-                </>
-              ) : null}
-            </p>
-          </>
-        )}
-      />
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-muted-foreground">
+                <span><span className="font-medium text-foreground tabular-nums">{String(item.vehiclesCount)}</span>{" "}veh</span>
+                <span aria-hidden className="text-border/80">·</span>
+                <span><span className="font-medium text-foreground tabular-nums">{String(item.totalVisits)}</span>{" "}visits</span>
+                <span aria-hidden className="text-border/80">·</span>
+                <span className="font-semibold text-foreground tabular-nums">{formatCurrency((item.walletBalance as number) ?? 0)}</span>
+                <span aria-hidden className="text-border/80">·</span>
+                <span><span className="font-medium text-foreground tabular-nums">{String(item.rewardPoints)}</span> pts</span>
+                {item.lastVisitDate ? (
+                  <><span aria-hidden className="text-border/80">·</span><span>Last {formatDate(String(item.lastVisitDate))}</span></>
+                ) : null}
+              </p>
+            </>
+          )}
+        />
+      )}
 
       <ImportCustomersDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
 

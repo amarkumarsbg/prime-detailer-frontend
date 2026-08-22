@@ -26,6 +26,7 @@ const createSchema = z.object({
   lastVisitDate: z.string().optional(),
   isInactive: z.boolean().optional(),
   emailVerified: z.boolean().optional(),
+  avatar: z.string().optional().nullable(),
 });
 
 const updateSchema = createSchema.partial().omit({ referredBy: true });

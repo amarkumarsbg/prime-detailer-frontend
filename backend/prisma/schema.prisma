@@ -282,6 +282,7 @@ model Customer {
   lastVisitDate  String?
   isInactive     Boolean      @default(false)
   emailVerified  Boolean      @default(false)
+  avatar         String?
   createdAt      DateTime
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

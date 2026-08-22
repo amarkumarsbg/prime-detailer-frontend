@@ -67,7 +67,7 @@ export default function ProfilePage() {
       return;
     }
     if (file.size > AVATAR_MAX_BYTES) {
-      toast.error("Photo must be 5 MB or smaller.");
+      toast.error("Photo must be 10 MB or smaller.");
       return;
     }
     const fd = new FormData();
@@ -250,7 +250,7 @@ export default function ProfilePage() {
                     className="h-10 rounded-lg"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Change your photo by clicking your picture at the top (JPEG, PNG, WebP, or GIF, max 5 MB).
+                    Change your photo by clicking your picture at the top (JPEG, PNG, WebP, or GIF, max 10 MB).
                   </p>
                 </div>
 
