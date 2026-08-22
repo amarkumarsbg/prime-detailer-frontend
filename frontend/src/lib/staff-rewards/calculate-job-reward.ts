@@ -388,7 +388,6 @@ export function getCompanyTargetResults(args: {
   joiningDate?: string;
   evaluationDate?: Date;
 }): CompanyTargetPeriodResult[] {
-  console.log("getCompanyTargetResults called with joiningDate:", args.joiningDate, "type:", typeof args.joiningDate);
   if (!args.settings.companyTargetEnabled) {
     return [];
   }
@@ -539,10 +538,21 @@ export function getCompanyTargetResults(args: {
       periodEnd = addMonthsUTC(periodStart, F);
     }
 
-    const startMs = periodStart.getTime();
-    const endMs = periodEnd.getTime() - 1;
+    // For MONTHLY slots, snap the boundaries to the calendar month that periodStart
+    // falls in (e.g. joiningDate Dec 31 → cycles start Jul 31, but revenue window
+    // should be Jul 1–Jul 31, not Jul 31–Aug 31).
+    let startMs: number;
+    let endMs: number;
+    if (slot.configKey === "MONTHLY") {
+      const calMonth = periodStart.getUTCMonth();
+      const calYear = periodStart.getUTCFullYear();
+      startMs = Date.UTC(calYear, calMonth, 1, 0, 0, 0, 0);
+      endMs = new Date(Date.UTC(calYear, calMonth + 1, 0, 23, 59, 59, 999)).getTime();
+    } else {
+      startMs = periodStart.getTime();
+      endMs = periodEnd.getTime() - 1;
+    }
 
-    const actualEnd = new Date(endMs);
     let label = slot.labelPrefix;
     if (slot.configKey === "MONTHLY") {
       const monthsFull = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
