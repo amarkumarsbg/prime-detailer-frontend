@@ -169,7 +169,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
 
   const activeStaffCount = useMemo(() => staff.filter((s) => s.isActive).length, [staff]);
   const companyTargetResults = useMemo(() => {
-    return getCompanyTargetResults({
+    const allResults = getCompanyTargetResults({
       jobCards,
       invoices,
       activeStaffCount,
@@ -177,6 +177,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       year: targetYear,
       joiningDate: member?.joiningDate || undefined,
     });
+    return allResults.filter((r) => r.periodLabel.startsWith("Monthly"));
   }, [jobCards, invoices, activeStaffCount, settings, targetYear, member?.joiningDate]);
 
   const totalCompanyTargetIncentive = useMemo(() => {

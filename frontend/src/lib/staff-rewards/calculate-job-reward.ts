@@ -388,6 +388,7 @@ export function getCompanyTargetResults(args: {
   joiningDate?: string;
   evaluationDate?: Date;
 }): CompanyTargetPeriodResult[] {
+  console.log("getCompanyTargetResults called with joiningDate:", args.joiningDate, "type:", typeof args.joiningDate);
   if (!args.settings.companyTargetEnabled) {
     return [];
   }

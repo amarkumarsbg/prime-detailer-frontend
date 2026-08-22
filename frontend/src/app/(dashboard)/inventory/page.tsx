@@ -460,6 +460,7 @@ export default function InventoryPage() {
       <PageHeader
         title="Inventory"
         description="Parts catalog, branch stock, transfers, purchases, and movement history"
+        hideDescriptionOnMobile
         actions={
           <div className="flex flex-wrap gap-2">
             <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>

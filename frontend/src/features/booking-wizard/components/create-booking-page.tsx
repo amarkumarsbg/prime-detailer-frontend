@@ -3285,7 +3285,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     </Label>
                     <Input
                       id="schedule-booking-date"
-                      type="date"
+                      type={splitDatetimeLocal(bookingWhen).date ? "date" : "text"}
+                      placeholder="dd-mm-yyyy"
+                      onFocus={(e) => (e.target.type = "date")}
+                      onBlur={(e) => {
+                        if (!e.target.value) e.target.type = "text";
+                      }}
                       min={bookingScheduleDateMin}
                       value={splitDatetimeLocal(bookingWhen).date}
                       onChange={(e) => {
@@ -3310,7 +3315,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     </Label>
                     <Input
                       id="schedule-booking-time"
-                      type="time"
+                      type={splitDatetimeLocal(bookingWhen).time ? "time" : "text"}
+                      placeholder="--:--"
+                      onFocus={(e) => (e.target.type = "time")}
+                      onBlur={(e) => {
+                        if (!e.target.value) e.target.type = "text";
+                      }}
                       min={bookingScheduleTimeMin}
                       value={splitDatetimeLocal(bookingWhen).time}
                       onChange={(e) => {
