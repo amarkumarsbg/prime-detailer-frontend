@@ -46,7 +46,9 @@ import { useVehicleStore } from "@/store/vehicle-store";
 import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { buildJobCardTemplateMessage, defaultWhatsAppTemplateForStatus } from "@/lib/job-card-whatsapp-templates";
-import { sendCustomerWhatsApp } from "@/lib/whatsapp-send";
+import { sendCustomerWhatsApp, openWhatsAppComposer } from "@/lib/whatsapp-send";
+import { buildJobCardPhotosWhatsAppMessage } from "@/lib/whatsapp-customer-messages";
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { downloadInvoicePdf, type InvoicePdfOpts } from "@/lib/invoice-pdf";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
@@ -61,7 +63,7 @@ import { formatDate, cn, formatCurrency } from "@/lib/utils";
 import { jobNumberSortKey, sortJobCardsByNumberThenCreated } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
-import { Plus, LayoutGrid, List, ChevronDown, MoreVertical, Eye, Pencil, Trash2, Download, Clock, FileText, Wrench, Calendar, User, Car, CreditCard } from "lucide-react";
+import { Plus, LayoutGrid, List, ChevronDown, MoreVertical, Eye, Pencil, Trash2, Download, Clock, FileText, Wrench, Calendar, User, Car, CreditCard, Copy, Image as ImageIcon } from "lucide-react";
 
 const TAB_STATUSES: (JobCardStatus | "ALL")[] = [
   "ALL",
@@ -864,6 +866,74 @@ export default function JobCardsPage() {
                                       {TAB_LABELS[st]}
                                     </DropdownMenuItem>
                                   ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuPortal>
+                            </DropdownMenuSub>
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger className="gap-2 text-xs">
+                                <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                                Customer Photos
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuPortal>
+                                <DropdownMenuSubContent onClick={(e) => e.stopPropagation()}>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const token = (jc as any).secureToken;
+                                      if (token) {
+                                        window.open(`/customer/job-card/${token}/photos`, "_blank");
+                                      } else {
+                                        toast.error("Photos link not ready yet. Please refresh the page.");
+                                      }
+                                    }}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                                    View Photos
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const token = (jc as any).secureToken;
+                                      if (token) {
+                                        const link = `${window.location.origin}/customer/job-card/${token}/photos`;
+                                        navigator.clipboard.writeText(link).then(() => {
+                                          toast.success("Customer link copied to clipboard!");
+                                        }).catch(() => {
+                                          toast.error("Failed to copy link.");
+                                        });
+                                      } else {
+                                        toast.error("Photos link not ready yet. Please refresh the page.");
+                                      }
+                                    }}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                    Copy Customer Link
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const token = (jc as any).secureToken;
+                                      if (token) {
+                                        const link = `${window.location.origin}/customer/job-card/${token}/photos`;
+                                        const bizName = useSettingsStore.getState().businessName || "Prime Detailers";
+                                        const message = buildJobCardPhotosWhatsAppMessage({
+                                          customerName: jc.customerName,
+                                          jobCardNumber: jc.jobNumber,
+                                          customerPhotosLink: link,
+                                          workshopName: bizName,
+                                        });
+                                        openWhatsAppComposer(jc.customerPhone, message);
+                                      } else {
+                                        toast.error("Photos link not ready yet. Please refresh the page.");
+                                      }
+                                    }}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                    Share on WhatsApp
+                                  </DropdownMenuItem>
                                 </DropdownMenuSubContent>
                               </DropdownMenuPortal>
                             </DropdownMenuSub>

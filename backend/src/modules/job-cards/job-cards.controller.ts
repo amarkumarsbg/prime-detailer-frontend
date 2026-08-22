@@ -17,6 +17,7 @@ import {
   replaceJobCards,
   upsertJobCard,
 } from "./job-cards.service.js";
+import { generateJobCardSecureToken } from "../../lib/secure-token.js";
 
 const COLLECTION = "jobCards" as const;
 const snapshotSchema = z.object({ items: z.array(z.unknown()) });
@@ -29,7 +30,16 @@ export async function getJobCards(req: Request, res: Response, next: NextFunctio
       return;
     }
     const items = await listJobCards(scope.scope.organizationId, scope.allowedBranchIds);
-    res.json({ data: { items }, error: null });
+    const itemsWithTokens = items.map((item: any) => {
+      if (item && typeof item === "object" && typeof item.id === "string") {
+        return {
+          ...item,
+          secureToken: generateJobCardSecureToken(item.id),
+        };
+      }
+      return item;
+    });
+    res.json({ data: { items: itemsWithTokens }, error: null });
   } catch (e) {
     next(e);
   }

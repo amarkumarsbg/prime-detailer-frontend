@@ -756,3 +756,24 @@ export function buildHighEndAdvanceReceiptWhatsAppMessage(
     .filter(Boolean)
     .join("\n");
 }
+
+export function buildJobCardPhotosWhatsAppMessage(params: {
+  customerName: string;
+  jobCardNumber: string;
+  customerPhotosLink: string;
+  workshopName: string;
+}): string {
+  const first = params.customerName.trim().split(/\s+/)[0] ?? params.customerName;
+  return [
+    `Hi *${first}*,`,
+    ``,
+    `Your vehicle photos for Job Card *${params.jobCardNumber}* are ready.`,
+    ``,
+    `View Before & After Photos:`,
+    params.customerPhotosLink,
+    ``,
+    `Thank you for choosing *${params.workshopName}*.`,
+    ``,
+    `— ${params.workshopName}`,
+  ].join("\n");
+}

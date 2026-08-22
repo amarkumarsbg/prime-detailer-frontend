@@ -30,6 +30,9 @@ import { prisma } from "./lib/prisma.js";
 import { getPublicInvoiceView } from "./modules/invoices/public-invoice.service.js";
 import { getPublicBranding } from "./services/public-branding.service.js";
 import { getPublicCustomerLedger } from "./modules/parties/public-ledger.service.js";
+import { verifyJobCardSecureToken } from "./lib/secure-token.js";
+import { getCollectionItem } from "./modules/collections/app-json-store.js";
+import { AppError } from "./lib/app-error.js";
 
 const app = express();
 
@@ -102,6 +105,58 @@ app.get("/api/public/invoices/:id", async (req, res, next) => {
     const id = Array.isArray(req.params.id) ? req.params.id[0]! : req.params.id!;
     const data = await getPublicInvoiceView(id);
     res.json({ data, error: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/public/job-cards/:secureToken/photos", async (req, res, next) => {
+  try {
+    const secureToken = Array.isArray(req.params.secureToken)
+      ? req.params.secureToken[0]!
+      : req.params.secureToken!;
+    
+    const jobCardId = verifyJobCardSecureToken(secureToken);
+    if (!jobCardId) {
+      throw AppError.forbidden("Invalid or expired photos link");
+    }
+
+    const jobCardRaw = (await getCollectionItem("jobCards", jobCardId)) as Record<string, any> | null;
+    if (!jobCardRaw) {
+      throw AppError.notFound("Job Card not found");
+    }
+
+    // Pick only public-safe fields
+    const jobCard = {
+      id: jobCardRaw.id,
+      jobNumber: jobCardRaw.jobNumber,
+      customerName: jobCardRaw.customerName,
+      vehicleMakeModel: jobCardRaw.vehicleMakeModel,
+      vehicleRegNumber: jobCardRaw.vehicleRegNumber,
+      status: jobCardRaw.status,
+      inspectionPhotos: jobCardRaw.inspectionPhotos ?? [],
+    };
+
+    const settingsRow = await prisma.appJsonRow.findUnique({
+      where: { collection_entityId: { collection: "appSettings", entityId: "default" } },
+    });
+    const settingsPayload =
+      settingsRow?.payload && typeof settingsRow.payload === "object"
+        ? (settingsRow.payload as Record<string, any>)
+        : null;
+
+    const businessSettings = {
+      businessName: settingsPayload?.businessName ?? "Prime Detailers",
+      logoUrl: settingsPayload?.logoUrl ?? null,
+    };
+
+    res.json({
+      data: {
+        jobCard,
+        businessSettings,
+      },
+      error: null,
+    });
   } catch (e) {
     next(e);
   }
