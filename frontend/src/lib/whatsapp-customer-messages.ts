@@ -644,7 +644,7 @@ export function buildJobReadyForPickupWhatsAppMessage(
 
 export function buildJobDeliveredWhatsAppMessage(
   job: JobCard,
-  opts: { businessName: string }
+  opts: { businessName: string; customerPhotosLink?: string | null }
 ): string {
   const firstName = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
   const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
@@ -655,10 +655,15 @@ export function buildJobDeliveredWhatsAppMessage(
     `Thank you for choosing *${opts.businessName}*.`,
     `Your job *${job.jobNumber}* is marked *delivered* for ${vehicle}.`,
     ``,
+    opts.customerPhotosLink ? `📸 *View Before & After Comparison:*` : null,
+    opts.customerPhotosLink || null,
+    opts.customerPhotosLink ? `` : null,
     `We hope you’re happy with the work. For invoice / warranty questions, reply here or visit the workshop.`,
     ``,
     `— ${opts.businessName}`,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildQuotationConvertedWhatsAppMessage(

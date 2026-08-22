@@ -81,6 +81,7 @@ export type BuildJobCardTemplateMessageOpts = {
   businessName: string;
   invoiceNumber?: string | null;
   customerLoginUrl?: string | null;
+  customerPhotosLink?: string | null;
 };
 
 function joinMessage(lines: Array<string | false | null | undefined>): string {
@@ -125,6 +126,9 @@ export function buildJobCardTemplateMessage(
         services ? `🛠️ Services booked: ${services}` : null,
         ``,
         `Inspection / service will begin shortly. Reply here if you have notes for our team.`,
+        opts.customerPhotosLink ? `📸 *View Before Photos:*` : null,
+        opts.customerPhotosLink || null,
+        opts.customerPhotosLink ? `` : null,
         login ? `🔗 *Your Customer Login*` : null,
         login || null,
         ``,
@@ -199,6 +203,9 @@ export function buildJobCardTemplateMessage(
         `Thank you for choosing ${biz}.`,
         `Your job ${job.jobNumber} is marked delivered for ${job.vehicleMakeModel} (${job.vehicleRegNumber}).`,
         ``,
+        opts.customerPhotosLink ? `📸 *View Before & After Comparison:*` : null,
+        opts.customerPhotosLink || null,
+        opts.customerPhotosLink ? `` : null,
         `We hope you’re happy with the work. For invoice / warranty questions, reply here or visit the workshop.`,
         ``,
         `— ${biz}`,

@@ -252,6 +252,7 @@ export default function JobCardsPage() {
       businessName: businessName || "Prime Detailers",
       invoiceNumber: invoice ? invoice.invoiceNumber : null,
       customerLoginUrl: typeof window !== "undefined" ? window.location.origin : null,
+      customerPhotosLink: jc.secureToken ? `${typeof window !== "undefined" ? window.location.origin : ""}/customer/job-card/${jc.secureToken}/photos` : null,
     };
     const templateId = defaultWhatsAppTemplateForStatus(jc.status);
     const body = buildJobCardTemplateMessage(templateId, jc, buildOpts);

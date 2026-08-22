@@ -61,8 +61,9 @@ export function JobCardWhatsAppNotifyDialog({
       businessName,
       invoiceNumber: invoiceNumber ?? null,
       customerLoginUrl: appOrigin() || null,
+      customerPhotosLink: jobCard.secureToken ? `${appOrigin()}/customer/job-card/${jobCard.secureToken}/photos` : null,
     }),
-    [businessName, invoiceNumber]
+    [businessName, invoiceNumber, jobCard.secureToken]
   );
 
   useEffect(() => {

@@ -55,7 +55,9 @@ export function notifyJobReadyWhatsApp(job: JobCard, businessName: string): void
 export function notifyJobDeliveredWhatsApp(job: JobCard, businessName: string): void {
   const phone = job.customerPhone?.trim();
   if (!phone) return;
-  const message = buildJobDeliveredWhatsAppMessage(job, { businessName });
+  const appUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "");
+  const customerPhotosLink = job.secureToken ? `${appUrl}/customer/job-card/${job.secureToken}/photos` : null;
+  const message = buildJobDeliveredWhatsAppMessage(job, { businessName, customerPhotosLink });
   void executeCustomerWhatsAppAutomation({
     phone,
     message,

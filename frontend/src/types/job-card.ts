@@ -168,6 +168,7 @@ export interface JobCard {
     notes?: string;
   }[];
   paidAmount?: number;
+  secureToken?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
