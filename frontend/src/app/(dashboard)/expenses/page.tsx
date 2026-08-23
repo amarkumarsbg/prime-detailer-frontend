@@ -31,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
+import { recognizedExpenseAmount, previousExpenseDateFilter, percentChange } from "@/lib/accounting/dashboard-metrics";
 import { expensePaidAmount, expenseOutstanding } from "@/lib/party/ledger-math";
 import { useExpenseStore } from "@/store/expense-store";
 import { useBranchStore } from "@/store/branch-store";
@@ -53,6 +53,9 @@ import {
   Receipt,
   SlidersHorizontal,
   Trash2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { assertCanExportData } from "@/lib/assert-can-export";
@@ -208,6 +211,52 @@ function ExpensesPageContent() {
       expenseCount: scoped.length,
     };
   }, [scoped]);
+
+  /** Previous-period expenses — only computed when Compare is on. */
+  const prevDateFilter = useMemo(
+    () => (compareOn ? previousExpenseDateFilter(dateFilter) : null),
+    [compareOn, dateFilter]
+  );
+
+  const prevScoped = useMemo(() => {
+    if (!prevDateFilter) return [];
+    return branchScopedExpenses.filter((e) => {
+      if (!matchesExpenseDate(e.date, prevDateFilter)) return false;
+      if (categoryFilter !== "all" && e.category !== categoryFilter) return false;
+      if (statusFilter !== "all" && e.paymentStatus !== statusFilter) return false;
+      return true;
+    });
+  }, [prevDateFilter, branchScopedExpenses, categoryFilter, statusFilter]);
+
+  const prevKpis = useMemo(() => {
+    if (!compareOn) return null;
+    const total = prevScoped.reduce((s, e) => s + expensePaidAmount(e), 0);
+    const payables = prevScoped.reduce((s, e) => s + expenseOutstanding(e), 0);
+    const billed = prevScoped.reduce((s, e) => s + recognizedExpenseAmount(e), 0);
+    const partialCount = prevScoped.filter((e) => e.paymentStatus === "PARTIAL").length;
+    return { total, billed, payables, partialCount, expenseCount: prevScoped.length };
+  }, [compareOn, prevScoped]);
+
+  /** Category breakdown — only built when Full is on. */
+  const categoryBreakdown = useMemo(() => {
+    if (!fullViewOn) return [];
+    const map = new Map<string, { count: number; amount: number }>();
+    for (const e of scoped) {
+      const existing = map.get(e.category) ?? { count: 0, amount: 0 };
+      map.set(e.category, {
+        count: existing.count + 1,
+        amount: existing.amount + expensePaidAmount(e),
+      });
+    }
+    const rows = [...map.entries()]
+      .map(([cat, v]) => ({ category: cat, ...v }))
+      .sort((a, b) => b.amount - a.amount);
+    const totalAmt = rows.reduce((s, r) => s + r.amount, 0);
+    return rows.map((r) => ({
+      ...r,
+      pct: totalAmt > 0 ? Math.round((r.amount / totalAmt) * 100) : 0,
+    }));
+  }, [fullViewOn, scoped]);
 
   const dateSummary = useMemo(
     () => formatExpenseDateFilterLabel(dateFilter),
@@ -495,6 +544,83 @@ function ExpensesPageContent() {
           valueClassName="text-lg sm:text-xl"
         />
       </div>
+
+      {/* ── Compare: previous-period KPIs ── */}
+      {compareOn && prevKpis && (
+        <div className="rounded-xl border border-border/70 bg-muted/30 p-3 md:p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Previous period comparison
+          </p>
+          <div className="grid grid-cols-2 gap-2 md:gap-3 xl:grid-cols-4">
+            {[
+              { label: "Total Expenses", cur: kpis.total, prev: prevKpis.total, fmt: formatCurrency },
+              { label: "Total Billed", cur: kpis.billed, prev: prevKpis.billed, fmt: formatCurrency },
+              { label: "Total Payables", cur: kpis.payables, prev: prevKpis.payables, fmt: formatCurrency },
+              { label: "Partial Payments", cur: kpis.partialCount, prev: prevKpis.partialCount, fmt: (v: number) => String(v) },
+            ].map(({ label, cur, prev, fmt }) => {
+              const delta = percentChange(cur, prev);
+              const up = delta !== null && delta > 0;
+              const down = delta !== null && delta < 0;
+              return (
+                <div key={label} className="rounded-lg border border-border/60 bg-card px-3 py-2.5 space-y-1">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground tabular-nums">{fmt(prev)} <span className="text-muted-foreground/60">prev</span></p>
+                      <p className="text-base font-bold tabular-nums">{fmt(cur)}</p>
+                    </div>
+                    {delta === null ? (
+                      <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
+                    ) : up ? (
+                      <span className="flex items-center gap-0.5 text-xs font-semibold text-rose-600 dark:text-rose-400 shrink-0">
+                        <TrendingUp className="h-3.5 w-3.5" />{delta}%
+                      </span>
+                    ) : down ? (
+                      <span className="flex items-center gap-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
+                        <TrendingDown className="h-3.5 w-3.5" />{Math.abs(delta)}%
+                      </span>
+                    ) : (
+                      <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            ↓ green = expenses decreased (good) · ↑ red = expenses increased
+          </p>
+        </div>
+      )}
+
+      {/* ── Full: category breakdown ── */}
+      {fullViewOn && categoryBreakdown.length > 0 && (
+        <div className="rounded-xl border border-border/70 bg-card p-3 md:p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Expense breakdown by category
+          </p>
+          <div className="space-y-2">
+            {categoryBreakdown.map((row) => (
+              <div key={row.category} className="space-y-1">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-foreground">{categoryLabel(row.category)}</span>
+                  <span className="tabular-nums text-muted-foreground shrink-0">
+                    {formatCurrency(row.amount)}{" "}
+                    <span className="text-foreground font-semibold">({row.pct}%)</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{row.count} expense{row.count !== 1 ? "s" : ""}</span>
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-[width]"
+                    style={{ width: `${Math.min(100, Math.max(0, row.pct))}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2 md:space-y-3">
         <h2 className="text-sm font-semibold tracking-tight md:text-base">

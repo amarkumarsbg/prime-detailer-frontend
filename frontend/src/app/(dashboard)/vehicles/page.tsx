@@ -1,7 +1,7 @@
 "use client";
 
 import type { Vehicle, FuelType, VehicleSegment } from "@/types";
-import { Plus, User, Upload, Download, ChevronDown, Loader2, Edit, Trash2 } from "lucide-react";
+import { Plus, User, Upload, Download, ChevronDown, Loader2, Edit, Trash2, LayoutGrid, List, Fuel, Car, Calendar, Palette, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -121,6 +121,24 @@ export default function VehiclesPage() {
   const [extraModels, setExtraModels] = useState<Record<string, Array<{ name: string }>>>({});
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredVehicles = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return vehicleList;
+    return vehicleList.filter((v) => {
+      return (
+        v.registrationNumber.toLowerCase().includes(q) ||
+        v.make.toLowerCase().includes(q) ||
+        v.model.toLowerCase().includes(q) ||
+        (v.variant ?? "").toLowerCase().includes(q) ||
+        (v.customerName ?? "").toLowerCase().includes(q) ||
+        (v.color ?? "").toLowerCase().includes(q) ||
+        (v.vinNumber ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [vehicleList, searchQuery]);
 
   const tableData = vehicleList as (Vehicle & Record<string, unknown>)[];
   const columns = [
@@ -352,52 +370,205 @@ export default function VehiclesPage() {
 
       <ImportVehiclesDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
 
-      <DataTable<Vehicle & Record<string, unknown>>
-        data={tableData}
-        columns={columns}
-        searchPlaceholder="Search by registration, VIN, make, model, customer..."
-        searchKeys={["registrationNumber", "vinNumber", "make", "model", "customerName"]}
-        pageSize={10}
-        onRowClick={(item) => router.push(`/vehicles/${(item as Vehicle).id}`)}
-        renderMobileCard={(item) => {
-          const v = item as Vehicle;
-          const hex = getColorHex(v.color);
-          const segmentLabel = v.segment?.replace(/_/g, " ") ?? "—";
-          return (
-            <>
-              <div className="flex items-center justify-between gap-2">
-                <Badge
-                  variant="default"
-                  className="h-6 max-w-[70%] truncate font-mono text-xs font-bold tracking-wide"
+      {/* Search + count + view toggle */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by registration, make, model, customer…"
+            className="w-full rounded-xl border border-border/80 bg-background py-2.5 pl-9 pr-9 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-3 shrink-0">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">
+            {filteredVehicles.length}{searchQuery ? ` of ${vehicleList.length}` : ""} vehicle{filteredVehicles.length !== 1 ? "s" : ""}
+          </p>
+          <div className="flex items-center rounded-xl border border-border/80 bg-background overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+              aria-label="Card view"
+              title="Card view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+              aria-label="List view"
+              title="List view"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {viewMode === "grid" ? (
+        filteredVehicles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/85 py-16 text-muted-foreground">
+            <p className="text-sm font-medium">{searchQuery ? "No vehicles match your search" : "No vehicles yet"}</p>
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery("")} className="text-xs text-primary hover:underline">
+                Clear search
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredVehicles.map((v) => {
+              const hex = getColorHex(v.color);
+              const segmentLabel = v.segment?.replace(/_/g, " ") ?? "—";
+              return (
+                <div
+                  key={v.id}
+                  className="group flex flex-col rounded-2xl border border-border/70 bg-card overflow-hidden shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer"
+                  onClick={() => router.push(`/vehicles/${v.id}`)}
                 >
-                  {v.registrationNumber}
-                </Badge>
-                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-medium uppercase">
-                  {segmentLabel}
-                </Badge>
-              </div>
-              <p className="mt-1.5 text-sm font-medium leading-tight">
-                {v.make} {v.model}
-                {v.variant ? ` ${v.variant}` : ""}
-              </p>
-              <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
-                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="truncate">{v.customerName}</span>
-              </p>
-              <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span
-                  className="size-2.5 shrink-0 rounded-full border border-border"
-                  style={{ backgroundColor: hex }}
-                  aria-hidden
-                />
-                <span className="truncate">
-                  {v.color} · {v.year} · {formatFuelLabel(v.fuelType)}
-                </span>
-              </p>
-            </>
-          );
-        }}
-      />
+                  {/* No color strip — clean card top */}
+
+                  <div className="p-4 space-y-3 flex-1">
+                    {/* Registration plate + segment */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="inline-flex items-stretch border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-background h-8 shrink-0">
+                        <div className="bg-[#0b5cda] flex flex-col items-center justify-center px-2 py-0.5 text-white select-none">
+                          <span className="w-1.5 h-1.5 rounded-full border border-white mb-0.5" />
+                          <span className="text-[7px] font-bold leading-none tracking-wider">IND</span>
+                        </div>
+                        <div className="flex items-center justify-center px-2.5 font-mono text-[11px] font-black tracking-wider uppercase text-foreground">
+                          {v.registrationNumber}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 text-[10px] font-medium uppercase px-1.5 h-5">
+                        {segmentLabel}
+                      </Badge>
+                    </div>
+
+                    {/* Make / Model + year on right */}
+                    <div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="font-semibold text-sm leading-snug">
+                          {v.make} {v.model}{v.variant ? ` ${v.variant}` : ""}
+                        </p>
+                        <span className="text-xs text-muted-foreground shrink-0">{v.year ?? "—"}</span>
+                      </div>
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                        <User className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{v.customerName}</span>
+                      </p>
+                    </div>
+
+                    {/* Details row */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Fuel className="h-3 w-3 shrink-0" />
+                        {formatFuelLabel(v.fuelType)}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2.5 rounded-full border border-border shrink-0" style={{ backgroundColor: hex }} />
+                        {v.color || "—"}
+                      </span>
+                      {v.odometer != null && (
+                        <span className="flex items-center gap-1.5">
+                          <Car className="h-3 w-3 shrink-0" />
+                          {v.odometer.toLocaleString("en-IN")} km
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer actions */}
+                  <div
+                    className="flex items-center justify-end gap-1 border-t border-border/60 px-3 py-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => setEditingVehicle(v)}
+                      title="Edit vehicle"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeletingVehicle(v)}
+                      title="Delete vehicle"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        <DataTable<Vehicle & Record<string, unknown>>
+          data={tableData}
+          columns={columns}
+          searchPlaceholder="Search by registration, VIN, make, model, customer..."
+          searchKeys={["registrationNumber", "vinNumber", "make", "model", "customerName"]}
+          pageSize={10}
+          onRowClick={(item) => router.push(`/vehicles/${(item as Vehicle).id}`)}
+          renderMobileCard={(item) => {
+            const v = item as Vehicle;
+            const hex = getColorHex(v.color);
+            const segmentLabel = v.segment?.replace(/_/g, " ") ?? "—";
+            return (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <Badge
+                    variant="default"
+                    className="h-6 max-w-[70%] truncate font-mono text-xs font-bold tracking-wide"
+                  >
+                    {v.registrationNumber}
+                  </Badge>
+                  <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-medium uppercase">
+                    {segmentLabel}
+                  </Badge>
+                </div>
+                <p className="mt-1.5 text-sm font-medium leading-tight">
+                  {v.make} {v.model}
+                  {v.variant ? ` ${v.variant}` : ""}
+                </p>
+                <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
+                  <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="truncate">{v.customerName}</span>
+                </p>
+                <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span
+                    className="size-2.5 shrink-0 rounded-full border border-border"
+                    style={{ backgroundColor: hex }}
+                    aria-hidden
+                  />
+                  <span className="truncate">
+                    {v.color} · {v.year} · {formatFuelLabel(v.fuelType)}
+                  </span>
+                </p>
+              </>
+            );
+          }}
+        />
+      )}
 
       <AddVehicleDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
 
