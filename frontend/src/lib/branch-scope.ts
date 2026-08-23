@@ -293,12 +293,15 @@ export function computeBranchScopedDashboardStats(
       0
     );
 
-  // Accrual basis: count all expenses incurred today (paid or pending).
-  // This matches what users expect — an expense they record today should appear
-  // in "today's expenses" regardless of whether payment has been made.
+  // This month's cash-paid expenses — matches what the Expenses page shows
+  // as "Total Expenses (Cash paid in period)" for the current month.
+  const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const totalExpensesToday = scopedExpenses
-    .filter((e) => isSameCalendarDay(e.date, today))
-    .reduce((s, e) => s + recognizedExpenseAmount(e), 0);
+    .filter((e) => {
+      const d = new Date(e.date);
+      return d >= thisMonthStart && d <= today;
+    })
+    .reduce((s, e) => s + expensePaidAmount(e), 0);
 
   const pendingPayments = new Set(
     scopedInvoices.filter(isPendingPaymentInvoice).map((inv) => inv.customerId)

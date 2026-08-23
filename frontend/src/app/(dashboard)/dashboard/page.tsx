@@ -764,7 +764,7 @@ export default function DashboardPage() {
             title="Expenses"
             value={formatCurrency(stats.totalExpensesToday)}
             isEmpty={stats.totalExpensesToday === 0}
-            emptyLabel="No expenses today"
+            emptyLabel="No expenses this month"
             subtitle="incurred today"
             icon={TrendingDown}
             titleClassName="text-[11px] leading-tight"
@@ -1292,9 +1292,9 @@ export default function DashboardPage() {
             />
             <KPICard
               tone="rose"
-              title="Expenses Today"
+              title="Expenses (Month)"
               value={formatCurrency(stats.totalExpensesToday)}
-              subtitle="today"
+              subtitle="cash paid this month"
               icon={TrendingDown}
             />
           </StaggerGrid>
