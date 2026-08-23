@@ -50,7 +50,16 @@ export async function syncPurchaseToExpense(
       purchase.supplierInvoiceNumber ? ` · ${purchase.supplierInvoiceNumber}` : ""
     }`;
   const purchaseDay = (purchase.purchasedAt || new Date().toISOString()).slice(0, 10);
-  const date = purchaseDay;
+  // Use local calendar date (not UTC) so expenses appear on the correct day for
+  // IST and other UTC+ timezones where late-night payments cross UTC midnight.
+  const localDateStr = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const lastPaymentDate = purchase.payments?.length
+    ? localDateStr(purchase.payments[purchase.payments.length - 1]!.paidAt)
+    : null;
+  const date = lastPaymentDate ?? purchaseDay;
 
   const existing = useExpenseStore.getState().expenses.find((e) => e.purchaseId === purchase.id);
   if (existing) {
