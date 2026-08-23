@@ -685,8 +685,13 @@ export function InventoryPurchasesTab() {
                         variant="ghost"
                         size="icon"
                         className="absolute right-3 top-2 h-8 w-8 text-destructive sm:static sm:justify-self-end"
-                        onClick={() => setItems((prev) => prev.filter((l) => l.key !== item.key))}
-                        disabled={items.length === 1}
+                        onClick={() =>
+                          setItems((prev) =>
+                            prev.length === 1
+                              ? [emptyItem()]
+                              : prev.filter((l) => l.key !== item.key)
+                          )
+                        }
                         aria-label="Remove item"
                       >
                         <Trash2 className="h-4 w-4" />
