@@ -57,8 +57,19 @@ function emptyItem(): DraftItem {
 }
 
 function applyPartToDraftItems(prev: DraftItem[], part: Part, targetKey?: string | null): DraftItem[] {
+  // Derive opening stock in primary unit so the purchase QTY defaults to it.
+  let openingQty = 1;
+  if (part.stockQuantityMl != null && part.stockQuantityMl > 0) {
+    openingQty = part.stockQuantityMl / 1000; // ml → litres
+  } else if (part.stockQuantitySecondary != null && part.stockQuantitySecondary > 0 && (part.conversionFactor ?? 1) > 1) {
+    openingQty = Math.round(part.stockQuantitySecondary / (part.conversionFactor ?? 1));
+  } else if (part.quantity > 0) {
+    openingQty = part.quantity;
+  }
+
   const patch = {
     partId: part.id,
+    quantity: String(openingQty),
     unitPrice: String(part.costPrice ?? part.unitPrice ?? ""),
     gstRate: part.gstApplicable === false ? "0" : String(part.gstRate ?? 18),
   };
