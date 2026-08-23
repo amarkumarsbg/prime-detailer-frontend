@@ -312,7 +312,12 @@ export function CatalogItemFormDialog({
         };
 
     if (existing) {
-      updatePart(existing.id, next);
+      // When primary unit changes away from Litre, clear the old ML stock field
+      // so getCanonicalStockSecondary uses the correct representation.
+      const patch = unit !== "Litre" && existing.primaryUnit === "Litre"
+        ? { ...next, stockQuantityMl: undefined }
+        : next;
+      updatePart(existing.id, patch);
       toast.success("Catalog item updated");
     } else {
       const created = addPart(next);

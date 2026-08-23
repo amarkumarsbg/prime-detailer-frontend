@@ -325,12 +325,25 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   },
 
   updatePart: (partId, patch) => {
-    set((state) => ({
-      parts: state.parts.map((p) => {
-        if (p.id !== partId) return p;
-        return normalizePartUnits(initializeDualUnitStock({ ...p, ...patch, id: partId }));
-      }),
-    }));
+    const existing = get().parts.find((p) => p.id === partId);
+    set((state) => {
+      const nextPart = normalizePartUnits(
+        initializeDualUnitStock({ ...existing, ...patch, id: partId } as Part)
+      );
+      const newCanonical = getCanonicalStockSecondary(nextPart);
+      // When the unit type changes (e.g. Litre → Pack), reset branchStocks
+      // so they reflect the new canonical quantity instead of stale ML values.
+      const unitChanged = existing && existing.primaryUnit !== nextPart.primaryUnit;
+      const nextBranchStocks = unitChanged
+        ? state.branchStocks.map((bs) =>
+            bs.partId === partId ? { ...bs, quantity: newCanonical, updatedAt: new Date().toISOString() } : bs
+          )
+        : state.branchStocks;
+      return {
+        parts: state.parts.map((p) => (p.id !== partId ? p : nextPart)),
+        branchStocks: nextBranchStocks,
+      };
+    });
     persistInventorySnapshot(get);
   },
 
