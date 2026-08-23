@@ -46,6 +46,7 @@ import { useVehicleStore } from "@/store/vehicle-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
+import type { VehicleSegment } from "@/types/vehicle";
 import { cn, formatDate, formatInrFull } from "@/lib/utils";
 import { Crown, Package, Pencil, UserPlus, Search, X, Plus, CheckCircle2, ChevronRight } from "lucide-react";
 import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
@@ -236,6 +237,7 @@ export function MembershipPageClient() {
   const [formTier, setFormTier] = useState<MembershipTier>("MONTHLY");
   const [formPrice, setFormPrice] = useState("");
   const [formServiceQuantities, setFormServiceQuantities] = useState<Record<string, number>>({});
+  const [formVehicleSegments, setFormVehicleSegments] = useState<VehicleSegment[]>([]);
   const [serviceFilter, setServiceFilter] = useState("");
   const [addServiceOpen, setAddServiceOpen] = useState(false);
 
@@ -250,6 +252,7 @@ export function MembershipPageClient() {
     setFormTier("MONTHLY");
     setFormPrice("");
     setFormServiceQuantities({});
+    setFormVehicleSegments([]);
     setServiceFilter("");
     setPkgDialogOpen(true);
   };
@@ -264,6 +267,7 @@ export function MembershipPageClient() {
         p.includedServiceIds.map((sid) => [sid, membershipIncludedQuantity(p, sid)])
       )
     );
+    setFormVehicleSegments(p.applicableVehicleSegments ?? []);
     setServiceFilter("");
     setPkgDialogOpen(true);
   };
@@ -308,6 +312,7 @@ export function MembershipPageClient() {
         selectedServiceIds.map((sid) => [sid, Math.max(1, Math.floor(formServiceQuantities[sid] ?? 1))])
       ),
       isActive: editingPackage?.isActive ?? true,
+      applicableVehicleSegments: formVehicleSegments.length > 0 ? formVehicleSegments : undefined,
       createdAt: editingPackage?.createdAt ?? now,
     };
     upsertPackage(pkg);
@@ -907,6 +912,28 @@ export function MembershipPageClient() {
                   value={formPrice}
                   onChange={(e) => setFormPrice(e.target.value)}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Applicable vehicle categories <span className="text-xs font-normal text-muted-foreground">(leave blank for all)</span></Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["HATCHBACK","SEDAN","SUV","COMPACT_SUV","MUV","LUXURY","BIKE"] as VehicleSegment[]).map((seg) => {
+                    const labels: Record<VehicleSegment,string> = { HATCHBACK:"Hatchback", SEDAN:"Sedan", SUV:"SUV", COMPACT_SUV:"Compact SUV", MUV:"MUV", LUXURY:"Luxury", BIKE:"Bike" };
+                    const checked = formVehicleSegments.includes(seg);
+                    return (
+                      <label key={seg} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/50">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) =>
+                            setFormVehicleSegments((prev) =>
+                              v ? [...prev, seg] : prev.filter((s) => s !== seg)
+                            )
+                          }
+                        />
+                        {labels[seg]}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">

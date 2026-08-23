@@ -68,6 +68,8 @@ export interface MembershipPackage {
   includedServiceIds: string[];
   /** Allowed usage count per included service id during the package period. */
   includedServiceQuantities?: Record<string, number>;
+  /** Vehicle segments this package applies to. Empty/undefined = all segments. */
+  applicableVehicleSegments?: VehicleSegment[];
   isActive: boolean;
   createdAt: string;
 }
