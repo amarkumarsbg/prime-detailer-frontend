@@ -360,9 +360,7 @@ export default function JobCardDetailPage() {
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showQuickAssignDialog, setShowQuickAssignDialog] = useState(false);
   const [beforePhotoRequiredOpen, setBeforePhotoRequiredOpen] = useState(false);
-  const beforePhotoModalInputRef = useRef<HTMLInputElement>(null);
   const [afterPhotoRequiredOpen, setAfterPhotoRequiredOpen] = useState(false);
-  const afterPhotoModalInputRef = useRef<HTMLInputElement>(null);
   // Tracks whether before-photos WhatsApp was already sent in this session to prevent duplicates
   // (fires at INSPECTION if photos exist, or at AWAITING_SERVICE as fallback — but never both).
   const beforePhotosWhatsAppSentRef = useRef(false);
@@ -651,6 +649,14 @@ export default function JobCardDetailPage() {
     currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED";
 
   const detailPhotoCount = displayPhotos.length;
+  const beforePhotoCount = useMemo(
+    () => displayPhotos.filter((p) => p.type === "BEFORE").length,
+    [displayPhotos]
+  );
+  const afterPhotoCount = useMemo(
+    () => displayPhotos.filter((p) => p.type === "AFTER").length,
+    [displayPhotos]
+  );
 
   const hasBeforePhoto = useMemo(
     () => hasBeforeInspectionPhoto(jobCard?.inspectionPhotos),
@@ -1268,6 +1274,7 @@ export default function JobCardDetailPage() {
           }
         }
         if (!hasBeforeInspectionPhoto(photos)) {
+          setDetailTab("photos");
           setPhotoTab("BEFORE");
           setBeforePhotoRequiredOpen(true);
           return;
@@ -2874,12 +2881,7 @@ export default function JobCardDetailPage() {
 
       <Dialog
         open={beforePhotoRequiredOpen}
-        onOpenChange={(open) => {
-          setBeforePhotoRequiredOpen(open);
-          if (!open) {
-            if (beforePhotoModalInputRef.current) beforePhotoModalInputRef.current.value = "";
-          }
-        }}
+        onOpenChange={setBeforePhotoRequiredOpen}
       >
         <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
@@ -2894,83 +2896,35 @@ export default function JobCardDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-4 min-h-0 flex-1 overflow-y-auto space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {canUploadBefore ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBeforePhotoRequiredOpen(false);
-                      openMultiCam("BEFORE");
-                    }}
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-                  >
-                    <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photos</span>
-                  </button>
-                  <input
-                    id="before-modal-upload"
-                    ref={beforePhotoModalInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="sr-only"
-                    onChange={async (e) => {
-                      await appendInspectionPhotosFromFiles(e.target.files, "BEFORE");
-                      if (beforePhotoModalInputRef.current) beforePhotoModalInputRef.current.value = "";
-                    }}
-                  />
-                  <label
-                    htmlFor="before-modal-upload"
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-                  >
-                    <Upload className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Upload photos</span>
-                  </label>
-                </>
-              ) : (
-                <>
-                  <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
-                    <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photos</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
-                    <Upload className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Upload photos</span>
-                  </div>
-                </>
-              )}
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-4 text-sm">
+              <p className="font-medium text-foreground">Use the Photos tab to manage Before photos.</p>
+              <p className="mt-1 text-muted-foreground">
+                This dialog no longer renders a second copy of the uploader or gallery. Add or review Before photos in the main Inspection Photos tab only.
+              </p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Current Before photos: <span className="font-medium text-foreground">{beforePhotoCount}</span>
+              </p>
+              {!canUploadBefore ? (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-500">
+                  Before uploads are only allowed during inspection / in service.
+                </p>
+              ) : null}
             </div>
-            {hasBeforeInspectionPhoto(jobCard?.inspectionPhotos) ? (
-              <div className="grid grid-cols-2 gap-2">
-                {displayPhotos
-                  .filter((p) => p.type === "BEFORE")
-                  .map((photo) => (
-                    <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
-                      <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
-                        <span className="truncate font-medium">{photo.label}</span>
-                        {canDeleteInspectionPhotos && (
-                          <button
-                            type="button"
-                            className="text-destructive font-medium shrink-0"
-                            onClick={() => void handleRemovePhoto(photo.id)}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center">No Before photos yet — use the upload area above.</p>
-            )}
           </div>
           <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0 flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setBeforePhotoRequiredOpen(false)}>
               Not now
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDetailTab("photos");
+                setPhotoTab("BEFORE");
+                setBeforePhotoRequiredOpen(false);
+              }}
+            >
+              Open Photos tab
             </Button>
             <Button
               type="button"
@@ -3003,12 +2957,7 @@ export default function JobCardDetailPage() {
 
       <Dialog
         open={afterPhotoRequiredOpen}
-        onOpenChange={(open) => {
-          setAfterPhotoRequiredOpen(open);
-          if (!open) {
-            if (afterPhotoModalInputRef.current) afterPhotoModalInputRef.current.value = "";
-          }
-        }}
+        onOpenChange={setAfterPhotoRequiredOpen}
       >
         <DialogContent className={cn(dialogMobileSheetContentClasses, "max-h-[90dvh]")}>
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
@@ -3019,90 +2968,35 @@ export default function JobCardDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 pb-4 min-h-0 flex-1 overflow-y-auto space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {canUploadAfter ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAfterPhotoRequiredOpen(false);
-                      openMultiCam("AFTER");
-                    }}
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-                  >
-                    <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photos</span>
-                  </button>
-                  <input
-                    id="after-modal-upload"
-                    ref={afterPhotoModalInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="sr-only"
-                    onChange={async (e) => {
-                      await appendInspectionPhotosFromFiles(e.target.files, "AFTER");
-                      if (afterPhotoModalInputRef.current) afterPhotoModalInputRef.current.value = "";
-                    }}
-                  />
-                  <label
-                    htmlFor="after-modal-upload"
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-                  >
-                    <Upload className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Upload photos</span>
-                  </label>
-                </>
-              ) : (
-                <>
-                  <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
-                    <Camera className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Take photos</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border min-h-[120px] px-2 py-4 text-muted-foreground opacity-50 pointer-events-none">
-                    <Upload className="w-7 h-7 mb-2" />
-                    <span className="text-xs font-medium text-center">Upload photos</span>
-                  </div>
-                </>
-              )}
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-4 text-sm">
+              <p className="font-medium text-foreground">Use the Photos tab to manage After photos.</p>
+              <p className="mt-1 text-muted-foreground">
+                This dialog no longer renders a second copy of the uploader or gallery. Add or review After photos in the main Inspection Photos tab only.
+              </p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Current After photos: <span className="font-medium text-foreground">{afterPhotoCount}</span>
+              </p>
+              {!canUploadAfter ? (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-500">
+                  After uploads are locked until quality check is completed.
+                </p>
+              ) : null}
             </div>
-            {!canUploadAfter && (
-              <p className="text-xs text-amber-700 dark:text-amber-500 text-center">
-                After uploads are locked until quality check is completed.
-              </p>
-            )}
-            {displayPhotos.filter((p) => p.type === "AFTER").length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {displayPhotos
-                  .filter((p) => p.type === "AFTER")
-                  .map((photo) => (
-                    <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
-                      <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
-                        <span className="truncate font-medium">{photo.label}</span>
-                        {canDeleteInspectionPhotos && (
-                          <button
-                            type="button"
-                            className="text-destructive font-medium shrink-0"
-                            onClick={() => void handleRemovePhoto(photo.id)}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center">
-                No After photos yet — use the upload area above.
-              </p>
-            )}
           </div>
           <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0 flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAfterPhotoRequiredOpen(false)}>
               Not now
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDetailTab("photos");
+                setPhotoTab("AFTER");
+                setAfterPhotoRequiredOpen(false);
+              }}
+            >
+              Open Photos tab
             </Button>
             <Button
               type="button"

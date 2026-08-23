@@ -344,11 +344,26 @@ export function AccountingDashboard() {
   );
 
   const dateLabel = formatExpenseDateFilterLabel(dateFilter);
+  const isAllTime = dateFilter.kind === "preset" && dateFilter.preset === "all";
 
   const resetFilters = () => {
     setDateFilter(DEFAULT_DATE);
     setCompare(false);
     if (!branchScoped) setBranchFilter("all");
+  };
+
+  const handleCompareToggle = () => {
+    if (isAllTime) {
+      setDateFilter(DEFAULT_DATE);
+      setCompare(true);
+      return;
+    }
+    setCompare((v) => !v);
+  };
+
+  const handleShowFull = () => {
+    setDateFilter({ kind: "preset", preset: "all" });
+    setCompare(false);
   };
 
   const handleRefresh = async () => {
@@ -441,10 +456,9 @@ export function AccountingDashboard() {
               size="sm"
               variant={compare ? "secondary" : "outline"}
               className="h-9 shrink-0 gap-1 px-2.5 text-xs sm:h-10 sm:gap-1.5 sm:px-3 sm:text-sm"
-              onClick={() => setCompare((v) => !v)}
-              disabled={!previousExpenseDateFilter(dateFilter)}
-              title="Compare to prior period"
-              aria-label="Compare to prior period"
+              onClick={handleCompareToggle}
+              title={isAllTime ? "Compare current month to last month" : "Compare to prior period"}
+              aria-label={isAllTime ? "Compare current month to last month" : "Compare to prior period"}
             >
               <LineChart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Compare
@@ -452,9 +466,9 @@ export function AccountingDashboard() {
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant={isAllTime ? "secondary" : "outline"}
               className="h-9 shrink-0 gap-1 px-2.5 text-xs sm:h-10 sm:gap-1.5 sm:px-3 sm:text-sm"
-              onClick={() => setDateFilter({ kind: "preset", preset: "all" })}
+              onClick={handleShowFull}
               title="Show all time"
               aria-label="Show all time"
             >
@@ -484,11 +498,18 @@ export function AccountingDashboard() {
             <span className="ml-1 text-xs">(vs prior period)</span>
           ) : null}
         </p>
+        <p className="mt-1 hidden text-xs text-muted-foreground sm:block">
+          Compare checks the current date range against the immediately previous period of the same length.
+        </p>
         {compare && compareFilter ? (
           <p className="mt-1 text-[11px] text-muted-foreground sm:hidden">
             Comparing vs prior period
           </p>
-        ) : null}
+        ) : (
+          <p className="mt-1 text-[11px] text-muted-foreground sm:hidden">
+            Compare uses the previous equal-length period.
+          </p>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-3 md:space-y-5">
