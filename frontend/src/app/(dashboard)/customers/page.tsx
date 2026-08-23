@@ -549,19 +549,7 @@ export default function CustomersPage() {
           columns={columns}
           defaultSortKey="memberSince"
           defaultSortDir="desc"
-          searchPlaceholder="Search by name, phone, email, or vehicle number..."
-          searchKeys={["name", "phone", "email"]}
-          searchMatch={(item, q) => {
-            const name = String(item.name ?? "").toLowerCase();
-            const phone = String(item.phone ?? "").toLowerCase();
-            const email = String(item.email ?? "").toLowerCase();
-            if (name.includes(q) || phone.includes(q) || email.includes(q)) return true;
-            const qReg = normalizeVehicleToken(q);
-            if (qReg.length < 2) return false;
-            const blob = String(item._vehicleRegSearch ?? "");
-            if (!blob) return false;
-            return blob.split(",").some((reg) => reg.includes(qReg));
-          }}
+          hideSearch
           onRowClick={(item) => router.push(`/customers/${String(item.id)}`)}
           renderMobileCard={(item) => (
             <>
