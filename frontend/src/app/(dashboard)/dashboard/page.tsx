@@ -765,6 +765,7 @@ export default function DashboardPage() {
             value={formatCurrency(stats.totalExpensesToday)}
             isEmpty={stats.totalExpensesToday === 0}
             emptyLabel="No expenses today"
+            subtitle="incurred today"
             icon={TrendingDown}
             titleClassName="text-[11px] leading-tight"
             valueClassName="text-base sm:text-lg tabular-nums"
