@@ -68,6 +68,19 @@ interface InventoryStore {
       referenceNumber?: string;
     }
   ) => { ok: boolean; error?: string };
+  updateInventoryPurchase: (purchaseId: string, input: {
+    vendorName: string;
+    supplierId?: string;
+    branchId: string;
+    purchasedAt: string;
+    dueDate?: string;
+    supplierInvoiceNumber?: string;
+    invoiceFileName?: string;
+    notes?: string;
+    items: NonNullable<ProductPurchase["items"]>;
+    roundOff?: number;
+    recordedBy: string;
+  }) => { ok: true; purchase: ProductPurchase } | { ok: false; error: string };
   renamePurchaseVendor: (fromName: string, toName: string) => void;
   recordStockAdjustment: (input: {
     partId: string;
@@ -494,7 +507,9 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
       };
       const after = getCanonicalStockSecondary(updated);
       nextParts = nextParts.map((p) => (p.id === part.id ? updated : p));
-      const applied = applyBranchCanonicalDelta(nextStocks, updated, input.branchId, canonical, now);
+      // Pass pre-update `part` (not `updated`) so getBranchCanonicalQty fallback
+      // uses the opening stock quantity, not the already-incremented value.
+      const applied = applyBranchCanonicalDelta(nextStocks, part, input.branchId, canonical, now);
       if (!applied.ok) return applied;
       nextStocks = applied.stocks;
       movements.push({
@@ -559,6 +574,104 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     }));
     persistInventorySnapshot(get);
     return { ok: true };
+  },
+
+  updateInventoryPurchase: (purchaseId, input) => {
+    if (!input.vendorName.trim()) return { ok: false, error: "Supplier is required." };
+    if (!input.branchId) return { ok: false, error: "Branch is required." };
+    if (!input.items.length) return { ok: false, error: "Add at least one purchase item." };
+
+    const existing = get().productPurchases.find((p) => p.id === purchaseId);
+    if (!existing) return { ok: false, error: "Purchase not found." };
+
+    const roundOff = input.roundOff ?? 0;
+    const totals = calcPurchaseTotals(input.items, roundOff);
+    const amountPaid = existing.amountPaid ?? 0;
+    const due = Math.max(0, totals.grandTotal - amountPaid);
+    const paymentStatus = amountPaid <= 0.01 ? "UNPAID" : due <= 0.01 ? "PAID" : "PARTIAL";
+
+    // Reverse old stock movements for this purchase
+    const oldMovements = get().stockMovements.filter((m) => m.purchaseId === purchaseId);
+    let nextParts = get().parts;
+    let nextStocks = get().branchStocks;
+    const oldBranchId = existing.branchId ?? input.branchId;
+
+    for (const mv of oldMovements) {
+      const part = nextParts.find((p) => p.id === mv.partId);
+      if (!part) continue;
+      const canonical = quantityToCanonicalSecondary(part, mv.quantity, mv.unit);
+      nextParts = nextParts.map((p) => p.id === mv.partId ? deductCanonicalSecondary(p, canonical) : p);
+      const applied = applyBranchCanonicalDelta(nextStocks, part, oldBranchId, -canonical, new Date().toISOString());
+      if (applied.ok) nextStocks = applied.stocks;
+    }
+
+    // Apply new items
+    const now = input.purchasedAt;
+    const newMovements: import("@/types").StockMovement[] = [];
+    for (const line of input.items) {
+      const part = nextParts.find((p) => p.id === line.partId);
+      if (!part) return { ok: false, error: `Unknown part: ${line.partName || line.partId}` };
+      const canonical = quantityToCanonicalSecondary(part, line.quantity, line.unit);
+      const before = getCanonicalStockSecondary(part);
+      const updated = { ...addCanonicalSecondary(part, canonical), lastRestocked: now, costPrice: line.unitPrice > 0 ? line.unitPrice : part.costPrice };
+      const after = getCanonicalStockSecondary(updated);
+      nextParts = nextParts.map((p) => (p.id === part.id ? updated : p));
+      // Pass pre-update `part` so getBranchCanonicalQty fallback uses opening stock.
+      const applied = applyBranchCanonicalDelta(nextStocks, part, input.branchId, canonical, now);
+      if (!applied.ok) return applied;
+      nextStocks = applied.stocks;
+      newMovements.push({
+        id: `sm-pur-${purchaseId}-${line.partId}-edit-${Date.now()}-${newMovements.length}`,
+        partId: line.partId,
+        type: "IN",
+        quantity: line.quantity,
+        unit: line.unit,
+        reason: `Purchase ${existing.purchaseNumber ?? purchaseId} (edited)`,
+        vendor: input.vendorName.trim(),
+        purchaseId,
+        performedBy: input.recordedBy,
+        createdAt: now,
+        stockBeforeSecondary: before,
+        stockAfterSecondary: after,
+        displayQuantity: line.quantity,
+        displayUnit: line.unit,
+        movementKind: "PURCHASE",
+        branchId: input.branchId,
+        notes: input.notes,
+      });
+    }
+
+    const updated: ProductPurchase = {
+      ...existing,
+      vendorName: input.vendorName.trim(),
+      supplierId: input.supplierId,
+      branchId: input.branchId,
+      purchasedAt: input.purchasedAt,
+      dueDate: input.dueDate,
+      supplierInvoiceNumber: input.supplierInvoiceNumber,
+      invoiceFileName: input.invoiceFileName,
+      notes: input.notes,
+      items: input.items,
+      subtotal: totals.subtotal,
+      discountTotal: totals.discountTotal,
+      gstTotal: totals.gstTotal,
+      roundOff,
+      grandTotal: totals.grandTotal,
+      paymentStatus,
+      reference: input.supplierInvoiceNumber,
+    };
+
+    set({
+      parts: nextParts,
+      branchStocks: nextStocks,
+      productPurchases: get().productPurchases.map((p) => (p.id === purchaseId ? updated : p)),
+      stockMovements: [
+        ...newMovements,
+        ...get().stockMovements.filter((m) => m.purchaseId !== purchaseId),
+      ],
+    });
+    persistInventorySnapshot(get);
+    return { ok: true, purchase: updated };
   },
 
   renamePurchaseVendor: (fromName, toName) => {

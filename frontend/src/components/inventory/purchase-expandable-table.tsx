@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, Fragment } from "react";
-import { ChevronDown, ChevronUp, CreditCard } from "lucide-react";
+import { ChevronDown, ChevronUp, CreditCard, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -36,9 +36,11 @@ function purchaseLines(p: ProductPurchase): { name: string; qty: number; total: 
 export function PurchaseExpandableTable({
   purchases,
   onPay,
+  onEdit,
 }: {
   purchases: ProductPurchase[];
   onPay?: (purchase: ProductPurchase) => void;
+  onEdit?: (purchase: ProductPurchase) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -58,7 +60,7 @@ export function PurchaseExpandableTable({
             <th className="whitespace-nowrap px-3 py-2.5 text-right">Paid</th>
             <th className="whitespace-nowrap px-3 py-2.5 text-right">Due</th>
             <th className="whitespace-nowrap px-3 py-2.5">Pay status</th>
-            <th className="whitespace-nowrap px-3 py-2.5 text-right">Action</th>
+            <th className="whitespace-nowrap px-3 py-2.5 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -111,20 +113,35 @@ export function PurchaseExpandableTable({
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    {due > 0.01 && onPay ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-primary"
-                        aria-label="Record payment"
-                        onClick={() => onPay(p)}
-                      >
-                        <CreditCard className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      {onEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          aria-label="Edit purchase"
+                          onClick={() => onEdit(p)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {due > 0.01 && onPay ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-primary"
+                          aria-label="Record payment"
+                          onClick={() => onPay(p)}
+                        >
+                          <CreditCard className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                      {!onEdit && !(due > 0.01 && onPay) && (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 {expanded ? (

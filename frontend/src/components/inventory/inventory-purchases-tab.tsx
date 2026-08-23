@@ -78,6 +78,7 @@ export function InventoryPurchasesTab() {
   const purchases = useInventoryStore((s) => s.productPurchases);
   const parts = useInventoryStore((s) => s.parts);
   const addInventoryPurchase = useInventoryStore((s) => s.addInventoryPurchase);
+  const updateInventoryPurchase = useInventoryStore((s) => s.updateInventoryPurchase);
   const branches = useBranchStore((s) => s.branches);
   const vendors = useExpenseStore((s) => s.vendorDirectory);
   const addVendorDirectoryEntry = useExpenseStore((s) => s.addVendorDirectoryEntry);
@@ -86,9 +87,12 @@ export function InventoryPurchasesTab() {
   const { selectedBranchId } = useBranchScope();
 
   const [open, setOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ProductPurchase | null>(null);
+  const isEditing = editTarget !== null;
   const [quickPartOpen, setQuickPartOpen] = useState(false);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const quickPartTargetKeyRef = useRef<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   /** Blocks purchase-dialog dismiss while a nested dialog is closing (Radix focus restore). */
   const suppressPurchaseDismissRef = useRef(false);
   const pendingCreatedPartRef = useRef<Part | null>(null);
@@ -218,6 +222,32 @@ export function InventoryPurchasesTab() {
     setRoundOff("0");
     setAmountPaid("0");
     setItems([emptyItem()]);
+    setEditTarget(null);
+  };
+
+  const openEdit = (purchase: ProductPurchase) => {
+    setEditTarget(purchase);
+    setSupplierName(purchase.vendorName);
+    setSupplierId(purchase.supplierId ?? "");
+    setBranchId(purchase.branchId ?? defaultBranchId());
+    setPurchaseDate(purchase.purchasedAt.slice(0, 10));
+    setDueDate(purchase.dueDate?.slice(0, 10) ?? "");
+    setInvoiceNo(purchase.supplierInvoiceNumber ?? "");
+    setInvoiceFileName(purchase.invoiceFileName ?? "");
+    setNotes(purchase.notes ?? "");
+    setRoundOff(String(purchase.roundOff ?? 0));
+    setAmountPaid(String(purchase.amountPaid ?? 0));
+    setItems(
+      purchase.items?.map((line) => ({
+        key: `line-edit-${line.partId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        partId: line.partId,
+        quantity: String(line.quantity),
+        unitPrice: String(line.unitPrice),
+        discount: String(line.discount ?? 0),
+        gstRate: String(line.gstRate ?? 18),
+      })) ?? [emptyItem()]
+    );
+    setOpen(true);
   };
 
   const patchItem = (key: string, patch: Partial<DraftItem>) => {
@@ -252,6 +282,38 @@ export function InventoryPurchasesTab() {
     }
     if (!computedLines.length) {
       toast.error("Add at least one part.");
+      return;
+    }
+
+    if (isEditing) {
+      const result = updateInventoryPurchase(editTarget.id, {
+        vendorName: supplierName.trim(),
+        supplierId: supplierId || undefined,
+        branchId,
+        purchasedAt: new Date(purchaseDate).toISOString(),
+        dueDate: dueDate || undefined,
+        supplierInvoiceNumber: invoiceNo.trim() || undefined,
+        invoiceFileName: invoiceFileName || undefined,
+        notes: notes.trim() || undefined,
+        items: computedLines,
+        roundOff: Number(roundOff) || 0,
+        recordedBy: user?.id ?? "unknown",
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      try {
+        await syncPurchaseToExpense(result.purchase, {
+          createdBy: user?.id ?? "unknown",
+          createdByName: user?.name ?? user?.email ?? "staff",
+        });
+      } catch {
+        // best-effort
+      }
+      toast.success(`Purchase ${result.purchase.purchaseNumber} updated.`);
+      setOpen(false);
+      reset();
       return;
     }
     const result = addInventoryPurchase({
@@ -336,6 +398,7 @@ export function InventoryPurchasesTab() {
       <PurchaseExpandableTable
         purchases={rows}
         onPay={(p) => setPayTarget(p)}
+        onEdit={openEdit}
       />
 
       <Dialog
@@ -372,7 +435,7 @@ export function InventoryPurchasesTab() {
           }}
         >
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-3")}>
-            <DialogTitle>Create purchase</DialogTitle>
+            <DialogTitle>{isEditing ? `Edit purchase ${editTarget?.purchaseNumber ?? ""}` : "Create purchase"}</DialogTitle>
             {!hasMultipleBranches ? (
               <p className="text-xs text-muted-foreground">
                 Stock increases at {activeBranches[0]?.name ?? "this branch"}.
@@ -380,7 +443,7 @@ export function InventoryPurchasesTab() {
             ) : null}
           </DialogHeader>
           <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="purchase-supplier">
@@ -515,7 +578,12 @@ export function InventoryPurchasesTab() {
                   >
                     New part
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setItems((prev) => [...prev, emptyItem()])}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => {
+                    setItems((prev) => [...prev, emptyItem()]);
+                    requestAnimationFrame(() => {
+                      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+                    });
+                  }}>
                     <Plus className="w-3.5 h-3.5 mr-1" />
                     Add item
                   </Button>
@@ -554,11 +622,7 @@ export function InventoryPurchasesTab() {
                           }}
                         >
                           <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Select part">
-                              {item.partId
-                                ? partsForSelect.find((p) => p.id === item.partId)?.name
-                                : undefined}
-                            </SelectValue>
+                            <SelectValue placeholder="Select part" />
                           </SelectTrigger>
                           <SelectContent>
                             {partsForSelect.map((p) => (
@@ -673,7 +737,7 @@ export function InventoryPurchasesTab() {
                   Cancel
                 </Button>
                 <Button type="submit" className="flex-1 sm:flex-none">
-                  Create purchase
+                  {isEditing ? "Save changes" : "Create purchase"}
                 </Button>
               </div>
             </DialogFooter>
