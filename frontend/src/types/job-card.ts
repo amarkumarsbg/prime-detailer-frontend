@@ -169,6 +169,9 @@ export interface JobCard {
   }[];
   paidAmount?: number;
   secureToken?: string;
+  /** ISO timestamp set when Vehicle Check-In completes with ≥1 before photo. Used as
+   * the authoritative signal that before photos exist, bypassing store/server lookup races. */
+  checkInCompletedAt?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

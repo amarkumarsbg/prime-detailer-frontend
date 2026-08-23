@@ -17,6 +17,7 @@ import type {
 } from "@/types";
 import { isInactiveCustomer, isPendingPaymentInvoice, isTodaysBookingsJob } from "@/lib/dashboard-filters";
 import { recognizedExpenseAmount } from "@/lib/accounting/dashboard-metrics";
+import { expensePaidAmount } from "@/lib/party/ledger-math";
 
 /** Header branch selector: null = org-wide (all branches). */
 export function useBranchScope() {
@@ -292,9 +293,10 @@ export function computeBranchScopedDashboardStats(
       0
     );
 
+  // Cash-basis: only count expenses actually paid today (matches Accounting Overview model).
   const totalExpensesToday = scopedExpenses
     .filter((e) => isSameCalendarDay(e.date, today))
-    .reduce((s, e) => s + recognizedExpenseAmount(e), 0);
+    .reduce((s, e) => s + expensePaidAmount(e), 0);
 
   const pendingPayments = new Set(
     scopedInvoices.filter(isPendingPaymentInvoice).map((inv) => inv.customerId)

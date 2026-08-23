@@ -31,20 +31,27 @@ describe("SUPER_ADMIN exclusion rules", () => {
     ];
     useStaffStore.setState({ staff: mockStaff });
 
-    // Setup a dummy salary structure for both
+    // Setup salary structures using the correct SalaryStructure shape
+    // (baseSalary / attendanceBonusPerDay / absenceDeductionPerDay — no "components" wrapper)
     usePayrollStore.setState({
       salaryStructures: [
         {
           id: "s-mech",
           role: "MECHANIC",
           experienceBand: "MID",
-          components: { basic: 1000, hra: 0, da: 0, allowances: 0, deductions: 0 },
+          label: "Mechanic Mid",
+          baseSalary: 1000,
+          attendanceBonusPerDay: 0,
+          absenceDeductionPerDay: 0,
         },
         {
           id: "s-admin",
           role: "SUPER_ADMIN",
           experienceBand: "MID",
-          components: { basic: 5000, hra: 0, da: 0, allowances: 0, deductions: 0 },
+          label: "Super Admin Mid",
+          baseSalary: 5000,
+          attendanceBonusPerDay: 0,
+          absenceDeductionPerDay: 0,
         },
       ],
     });
@@ -70,26 +77,93 @@ describe("SUPER_ADMIN exclusion rules", () => {
   });
 
   it("recalculateAll skips SUPER_ADMIN records if they exist", () => {
-    // Manually inject a SUPER_ADMIN record (e.g. historical)
+    const now = new Date().toISOString();
+    // Manually inject a SUPER_ADMIN record (e.g. historical).
+    // Records must use the flat PayrollRecord shape (no "breakdown"/"totals" wrappers).
+    // The mechanic is set isAttendanceTracked:false so recalculation yields baseSalary
+    // without needing attendance rows — simpler and sufficient for this test.
+    useStaffStore.setState({
+      staff: [
+        {
+          id: "u-mech",
+          name: "Mechanic Bob",
+          role: "MECHANIC",
+          branchId: "b-1",
+          isActive: true,
+          isAttendanceTracked: false,
+          email: "mech@example.com",
+          organizationId: "org-1",
+          phone: "9000000000",
+          permissions: [],
+        } as any,
+        {
+          id: "u-admin",
+          name: "Super Admin",
+          role: "SUPER_ADMIN",
+          branchId: "b-1",
+          isActive: true,
+          isAttendanceTracked: false,
+          email: "super@example.com",
+          organizationId: "org-1",
+          phone: "9000000001",
+          permissions: [],
+        } as any,
+      ],
+    });
+
     usePayrollStore.setState({
       payrollRecords: [
         {
           id: "p-1",
           employeeId: "u-admin",
+          salaryStructureId: "s-admin",
           periodYear: 2026,
           periodMonth: 8,
-          status: "DRAFT",
-          breakdown: { basic: 0, hra: 0, da: 0, allowances: 0, deductions: 0, attendanceDays: 0, paidLeaveDays: 0, unpaidLeaveDays: 0 },
-          totals: { grossEarnings: 0, grossDeductions: 0, netSalary: 0 },
+          status: "PENDING",
+          attendanceDays: 0,
+          paidLeaveDays: 0,
+          unpaidLeaveDays: 0,
+          presencePayment: 0,
+          baseSalary: 0,
+          absenceDeduction: 0,
+          grossEarnings: 0,
+          totalDeductions: 0,
+          netSalaryBeforeAdvance: 0,
+          advanceDeductionPlanned: 0,
+          advanceDeductionFinalized: 0,
+          advanceOutstandingBefore: 0,
+          advanceOutstandingAfterPlanned: 0,
+          advanceOutstandingAfterFinalized: 0,
+          advanceRecoveryRefs: [],
+          netSalary: 0,
+          createdAt: now,
+          updatedAt: now,
         } as any,
         {
           id: "p-2",
           employeeId: "u-mech",
+          salaryStructureId: "s-mech",
           periodYear: 2026,
           periodMonth: 8,
-          status: "DRAFT",
-          breakdown: { basic: 0, hra: 0, da: 0, allowances: 0, deductions: 0, attendanceDays: 0, paidLeaveDays: 0, unpaidLeaveDays: 0 },
-          totals: { grossEarnings: 0, grossDeductions: 0, netSalary: 0 },
+          status: "PENDING",
+          attendanceDays: 0,
+          paidLeaveDays: 0,
+          unpaidLeaveDays: 0,
+          presencePayment: 0,
+          baseSalary: 0,
+          absenceDeduction: 0,
+          grossEarnings: 0,
+          totalDeductions: 0,
+          netSalaryBeforeAdvance: 0,
+          advanceDeductionPlanned: 0,
+          advanceDeductionFinalized: 0,
+          advanceOutstandingBefore: 0,
+          advanceOutstandingAfterPlanned: 0,
+          advanceOutstandingAfterFinalized: 0,
+          advanceRecoveryRefs: [],
+          netSalary: 0,
+          createdAt: now,
+          updatedAt: now,
         } as any,
       ],
     });
@@ -97,13 +171,13 @@ describe("SUPER_ADMIN exclusion rules", () => {
     usePayrollStore.getState().recalculateAll();
 
     const records = usePayrollStore.getState().payrollRecords;
-    // SUPER_ADMIN record should be untouched (basic: 0)
+    // SUPER_ADMIN record must NOT be recalculated — grossEarnings stays 0
     const adminRecord = records.find((r) => r.employeeId === "u-admin");
-    expect(adminRecord?.totals.grossEarnings).toBe(0);
+    expect(adminRecord?.grossEarnings).toBe(0);
 
-    // Mechanic record should be recalculated (basic: 1000)
+    // Mechanic record MUST be recalculated — isAttendanceTracked:false gives full baseSalary
     const mechRecord = records.find((r) => r.employeeId === "u-mech");
-    expect(mechRecord?.totals.grossEarnings).toBeGreaterThan(0);
+    expect(mechRecord?.grossEarnings).toBeGreaterThan(0);
   });
 
   it("recordJobDeliveryRewards skips SUPER_ADMIN mechanics", () => {

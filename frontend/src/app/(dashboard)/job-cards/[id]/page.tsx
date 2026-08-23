@@ -113,7 +113,7 @@ import {
 import { ApiError } from "@/lib/api-client";
 import { ensureDomainResources, invalidateDomainResources } from "@/lib/domain-data-loader";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
-import { uploadJobInspectionPhoto, refreshJobCardFromServer } from "@/lib/job-card-inspection-photo-upload";
+import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
 import {
   hasAfterInspectionPhoto,
   hasBeforeInspectionPhoto,
@@ -1256,25 +1256,8 @@ export default function JobCardDetailPage() {
       const nextStatus = WORKFLOW_STATUSES[nextIndex];
 
       if (currentStatus === "INSPECTION" && nextStatus === "AWAITING_SERVICE") {
-        // Always fetch the server-authoritative job card first so stale store
-        // state (from background refreshes, visibility reloads, etc.) cannot
-        // cause a false-positive "no before photos" block.
-        let photos =
-          useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id)?.inspectionPhotos ??
-          jobCard.inspectionPhotos;
-        try {
-          const fresh = await refreshJobCardFromServer(jobCard.id);
-          if (fresh?.inspectionPhotos?.length) {
-            photos = fresh.inspectionPhotos;
-          }
-        } catch {
-          /* network failure — fall back to whatever is in the store */
-        }
-        if (!hasBeforeInspectionPhoto(photos)) {
-          setPhotoTab("BEFORE");
-          setBeforePhotoRequiredOpen(true);
-          return;
-        }
+        // Before photos are captured during Vehicle Check-In — no additional
+        // photo check is needed at this transition.
         if (!hasMechanicAssigned) {
           toast.error("Assign a mechanic before moving to In Service", {
             description: "Use Assign mechanic in the workflow bar above.",

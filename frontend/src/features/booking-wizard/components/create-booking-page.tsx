@@ -8,7 +8,7 @@ import {
 } from "@/lib/whatsapp-send";
 import { useNotificationStore } from "@/store/notification-store";
 import { ApiError } from "@/lib/api-client";
-import { uploadJobInspectionPhoto, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
+import { uploadJobInspectionPhoto, refreshJobCardFromServer, markJobCardCheckedIn, INSPECTION_PHOTO_MAX_BYTES } from "@/lib/job-card-inspection-photo-upload";
 import {
   hasBeforeInspectionPhoto,
   mergeInspectionPhotosById,
@@ -2121,16 +2121,32 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         updatedAt: nowIso,
       });
 
-      // savedOk=true means the PUT reached the backend. Give the store one
-      // microtask to settle (handles the narrow race where addJobCard's
-      // background refreshJobCardFromServer setState fires in-between).
-      await Promise.resolve();
-      const saved = useJobCardStore.getState().jobCards.find((j) => j.id === checkInJob.id);
       if (!savedOk) {
         throw new Error("Before photos did not save. Please try check-in again.");
       }
-      // If the store looks empty (background overwrite), trust savedOk=true
-      // since the PUT already confirmed persistence on the server.
+
+      // Register in the session-level in-memory flag IMMEDIATELY — before any
+      // async work — so the INSPECTION → In Service validation can bypass the
+      // before-photo check without a network round-trip or store lookup.
+      // This is the most race-condition-proof signal we can produce.
+      markJobCardCheckedIn(checkInJob.id);
+
+      // Also refresh from server (for secureToken + checkInCompletedAt stamp).
+      try {
+        await refreshJobCardFromServer(checkInJob.id);
+      } catch {
+        // Non-critical: session flag above is already set.
+      }
+
+      // Persist a checkInCompletedAt stamp so the bypass also works after a
+      // hard page refresh (where the session Set is cleared).
+      await updateJobCard(checkInJob.id, {
+        checkInCompletedAt: nowIso,
+        updatedAt: nowIso,
+      }).catch(() => { /* non-critical */ });
+
+      // Verify photos made it into the store (server-confirmed).
+      const saved = useJobCardStore.getState().jobCards.find((j) => j.id === checkInJob.id);
       if (saved && !hasBeforeInspectionPhoto(saved.inspectionPhotos)) {
         throw new Error("Before photos did not save. Please try check-in again.");
       }

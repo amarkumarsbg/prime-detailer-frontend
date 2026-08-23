@@ -92,7 +92,7 @@ export function ProfitLossReport() {
       { label: "Other Income(+)", amount: null },
       { label: "Indirect Expenses(-)", amount: expenseTotal > 0 ? expenseTotal : null },
       {
-        label: "Net Profit",
+        label: "Net Profit (Accrual Basis)",
         amount: saleTotal > 0 || expenseTotal > 0 ? netSimplified : null,
       },
     ],

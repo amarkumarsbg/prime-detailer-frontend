@@ -638,10 +638,12 @@ export function paymentMethodBreakdownForPeriod(
   invoices: Invoice[],
   expenses: Expense[],
   filter: ExpenseDateFilter,
-  purchases: ProductPurchase[] = []
+  purchases: ProductPurchase[] = [],
+  otherIncomeAmounts: { advances: number; memberships: number } = { advances: 0, memberships: 0 }
 ) {
   const cashIncome = sumInvoicePaymentsInPeriod(invoices, filter, ["CASH"]);
   const onlineIncome = sumInvoicePaymentsInPeriod(invoices, filter, ONLINE_INCOME);
+  const otherIncome = Math.round((otherIncomeAmounts.advances + otherIncomeAmounts.memberships) * 100) / 100;
   const cashExpenses =
     sumPurchasePaymentsInPeriod(purchases, filter, "cash") +
     sumStandaloneExpenseCashOutInPeriod(expenses, filter, CASH_EXPENSE) +
@@ -653,6 +655,7 @@ export function paymentMethodBreakdownForPeriod(
   return {
     cashIncome,
     onlineIncome,
+    otherIncome,
     cashExpenses,
     onlineExpenses,
     netCashFlow: Math.round((cashIncome - cashExpenses) * 100) / 100,

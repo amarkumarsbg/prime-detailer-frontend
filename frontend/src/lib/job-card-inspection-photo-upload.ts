@@ -10,6 +10,28 @@ import { useJobCardStore } from "@/store/job-card-store";
 export const INSPECTION_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 /**
+ * Session-level registry of job card IDs that completed Vehicle Check-In with
+ * at least one before photo in the current browser session.
+ *
+ * This is a plain in-memory Set — no Zustand, no server round-trip.  It is set
+ * immediately when check-in succeeds and survives all store/domain-loader races
+ * until the user closes the tab or refreshes the page.
+ *
+ * The INSPECTION → In Service validation reads this first; if the ID is here
+ * the before-photo requirement is already satisfied and no network call is
+ * needed.
+ */
+const _checkedInJobIds = new Set<string>();
+
+export function markJobCardCheckedIn(jobCardId: string): void {
+  _checkedInJobIds.add(jobCardId);
+}
+
+export function isJobCardCheckedIn(jobCardId: string): boolean {
+  return _checkedInJobIds.has(jobCardId);
+}
+
+/**
  * Upload one inspection photo; returns persisted URL/path stored on `InspectionPhoto.url`.
  * `kind` is normalized; the HTTP query uses uppercase for the backend contract.
  */

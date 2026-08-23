@@ -285,8 +285,14 @@ export function AccountingDashboard() {
     : null;
 
   const payments = useMemo(
-    () => paymentMethodBreakdownForPeriod(branchInvoices, branchExpenses, dateFilter, branchPurchases),
-    [branchInvoices, branchExpenses, dateFilter, branchPurchases]
+    () => paymentMethodBreakdownForPeriod(
+      branchInvoices,
+      branchExpenses,
+      dateFilter,
+      branchPurchases,
+      { advances: incomeReceipts.advances, memberships: incomeReceipts.memberships }
+    ),
+    [branchInvoices, branchExpenses, dateFilter, branchPurchases, incomeReceipts.advances, incomeReceipts.memberships]
   );
 
   const trend = useMemo(
@@ -598,10 +604,10 @@ export function AccountingDashboard() {
               }
             />
             <MetricCard
-              title="Net Profit"
+              title="Net Profit (Cash Basis)"
               value={netProfit}
               valueClass="text-blue-600 dark:text-blue-400"
-              subtitle="Income - Expenses"
+              subtitle="Income and expenses counted when money is received / paid"
               icon={Activity}
               iconWrap="bg-blue-500 text-white"
               headerBg="bg-blue-50/90 dark:bg-blue-950/30"
@@ -694,6 +700,15 @@ export function AccountingDashboard() {
                 icon={CreditCard}
                 tone="blue"
               />
+              {payments.otherIncome > 0 && (
+                <PastelStat
+                  label="Other Income"
+                  value={payments.otherIncome}
+                  subtitle="Advances & memberships"
+                  icon={Activity}
+                  tone="amber"
+                />
+              )}
               <PastelStat
                 label="Cash Expenses"
                 value={payments.cashExpenses}

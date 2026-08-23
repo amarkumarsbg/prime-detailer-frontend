@@ -6,6 +6,7 @@ import {
   counterSaleLineTotal,
 } from "./counter-sale";
 import { invoiceOutstanding, invoicePaidTotal, buildPartyTransactions, partyCurrentBalance } from "./party/ledger-math";
+import { invoiceBranchId, buildJobBranchMap } from "./branch-scope";
 
 describe("counter sale totals and status", () => {
   const line = {
@@ -97,5 +98,77 @@ describe("counter sale ledger label", () => {
     expect(sale?.typeLabel).toBe("Counter Sale");
     expect(sale?.unpaidAmount).toBe(100);
     expect(partyCurrentBalance(party, [inv], [])).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fix 1: Counter-sale invoice always carries branchId (branch attribution)
+// ---------------------------------------------------------------------------
+
+function makeCSInvoice(branchId: string, id = "inv-cs-test") {
+  return buildCounterSaleInvoice({
+    id,
+    invoiceNumber: `INV-${id}`,
+    branchId,
+    customerId: "c-1",
+    customerName: "Test",
+    customerPhone: "9000000000",
+    lines: [
+      {
+        partId: "p1",
+        name: "Wax",
+        sku: "W-1",
+        quantity: 1,
+        unit: "Piece",
+        unitPrice: 500,
+        lineDiscount: 0,
+      },
+    ],
+    discountAmount: 0,
+    taxRate: 0,
+    taxAmount: 0,
+    grandTotal: 500,
+    paidAmount: 500,
+    paymentMethod: "CASH",
+    createdAt: "2026-08-20T10:00:00.000Z",
+  });
+}
+
+describe("counter sale branch attribution", () => {
+  it("invoice always stores the provided branchId", () => {
+    const inv = makeCSInvoice("br-main");
+    expect(inv.branchId).toBe("br-main");
+    expect(inv.source).toBe("COUNTER_SALE");
+  });
+
+  it("invoiceBranchId resolves directly from invoice.branchId (no job card needed)", () => {
+    const inv = makeCSInvoice("br-main");
+    // Empty job-branch map — counter-sale has no job card
+    const jobBranch = buildJobBranchMap([]);
+    expect(invoiceBranchId(inv, jobBranch)).toBe("br-main");
+  });
+
+  it("Branch A counter-sale is NOT visible when filtered to Branch B", () => {
+    const invA = makeCSInvoice("br-main", "inv-cs-a");
+    const invB = makeCSInvoice("br-002", "inv-cs-b");
+    const jobBranch = buildJobBranchMap([]);
+
+    const branchAVisible = [invA, invB].filter(
+      (inv) => invoiceBranchId(inv, jobBranch) === "br-main"
+    );
+    expect(branchAVisible).toHaveLength(1);
+    expect(branchAVisible[0]?.id).toBe("inv-cs-a");
+  });
+
+  it("Branch B counter-sale is NOT visible when filtered to Branch A", () => {
+    const invA = makeCSInvoice("br-main", "inv-cs-a");
+    const invB = makeCSInvoice("br-002", "inv-cs-b");
+    const jobBranch = buildJobBranchMap([]);
+
+    const branchBVisible = [invA, invB].filter(
+      (inv) => invoiceBranchId(inv, jobBranch) === "br-002"
+    );
+    expect(branchBVisible).toHaveLength(1);
+    expect(branchBVisible[0]?.id).toBe("inv-cs-b");
   });
 });

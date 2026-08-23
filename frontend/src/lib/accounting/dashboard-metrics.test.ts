@@ -9,7 +9,7 @@ import {
 } from "@/lib/accounting/dashboard-metrics";
 import { expenseOutstanding, expensePaidAmount } from "@/lib/party/ledger-math";
 import { purchaseDue } from "@/lib/inventory/purchase-math";
-import type { Expense, ProductPurchase } from "@/types";
+import type { Expense, Invoice, ProductPurchase } from "@/types";
 
 function purchaseExpense(amount: number, paid: number, purchaseId = "pur-1"): Expense {
   const paymentStatus = paid <= 0 ? "PENDING" : paid >= amount ? "PAID" : "PARTIAL";
@@ -164,5 +164,89 @@ describe("totalPayables", () => {
       paymentStatus: "PENDING",
     };
     expect(totalPayables([purchaseBill, direct])).toBe(1500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fix 2: otherIncome breakdown — Cash + Online + Other = Total Income
+// ---------------------------------------------------------------------------
+
+function invoiceWithPayment(
+  id: string,
+  grandTotal: number,
+  paidAmount: number,
+  method: "CASH" | "UPI" | "CARD" | "WALLET",
+  paidAt = "2026-08-10T10:00:00.000Z"
+): Invoice {
+  const payments =
+    paidAmount > 0
+      ? [{ id: `pay-${id}`, invoiceId: id, amount: paidAmount, method, paidAt }]
+      : [];
+  return {
+    id,
+    invoiceNumber: `INV-${id}`,
+    jobCardId: "",
+    jobNumber: "Test",
+    customerId: "c1",
+    customerName: "Customer",
+    customerPhone: "9000000000",
+    vehicleRegNumber: "DL01",
+    lineItems: [],
+    subtotal: grandTotal,
+    taxRate: 0,
+    taxAmount: 0,
+    discountAmount: 0,
+    rewardDiscount: 0,
+    walletAmountUsed: 0,
+    grandTotal,
+    status: paidAmount >= grandTotal ? "PAID" : "ISSUED",
+    payments,
+    createdAt: paidAt,
+  } as Invoice;
+}
+
+describe("paymentMethodBreakdownForPeriod — otherIncome", () => {
+  const filter = { kind: "custom" as const, start: "2026-08-01", end: "2026-08-31" };
+
+  it("otherIncome is 0 when advances and memberships are 0", () => {
+    const invoices = [invoiceWithPayment("i1", 5000, 5000, "CASH")];
+    const result = paymentMethodBreakdownForPeriod(invoices, [], filter);
+    expect(result.otherIncome).toBe(0);
+    expect(result.cashIncome + result.onlineIncome + result.otherIncome).toBe(result.cashIncome);
+  });
+
+  it("otherIncome contains advance amount passed from caller", () => {
+    const invoices = [invoiceWithPayment("i1", 5000, 5000, "CASH")];
+    const result = paymentMethodBreakdownForPeriod(invoices, [], filter, [], {
+      advances: 1000,
+      memberships: 500,
+    });
+    expect(result.otherIncome).toBe(1500);
+    expect(result.cashIncome).toBe(5000);
+    // Total Income = cashIncome + onlineIncome + otherIncome
+    expect(result.cashIncome + result.onlineIncome + result.otherIncome).toBe(6500);
+  });
+
+  it("does not double-count: invoicePayments are NOT in otherIncome", () => {
+    const invoices = [
+      invoiceWithPayment("i1", 3000, 3000, "CASH"),
+      invoiceWithPayment("i2", 2000, 2000, "UPI"),
+    ];
+    const result = paymentMethodBreakdownForPeriod(invoices, [], filter, [], {
+      advances: 500,
+      memberships: 0,
+    });
+    expect(result.cashIncome).toBe(3000);
+    expect(result.onlineIncome).toBe(2000);
+    expect(result.otherIncome).toBe(500);
+    // No double-count: sum equals total
+    expect(result.cashIncome + result.onlineIncome + result.otherIncome).toBe(5500);
+  });
+
+  it("wallet payments are Online Income, not Other", () => {
+    const invoices = [invoiceWithPayment("i1", 1000, 1000, "WALLET")];
+    const result = paymentMethodBreakdownForPeriod(invoices, [], filter);
+    expect(result.onlineIncome).toBe(1000);
+    expect(result.otherIncome).toBe(0);
   });
 });

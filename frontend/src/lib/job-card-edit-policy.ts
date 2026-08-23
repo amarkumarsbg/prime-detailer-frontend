@@ -43,6 +43,7 @@ const LOCKED_ALLOWED_KEYS = new Set([
   "timerIsPaused",
   "timerPausedAt",
   "inspectionPhotos",
+  "checkInCompletedAt",
   "whatsappLog",
 ]);
 
