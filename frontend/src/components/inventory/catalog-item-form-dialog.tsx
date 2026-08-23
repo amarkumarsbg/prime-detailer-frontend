@@ -200,7 +200,7 @@ export function CatalogItemFormDialog({
       toast.error("Enter part name and SKU");
       return;
     }
-    const sellingPrice = Number(price);
+    const sellingPrice = price.trim() === "" ? 0 : Number(price);
     if (Number.isNaN(sellingPrice) || sellingPrice < 0) {
       toast.error("Enter a valid selling price");
       return;
@@ -522,7 +522,7 @@ export function CatalogItemFormDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="catalog-part-price">Selling price (₹)</Label>
+                <Label htmlFor="catalog-part-price">Selling price (₹) <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Input
                   id="catalog-part-price"
                   type="number"
@@ -531,7 +531,6 @@ export function CatalogItemFormDialog({
                   placeholder="e.g. 500 per BOX"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  required
                 />
               </div>
               <div className="space-y-2">
