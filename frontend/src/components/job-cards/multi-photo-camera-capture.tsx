@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, ImagePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 type CapturedShot = {
   id: string;
@@ -322,6 +322,8 @@ export function MultiPhotoCameraCapture({
         mobileVariant="fullscreen"
         className="fixed inset-0 left-0 top-0 translate-x-0 translate-y-0 z-[200] flex flex-col bg-black text-white max-w-none w-full h-full p-0 border-0 rounded-none overflow-hidden sm:rounded-none [&>button]:hidden"
       >
+        {/* Visually hidden title satisfies Radix accessibility requirement; the <h2> below is the visible label */}
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         <header className="flex shrink-0 items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <Camera className="h-4 w-4 shrink-0 opacity-90" aria-hidden />

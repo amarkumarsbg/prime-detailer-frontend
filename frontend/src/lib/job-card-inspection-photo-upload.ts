@@ -1,5 +1,6 @@
 import { apiGet, apiPostForm } from "./api-client";
 import {
+  mergeInspectionPhotosById,
   toInspectionPhotoUploadQueryType,
   type InspectionPhotoKind,
 } from "@/lib/job-card-inspection-photos";
@@ -41,6 +42,11 @@ export async function uploadJobInspectionPhoto(
 /**
  * Re-fetch job cards from the API and sync the matching card into the store.
  * Used before Inspection → In Service so validation reads persisted photos.
+ *
+ * IMPORTANT: Inspection photos are MERGED (local wins by photo ID) so that a
+ * stale server response (e.g. the background secureToken refresh that fires
+ * right after addJobCard, before the check-in PUT completes) never wipes photos
+ * that have already been saved locally or are already in the store.
  */
 export async function refreshJobCardFromServer(jobCardId: string): Promise<JobCard | null> {
   const data = await apiGet<{ items?: JobCard[] }>("/api/job-cards");
@@ -49,12 +55,33 @@ export async function refreshJobCardFromServer(jobCardId: string): Promise<JobCa
   if (!found) return null;
 
   useJobCardStore.setState((state) => {
-    const exists = state.jobCards.some((j) => j.id === jobCardId);
+    const existing = state.jobCards.find((j) => j.id === jobCardId);
+    const remotePhotos = found.inspectionPhotos ?? [];
+    const localPhotos = existing?.inspectionPhotos ?? [];
+
+    let merged: JobCard;
+    if (localPhotos.length === 0) {
+      merged = found;
+    } else if (remotePhotos.length === 0) {
+      // Server response predates the check-in PUT — keep all local photos.
+      merged = { ...found, inspectionPhotos: localPhotos };
+    } else {
+      // Both sides have photos: union by id, remote metadata wins for shared ids.
+      merged = {
+        ...found,
+        inspectionPhotos: mergeInspectionPhotosById(remotePhotos, localPhotos),
+      };
+    }
+
+    if (!existing) {
+      return { jobCards: [merged, ...state.jobCards] };
+    }
     return {
-      jobCards: exists
-        ? state.jobCards.map((j) => (j.id === jobCardId ? found : j))
-        : [found, ...state.jobCards],
+      jobCards: state.jobCards.map((j) => (j.id === jobCardId ? merged : j)),
     };
   });
-  return found;
+
+  // Return the merged version so callers (e.g. the INSPECTION → In Service
+  // validation) see the authoritative photo list, not the bare server snapshot.
+  return useJobCardStore.getState().jobCards.find((j) => j.id === jobCardId) ?? found;
 }

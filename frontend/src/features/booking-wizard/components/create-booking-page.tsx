@@ -2121,8 +2121,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         updatedAt: nowIso,
       });
 
+      // savedOk=true means the PUT reached the backend. Give the store one
+      // microtask to settle (handles the narrow race where addJobCard's
+      // background refreshJobCardFromServer setState fires in-between).
+      await Promise.resolve();
       const saved = useJobCardStore.getState().jobCards.find((j) => j.id === checkInJob.id);
-      if (!savedOk || !hasBeforeInspectionPhoto(saved?.inspectionPhotos)) {
+      if (!savedOk) {
+        throw new Error("Before photos did not save. Please try check-in again.");
+      }
+      // If the store looks empty (background overwrite), trust savedOk=true
+      // since the PUT already confirmed persistence on the server.
+      if (saved && !hasBeforeInspectionPhoto(saved.inspectionPhotos)) {
         throw new Error("Before photos did not save. Please try check-in again.");
       }
     } catch (e) {

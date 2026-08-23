@@ -76,6 +76,13 @@ import {
   Pencil,
   CreditCard,
   Target,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  Users,
+  GitBranch,
+  LockKeyhole,
+  Unlock,
 } from "lucide-react";
 import {
   branchLimitLabel,
@@ -459,132 +466,259 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="plan">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <CreditCard className="w-4 h-4" />
-                Plan & billing
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {entitlement ? (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Current plan</p>
-                      <p className="font-medium">{entitlement.subscription.planName}</p>
+          <div className="space-y-4">
+            {entitlement ? (
+              <>
+                {/* Expiry / Export Lock Warning Banner */}
+                {(() => {
+                  const days = entitlement.subscription.daysRemaining;
+                  const exportLocked = entitlement.subscription.exportLocked === true || entitlement.canExportData === false;
+                  const expired = typeof days === "number" && days < 0;
+                  const expiringSoon = typeof days === "number" && days >= 0 && days <= 30;
+                  if (expired || expiringSoon || exportLocked) {
+                    return (
+                      <div className={cn(
+                        "flex items-start gap-3 rounded-xl border px-4 py-3",
+                        expired
+                          ? "border-destructive/30 bg-destructive/5 text-destructive dark:bg-destructive/10"
+                          : "border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-100"
+                      )}>
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">
+                            {expired
+                              ? "Subscription expired"
+                              : `Subscription expires in ${days} day${days === 1 ? "" : "s"}`}
+                          </p>
+                          {exportLocked && (
+                            <p className="mt-0.5 text-sm opacity-80">
+                              Exports and data downloads are locked. Your data is safe — renew to restore access.
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="shrink-0"
+                          variant={expired ? "destructive" : "default"}
+                          onClick={() => {
+                            document.getElementById("renew-workbench")?.scrollIntoView({ behavior: "smooth" });
+                          }}
+                        >
+                          Renew now
+                        </Button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Current Subscription Card */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-base">
+                      <span className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" />
+                        Current Subscription
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            entitlement.subscription.status === "ACTIVE"
+                              ? "default"
+                              : entitlement.subscription.status === "EXPIRED"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {entitlement.subscription.status}
+                        </Badge>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => void refreshEntitlement()}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Plan</p>
+                        <p className="font-semibold">{entitlement.subscription.planName}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Term</p>
+                        <p className="font-medium">{termLabelFromMonths(entitlement.subscription.termMonths ?? 12)}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Payment status</p>
+                        <p className="flex items-center gap-1.5 font-medium">
+                          {entitlement.subscription.paymentStatus === "PAID"
+                            ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                            : entitlement.subscription.paymentStatus === "PENDING"
+                              ? <Clock className="h-3.5 w-3.5 text-amber-500" />
+                              : null}
+                          {formatPaymentStatus(entitlement.subscription.paymentStatus)}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Start date</p>
+                        <p className="font-medium">
+                          {entitlement.subscription.startsAt
+                            ? formatDate(entitlement.subscription.startsAt)
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Expiry date</p>
+                        <p className="font-medium">
+                          {entitlement.subscription.expiresAt || entitlement.subscription.currentPeriodEnd
+                            ? formatDate(entitlement.subscription.expiresAt ?? entitlement.subscription.currentPeriodEnd!)
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Days remaining</p>
+                        <p className={cn("font-semibold", typeof entitlement.subscription.daysRemaining === "number" && entitlement.subscription.daysRemaining <= 30 ? "text-orange-600 dark:text-orange-400" : "")}>
+                          {typeof entitlement.subscription.daysRemaining === "number"
+                            ? `${entitlement.subscription.daysRemaining} days`
+                            : "—"}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Term</p>
-                      <p className="font-medium">
-                        {termLabelFromMonths(entitlement.subscription.termMonths ?? 12)}
-                      </p>
+
+                    {/* Usage */}
+                    <Separator />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border bg-muted/30 p-3">
+                        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                          <GitBranch className="h-3.5 w-3.5" />
+                          Branches
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold">{entitlement.usage.branchesUsed}</span>
+                          <span className="text-sm text-muted-foreground">/ {branchLimitLabel(entitlement.subscription.effectiveMaxBranches)}</span>
+                        </div>
+                        {(() => {
+                          const max = entitlement.subscription.effectiveMaxBranches;
+                          if (max !== null && max !== undefined && entitlement.usage.branchesUsed >= max) {
+                            return (
+                              <p className="mt-1.5 text-xs text-orange-600 dark:text-orange-400">
+                                Branch limit reached. Add extra branches when renewing.
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                      <div className="rounded-lg border bg-muted/30 p-3">
+                        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                          <Users className="h-3.5 w-3.5" />
+                          Users
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold">{entitlement.usage.usersUsed ?? 0}</span>
+                          <span className="text-sm text-muted-foreground">
+                            / {entitlement.subscription.limits.maxStaff == null ? "unlimited" : entitlement.subscription.limits.maxStaff}
+                          </span>
+                        </div>
+                        {(() => {
+                          const max = entitlement.subscription.limits.maxStaff;
+                          const used = entitlement.usage.usersUsed ?? 0;
+                          if (max !== null && max !== undefined && used >= max) {
+                            return (
+                              <p className="mt-1.5 text-xs text-orange-600 dark:text-orange-400">
+                                User limit reached. Add extra users when renewing.
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Status</p>
-                      <p className="font-medium">{entitlement.subscription.status}</p>
+
+                    {/* Exports */}
+                    <div className={cn(
+                      "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm",
+                      entitlement.canExportData === false || entitlement.subscription.exportLocked
+                        ? "border-destructive/20 bg-destructive/5 text-destructive"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-300"
+                    )}>
+                      {entitlement.canExportData === false || entitlement.subscription.exportLocked
+                        ? <LockKeyhole className="h-4 w-4 shrink-0" />
+                        : <Unlock className="h-4 w-4 shrink-0" />}
+                      <span>
+                        {entitlement.canExportData === false || entitlement.subscription.exportLocked
+                          ? "Data exports and downloads are currently locked. Your data is safe — renew to restore full access."
+                          : "Data exports and downloads are available."}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Started</p>
-                      <p className="font-medium">
-                        {entitlement.subscription.startsAt
-                          ? formatDate(entitlement.subscription.startsAt)
-                          : "—"}
-                      </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      Your business data is never deleted when a subscription expires. Exports lock when 30 or fewer days remain.
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <PlanCtaButton
+                        href={resolveContactUsUrl(entitlement)}
+                        phone={resolveSupportPhone(entitlement)}
+                        dialogTitle="Contact support"
+                      >
+                        Contact support
+                      </PlanCtaButton>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Expires</p>
-                      <p className="font-medium">
-                        {entitlement.subscription.expiresAt ||
-                        entitlement.subscription.currentPeriodEnd
-                          ? formatDate(
-                              entitlement.subscription.expiresAt ??
-                                entitlement.subscription.currentPeriodEnd!
-                            )
-                          : "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Days remaining</p>
-                      <p className="font-medium">
-                        {typeof entitlement.subscription.daysRemaining === "number"
-                          ? entitlement.subscription.daysRemaining
-                          : "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Branch usage</p>
-                      <p className="font-medium">
-                        {entitlement.usage.branchesUsed} /{" "}
-                        {branchLimitLabel(entitlement.subscription.effectiveMaxBranches)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">User usage</p>
-                      <p className="font-medium">
-                        {entitlement.usage.usersUsed ?? 0} /{" "}
-                        {entitlement.subscription.limits.maxStaff == null
-                          ? "unlimited"
-                          : entitlement.subscription.limits.maxStaff}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Payment status</p>
-                      <p className="font-medium">
-                        {formatPaymentStatus(entitlement.subscription.paymentStatus)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Exports</p>
-                      <p className="font-medium">
-                        {entitlement.canExportData === false ||
-                        entitlement.subscription.exportLocked
-                          ? "Locked"
-                          : "Available"}
-                      </p>
-                    </div>
-                  </div>
+                  </CardContent>
+                </Card>
+
+                {/* Renewal Workbench */}
+                <Card id="renew-workbench">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Choose / Renew Plan</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <SubscriptionRenewalWorkbench
+                      entitlement={entitlement}
+                      onEntitlementUpdated={async () => {
+                        await refreshEntitlement();
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Bills */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileText className="h-4 w-4" />
+                      Bills
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <SubscriptionBillsSection />
+                  </CardContent>
+                </Card>
+
+                <SubscriptionRenewDialog open={renewOpen} onOpenChange={setRenewOpen} />
+              </>
+            ) : (
+              <Card>
+                <CardContent className="py-10 text-center">
                   <p className="text-sm text-muted-foreground">
-                    Your business data is never deleted when a subscription expires. Exports lock
-                    when 30 days or fewer remain until expiry.
+                    Unable to load plan details. Refresh the page or contact support.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" onClick={() => setRenewOpen(true)}>
-                      Renew subscription / Pay now
-                    </Button>
-                    <PlanCtaButton
-                      href={resolveContactUsUrl(entitlement)}
-                      phone={resolveSupportPhone(entitlement)}
-                      dialogTitle="Contact support"
-                    >
-                      Contact support
-                    </PlanCtaButton>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void refreshEntitlement()}
-                    >
-                      Refresh status
-                    </Button>
-                  </div>
-                  <Separator />
-                  <SubscriptionRenewalWorkbench
-                    entitlement={entitlement}
-                    onEntitlementUpdated={async () => {
-                      await refreshEntitlement();
-                    }}
-                  />
-                  <Separator />
-                  <SubscriptionBillsSection />
-                  <SubscriptionRenewDialog open={renewOpen} onOpenChange={setRenewOpen} />
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Unable to load plan details. Refresh the page or contact support.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  <Button type="button" variant="outline" className="mt-3" onClick={() => void refreshEntitlement()}>
+                    Retry
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
         <TabsContent value="business">
           <Card>

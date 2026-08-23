@@ -208,6 +208,7 @@ async function loadOne(resource: DomainResource): Promise<void> {
       );
       // Prefer merging inspection photos so a stale list response cannot wipe
       // check-in photos that were just saved locally / mid-flight.
+      const remoteIds = new Set(items.map((r) => r.id));
       const merged = items.map((remote) => {
         const local = localById.get(remote.id);
         if (!local?.inspectionPhotos?.length) return remote;
@@ -220,7 +221,13 @@ async function loadOne(resource: DomainResource): Promise<void> {
           inspectionPhotos: mergeInspectionPhotosById(remotePhotos, local.inspectionPhotos),
         };
       });
-      useJobCardStore.setState({ jobCards: merged });
+      // Preserve local-only entries (e.g. a job card created while a stale GET
+      // was in-flight; without this the card — and its check-in photos — would
+      // vanish from the store the moment the stale response is applied).
+      const localOnly = useJobCardStore
+        .getState()
+        .jobCards.filter((j) => !remoteIds.has(j.id));
+      useJobCardStore.setState({ jobCards: [...merged, ...localOnly] });
       void useAppointmentStore.getState().reconcileStaleAppointments(merged);
       return;
     }
