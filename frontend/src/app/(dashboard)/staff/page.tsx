@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
+import { ApiError } from "@/lib/api-client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getInitials } from "@/lib/utils";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
@@ -609,8 +610,26 @@ export default function StaffPage() {
       }
       resetAddForm();
       setDialogOpen(false);
-    } catch {
-      toast.error("Could not create user. Check API server and try again.");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.code === "USER_LIMIT_REACHED") {
+          const currentUsers =
+            typeof e.details?.currentUsers === "number" ? e.details.currentUsers : null;
+          const maxUsers = typeof e.details?.maxUsers === "number" ? e.details.maxUsers : null;
+          const planName =
+            typeof e.details?.planName === "string" ? e.details.planName : "your current";
+          toast.error(e.message, {
+            description:
+              currentUsers !== null && maxUsers !== null
+                ? `${currentUsers}/${maxUsers} users used on ${planName} plan.`
+                : undefined,
+          });
+          return;
+        }
+        toast.error(e.message);
+        return;
+      }
+      toast.error(e instanceof Error ? e.message : "Could not create user. Check API server and try again.");
     }
   };
 
