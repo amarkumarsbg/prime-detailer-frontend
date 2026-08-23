@@ -83,6 +83,7 @@ import {
   isTodaysBookingsJob,
   isReadyForDeliveryJob,
   isInactiveCustomer,
+  isOverdueJobCard,
   jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import type { DashboardStats, JobCard, UserRole } from "@/types";
@@ -354,10 +355,8 @@ export default function DashboardPage() {
       bgColor: string;
     }[] = [];
 
-    const overdueJobs = scopedJobCards.filter((jc) => {
-      const expected = new Date(jc.expectedDelivery);
-      return expected < new Date() && !["DELIVERED", "CANCELLED"].includes(jc.status);
-    });
+    // Use the shared isOverdueJobCard function so the badge count matches the job-cards page filter.
+    const overdueJobs = scopedJobCards.filter(isOverdueJobCard);
     if (overdueJobs.length > 0) {
       items.push({
         id: "overdue",

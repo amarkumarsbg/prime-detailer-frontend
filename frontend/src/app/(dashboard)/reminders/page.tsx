@@ -335,7 +335,9 @@ export default function RemindersPage() {
     }
 
     if (activeFilter === DASHBOARD_FILTER.DUE_SOON && kindTab === "service") {
-      list = list.filter(isDueSoonReminder);
+      // Match the dashboard badge definition exactly: only OVERDUE and DUE reminders
+      // (not UPCOMING — those are not yet counted in the dashboard alert).
+      list = list.filter((r) => r.status === "OVERDUE" || r.status === "DUE");
     }
 
     return list.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
@@ -571,7 +573,7 @@ export default function RemindersPage() {
 
       {activeFilter === DASHBOARD_FILTER.DUE_SOON && (
         <FilterBanner
-          message="Showing due-soon service reminders"
+          message="Showing overdue and due service reminders"
           onDismiss={() => setActiveFilter(null)}
         />
       )}

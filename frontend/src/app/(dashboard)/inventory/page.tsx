@@ -120,7 +120,9 @@ export default function InventoryPage() {
   const partsForTable = useMemo(() => {
     let list = scopedParts;
     if (activeFilter === DASHBOARD_FILTER.LOW_STOCK) {
-      list = list.filter(isLowStockPart);
+      // Use getStockStatus so this filter matches exactly what the dashboard badge counted
+      // ("Low Stock" only; Out-of-Stock items are excluded from the badge count).
+      list = list.filter((p) => getStockStatus(p).label === "Low Stock");
     }
     if (stockTableFilter === "low") {
       list = list.filter((p) => getStockStatus(p).label === "Low Stock");

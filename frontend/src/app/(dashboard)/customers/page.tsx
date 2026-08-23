@@ -44,8 +44,10 @@ import {
 import { ImportCustomersDialog } from "@/components/customers/import-customers-dialog";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { useJobCardStore } from "@/store/job-card-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { isInactiveCustomer } from "@/lib/dashboard-filters";
+import { useBranchScope } from "@/lib/branch-scope";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import {
   buildCustomerExportRows,
@@ -78,6 +80,8 @@ export default function CustomersPage() {
   const router = useRouter();
   const { customers, addCustomer: addCustomerToStore, fetchCustomers, findByReferralCode } = useCustomerStore();
   const vehicles = useVehicleStore((s) => s.vehicles);
+  const jobCards = useJobCardStore((s) => s.jobCards);
+  const { selectedBranchId } = useBranchScope();
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -86,10 +90,19 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
+  // Customer ids that appear in at least one job card (same constraint the dashboard uses).
+  const jobCustomerIds = useMemo(() => {
+    const scoped = selectedBranchId
+      ? jobCards.filter((jc) => jc.branchId === selectedBranchId)
+      : jobCards;
+    return new Set(scoped.map((jc) => jc.customerId));
+  }, [jobCards, selectedBranchId]);
+
   const tableData = useMemo(() => {
     const source =
       activeFilter === DASHBOARD_FILTER.INACTIVE
-        ? customers.filter(isInactiveCustomer)
+        // Mirror the dashboard definition exactly: has job history + inactive by date
+        ? customers.filter((c) => jobCustomerIds.has(c.id) && isInactiveCustomer(c))
         : customers;
     return source.map((c) => {
       const customerVehicles = vehicles.filter((v) => v.customerId === c.id);
@@ -108,7 +121,7 @@ export default function CustomersPage() {
         rewardPoints: c.rewardPoints,
         walletBalance: c.walletBalance,
         lastVisitDate: c.lastVisitDate,
-        isInactive: c.isInactive,
+        isInactive: Boolean(c.isInactive) || isInactiveCustomer(c),
         memberSince: c.createdAt,
         /** Hidden field for search (comma-separated normalized regs). */
         _vehicleRegSearch: vehicleRegNormalizedList.join(","),
@@ -435,7 +448,9 @@ export default function CustomersPage() {
 
       {/* Results count */}
       <p className="text-xs text-muted-foreground">
-        {filteredData.length} customer{filteredData.length !== 1 ? "s" : ""}
+        {activeFilter === DASHBOARD_FILTER.INACTIVE
+          ? `${filteredData.length} inactive customer${filteredData.length !== 1 ? "s" : ""}`
+          : `${filteredData.length} customer${filteredData.length !== 1 ? "s" : ""}`}
       </p>
 
       {/* Card grid / List view */}
