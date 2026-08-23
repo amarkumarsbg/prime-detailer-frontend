@@ -484,16 +484,23 @@ export function CatalogItemFormDialog({
                       ? "Opening stock (litres)"
                       : "Opening stock"}
                 </Label>
-                <Input
-                  id="catalog-part-qty"
-                  type="number"
-                  min="0"
-                  step={unit === "Litre" ? "0.01" : "1"}
-                  placeholder="0"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                  required
-                />
+                {editingPart ? (
+                  <div className="flex h-9 items-center rounded-md border border-border bg-muted/50 px-3 text-sm tabular-nums text-muted-foreground select-none">
+                    {qty} {unit}
+                    <span className="ml-2 text-xs">(use purchases / adjustments to change stock)</span>
+                  </div>
+                ) : (
+                  <Input
+                    id="catalog-part-qty"
+                    type="number"
+                    min="0"
+                    step={unit === "Litre" ? "0.01" : "1"}
+                    placeholder="0"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                    required
+                  />
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-reorder">Reorder level ({unit})</Label>
