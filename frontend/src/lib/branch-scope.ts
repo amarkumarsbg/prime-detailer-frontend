@@ -293,14 +293,9 @@ export function computeBranchScopedDashboardStats(
       0
     );
 
-  // This month's cash-paid expenses — matches what the Expenses page shows
-  // as "Total Expenses (Cash paid in period)" for the current month.
-  const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  // Today's cash-paid expenses (same cash basis as the Expenses page KPI).
   const totalExpensesToday = scopedExpenses
-    .filter((e) => {
-      const d = new Date(e.date);
-      return d >= thisMonthStart && d <= today;
-    })
+    .filter((e) => isSameCalendarDay(e.date, today))
     .reduce((s, e) => s + expensePaidAmount(e), 0);
 
   const pendingPayments = new Set(
