@@ -200,7 +200,7 @@ export function EditReservationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit {label}</DialogTitle>
           <DialogDescription>
@@ -230,21 +230,23 @@ export function EditReservationDialog({
               />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="res-name">Customer name</Label>
-            <Input
-              id="res-name"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="res-phone">Phone</Label>
-            <Input
-              id="res-phone"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="res-name">Customer name</Label>
+              <Input
+                id="res-name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="res-phone">Phone</Label>
+              <Input
+                id="res-phone"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -285,45 +287,47 @@ export function EditReservationDialog({
               );
             })()}
           </div>
-          {activeBranches.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {activeBranches.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Branch</Label>
+                <Select
+                  value={branchId || "__none__"}
+                  onValueChange={(v) => setBranchId(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No branch</SelectItem>
+                    {activeBranches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
-              <Label>Branch</Label>
+              <Label>Mechanic</Label>
               <Select
-                value={branchId || "__none__"}
-                onValueChange={(v) => setBranchId(v === "__none__" ? "" : v)}
+                value={mechanicId || "__none__"}
+                onValueChange={(v) => setMechanicId(v === "__none__" ? "" : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select branch" />
+                  <SelectValue placeholder="Optional" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">No branch</SelectItem>
-                  {activeBranches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
+                  <SelectItem value="__none__">Unassigned</SelectItem>
+                  {mechanics.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <div className="space-y-1.5">
-            <Label>Mechanic</Label>
-            <Select
-              value={mechanicId || "__none__"}
-              onValueChange={(v) => setMechanicId(v === "__none__" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Optional" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Unassigned</SelectItem>
-                {mechanics.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
