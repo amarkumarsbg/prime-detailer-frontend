@@ -60,7 +60,7 @@ function applyPartToDraftItems(prev: DraftItem[], part: Part, targetKey?: string
   const patch = {
     partId: part.id,
     unitPrice: String(part.costPrice ?? part.unitPrice ?? ""),
-    gstRate: String(part.gstRate ?? 18),
+    gstRate: part.gstApplicable === false ? "0" : String(part.gstRate ?? 18),
   };
   if (targetKey && prev.some((i) => i.key === targetKey)) {
     return prev.map((i) => (i.key === targetKey ? { ...i, ...patch } : i));
@@ -617,7 +617,7 @@ export function InventoryPurchasesTab() {
                             patchItem(item.key, {
                               partId,
                               unitPrice: part ? String(part.costPrice ?? part.unitPrice ?? "") : item.unitPrice,
-                              gstRate: String(part?.gstRate ?? 18),
+                              gstRate: part?.gstApplicable === false ? "0" : String(part?.gstRate ?? 18),
                             });
                           }}
                         >
