@@ -215,6 +215,7 @@ export function CashBankClient() {
   const removeBankAccount = useCashBankStore((s) => s.removeBankAccount);
   const adjustBalance = useCashBankStore((s) => s.adjustBalance);
   const transfer = useCashBankStore((s) => s.transfer);
+  const setAccounts = useCashBankStore((s) => s.setAccounts);
   const businessName = useSettingsStore((s) => s.businessName);
   const businessPhone = useSettingsStore((s) => s.businessPhone);
 
@@ -234,6 +235,7 @@ export function CashBankClient() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [cashSetupOpen, setCashSetupOpen] = useState(false);
 
   const selected = useMemo(
     () => accounts.find((a) => a.id === selectedId) ?? null,
@@ -334,6 +336,22 @@ export function CashBankClient() {
                 <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Cash in Hand
                 </p>
+                {!cashAccount && (
+                  <button
+                    type="button"
+                    onClick={() => setCashSetupOpen(true)}
+                    className="mb-1 flex w-full items-center gap-3 rounded-lg border border-dashed border-indigo-300 px-3 py-2.5 text-left text-indigo-600 transition-colors hover:bg-indigo-50/60 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950/30"
+                  >
+                    <div className="flex size-9 items-center justify-center rounded-md bg-indigo-50 dark:bg-indigo-950/40">
+                      <Wallet className="size-4 text-indigo-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">Set up Cash in Hand</p>
+                      <p className="text-xs text-muted-foreground">Enter opening capital</p>
+                    </div>
+                    <Plus className="size-4 shrink-0" />
+                  </button>
+                )}
                 {cashAccount && (
                   <button
                     type="button"
@@ -582,6 +600,22 @@ export function CashBankClient() {
       </div>
 
       <AddBankAccountDialog open={addOpen} onOpenChange={setAddOpen} onSave={addBankAccount} />
+      <SetupCashDialog
+        open={cashSetupOpen}
+        onOpenChange={setCashSetupOpen}
+        onSave={(balance, dateIso) => {
+          const newAccount: import("@/store/cash-bank-store").CashBankAccount = {
+            id: `acc-cash-${Date.now()}`,
+            type: "cash",
+            displayName: "Cash in Hand",
+            balance,
+            openingBalanceDate: dateIso,
+          };
+          setAccounts((prev) => [newAccount, ...prev]);
+          setSelectedId(newAccount.id);
+          toast.success("Cash in Hand set up");
+        }}
+      />
       <AdjustBalanceDialog
         open={adjustOpen}
         onOpenChange={setAdjustOpen}
@@ -608,6 +642,66 @@ export function CashBankClient() {
         </>
       )}
     </div>
+  );
+}
+
+function SetupCashDialog({
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSave: (balance: number, dateIso: string) => void;
+}) {
+  const [opening, setOpening] = useState("");
+  const [asOf, setAsOf] = useState(format(new Date(), "yyyy-MM-dd"));
+
+  const reset = () => { setOpening(""); setAsOf(format(new Date(), "yyyy-MM-dd")); };
+
+  const submit = () => {
+    const bal = Number.parseFloat(opening.replace(/,/g, "") || "0");
+    if (Number.isNaN(bal) || bal < 0) { toast.error("Enter a valid amount"); return; }
+    onSave(bal, new Date(asOf).toISOString());
+    onOpenChange(false);
+    reset();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Set up Cash in Hand</DialogTitle>
+          <DialogDescription>Enter your current cash capital (opening balance).</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Opening Capital (₹)</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+              <Input
+                className="pl-7"
+                placeholder="0"
+                value={opening}
+                onChange={(e) => setOpening(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>As of Date</Label>
+            <Input
+              type="date"
+              className="date-input-icon-end pr-9"
+              value={asOf}
+              onChange={(e) => setAsOf(e.target.value)}
+            />
+          </div>
+          <Button className="w-full bg-indigo-600 text-white hover:bg-indigo-700" onClick={submit}>
+            Save Cash in Hand
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

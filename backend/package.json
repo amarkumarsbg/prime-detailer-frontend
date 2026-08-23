@@ -33,6 +33,9 @@
     "saas:set-branch-limit": "tsx scripts/saas-set-branch-limit.ts",
     "saas:ensure-platform-owner": "tsx scripts/ensure-platform-owner.ts",
     "saas:force-one-branch": "tsx scripts/saas-force-one-branch.ts",
+    "org:reset-data": "tsx scripts/reset-org-data.ts",
+    "org:reset-data:dry-run": "tsx scripts/reset-org-data.ts --dry-run",
+    "org:reset-data:confirm": "tsx scripts/reset-org-data.ts --confirm",
     "s3:setup-aws-public-read": "tsx scripts/s3-setup-aws-public-read.ts",
     "s3:setup-aws-policy-only": "tsx scripts/s3-setup-aws-public-read.ts --policy-only"
   },
