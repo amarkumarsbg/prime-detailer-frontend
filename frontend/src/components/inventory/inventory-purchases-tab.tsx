@@ -90,6 +90,7 @@ export function InventoryPurchasesTab() {
   const parts = useInventoryStore((s) => s.parts);
   const addInventoryPurchase = useInventoryStore((s) => s.addInventoryPurchase);
   const updateInventoryPurchase = useInventoryStore((s) => s.updateInventoryPurchase);
+  const updatePart = useInventoryStore((s) => s.updatePart);
   const branches = useBranchStore((s) => s.branches);
   const vendors = useExpenseStore((s) => s.vendorDirectory);
   const addVendorDirectoryEntry = useExpenseStore((s) => s.addVendorDirectoryEntry);
@@ -154,6 +155,10 @@ export function InventoryPurchasesTab() {
     const targetKey = quickPartTargetKeyRef.current;
     quickPartTargetKeyRef.current = null;
     setItems((prev) => applyPartToDraftItems(prev, fromStore, targetKey));
+    // Zero out the opening stock immediately — the purchase line will be the
+    // source of truth for initial stock. Without this, opening stock + purchase
+    // qty would both be counted, doubling the actual quantity.
+    updatePart(fromStore.id, { quantity: 0, stockQuantityMl: 0, stockQuantitySecondary: 0 });
   }, [quickPartOpen, parts]);
 
   useEffect(() => {
