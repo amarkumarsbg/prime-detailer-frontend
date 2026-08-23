@@ -4,6 +4,7 @@ import type { Prisma, User as PrismaUser } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/app-error.js";
 import { toStaffDirectoryEntry } from "../../lib/data-scope.js";
+import { assertCanCreateUser } from "../organization/organization-subscription.service.js";
 
 function pickChar(set: string): string {
   return set[randomInt(0, set.length)]!;
@@ -158,6 +159,9 @@ export async function createUserApi(input: {
   if (!branch) {
     throw AppError.validation("Selected branch was not found.");
   }
+  if (input.isActive ?? true) {
+    await assertCanCreateUser(branch.organizationId);
+  }
 
   const useExplicitPassword = input.password !== undefined && input.password.trim() !== "";
   const plainPassword = useExplicitPassword ? input.password!.trim() : generateTemporaryPassword();
@@ -232,6 +236,9 @@ export async function updateUserApi(
   }>
 ): Promise<ReturnType<typeof toApiUser> | null> {
   try {
+    const current = await prisma.user.findUnique({ where: { id } });
+    if (!current) return null;
+
     const data: Prisma.UserUncheckedUpdateInput = { ...patch };
     if (patch.email !== undefined) data.email = patch.email.toLowerCase();
     if (patch.employeeCode !== undefined) data.employeeCode = nullIfEmpty(patch.employeeCode) ?? null;
@@ -246,6 +253,17 @@ export async function updateUserApi(
       if (!branch) return null;
       data.organizationId = branch.organizationId;
     }
+
+    const nextActive = patch.isActive ?? current.isActive;
+    const wasInactive = !current.isActive;
+    if (nextActive && wasInactive) {
+      const nextOrgId =
+        typeof data.organizationId === "string" && data.organizationId.trim()
+          ? data.organizationId
+          : current.organizationId;
+      await assertCanCreateUser(nextOrgId);
+    }
+
     if (typeof data.employeeCode === "string" && data.employeeCode) {
       const clash = await prisma.user.findFirst({
         where: { employeeCode: data.employeeCode, NOT: { id } },

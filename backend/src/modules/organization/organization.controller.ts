@@ -4,10 +4,12 @@ import {
   adminMarkSubscriptionPaid,
   getEntitlementForOrg,
   getOrganizationForPlatform,
+  getSubscriptionPricingQuote,
   getSubscriptionBill,
   listOrganizationsForPlatform,
   listSubscriptionBills,
   listSubscriptionPayments,
+  listSubscriptionRenewalHistory,
   patchOrganizationSubscription,
   requestSubscriptionRenewal,
   verifySubscriptionPayment,
@@ -67,10 +69,48 @@ export async function postStudioRenewRequest(req: Request, res: Response, next: 
       .object({
         notes: z.string().max(500).optional(),
         method: z.string().max(64).optional(),
+        termMonths: z.union([z.literal(12), z.literal(24), z.literal(36), z.literal(60)]).optional(),
+        extraBranches: z.number().int().nonnegative().optional(),
+        extraUsers: z.number().int().nonnegative().optional(),
+        referralCode: z.string().max(32).nullable().optional(),
       })
       .parse(req.body ?? {});
     const result = await requestSubscriptionRenewal(orgId, actorFromReq(req), body);
     res.json({ data: result, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function postStudioSubscriptionPricing(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveOrgId(req);
+    if (!orgId) {
+      throw new AppHttpError(403, "Organization not found on user", "ORG_MISSING");
+    }
+    const body = z
+      .object({
+        termMonths: z.union([z.literal(12), z.literal(24), z.literal(36), z.literal(60)]),
+        extraBranches: z.number().int().nonnegative().default(0),
+        extraUsers: z.number().int().nonnegative().default(0),
+        referralCode: z.string().max(32).nullable().optional(),
+      })
+      .parse(req.body ?? {});
+    const quote = await getSubscriptionPricingQuote(orgId, body);
+    res.json({ data: quote, error: null });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function getStudioSubscriptionRenewals(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveOrgId(req);
+    if (!orgId) {
+      throw new AppHttpError(403, "Organization not found on user", "ORG_MISSING");
+    }
+    const renewals = await listSubscriptionRenewalHistory(orgId);
+    res.json({ data: { renewals }, error: null });
   } catch (e) {
     next(e);
   }
@@ -153,7 +193,7 @@ const patchSchema = z.object({
   contactUsUrl: z.string().nullable().optional(),
   contactPhone: z.string().nullable().optional(),
   upgradeUrl: z.string().nullable().optional(),
-  termMonths: z.union([z.literal(12), z.literal(24), z.literal(36)]).optional(),
+  termMonths: z.union([z.literal(12), z.literal(24), z.literal(36), z.literal(60)]).optional(),
   startsAt: z.string().datetime().nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
   paymentStatus: z.enum(["PAID", "PENDING", "PROCESSING", "FAILED"]).optional(),
@@ -211,7 +251,7 @@ export async function postPlatformVerifyPayment(req: Request, res: Response, nex
 const markPaidSchema = z.object({
   txnReference: z.string().nullable().optional(),
   amount: z.number().nonnegative().nullable().optional(),
-  termMonths: z.union([z.literal(12), z.literal(24), z.literal(36)]).optional(),
+  termMonths: z.union([z.literal(12), z.literal(24), z.literal(36), z.literal(60)]).optional(),
   notes: z.string().nullable().optional(),
 });
 

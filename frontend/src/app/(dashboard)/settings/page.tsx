@@ -89,6 +89,7 @@ import {
 import { PlanCtaButton } from "@/components/billing/plan-cta-link";
 import { SubscriptionBillsSection } from "@/components/billing/subscription-bills-section";
 import { SubscriptionRenewDialog } from "@/components/billing/subscription-renew-banner";
+import { SubscriptionRenewalWorkbench } from "@/components/billing/subscription-renewal-workbench";
 
 const DEFAULT_TERMS = `1. Vehicle will be kept in secure parking during service.
 2. Not responsible for valuables left in vehicle.
@@ -480,6 +481,18 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <div>
+                      <p className="text-muted-foreground">Status</p>
+                      <p className="font-medium">{entitlement.subscription.status}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Started</p>
+                      <p className="font-medium">
+                        {entitlement.subscription.startsAt
+                          ? formatDate(entitlement.subscription.startsAt)
+                          : "—"}
+                      </p>
+                    </div>
+                    <div>
                       <p className="text-muted-foreground">Expires</p>
                       <p className="font-medium">
                         {entitlement.subscription.expiresAt ||
@@ -492,10 +505,27 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <div>
+                      <p className="text-muted-foreground">Days remaining</p>
+                      <p className="font-medium">
+                        {typeof entitlement.subscription.daysRemaining === "number"
+                          ? entitlement.subscription.daysRemaining
+                          : "—"}
+                      </p>
+                    </div>
+                    <div>
                       <p className="text-muted-foreground">Branch usage</p>
                       <p className="font-medium">
                         {entitlement.usage.branchesUsed} /{" "}
                         {branchLimitLabel(entitlement.subscription.effectiveMaxBranches)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">User usage</p>
+                      <p className="font-medium">
+                        {entitlement.usage.usersUsed ?? 0} /{" "}
+                        {entitlement.subscription.limits.maxStaff == null
+                          ? "unlimited"
+                          : entitlement.subscription.limits.maxStaff}
                       </p>
                     </div>
                     <div>
@@ -537,6 +567,15 @@ export default function SettingsPage() {
                       Refresh status
                     </Button>
                   </div>
+                  <Separator />
+                  <SubscriptionRenewalWorkbench
+                    entitlement={entitlement}
+                    onEntitlementUpdated={async () => {
+                      await refreshEntitlement();
+                    }}
+                  />
+                  <Separator />
+                  <SubscriptionBillsSection />
                   <SubscriptionRenewDialog open={renewOpen} onOpenChange={setRenewOpen} />
                 </>
               ) : (
@@ -631,8 +670,6 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
-                <Separator />
-                <SubscriptionBillsSection />
                 <Separator />
                 <Button onClick={() => handleSave("Business profile")}>
                   <Save className="w-4 h-4 mr-2" />Save Changes

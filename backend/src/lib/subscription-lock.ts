@@ -47,6 +47,6 @@ export function addMonths(date: Date, months: number): Date {
 }
 
 export function normalizeTermMonths(raw: number | null | undefined): number {
-  if (raw === 24 || raw === 36) return raw;
+  if (raw === 24 || raw === 36 || raw === 60) return raw;
   return 12;
 }

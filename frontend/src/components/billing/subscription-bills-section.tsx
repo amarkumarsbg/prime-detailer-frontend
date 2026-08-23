@@ -27,7 +27,15 @@ function openSubscriptionBillPrint(bill: SubscriptionBillRow & { organizationNam
     <tr><td>Term of usage</td><td>${bill.termLabel} (${bill.termMonths} months)</td></tr>
     <tr><td>Period start</td><td>${formatDate(bill.periodStart)}</td></tr>
     <tr><td>Expiry / period end</td><td><strong>${formatDate(bill.periodEnd)}</strong></td></tr>
-    <tr><td>Amount</td><td>${bill.amount != null ? formatCurrency(bill.amount) : "—"} ${bill.currency}</td></tr>
+    <tr><td>Base subscription</td><td>${formatCurrency(bill.baseAmount)} ${bill.currency}</td></tr>
+    <tr><td>Extra branch cost</td><td>${formatCurrency(bill.extraBranchCost)} ${bill.currency}</td></tr>
+    <tr><td>Extra user cost</td><td>${formatCurrency(bill.extraUserCost)} ${bill.currency}</td></tr>
+    <tr><td>Onboarding fee</td><td>${formatCurrency(bill.onboardingFee)} ${bill.currency}</td></tr>
+    <tr><td>Referral discount</td><td>- ${formatCurrency(bill.referralDiscount)} ${bill.currency}</td></tr>
+    <tr><td>GST</td><td>${formatCurrency(bill.gstAmount)} (${bill.gstPercent}%) ${bill.currency}</td></tr>
+    <tr><td>Total amount</td><td><strong>${formatCurrency(bill.totalAmount)} ${bill.currency}</strong></td></tr>
+    <tr><td>Payment status</td><td>${bill.paymentStatus ?? "—"}</td></tr>
+    <tr><td>Txn / reference</td><td>${bill.txnReference ?? "—"}</td></tr>
     <tr><td>Issued</td><td>${formatDate(bill.createdAt)}</td></tr>
   </table>
   <p class="foot">This receipt covers SaaS subscription access for the term above. Business data is retained after expiry; exports may be locked until renewal.</p>
@@ -81,12 +89,17 @@ export function SubscriptionBillsSection() {
     <div className="space-y-2">
       <p className="text-sm font-medium">Subscription bills</p>
       <div className="overflow-x-auto rounded-md border">
-        <table className="w-full min-w-[520px] text-sm">
+        <table className="w-full min-w-240 text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
               <th className="px-3 py-2">Bill #</th>
+              <th className="px-3 py-2">Date</th>
+              <th className="px-3 py-2">Plan</th>
               <th className="px-3 py-2">Term</th>
-              <th className="px-3 py-2">Expires</th>
+              <th className="px-3 py-2 text-right">Amount</th>
+              <th className="px-3 py-2 text-right">GST</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Txn Ref</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -94,29 +107,55 @@ export function SubscriptionBillsSection() {
             {bills.map((b) => (
               <tr key={b.id} className="border-b last:border-0">
                 <td className="px-3 py-2 font-medium">{b.billNumber}</td>
+                <td className="px-3 py-2">{formatDate(b.createdAt)}</td>
+                <td className="px-3 py-2">{b.planName}</td>
                 <td className="px-3 py-2">{b.termLabel}</td>
-                <td className="px-3 py-2">{formatDate(b.periodEnd)}</td>
+                <td className="px-3 py-2 text-right">{formatCurrency(b.totalAmount)}</td>
+                <td className="px-3 py-2 text-right">{formatCurrency(b.gstAmount)}</td>
+                <td className="px-3 py-2">{b.paymentStatus ?? "—"}</td>
+                <td className="px-3 py-2 font-mono text-xs">{b.txnReference ?? "—"}</td>
                 <td className="px-3 py-2 text-right">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          const full = await apiGet<SubscriptionBillRow>(
-                            `/api/organization/subscription/bills/${encodeURIComponent(b.id)}`
-                          );
-                          openSubscriptionBillPrint(full);
-                        } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Could not open bill");
-                        }
-                      })();
-                    }}
-                  >
-                    <Download className="mr-1.5 h-3.5 w-3.5" />
-                    Download
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void (async () => {
+                          try {
+                            const full = await apiGet<SubscriptionBillRow>(
+                              `/api/organization/subscription/bills/${encodeURIComponent(b.id)}`
+                            );
+                            openSubscriptionBillPrint(full);
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Could not open bill");
+                          }
+                        })();
+                      }}
+                    >
+                      View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void (async () => {
+                          try {
+                            const full = await apiGet<SubscriptionBillRow>(
+                              `/api/organization/subscription/bills/${encodeURIComponent(b.id)}`
+                            );
+                            openSubscriptionBillPrint(full);
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Could not open bill");
+                          }
+                        })();
+                      }}
+                    >
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                      Download
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}

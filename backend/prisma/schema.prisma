@@ -159,6 +159,14 @@ model SubscriptionBill {
   termLabel      String
   periodStart    DateTime
   periodEnd      DateTime
+  baseAmount     Float?
+  extraBranchCost Float?
+  extraUserCost  Float?
+  onboardingFee  Float?
+  referralDiscount Float?
+  gstPercent     Float?
+  gstAmount      Float?
+  totalAmount    Float?
   amount         Float?
   currency       String                   @default("INR")
   createdAt      DateTime                 @default(now())

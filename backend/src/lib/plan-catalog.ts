@@ -16,27 +16,27 @@ export const PLAN_CATALOG: Record<PlanCode, PlanTemplate> = {
   STARTER: {
     planCode: "STARTER",
     planName: "Starter",
-    limits: { maxBranches: 1 },
+    limits: { maxBranches: 1, maxStaff: 3 },
   },
   GROWTH: {
     planCode: "GROWTH",
     planName: "Growth",
-    limits: { maxBranches: 3 },
+    limits: { maxBranches: 3, maxStaff: 10 },
   },
   BUSINESS: {
     planCode: "BUSINESS",
     planName: "Business",
-    limits: { maxBranches: 10 },
+    limits: { maxBranches: 10, maxStaff: 25 },
   },
   ENTERPRISE: {
     planCode: "ENTERPRISE",
     planName: "Enterprise",
-    limits: { maxBranches: null },
+    limits: { maxBranches: null, maxStaff: null },
   },
   CUSTOM: {
     planCode: "CUSTOM",
     planName: "Custom",
-    limits: { maxBranches: 1 },
+    limits: { maxBranches: 1, maxStaff: 3 },
   },
 };
 

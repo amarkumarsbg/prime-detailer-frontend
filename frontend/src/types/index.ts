@@ -60,10 +60,63 @@ export type SubscriptionBillRow = {
   termLabel: string;
   periodStart: string;
   periodEnd: string;
+  baseAmount: number;
+  extraBranchCost: number;
+  extraUserCost: number;
+  onboardingFee: number;
+  referralDiscount: number;
+  gstPercent: number;
+  gstAmount: number;
+  paymentStatus: SubscriptionPaymentStatus | null;
+  txnReference: string | null;
   amount: number | null;
+  totalAmount: number;
   currency: string;
   createdAt: string;
   organizationName?: string;
+};
+
+export type SubscriptionPricingBreakdown = {
+  planCode: PlanCode;
+  planName: string;
+  termMonths: number;
+  termLabel: string;
+  extraBranches: number;
+  extraUsers: number;
+  baseAmount: number;
+  extraBranchCost: number;
+  extraUserCost: number;
+  onboardingFee: number;
+  onboardingApplied: boolean;
+  referralCode: string | null;
+  referralDiscount: number;
+  referralApplied: boolean;
+  referralEligible: boolean;
+  referralValidationMessage: string | null;
+  gstPercent: number;
+  gstAmount: number;
+  subTotalBeforeTax: number;
+  finalAmount: number;
+  includedBranches: number | null;
+  includedUsers: number | null;
+  finalAllowedBranches: number | null;
+  finalAllowedUsers: number | null;
+  currency: string;
+  isFirstSubscription: boolean;
+};
+
+export type SubscriptionRenewalHistoryRow = {
+  billId: string;
+  billNumber: string;
+  previousExpiry: string;
+  newExpiry: string;
+  termMonths: number;
+  termLabel: string;
+  amount: number;
+  gstAmount: number;
+  paymentStatus: SubscriptionPaymentStatus | null;
+  txnReference: string | null;
+  renewalDate: string;
 };
 
 export * from "./auth";

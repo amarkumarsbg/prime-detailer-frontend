@@ -15,6 +15,11 @@ import {
   type PlanLimits,
 } from "../../lib/plan-catalog.js";
 import {
+  calculateSubscriptionPricing,
+  type SubscriptionPricingBreakdown,
+  type SubscriptionPricingInput,
+} from "../../lib/subscription-pricing.js";
+import {
   addMonths,
   daysUntilExpiry,
   graceOrLockStatus,
@@ -78,9 +83,37 @@ export type SubscriptionBillRow = {
   termLabel: string;
   periodStart: string;
   periodEnd: string;
+  baseAmount: number;
+  extraBranchCost: number;
+  extraUserCost: number;
+  onboardingFee: number;
+  referralDiscount: number;
+  gstPercent: number;
+  gstAmount: number;
+  paymentStatus: SubscriptionPaymentStatus | null;
+  txnReference: string | null;
   amount: number | null;
+  totalAmount: number;
   currency: string;
   createdAt: string;
+};
+
+export type SubscriptionRenewalHistoryRow = {
+  billId: string;
+  billNumber: string;
+  previousExpiry: string;
+  newExpiry: string;
+  termMonths: number;
+  termLabel: string;
+  amount: number;
+  gstAmount: number;
+  paymentStatus: SubscriptionPaymentStatus | null;
+  txnReference: string | null;
+  renewalDate: string;
+};
+
+export type StudioPricingQuote = {
+  breakdown: SubscriptionPricingBreakdown;
 };
 
 function asLimitsJson(limits: PlanLimits): Prisma.InputJsonValue {
@@ -91,6 +124,16 @@ function resolveExpiresAt(sub: OrganizationSubscription): Date | null {
   return sub.expiresAt ?? sub.currentPeriodEnd ?? null;
 }
 
+function normalizedLimitsForSubscription(sub: OrganizationSubscription): PlanLimits {
+  const parsed = parsePlanLimits(sub.limits);
+  const template = PLAN_CATALOG[sub.planCode]?.limits;
+  return {
+    maxBranches: parsed.maxBranches,
+    maxStaff: parsed.maxStaff ?? template?.maxStaff,
+    maxCustomers: parsed.maxCustomers ?? template?.maxCustomers,
+  };
+}
+
 export function toEntitlement(
   org: { id: string; name: string; slug: string | null },
   sub: OrganizationSubscription,
@@ -98,7 +141,7 @@ export function toEntitlement(
   usersUsed: number,
   now: Date = new Date()
 ): EntitlementPayload {
-  const limits = parsePlanLimits(sub.limits);
+  const limits = normalizedLimitsForSubscription(sub);
   const max = effectiveMaxBranches(limits, sub.maxBranchesOverride);
   const statusOk = sub.status === "ACTIVE" || sub.status === "PAST_DUE";
   const canCreate = statusOk && canCreateWithLimit(branchesUsed, max);
@@ -182,6 +225,33 @@ export async function assertCanCreateBranch(organizationId: string): Promise<Ent
         planName: entitlement.subscription.planName,
         maxBranches: max,
         currentBranches: used,
+        upgradeUrl: entitlement.subscription.upgradeUrl,
+        contactUsUrl: entitlement.subscription.contactUsUrl,
+      }
+    );
+  }
+  return entitlement;
+}
+
+export async function assertCanCreateUser(organizationId: string): Promise<EntitlementPayload> {
+  const entitlement = await getEntitlementForOrg(organizationId);
+  if (!entitlement) {
+    throw new AppHttpError(403, "Organization subscription not found.", "SUBSCRIPTION_MISSING");
+  }
+  const maxUsers = entitlement.subscription.limits.maxStaff;
+  if (maxUsers === null || maxUsers === undefined) {
+    return entitlement;
+  }
+  const used = entitlement.usage.usersUsed;
+  if (!canCreateWithLimit(used, maxUsers)) {
+    throw new AppHttpError(
+      403,
+      `User limit reached (${used}/${maxUsers}). Renew or upgrade your plan to add more users.`,
+      "USER_LIMIT_REACHED",
+      {
+        planName: entitlement.subscription.planName,
+        maxUsers,
+        currentUsers: used,
         upgradeUrl: entitlement.subscription.upgradeUrl,
         contactUsUrl: entitlement.subscription.contactUsUrl,
       }
@@ -332,6 +402,7 @@ export async function ensureDefaultOrganization(opts?: {
   const name = opts?.name ?? "Prime Detailers";
   const branchCount = await prisma.branch.count();
   const maxBranches = opts?.maxBranches ?? Math.max(1, branchCount);
+  const maxStaff = PLAN_CATALOG.STARTER.limits.maxStaff ?? 3;
   const termMonths = 12;
   const { startsAt, expiresAt } = defaultPeriodDates(termMonths);
 
@@ -347,7 +418,7 @@ export async function ensureDefaultOrganization(opts?: {
           planCode: "STARTER",
           planName: "Starter",
           status: "ACTIVE",
-          limits: asLimitsJson({ maxBranches }),
+          limits: asLimitsJson({ maxBranches, maxStaff }),
           termMonths,
           startsAt,
           expiresAt,
@@ -370,7 +441,7 @@ export async function ensureDefaultOrganization(opts?: {
         planCode: "STARTER",
         planName: "Starter",
         status: "ACTIVE",
-        limits: asLimitsJson({ maxBranches }),
+        limits: asLimitsJson({ maxBranches, maxStaff }),
         termMonths,
         startsAt,
         expiresAt,
@@ -394,10 +465,66 @@ export async function ensureDefaultOrganization(opts?: {
   return DEFAULT_ORG_ID;
 }
 
+async function isFirstSubscriptionForOrg(organizationId: string): Promise<boolean> {
+  const [billCount, paidCount] = await Promise.all([
+    prisma.subscriptionBill.count({ where: { organizationId } }),
+    prisma.subscriptionPayment.count({ where: { organizationId, status: "PAID" } }),
+  ]);
+  return billCount === 0 && paidCount === 0;
+}
+
+function parsePricingFromNotes(notes: string | null | undefined): SubscriptionPricingBreakdown | null {
+  if (!notes) return null;
+  const marker = "SUBSCRIPTION_PRICING:";
+  const idx = notes.indexOf(marker);
+  if (idx < 0) return null;
+  const json = notes.slice(idx + marker.length).trim();
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as SubscriptionPricingBreakdown;
+  } catch {
+    return null;
+  }
+}
+
+function pricingNotes(prefix: string, breakdown: SubscriptionPricingBreakdown): string {
+  return `${prefix}\n${"SUBSCRIPTION_PRICING:"}${JSON.stringify(breakdown)}`;
+}
+
+export async function getSubscriptionPricingQuote(
+  organizationId: string,
+  payload: SubscriptionPricingInput
+): Promise<StudioPricingQuote> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    include: { subscription: true },
+  });
+  if (!org?.subscription) {
+    throw new AppHttpError(404, "Subscription not found", "SUBSCRIPTION_MISSING");
+  }
+  const isFirstSubscription = await isFirstSubscriptionForOrg(organizationId);
+  const limits = normalizedLimitsForSubscription(org.subscription);
+  const breakdown = calculateSubscriptionPricing({
+    planCode: org.subscription.planCode,
+    planName: org.subscription.planName,
+    limits,
+    isFirstSubscription,
+    payload,
+  });
+  return { breakdown };
+}
+
 export async function requestSubscriptionRenewal(
   organizationId: string,
   actorLabel: string,
-  opts?: { notes?: string; method?: string }
+  opts?: {
+    notes?: string;
+    method?: string;
+    termMonths?: number;
+    extraBranches?: number;
+    extraUsers?: number;
+    referralCode?: string | null;
+  }
 ): Promise<{ entitlement: EntitlementPayload; payment: SubscriptionPaymentRow }> {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -407,20 +534,36 @@ export async function requestSubscriptionRenewal(
     throw new AppHttpError(404, "Subscription not found", "SUBSCRIPTION_MISSING");
   }
 
+  const quote = await getSubscriptionPricingQuote(organizationId, {
+    termMonths: normalizeTermMonths(opts?.termMonths),
+    extraBranches: Math.max(0, Math.floor(opts?.extraBranches ?? 0)),
+    extraUsers: Math.max(0, Math.floor(opts?.extraUsers ?? 0)),
+    referralCode: opts?.referralCode ?? null,
+  });
+
   const payment = await prisma.subscriptionPayment.create({
     data: {
       organizationId,
       subscriptionId: org.subscription.id,
       status: "PENDING",
+      amount: quote.breakdown.finalAmount,
+      currency: quote.breakdown.currency,
       method: opts?.method ?? "MANUAL",
-      notes: opts?.notes ?? "Renewal requested from studio",
+      notes: pricingNotes(opts?.notes ?? "Renewal requested from studio", quote.breakdown),
       recordedBy: actorLabel,
     },
   });
 
-  const updated = await prisma.organizationSubscription.update({
+  await prisma.organizationSubscription.update({
     where: { organizationId },
-    data: { paymentStatus: "PENDING" },
+    data: {
+      paymentStatus: "PENDING",
+      termMonths: quote.breakdown.termMonths,
+    },
+  });
+
+  const updated = await prisma.organizationSubscription.findUniqueOrThrow({
+    where: { organizationId },
   });
 
   await prisma.platformAuditLog.create({
@@ -429,7 +572,12 @@ export async function requestSubscriptionRenewal(
       actor: actorLabel,
       action: "subscription.renew_request",
       before: { paymentStatus: org.subscription.paymentStatus },
-      after: { paymentStatus: "PENDING", paymentId: payment.id },
+      after: {
+        paymentStatus: "PENDING",
+        paymentId: payment.id,
+        termMonths: quote.breakdown.termMonths,
+        amount: quote.breakdown.finalAmount,
+      },
     },
   });
 
@@ -452,6 +600,14 @@ export async function listSubscriptionPayments(organizationId: string): Promise<
 export async function listSubscriptionBills(organizationId: string): Promise<SubscriptionBillRow[]> {
   const rows = await prisma.subscriptionBill.findMany({
     where: { organizationId },
+    include: {
+      payment: {
+        select: {
+          status: true,
+          txnReference: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
@@ -464,10 +620,49 @@ export async function getSubscriptionBill(
 ): Promise<SubscriptionBillRow & { organizationName: string } | null> {
   const bill = await prisma.subscriptionBill.findFirst({
     where: { id: billId, organizationId },
-    include: { organization: { select: { name: true } } },
+    include: {
+      organization: { select: { name: true } },
+      payment: {
+        select: {
+          status: true,
+          txnReference: true,
+        },
+      },
+    },
   });
   if (!bill) return null;
   return { ...mapBill(bill), organizationName: bill.organization.name };
+}
+
+export async function listSubscriptionRenewalHistory(
+  organizationId: string
+): Promise<SubscriptionRenewalHistoryRow[]> {
+  const bills = await prisma.subscriptionBill.findMany({
+    where: { organizationId },
+    include: {
+      payment: {
+        select: {
+          status: true,
+          txnReference: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+  return bills.map((bill) => ({
+    billId: bill.id,
+    billNumber: bill.billNumber,
+    previousExpiry: bill.periodStart.toISOString(),
+    newExpiry: bill.periodEnd.toISOString(),
+    termMonths: bill.termMonths,
+    termLabel: bill.termLabel,
+    amount: bill.totalAmount ?? bill.amount ?? 0,
+    gstAmount: bill.gstAmount ?? 0,
+    paymentStatus: bill.payment?.status ?? null,
+    txnReference: bill.payment?.txnReference ?? null,
+    renewalDate: bill.createdAt.toISOString(),
+  }));
 }
 
 function mapPayment(p: {
@@ -504,6 +699,18 @@ function mapBill(b: {
   termLabel: string;
   periodStart: Date;
   periodEnd: Date;
+  baseAmount: number | null;
+  extraBranchCost: number | null;
+  extraUserCost: number | null;
+  onboardingFee: number | null;
+  referralDiscount: number | null;
+  gstPercent: number | null;
+  gstAmount: number | null;
+  totalAmount: number | null;
+  payment?: {
+    status: SubscriptionPaymentStatus;
+    txnReference: string | null;
+  } | null;
   amount: number | null;
   currency: string;
   createdAt: Date;
@@ -516,7 +723,17 @@ function mapBill(b: {
     termLabel: b.termLabel,
     periodStart: b.periodStart.toISOString(),
     periodEnd: b.periodEnd.toISOString(),
+    baseAmount: b.baseAmount ?? 0,
+    extraBranchCost: b.extraBranchCost ?? 0,
+    extraUserCost: b.extraUserCost ?? 0,
+    onboardingFee: b.onboardingFee ?? 0,
+    referralDiscount: b.referralDiscount ?? 0,
+    gstPercent: b.gstPercent ?? 0,
+    gstAmount: b.gstAmount ?? 0,
+    paymentStatus: b.payment?.status ?? null,
+    txnReference: b.payment?.txnReference ?? null,
     amount: b.amount,
+    totalAmount: b.totalAmount ?? b.amount ?? 0,
     currency: b.currency,
     createdAt: b.createdAt.toISOString(),
   };
@@ -563,6 +780,7 @@ export async function verifySubscriptionPayment(
   }
 
   const sub = org.subscription;
+  const pricing = parsePricingFromNotes(payment.notes);
 
   if (input.outcome === "FAILED") {
     await prisma.$transaction([
@@ -598,7 +816,7 @@ export async function verifySubscriptionPayment(
     return toEntitlement(org, updated, usage.branchesUsed, usage.usersUsed);
   }
 
-  const termMonths = normalizeTermMonths(sub.termMonths);
+  const termMonths = normalizeTermMonths(pricing?.termMonths ?? sub.termMonths);
   const now = new Date();
   const currentEnd = resolveExpiresAt(sub);
   const periodStart = currentEnd && currentEnd.getTime() > now.getTime() ? currentEnd : now;
@@ -606,6 +824,19 @@ export async function verifySubscriptionPayment(
   const txnRef = input.txnReference?.trim() || payment.txnReference || `MANUAL-${Date.now()}`;
   const billNumber = await nextBillNumber(orgId);
   const termLabel = termLabelFromMonths(termMonths);
+  const currentLimits = normalizedLimitsForSubscription(sub);
+  const nextLimits: PlanLimits = {
+    ...currentLimits,
+    maxStaff:
+      pricing?.finalAllowedUsers === null
+        ? null
+        : pricing?.finalAllowedUsers ?? currentLimits.maxStaff,
+  };
+  const nextBranchOverride =
+    pricing?.finalAllowedBranches === null
+      ? null
+      : pricing?.finalAllowedBranches ?? sub.maxBranchesOverride;
+  const finalAmount = pricing?.finalAmount ?? input.amount ?? payment.amount ?? 0;
 
   await prisma.$transaction(async (tx) => {
     await tx.subscriptionPayment.update({
@@ -626,6 +857,8 @@ export async function verifySubscriptionPayment(
         paymentStatus: "PAID",
         lastPaymentTxnId: txnRef,
         status: "ACTIVE",
+        limits: asLimitsJson(nextLimits),
+        maxBranchesOverride: nextBranchOverride,
         startsAt: sub.startsAt ?? periodStart,
         expiresAt: periodEnd,
         currentPeriodEnd: periodEnd,
@@ -644,7 +877,15 @@ export async function verifySubscriptionPayment(
         termLabel,
         periodStart,
         periodEnd,
-        amount: input.amount ?? payment.amount,
+        baseAmount: pricing?.baseAmount ?? finalAmount,
+        extraBranchCost: pricing?.extraBranchCost ?? 0,
+        extraUserCost: pricing?.extraUserCost ?? 0,
+        onboardingFee: pricing?.onboardingFee ?? 0,
+        referralDiscount: pricing?.referralDiscount ?? 0,
+        gstPercent: pricing?.gstPercent ?? 0,
+        gstAmount: pricing?.gstAmount ?? 0,
+        totalAmount: finalAmount,
+        amount: finalAmount,
         currency: payment.currency,
       },
     });
@@ -663,6 +904,8 @@ export async function verifySubscriptionPayment(
           paymentStatus: "PAID",
           billNumber,
           txnReference: txnRef,
+          termMonths,
+          finalAmount,
         },
       },
     });
