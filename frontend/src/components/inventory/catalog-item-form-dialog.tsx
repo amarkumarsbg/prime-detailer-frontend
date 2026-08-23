@@ -361,7 +361,11 @@ export function CatalogItemFormDialog({
               : "Choose Piece, Set, Kg, etc., or Litre for fluids. For packs, set secondary unit + conversion (e.g. 1 Box = 12 PCS)."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <form
+          onSubmit={submit}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") e.preventDefault(); }}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 [-webkit-overflow-scrolling:touch]">
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
               <div className="space-y-2">
