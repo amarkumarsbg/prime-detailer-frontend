@@ -16,13 +16,40 @@ import {
 let _bootReconciling = false;
 export function setPickupDropBootReconciling(v: boolean) { _bootReconciling = v; }
 
+/** Call this from the console or a dev tool to re-enable writes after unblocking on the server. */
+export function clearPickupDropWriteBlock() {
+  _writesBlocked = false;
+  try { localStorage.removeItem(_WRITES_BLOCKED_KEY); } catch { /* non-critical */ }
+  usePickupDropStore.getState().setWritesBlocked(false);
+}
+
+const _WRITES_BLOCKED_KEY = "pnd_writes_blocked";
+
+/**
+ * Module-level flag: set synchronously on first 403 to block all subsequent
+ * calls immediately. Persisted to localStorage so hot-reloads don't re-fire.
+ */
+let _writesBlocked: boolean = (() => {
+  try {
+    return localStorage.getItem(_WRITES_BLOCKED_KEY) === "1";
+  } catch {
+    return false;
+  }
+})();
+
+function blockWrites() {
+  _writesBlocked = true;
+  try { localStorage.setItem(_WRITES_BLOCKED_KEY, "1"); } catch { /* non-critical */ }
+  usePickupDropStore.getState().setWritesBlocked(true);
+}
+
 function pushPickupSnapshot(requests: PickupDropRequest[]) {
   if (_bootReconciling) return;
-  if (process.env.NEXT_PUBLIC_BLOCK_PICKUP_DROP_WRITES === "true") return;
-  if (usePickupDropStore.getState().writesBlocked) return;
+  if (_writesBlocked) return;
+  if (process.env.NEXT_PUBLIC_BLOCK_PICKUP_DROP_WRITES === "true") { blockWrites(); return; }
   void postCollectionSnapshot("pickupDropRequests", requests).catch((err) => {
     if (err != null && typeof err === "object" && "status" in err && (err as { status: number }).status === 403) {
-      usePickupDropStore.getState().setWritesBlocked(true);
+      blockWrites();
       return;
     }
     if (process.env.NODE_ENV !== "production") console.error(err);
