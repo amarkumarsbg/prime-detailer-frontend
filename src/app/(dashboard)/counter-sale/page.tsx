@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { Minus, Pencil, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { PageSkeleton } from "@/components/shared/skeleton-loader";
@@ -105,6 +105,19 @@ export default function CounterSalePage() {
   const [paidAmount, setPaidAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [editingPriceKey, setEditingPriceKey] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState("");
+
+  const commitCustomPrice = (line: CounterSaleCartLine) => {
+    const n = Number.parseFloat(priceDraft.replace(/,/g, "").trim());
+    const part = parts.find((p) => p.id === line.partId);
+    const catalogPrice = part ? getUnitPrice(part, line.unit) : line.unitPrice;
+    const newPrice = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : catalogPrice;
+    setCart(cart.map((l) =>
+      l.partId === line.partId && l.unit === line.unit ? { ...l, unitPrice: newPrice } : l
+    ));
+    setEditingPriceKey(null);
+  };
 
   const lookupMatches = useMemo(
     () => computeCustomerLookupMatches(lookupQuery, customers, vehicles, 12),
@@ -666,6 +679,55 @@ export default function CounterSalePage() {
                           {formatCurrency(counterSaleLineTotal(line))}
                         </span>
                       </div>
+                      {/* Unit price with custom price editing */}
+                      {(() => {
+                        const key = `${line.partId}-${line.unit}`;
+                        const part = parts.find((p) => p.id === line.partId);
+                        const catalogPrice = part ? getUnitPrice(part, line.unit) : line.unitPrice;
+                        const isCustom = Math.abs(line.unitPrice - catalogPrice) > 0.005;
+                        if (editingPriceKey === key) {
+                          return (
+                            <div className="flex items-center gap-2 pt-0.5">
+                              <Label className="text-[11px] text-muted-foreground shrink-0">Unit price (₹)</Label>
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                className="h-7 w-24 text-xs tabular-nums"
+                                value={priceDraft}
+                                autoFocus
+                                onChange={(e) => setPriceDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") { e.preventDefault(); commitCustomPrice(line); }
+                                  if (e.key === "Escape") { e.preventDefault(); setEditingPriceKey(null); }
+                                }}
+                                onBlur={() => commitCustomPrice(line)}
+                              />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex items-center gap-1.5 pt-0.5">
+                            <span className="text-xs text-muted-foreground">
+                              Unit: <span className="text-foreground tabular-nums">{formatCurrency(line.unitPrice)}</span>
+                            </span>
+                            {isCustom && (
+                              <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1 rounded">custom</span>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-muted-foreground"
+                              onClick={() => {
+                                setPriceDraft(String(line.unitPrice));
+                                setEditingPriceKey(key);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })()}
                     </li>
                   ))}
                 </ul>

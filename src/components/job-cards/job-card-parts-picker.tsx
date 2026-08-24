@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Package, X, AlertTriangle, ChevronDown, ChevronUp, Minus, Plus } from "lucide-react";
+import { Search, Package, X, AlertTriangle, ChevronDown, ChevronUp, Minus, Pencil, Plus } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,10 +39,16 @@ export type SelectedPartLine = {
   partId: string;
   quantity: number;
   unit: string;
+  customUnitPrice?: number;
 };
 
 export function selectedLinesFromJobParts(parts: JobCardPartItem[]): SelectedPartLine[] {
-  return parts.map((p) => ({ partId: p.partId, quantity: p.quantity, unit: p.unit }));
+  return parts.map((p) => ({
+    partId: p.partId,
+    quantity: p.quantity,
+    unit: p.unit,
+    customUnitPrice: p.isCustomPrice ? p.unitPrice : undefined,
+  }));
 }
 
 export function buildJobCardPartItems(
@@ -54,7 +61,9 @@ export function buildJobCardPartItems(
     .map((line) => {
       const part = byId.get(line.partId);
       if (!part) return null;
-      const unitPrice = getUnitPrice(part, line.unit);
+      const catalogPrice = getUnitPrice(part, line.unit);
+      const unitPrice = line.customUnitPrice ?? catalogPrice;
+      const isCustomPrice = line.customUnitPrice != null && Math.abs(line.customUnitPrice - catalogPrice) > 0.005;
       const lineTotal = Math.round(line.quantity * unitPrice * 100) / 100;
       return {
         id: `jp-${jobCardId}-${part.id}`,
@@ -66,6 +75,9 @@ export function buildJobCardPartItems(
         unit: line.unit,
         unitPrice,
         lineTotal,
+        isCustomPrice,
+        catalogPrice: isCustomPrice ? catalogPrice : undefined,
+        priceSource: isCustomPrice ? ("CUSTOM" as const) : ("CATALOG" as const),
       };
     })
     .filter((x): x is JobCardPartItem => x != null);
@@ -99,6 +111,19 @@ export function JobCardPartsPicker({
   const [selectedExpanded, setSelectedExpanded] = useState(!collapseSelected);
   /** Lets users clear/retype qty without snapping back to 1 mid-edit. */
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
+  const [editingPricePartId, setEditingPricePartId] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState("");
+
+  const commitCustomPrice = (part: Part, line: SelectedPartLine) => {
+    const n = Number.parseFloat(priceDraft.replace(/,/g, "").trim());
+    const catalogPrice = getUnitPrice(part, line.unit);
+    const newPrice = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : catalogPrice;
+    const customUnitPrice = Math.abs(newPrice - catalogPrice) < 0.005 ? undefined : newPrice;
+    onSelectedLinesChange(
+      selectedLines.map((l) => l.partId === part.id ? { ...l, customUnitPrice } : l)
+    );
+    setEditingPricePartId(null);
+  };
 
   const categoryOptions = useMemo(
     () => ["ALL", ...mergePartCategoryNames(parts, savedPartCategories)],
@@ -242,7 +267,9 @@ export function JobCardPartsPicker({
     stock: ReturnType<typeof getStockStatus>;
     stockCheck: ReturnType<typeof validateStockConsumption>;
   }) => {
-    const unitPrice = getUnitPrice(part, line.unit);
+    const catalogPrice = getUnitPrice(part, line.unit);
+    const unitPrice = line.customUnitPrice ?? catalogPrice;
+    const isCustomPrice = line.customUnitPrice != null && Math.abs(line.customUnitPrice - catalogPrice) > 0.005;
     return (
       <div className="rounded-lg border border-border bg-card p-3 space-y-3">
         <div className="flex items-start gap-2">
@@ -342,12 +369,51 @@ export function JobCardPartsPicker({
             ) : null}
           </div>
           <div className="ml-auto text-right">
-            <p className="text-sm font-semibold tabular-nums text-emerald-600">
-              {formatCurrency(lineTotal)}
-            </p>
-            <p className="text-[10px] text-muted-foreground whitespace-nowrap">
-              @ {formatCurrency(unitPrice)}/{line.unit}
-            </p>
+            {editingPricePartId === part.id ? (
+              <div className="flex items-center gap-1.5 justify-end">
+                <Label className="text-[11px] text-muted-foreground shrink-0">₹/unit</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  className="h-7 w-20 text-xs tabular-nums text-right"
+                  value={priceDraft}
+                  autoFocus
+                  onChange={(e) => setPriceDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); commitCustomPrice(part, line); }
+                    if (e.key === "Escape") { e.preventDefault(); setEditingPricePartId(null); }
+                  }}
+                  onBlur={() => commitCustomPrice(part, line)}
+                />
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-semibold tabular-nums text-emerald-600">
+                  {formatCurrency(lineTotal)}
+                </p>
+                <div className="flex items-center justify-end gap-0.5">
+                  <p className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    @ {formatCurrency(unitPrice)}/{line.unit}
+                  </p>
+                  {isCustomPrice && (
+                    <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1 rounded ml-1">custom</span>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 text-muted-foreground -mr-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPriceDraft(String(unitPrice));
+                      setEditingPricePartId(part.id);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -395,7 +461,7 @@ export function JobCardPartsPicker({
                     const stock = getStockStatus(part);
                     const qtyValue = qtyDrafts[part.id] ?? String(line.quantity);
                     const qtyNumeric = effectiveQuantity(part.id, line.quantity);
-                    const unitPrice = getUnitPrice(part, line.unit);
+                    const unitPrice = line.customUnitPrice ?? getUnitPrice(part, line.unit);
                     const lineTotal = Math.round(qtyNumeric * unitPrice * 100) / 100;
                     const stockCheck = validateStockConsumption(part, qtyNumeric, line.unit);
                     const units = getSelectableUnits(part);
@@ -427,7 +493,7 @@ export function JobCardPartsPicker({
                 const stock = getStockStatus(part);
                 const qtyValue = qtyDrafts[part.id] ?? String(line.quantity);
                 const qtyNumeric = effectiveQuantity(part.id, line.quantity);
-                const unitPrice = getUnitPrice(part, line.unit);
+                const unitPrice = line.customUnitPrice ?? getUnitPrice(part, line.unit);
                 const lineTotal = Math.round(qtyNumeric * unitPrice * 100) / 100;
                 const stockCheck = validateStockConsumption(part, qtyNumeric, line.unit);
                 const units = getSelectableUnits(part);

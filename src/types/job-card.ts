@@ -63,6 +63,9 @@ export interface JobCardPartItem {
   unitPrice: number;
   /** Line total excl. GST */
   lineTotal: number;
+  isCustomPrice?: boolean;
+  catalogPrice?: number;
+  priceSource?: "CATALOG" | "CUSTOM";
 }
 
 export interface InspectionPhoto {
