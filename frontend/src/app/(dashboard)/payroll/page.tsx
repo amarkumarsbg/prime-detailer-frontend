@@ -65,6 +65,8 @@ import {
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const MONTHS = [
   { v: 1, label: "January" },
@@ -111,6 +113,7 @@ function statusBadge(status: PayrollRecordStatus) {
 }
 
 export default function PayrollPage() {
+  const storesReady = useDashboardStoresReady();
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
   const staff = useStaffStore((s) => s.staff);
@@ -379,6 +382,8 @@ export default function PayrollPage() {
   };
 
   const viewLabel = `Today (${formatDate(viewDate)})`;
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 md:space-y-6">

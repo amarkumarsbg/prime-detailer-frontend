@@ -71,10 +71,13 @@ import { isLowStockPart } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 type StockTableFilter = "all" | "low" | "out";
 
 export default function InventoryPage() {
+  const storesReady = useDashboardStoresReady();
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const user = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
@@ -456,6 +459,8 @@ export default function InventoryPage() {
     setAdjustDialogOpen(false);
     setAdjustAmount("");
   };
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">

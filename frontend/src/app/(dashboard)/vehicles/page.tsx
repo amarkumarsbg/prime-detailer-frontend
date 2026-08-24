@@ -62,6 +62,8 @@ import {
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const fuelTypes: FuelType[] = ["PETROL", "DIESEL", "CNG", "ELECTRIC", "HYBRID"];
 
@@ -106,6 +108,7 @@ function getColorHex(colorName: string): string {
 }
 
 export default function VehiclesPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const customers = useCustomerStore((s) => s.customers);
   const vehicleList = useVehicleStore((s) => s.vehicles);
@@ -286,6 +289,8 @@ export default function VehiclesPage() {
       setExporting(false);
     }
   };
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">

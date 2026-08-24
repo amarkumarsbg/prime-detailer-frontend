@@ -64,6 +64,8 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 function reminderWasSent(r: ServiceReminder): boolean {
   return Boolean(r.lastMessageSentAt || r.whatsappSent);
@@ -247,6 +249,7 @@ function RowActions({
 type KindTab = "service" | "payment";
 
 export default function RemindersPage() {
+  const storesReady = useDashboardStoresReady();
   useAutoReminderWhatsApp();
   useEffect(() => {
     void ensureDomainResources(["serviceReminders", "jobCards", "invoices"]);
@@ -563,6 +566,8 @@ export default function RemindersPage() {
       </p>
     </div>
   );
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">

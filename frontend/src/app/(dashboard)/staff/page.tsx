@@ -65,10 +65,13 @@ import {
   Users,
   UserX,
   MailCheck,
+  Loader2,
 } from "lucide-react";
 import type { User, UserRole, Customer } from "@/types";
 import { toast } from "sonner";
 import { pushActivityLog } from "@/lib/activity-log-helper";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const ROLE_BADGE_MAP: Record<
   UserRole,
@@ -146,6 +149,7 @@ const ALL_ROLES_FILTER: (UserRole | "ALL")[] = [
 ];
 
 export default function StaffPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const authRole = useAuthStore((s) => s.user?.role);
   const authUser = useAuthStore((s) => s.user);
@@ -156,6 +160,7 @@ export default function StaffPage() {
     authRole === "BRANCH_MANAGER" || authRole === "MANAGER";
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
   const staff = useStaffStore((s) => s.staff);
   const addStaff = useStaffStore((s) => s.addStaff);
   const customers = useCustomerStore((s) => s.customers);
@@ -582,6 +587,7 @@ export default function StaffPage() {
     }
 
     const branchId = branchLocked && authUser?.branchId ? authUser.branchId : newBranchId;
+    setCreatingUser(true);
     try {
       const { temporaryPassword, credentialsEmailSent } = await addStaff({
         name,
@@ -637,8 +643,12 @@ export default function StaffPage() {
         return;
       }
       toast.error(e instanceof Error ? e.message : "Could not create user. Check API server and try again.");
+    } finally {
+      setCreatingUser(false);
     }
   };
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -920,11 +930,12 @@ export default function StaffPage() {
                         </div>
                       </div>
                       <div className="flex justify-end gap-2 pt-2">
-                        <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                        <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={creatingUser}>
                           Cancel
                         </Button>
-                        <Button type="submit">
-                          Create User
+                        <Button type="submit" disabled={creatingUser}>
+                          {creatingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {creatingUser ? "Creating..." : "Create User"}
                         </Button>
                       </div>
                     </form>

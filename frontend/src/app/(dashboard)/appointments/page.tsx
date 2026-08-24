@@ -110,6 +110,8 @@ import {
   computeCustomerLookupMatches,
   queryLooksLikeVehicleReg,
 } from "@/lib/customer-vehicle-lookup";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -149,6 +151,7 @@ function AppointmentFromQueryEffect({ setDialogOpen }: { setDialogOpen: (open: b
 }
 
 export default function AppointmentsPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const authUser = useAuthStore((s) => s.user);
   const currentBranch = useAuthStore((s) => s.currentBranch);
@@ -691,6 +694,9 @@ export default function AppointmentsPage() {
   const cancelledCount = appointments.filter(
     (a) => a.status === "CANCELLED" || a.status === "NOT_ATTENDED"
   ).length;
+
+  if (!storesReady) return <PageSkeleton />;
+
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <Suspense fallback={null}>

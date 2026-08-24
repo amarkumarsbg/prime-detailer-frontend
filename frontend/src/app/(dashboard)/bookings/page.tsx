@@ -63,6 +63,8 @@ import {
   Wrench,
   User,
 } from "lucide-react";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 function compactRegForSearch(s: string): string {
   return normalizeRegistrationNumber(s).replace(/-/g, "").toLowerCase();
@@ -122,6 +124,7 @@ const STATUS_OPTIONS: { value: JobCardStatus | "ALL"; label: string }[] = [
 ];
 
 export default function BookingsPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const { jobCards } = useJobCardStore();
   const invoices = useInvoiceStore((s) => s.invoices);
@@ -409,6 +412,8 @@ export default function BookingsPage() {
     ],
     [branchNameById]
   );
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="w-full min-w-0 space-y-4 sm:space-y-6">

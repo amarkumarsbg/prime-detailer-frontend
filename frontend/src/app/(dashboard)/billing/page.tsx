@@ -39,6 +39,8 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { invoiceOutstanding } from "@/lib/party/ledger-math";
 import { invoiceSourceColumnLabel } from "@/lib/invoice-source";
 import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const STATUS_TABS: { value: "all" | InvoiceStatus; label: string; shortLabel?: string }[] = [
   { value: "all", label: "All" },
@@ -167,6 +169,7 @@ function InvoiceRowActions({
 }
 
 export default function BillingPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
@@ -504,6 +507,8 @@ export default function BillingPage() {
       setDeletingInvoice(false);
     }
   };
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">

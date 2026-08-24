@@ -130,6 +130,8 @@ import {
   QuotationStatusFilters,
   quotationCanConvertToJob,
 } from "@/components/quotations/quotation-status-filters";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const SEGMENT_OPTIONS: { value: VehicleSegment; label: string }[] = [
   { value: "HATCHBACK", label: "Hatchback" },
@@ -166,6 +168,7 @@ function QuotationFromQueryEffect({ setNewDialogOpen }: { setNewDialogOpen: (ope
 }
 
 export default function QuotationsPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
@@ -1135,6 +1138,8 @@ export default function QuotationsPage() {
     });
     return c;
   }, [quotationList]);
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">

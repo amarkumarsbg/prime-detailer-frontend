@@ -57,6 +57,8 @@ import {
 import { cn, formatDate, formatCurrency, getInitials } from "@/lib/utils";
 import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
@@ -77,6 +79,7 @@ function normalizeVehicleToken(s: string): string {
 }
 
 export default function CustomersPage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const { customers, addCustomer: addCustomerToStore, fetchCustomers, findByReferralCode } = useCustomerStore();
   const vehicles = useVehicleStore((s) => s.vehicles);
@@ -86,6 +89,7 @@ export default function CustomersPage() {
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [addingCustomer, setAddingCustomer] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -256,6 +260,7 @@ export default function CustomersPage() {
       toast.error(referred.error);
       return;
     }
+    setAddingCustomer(true);
     try {
       const created = await addCustomerToStore({
         name: data.name,
@@ -282,6 +287,8 @@ export default function CustomersPage() {
       toast.error("Could not add customer", {
         description: "Check that the API server is running (npm run dev in /backend).",
       });
+    } finally {
+      setAddingCustomer(false);
     }
   };
 
@@ -315,6 +322,8 @@ export default function CustomersPage() {
       setExporting(false);
     }
   };
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -670,10 +679,13 @@ export default function CustomersPage() {
               />
             </div>
             <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)} disabled={addingCustomer}>
                 Cancel
               </Button>
-              <Button type="submit">Add Customer</Button>
+              <Button type="submit" disabled={addingCustomer}>
+                {addingCustomer && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {addingCustomer ? "Adding..." : "Add Customer"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

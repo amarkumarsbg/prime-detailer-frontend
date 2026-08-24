@@ -38,6 +38,7 @@ import { creditReferralWalletsForInvoice } from "@/lib/referral-wallet-credits";
 import { resolveReferralProgramRewards } from "@/lib/referral-program-rewards";
 import { maxWalletRedeemForPayment, MAX_WALLET_REDEEM_INR } from "@/lib/wallet-redeem";
 import type { PaymentMethod } from "@/types";
+import { Loader2 } from "lucide-react";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "CASH", label: "Cash" },
@@ -506,7 +507,12 @@ export function RecordPaymentDialog({
               (showReceivedIn && !receivedInAccountId)
             }
           >
-            {saving ? "Recording…" : "Record Payment"}
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Recording…
+              </>
+            ) : "Record Payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

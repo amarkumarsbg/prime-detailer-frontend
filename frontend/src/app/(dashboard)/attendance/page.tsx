@@ -46,6 +46,8 @@ import {
   type AttendanceSummaryStaff,
 } from "@/lib/attendance-reports";
 import { toast } from "sonner";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
+import { PageSkeleton } from "@/components/shared/skeleton-loader";
 
 const MONTH_OPTIONS = [
   { v: 1, label: "January" },
@@ -76,6 +78,7 @@ function formatDateOptionLabel(isoDate: string): string {
 }
 
 export default function AttendancePage() {
+  const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
@@ -294,6 +297,8 @@ export default function AttendancePage() {
       </div>
     );
   }
+
+  if (!storesReady) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
