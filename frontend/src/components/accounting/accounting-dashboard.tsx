@@ -543,7 +543,7 @@ export function AccountingDashboard() {
 
         <TabsContent value="overview" className="mt-0 space-y-3 md:space-y-5">
           {/* KPI row */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <MetricCard
               title="Total Income"
               value={totalIncome}
