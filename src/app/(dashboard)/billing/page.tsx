@@ -183,6 +183,12 @@ export default function BillingPage() {
   } | null>(null);
   const [deletingInvoice, setDeletingInvoice] = useState(false);
   const invoices = useInvoiceStore((s) => s.invoices);
+  const total = useInvoiceStore((s) => s.total);
+  const totalPages = useInvoiceStore((s) => s.totalPages);
+  const currentPage = useInvoiceStore((s) => s.page);
+  const isLoading = useInvoiceStore((s) => s.invoicesLoading);
+  const isInitialLoaded = useInvoiceStore((s) => s.isInitialLoaded);
+  const fetchPaginatedInvoices = useInvoiceStore((s) => s.fetchPaginatedInvoices);
   const deleteInvoice = useInvoiceStore((s) => s.deleteInvoice);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const businessName = useSettingsStore((s) => s.businessName);
@@ -204,6 +210,35 @@ export default function BillingPage() {
     if (activeFilter !== DASHBOARD_FILTER.PENDING_PAYMENT) return branchScopedInvoices;
     return branchScopedInvoices.filter(isPendingPaymentInvoice);
   }, [branchScopedInvoices, activeFilter]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const isFirstMount = useRef(true);
+
+  useEffect(() => {
+    const filters: Record<string, unknown> = {};
+    if (selectedBranchId) filters.branchId = selectedBranchId;
+    if (activeTab !== "all") filters.status = activeTab;
+    if (activeFilter !== DASHBOARD_FILTER.NONE) filters.dashboardFilter = activeFilter;
+
+    const isDefaultFilters = !selectedBranchId && activeTab === "all" && activeFilter === DASHBOARD_FILTER.NONE;
+
+    if (isFirstMount.current && isInitialLoaded && !searchQuery && isDefaultFilters) {
+      isFirstMount.current = false;
+      return;
+    }
+    isFirstMount.current = false;
+
+    fetchPaginatedInvoices({ page: 1, pageSize: 50, search: searchQuery, filters });
+  }, [searchQuery, activeTab, activeFilter, selectedBranchId, fetchPaginatedInvoices, isInitialLoaded]);
+
+  const handlePageChange = (newPage: number) => {
+    const filters: Record<string, unknown> = {};
+    if (selectedBranchId) filters.branchId = selectedBranchId;
+    if (activeTab !== "all") filters.status = activeTab;
+    if (activeFilter !== DASHBOARD_FILTER.NONE) filters.dashboardFilter = activeFilter;
+
+    fetchPaginatedInvoices({ page: newPage, pageSize: 50, search: searchQuery, filters });
+  };
 
   const tabCounts = useMemo(() => {
     const c: Record<string, number> = { all: invoicesForView.length };
@@ -508,7 +543,7 @@ export default function BillingPage() {
     }
   };
 
-  if (!storesReady && invoices.length === 0) return <PageSkeleton />;
+  if (!storesReady && !isInitialLoaded && invoicesForView.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -713,7 +748,15 @@ export default function BillingPage() {
                         "jobNumber",
                         "servicesSummary",
                       ]}
-                      pageSize={10}
+                      serverPagination={{
+                        page: currentPage,
+                        pageSize: 50,
+                        total,
+                        totalPages,
+                        onPageChange: handlePageChange,
+                        isLoading,
+                      }}
+                      onSearchChange={setSearchQuery}
                       onRowClick={handleRowClick}
                       renderMobileCard={(item) => {
                         const paymentLabel = item.paymentMethod

@@ -118,12 +118,12 @@ async function getCollectionItems<T>(collection: string): Promise<T[]> {
 async function getDocumentItems<T>(collection: string): Promise<T[]> {
   const path =
     collection === "jobCards"
-      ? "/api/job-cards"
+      ? "/api/job-cards?page=1&pageSize=50"
       : collection === "invoices"
-        ? "/api/invoices"
+        ? "/api/invoices?page=1&pageSize=50"
         : collection === "quotations"
-          ? "/api/quotations"
-          : `/api/collections/${collection}`;
+          ? "/api/quotations?page=1&pageSize=50"
+          : `/api/collections/${collection}?page=1&pageSize=50`;
   const data = await apiGet<{ items: T[] }>(path);
   return Array.isArray(data.items) ? data.items : [];
 }
@@ -162,17 +162,11 @@ function directoryToUser(row: {
 async function loadOne(resource: DomainResource): Promise<void> {
   switch (resource) {
     case "customers": {
-      const data = await apiGet<{ customers: Customer[] }>("/api/customers");
-      useCustomerStore.setState({
-        customers: data.customers ?? [],
-        customersLoading: false,
-        customersError: null,
-      });
+      await useCustomerStore.getState().fetchPaginatedCustomers({ page: 1, pageSize: 50 });
       return;
     }
     case "vehicles": {
-      const data = await apiGet<{ vehicles: Vehicle[] }>("/api/vehicles");
-      useVehicleStore.setState({ vehicles: data.vehicles ?? [] });
+      await useVehicleStore.getState().fetchPaginatedVehicles({ page: 1, pageSize: 50 });
       return;
     }
     case "staff": {
@@ -202,37 +196,14 @@ async function loadOne(resource: DomainResource): Promise<void> {
       return;
     }
     case "jobCards": {
-      const items = await getDocumentItems<JobCard>("jobCards");
-      const localById = new Map(
-        useJobCardStore.getState().jobCards.map((j) => [j.id, j] as const)
-      );
-      // Prefer merging inspection photos so a stale list response cannot wipe
-      // check-in photos that were just saved locally / mid-flight.
-      const remoteIds = new Set(items.map((r) => r.id));
-      const merged = items.map((remote) => {
-        const local = localById.get(remote.id);
-        if (!local?.inspectionPhotos?.length) return remote;
-        const remotePhotos = remote.inspectionPhotos ?? [];
-        if (remotePhotos.length === 0) {
-          return { ...remote, inspectionPhotos: local.inspectionPhotos };
-        }
-        return {
-          ...remote,
-          inspectionPhotos: mergeInspectionPhotosById(remotePhotos, local.inspectionPhotos),
-        };
-      });
-      // Preserve local-only entries (e.g. a job card created while a stale GET
-      // was in-flight; without this the card — and its check-in photos — would
-      // vanish from the store the moment the stale response is applied).
-      const localOnly = useJobCardStore
-        .getState()
-        .jobCards.filter((j) => !remoteIds.has(j.id));
-      useJobCardStore.setState({ jobCards: [...merged, ...localOnly] });
-      void useAppointmentStore.getState().reconcileStaleAppointments(merged);
+      await useJobCardStore.getState().fetchPaginatedJobCards({ page: 1, pageSize: 50 });
+      // Reconcile appointments with the loaded page
+      const current = useJobCardStore.getState().jobCards;
+      void useAppointmentStore.getState().reconcileStaleAppointments(current);
       return;
     }
     case "invoices": {
-      useInvoiceStore.setState({ invoices: await getDocumentItems<Invoice>("invoices") });
+      await useInvoiceStore.getState().fetchPaginatedInvoices({ page: 1, pageSize: 50 });
       return;
     }
     case "quotations": {

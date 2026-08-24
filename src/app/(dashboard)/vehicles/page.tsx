@@ -59,7 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
@@ -112,6 +112,13 @@ export default function VehiclesPage() {
   const router = useRouter();
   const customers = useCustomerStore((s) => s.customers);
   const vehicleList = useVehicleStore((s) => s.vehicles);
+  const total = useVehicleStore((s) => s.total);
+  const totalPages = useVehicleStore((s) => s.totalPages);
+  const currentPage = useVehicleStore((s) => s.page);
+  const isLoading = useVehicleStore((s) => s.vehiclesLoading);
+  const isInitialLoaded = useVehicleStore((s) => s.isInitialLoaded);
+  const fetchPaginatedVehicles = useVehicleStore((s) => s.fetchPaginatedVehicles);
+
   const setVehicles = useVehicleStore((s) => s.setVehicles);
   const updateVehicle = useVehicleStore((s) => s.updateVehicle);
   const deleteVehicle = useVehicleStore((s) => s.deleteVehicle);
@@ -127,23 +134,32 @@ export default function VehiclesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredVehicles = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return vehicleList;
-    return vehicleList.filter((v) => {
-      return (
-        v.registrationNumber.toLowerCase().includes(q) ||
-        v.make.toLowerCase().includes(q) ||
-        v.model.toLowerCase().includes(q) ||
-        (v.variant ?? "").toLowerCase().includes(q) ||
-        (v.customerName ?? "").toLowerCase().includes(q) ||
-        (v.color ?? "").toLowerCase().includes(q) ||
-        (v.vinNumber ?? "").toLowerCase().includes(q)
-      );
-    });
-  }, [vehicleList, searchQuery]);
+  const hasMore = currentPage < totalPages;
+  const isFirstMount = useRef(true);
 
-  const tableData = vehicleList as (Vehicle & Record<string, unknown>)[];
+  useEffect(() => {
+    if (isFirstMount.current && isInitialLoaded && !searchQuery) {
+      isFirstMount.current = false;
+      return;
+    }
+    isFirstMount.current = false;
+
+    fetchPaginatedVehicles({ page: 1, pageSize: 50, search: searchQuery });
+  }, [searchQuery, fetchPaginatedVehicles, isInitialLoaded]);
+
+  const filteredVehicles = vehicleList;
+  
+  const loadMore = () => {
+    if (!isLoading && hasMore) {
+      fetchPaginatedVehicles({ page: currentPage + 1, pageSize: 50, search: searchQuery }, true);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    fetchPaginatedVehicles({ page: newPage, pageSize: 50, search: searchQuery });
+  };
+
+  const tableData = filteredVehicles as (Vehicle & Record<string, unknown>)[];
   const columns = [
     {
       key: "registrationNumber",
@@ -290,7 +306,7 @@ export default function VehiclesPage() {
     }
   };
 
-  if (!storesReady && vehicleList.length === 0) return <PageSkeleton />;
+  if (!storesReady && !isInitialLoaded && vehicleList.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -436,11 +452,12 @@ export default function VehiclesPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredVehicles.map((v) => {
-              const hex = getColorHex(v.color);
-              const segmentLabel = v.segment?.replace(/_/g, " ") ?? "—";
-              return (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredVehicles.map((v) => {
+                const hex = getColorHex(v.color);
+                const segmentLabel = v.segment?.replace(/_/g, " ") ?? "—";
+                return (
                 <div
                   key={v.id}
                   className="group flex flex-col rounded-2xl border border-border/70 bg-card overflow-hidden shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer"
@@ -525,6 +542,15 @@ export default function VehiclesPage() {
                 </div>
               );
             })}
+            </div>
+            {hasMore && (
+              <div className="flex justify-center mt-4">
+                <Button variant="outline" onClick={loadMore} disabled={isLoading}>
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Load More
+                </Button>
+              </div>
+            )}
           </div>
         )
       ) : (
@@ -533,7 +559,16 @@ export default function VehiclesPage() {
           columns={columns}
           searchPlaceholder="Search by registration, VIN, make, model, customer..."
           searchKeys={["registrationNumber", "vinNumber", "make", "model", "customerName"]}
-          pageSize={10}
+          serverPagination={{
+            page: currentPage,
+            pageSize: 50,
+            total,
+            totalPages,
+            onPageChange: handlePageChange,
+            isLoading,
+          }}
+          hideSearch
+
           onRowClick={(item) => router.push(`/vehicles/${(item as Vehicle).id}`)}
           renderMobileCard={(item) => {
             const v = item as Vehicle;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
@@ -65,6 +66,30 @@ import { jobNumberSortKey, sortJobCardsByNumberThenCreated } from "@/lib/sort-by
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
 import { Plus, LayoutGrid, List, ChevronDown, MoreVertical, Eye, Pencil, Trash2, Download, Clock, FileText, Wrench, Calendar, User, Car, CreditCard, Copy, Image as ImageIcon } from "lucide-react";
+import { VirtuosoGrid } from "react-virtuoso";
+
+const GridList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ style, children, ...props }, ref) => (
+    <div
+      ref={ref}
+      {...props}
+      style={style}
+      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+    >
+      {children}
+    </div>
+  )
+);
+GridList.displayName = "GridList";
+
+const GridItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ children, ...props }, ref) => (
+    <div ref={ref} {...props} className="flex flex-col h-full">
+      {children}
+    </div>
+  )
+);
+GridItem.displayName = "GridItem";
 
 const TAB_STATUSES: (JobCardStatus | "ALL")[] = [
   "ALL",
@@ -142,7 +167,15 @@ const STATUS_BADGE_STYLES: Record<JobCardStatus, string> = {
 export default function JobCardsPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
-  const { jobCards, updateJobCard, deleteJobCard } = useJobCardStore();
+  const jobCards = useJobCardStore((s) => s.jobCards);
+  const total = useJobCardStore((s) => s.total);
+  const totalPages = useJobCardStore((s) => s.totalPages);
+  const currentPage = useJobCardStore((s) => s.page);
+  const isLoading = useJobCardStore((s) => s.jobCardsLoading);
+  const isInitialLoaded = useJobCardStore((s) => s.isInitialLoaded);
+  const fetchPaginatedJobCards = useJobCardStore((s) => s.fetchPaginatedJobCards);
+  const updateJobCard = useJobCardStore((s) => s.updateJobCard);
+  const deleteJobCard = useJobCardStore((s) => s.deleteJobCard);
   const invoices = useInvoiceStore((s) => s.invoices);
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId } = useBranchScope();
@@ -288,6 +321,52 @@ export default function JobCardsPage() {
   const mechanics = useMemo(() => {
     return staff.filter((m) => m.role === "MECHANIC" || !m.role);
   }, [staff]);
+
+  const hasMore = currentPage < totalPages;
+  const isFirstMount = useRef(true);
+
+  useEffect(() => {
+    const filters: Record<string, any> = {};
+    if (selectedBranchId) filters.branchId = selectedBranchId;
+    if (statusFilter !== "ALL") filters.status = statusFilter;
+    if (dateFilter) filters.date = dateFilter;
+    if (mechanicFilter !== "ALL") filters.mechanicId = mechanicFilter;
+    if (activeFilter) filters.dashboardFilter = activeFilter;
+    
+    const isDefaultFilters = !selectedBranchId && statusFilter === "ALL" && !dateFilter && mechanicFilter === "ALL" && !activeFilter;
+
+    if (isFirstMount.current && isInitialLoaded && !searchQuery && isDefaultFilters) {
+      isFirstMount.current = false;
+      return;
+    }
+    isFirstMount.current = false;
+
+    fetchPaginatedJobCards({ page: 1, pageSize: 50, search: searchQuery, filters });
+  }, [searchQuery, statusFilter, dateFilter, mechanicFilter, activeFilter, selectedBranchId, fetchPaginatedJobCards, isInitialLoaded]);
+
+  const loadMore = () => {
+    if (!isLoading && hasMore) {
+      const filters: Record<string, any> = {};
+      if (selectedBranchId) filters.branchId = selectedBranchId;
+      if (statusFilter !== "ALL") filters.status = statusFilter;
+      if (dateFilter) filters.date = dateFilter;
+      if (mechanicFilter !== "ALL") filters.mechanicId = mechanicFilter;
+      if (activeFilter) filters.dashboardFilter = activeFilter;
+      
+      fetchPaginatedJobCards({ page: currentPage + 1, pageSize: 50, search: searchQuery, filters }, true);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const filters: Record<string, any> = {};
+    if (selectedBranchId) filters.branchId = selectedBranchId;
+    if (statusFilter !== "ALL") filters.status = statusFilter;
+    if (dateFilter) filters.date = dateFilter;
+    if (mechanicFilter !== "ALL") filters.mechanicId = mechanicFilter;
+    if (activeFilter) filters.dashboardFilter = activeFilter;
+    
+    fetchPaginatedJobCards({ page: newPage, pageSize: 50, search: searchQuery, filters });
+  };
 
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
@@ -653,7 +732,14 @@ export default function JobCardsPage() {
                   defaultSortDir="desc"
                   searchPlaceholder="Search jobs, customers, vehicles..."
                   searchMatch={searchMatchJobCard}
-                  pageSize={10}
+                  serverPagination={{
+                    page: currentPage,
+                    pageSize: 50,
+                    total,
+                    totalPages,
+                    onPageChange: handlePageChange,
+                    isLoading,
+                  }}
                   mobileCardClassName="p-2.5"
                   onRowClick={(item) => router.push(`/job-cards/${item.id}`)}
                   renderMobileCard={(jc) => (
@@ -953,30 +1039,37 @@ export default function JobCardsPage() {
                               <Download className="w-3.5 h-3.5 text-muted-foreground" />
                               Download Invoice
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const hasInvoice = invoices.some((inv) => inv.jobCardId === jc.id);
-                                setDeleteConfirmHasInvoice(hasInvoice);
-                                setDeleteConfirmJobCard(jc);
-                              }}
-                              className="gap-2 text-xs text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                              Delete
-                            </DropdownMenuItem>
+                            {jc.status !== "CANCELLED" && (
+                              <DropdownMenuItem
+                                className="text-destructive focus:bg-destructive/10 focus:text-destructive gap-2 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmJobCard(jc);
+                                  setDeleteConfirmHasInvoice(invoices.some((inv) => inv.jobCardId === jc.id));
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete Job Card
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     </div>
 
-                    {/* Badges Row */}
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
-                        <Car className="w-3 h-3 shrink-0" />
-                        {jc.vehicleSegment}
-                      </span>
-
+                    {/* Meta tags (Invoice, Photos, Payment status) */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {invoices.some((inv) => inv.jobCardId === jc.id) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/50 dark:bg-emerald-950/40 dark:text-emerald-400">
+                          <FileText className="w-3 h-3 shrink-0" />
+                          Invoiced
+                        </span>
+                      )}
+                      {(((jc as any).beforePhotos?.length || 0) > 0 || ((jc as any).afterPhotos?.length || 0) > 0 || (jc.inspectionPhotos?.length || 0) > 0) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/50 dark:bg-blue-950/40 dark:text-blue-400">
+                          <ImageIcon className="w-3 h-3 shrink-0" />
+                          Photos
+                        </span>
+                      )}
                       {(() => {
                         const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
                         const paid = invoice
@@ -985,18 +1078,17 @@ export default function JobCardsPage() {
                         const due = invoice
                           ? invoice.grandTotal - paid
                           : jc.estimatedAmount - paid;
-
-                        let badgeColor = "bg-red-50 text-red-700 border-red-200/50 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/30";
-                        let statusLabel = "UNPAID";
-                        if (paid > 0) {
-                          if (due <= 0.01) {
-                            badgeColor = "bg-green-50 text-green-700 border-green-200/50 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/30";
-                            statusLabel = "PAID";
-                          } else {
-                            badgeColor = "bg-blue-50 text-blue-700 border-blue-200/50 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/30";
-                            statusLabel = "PARTIALLY PAID";
-                          }
+                        
+                        let statusLabel = "Unpaid";
+                        let badgeColor = "bg-rose-50 text-rose-700 border-rose-200/50 dark:bg-rose-950/40 dark:text-rose-400";
+                        if (paid > 0 && due > 0) {
+                          statusLabel = "Partially Paid";
+                          badgeColor = "bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-950/40 dark:text-amber-400";
+                        } else if (paid > 0 && due <= 0) {
+                          statusLabel = "Paid";
+                          badgeColor = "bg-green-50 text-green-700 border-green-200/50 dark:bg-green-950/40 dark:text-green-400";
                         }
+                        
                         return (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${badgeColor}`}>
                             <CreditCard className="w-3 h-3 shrink-0" />
@@ -1018,18 +1110,6 @@ export default function JobCardsPage() {
                         <p className="text-[11px] font-mono text-muted-foreground mt-0.5 leading-none">{jc.customerPhone}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleSendWhatsApp(jc);
-                      }}
-                      className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-[#25D366] rounded-xl border border-border/60 bg-muted/20 transition-colors shrink-0"
-                      title="Chat on WhatsApp"
-                    >
-                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008 0c3.202.001 6.212 1.248 8.477 3.517 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.588 1.485 5.412 1.486 5.49.003 9.953-4.461 9.957-9.954.002-2.66-1.033-5.161-2.91-7.04C17.229 1.767 14.73 1.733 12.01 1.73c-5.49.005-9.956 4.467-9.96 9.961-.002 1.9.497 3.754 1.445 5.378L2.43 21.72l4.217-1.106zM17.487 14.4c-.299-.149-1.778-.878-2.057-.98-.279-.1-.484-.149-.688.15-.204.3-.79.98-.969 1.18-.18.2-.359.224-.658.075-.3-.15-1.265-.467-2.41-1.485-.89-.795-1.49-1.777-1.665-2.076-.175-.3-.019-.462.13-.611.135-.133.3-.349.45-.523.15-.174.2-.3.3-.499.1-.2.05-.374-.025-.524-.075-.15-.688-1.66-.942-2.272-.247-.597-.5-.515-.688-.525-.179-.01-.383-.01-.588-.01-.204 0-.538.077-.82.385-.282.309-1.078 1.053-1.078 2.569 0 1.515 1.102 2.982 1.256 3.187.154.205 2.167 3.31 5.25 4.643.734.316 1.307.505 1.753.647.737.234 1.407.2 1.938.12.59-.09 1.778-.727 2.028-1.43.25-.702.25-1.3.176-1.43-.075-.13-.279-.23-.579-.38z" />
-                      </svg>
-                    </button>
                   </div>
 
                   {/* Mechanic & Expected Delivery Row */}
@@ -1050,50 +1130,52 @@ export default function JobCardsPage() {
                     </div>
                   </div>
 
-                  {/* Total Cost & Compact Created On Section */}
-                  <div className="px-4 py-3 border-t border-border/40 space-y-1.5 bg-background">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground font-semibold">
-                        Created {formatDateTime(jc.createdAt || jc.expectedDelivery)}
-                      </span>
-                      <span className="text-base font-black text-foreground tabular-nums">
-                        {formatCurrency(jc.estimatedAmount)}
-                      </span>
+                  <div className="mt-auto">
+                    {/* Total Cost & Compact Created On Section */}
+                    <div className="px-4 py-3 border-t border-border/40 space-y-1.5 bg-background">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-semibold">
+                          Created {formatDateTime(jc.createdAt || jc.expectedDelivery)}
+                        </span>
+                        <span className="text-base font-black text-foreground tabular-nums">
+                          {formatCurrency(jc.estimatedAmount)}
+                        </span>
+                      </div>
+                      {(() => {
+                        const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+                        const paid = invoice
+                          ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
+                          : (jc.paidAmount ?? 0);
+                        const due = invoice
+                          ? invoice.grandTotal - paid
+                          : jc.estimatedAmount - paid;
+                        
+                        if (paid <= 0) return null;
+                        return (
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pt-0.5">
+                            <span>Paid: <span className="text-foreground font-semibold">{formatCurrency(paid)}</span></span>
+                            <span>Due: <span className="text-foreground font-semibold">{formatCurrency(Math.max(0, due))}</span></span>
+                          </div>
+                        );
+                      })()}
                     </div>
-                    {(() => {
-                      const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
-                      const paid = invoice
-                        ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
-                        : (jc.paidAmount ?? 0);
-                      const due = invoice
-                        ? invoice.grandTotal - paid
-                        : jc.estimatedAmount - paid;
-                      
-                      if (paid <= 0) return null;
-                      return (
-                        <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pt-0.5">
-                          <span>Paid: <span className="text-foreground font-semibold">{formatCurrency(paid)}</span></span>
-                          <span>Due: <span className="text-foreground font-semibold">{formatCurrency(Math.max(0, due))}</span></span>
-                        </div>
-                      );
-                    })()}
-                  </div>
 
-                  {/* Bottom Actions Grid */}
-                  <div className="px-4 py-3 bg-muted/10 border-t border-border/40 flex text-xs font-semibold">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 h-9 text-[#0b5cda] border-[#0b5cda]/30 hover:border-[#0b5cda] hover:bg-blue-50/20 font-bold"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/job-cards/${jc.id}`);
-                      }}
-                    >
-                      <Eye className="w-3.5 h-3.5 text-[#0b5cda]" />
-                      View Details
-                    </Button>
+                    {/* Bottom Actions Grid */}
+                    <div className="px-4 py-3 bg-muted/10 border-t border-border/40 flex text-xs font-semibold">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-1.5 h-9 text-[#0b5cda] border-[#0b5cda]/30 hover:border-[#0b5cda] hover:bg-blue-50/20 font-bold"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/job-cards/${jc.id}`);
+                        }}
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#0b5cda]" />
+                        View Details
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -7,6 +7,16 @@ import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "
 import { compareFieldValues } from "@/lib/sort-by-date";
 import { cn } from "@/lib/utils";
 
+export interface ServerPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
+  isLoading?: boolean;
+}
+
 interface Column<T> {
   key: string;
   label: string;
@@ -44,6 +54,8 @@ interface DataTableProps<T> {
   emptyContent?: React.ReactNode;
   /** Extra classes on mobile card wrappers (e.g. tighter padding). */
   mobileCardClassName?: string;
+  serverPagination?: ServerPagination;
+  onSearchChange?: (search: string) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,21 +77,44 @@ export function DataTable<T extends Record<string, any>>({
   defaultSortDir = "desc",
   emptyContent,
   mobileCardClassName,
+  serverPagination,
+  onSearchChange,
 }: DataTableProps<T>) {
-  const mobileCardHiddenClass = mobileCardBelow === "lg" ? "lg:hidden" : "md:hidden";
-  const tableHiddenClass =
-    mobileCardBelow === "lg" ? "hidden lg:block overflow-x-auto" : "hidden md:block overflow-x-auto";
-
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
+  const [internalPage, setInternalPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(
     defaultSortKey ? defaultSortDir : "asc"
   );
 
+  const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
   useEffect(() => {
-    queueMicrotask(() => setPage(0));
-  }, [data]);
+    setMounted(true);
+    const mq = window.matchMedia(mobileCardBelow === "lg" ? "(max-width: 1023px)" : "(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [mobileCardBelow]);
+
+  useEffect(() => {
+    if (!serverPagination) {
+      queueMicrotask(() => setInternalPage(0));
+    }
+  }, [data, serverPagination]);
+
+  const isServer = !!serverPagination;
+  const currentPage = isServer ? serverPagination!.page - 1 : internalPage;
+
+  const handlePageChange = (newPage: number) => {
+    if (isServer) {
+      serverPagination!.onPageChange(newPage + 1);
+    } else {
+      setInternalPage(newPage);
+    }
+  };
 
   const filtered = useMemo(() => {
     if (!search) return data;
@@ -110,7 +145,7 @@ export function DataTable<T extends Record<string, any>>({
     const idx = sorted.findIndex(
       (item) => String((item as T & { id?: string }).id) === focusItemId
     );
-    if (idx >= 0) queueMicrotask(() => setPage(Math.floor(idx / pageSize)));
+    if (idx >= 0) queueMicrotask(() => handlePageChange(Math.floor(idx / pageSize)));
   }, [focusItemId, sorted, pageSize]);
 
   useEffect(() => {
@@ -125,10 +160,14 @@ export function DataTable<T extends Record<string, any>>({
       document.getElementById(domId)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
     return () => window.clearTimeout(t);
-  }, [focusItemId, page, sorted, getRowDomId]);
+  }, [focusItemId, currentPage, sorted, getRowDomId]);
 
-  const totalPages = Math.ceil(sorted.length / pageSize);
-  const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = isServer ? serverPagination!.totalPages : Math.ceil(sorted.length / pageSize);
+  const paged = isServer ? data : sorted.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const currentTotal = isServer ? serverPagination!.total : sorted.length;
+
+  const showMobile = !mounted || isMobile;
+  const showDesktop = !mounted || !isMobile || !renderMobileCard;
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -148,7 +187,12 @@ export function DataTable<T extends Record<string, any>>({
             <Input
               placeholder={searchPlaceholder}
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              onChange={(e) => { 
+                const val = e.target.value;
+                setSearch(val); 
+                onSearchChange?.(val);
+                handlePageChange(0); 
+              }}
               className="pl-9 text-sm placeholder:text-muted-foreground"
             />
           </div>
@@ -158,15 +202,15 @@ export function DataTable<T extends Record<string, any>>({
       {hideSearch && actions ? <div className="flex justify-end">{actions}</div> : null}
 
       <div className="rounded-xl border border-border overflow-hidden">
-        {renderMobileCard && (
-          <div className={`${mobileCardHiddenClass} p-3 space-y-3 bg-card`}>
+        {renderMobileCard && showMobile && (
+          <div className={`p-3 space-y-3 bg-card`}>
             {paged.length === 0 ? (
               emptyContent ?? (
                 <p className="text-center py-12 text-sm text-muted-foreground">No results found</p>
               )
             ) : (
               paged.map((item, i) => {
-                const rowKey = String((item as T & { id?: string }).id ?? `${page}-${i}`);
+                const rowKey = String((item as T & { id?: string }).id ?? `${currentPage}-${i}`);
                 const domId = getRowDomId?.(item);
                 return (
                   <div
@@ -196,7 +240,8 @@ export function DataTable<T extends Record<string, any>>({
             )}
           </div>
         )}
-        <div className={renderMobileCard ? tableHiddenClass : "overflow-x-auto"}>
+        {showDesktop && (
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -260,27 +305,28 @@ export function DataTable<T extends Record<string, any>>({
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {totalPages > 1 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground text-center sm:text-left">
-            Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, sorted.length)} of {sorted.length}
+            Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, currentTotal)} of {currentTotal}
           </p>
           <div className="flex items-center justify-center gap-1">
-            <Button variant="outline" size="icon" onClick={() => setPage(0)} disabled={page === 0}>
+            <Button variant="outline" size="icon" onClick={() => handlePageChange(0)} disabled={currentPage === 0}>
               <ChevronsLeft className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={() => setPage(page - 1)} disabled={page === 0}>
+            <Button variant="outline" size="icon" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 0}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <span className="text-sm px-3 font-medium">
-              {page + 1} / {totalPages}
+              {currentPage + 1} / {totalPages}
             </span>
-            <Button variant="outline" size="icon" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}>
+            <Button variant="outline" size="icon" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>
+            <Button variant="outline" size="icon" onClick={() => handlePageChange(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
               <ChevronsRight className="w-4 h-4" />
             </Button>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,6 +60,31 @@ import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
+import { VirtuosoGrid } from "react-virtuoso";
+
+const GridList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ style, children, ...props }, ref) => (
+    <div
+      ref={ref}
+      {...props}
+      style={style}
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+    >
+      {children}
+    </div>
+  )
+);
+GridList.displayName = "GridList";
+
+const GridItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ children, ...props }, ref) => (
+    <div ref={ref} {...props} className="flex flex-col min-h-[160px]">
+      {children}
+    </div>
+  )
+);
+GridItem.displayName = "GridItem";
+
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
@@ -81,7 +107,18 @@ function normalizeVehicleToken(s: string): string {
 export default function CustomersPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
-  const { customers, addCustomer: addCustomerToStore, fetchCustomers, findByReferralCode } = useCustomerStore();
+  
+  const filteredData = useCustomerStore((s) => s.customers);
+  const total = useCustomerStore((s) => s.total);
+  const totalPages = useCustomerStore((s) => s.totalPages);
+  const currentPage = useCustomerStore((s) => s.page);
+  const isLoading = useCustomerStore((s) => s.customersLoading);
+  const isInitialLoaded = useCustomerStore((s) => s.isInitialLoaded);
+  const fetchPaginatedCustomers = useCustomerStore((s) => s.fetchPaginatedCustomers);
+  const addCustomerToStore = useCustomerStore((s) => s.addCustomer);
+  const findByReferralCode = useCustomerStore((s) => s.findByReferralCode);
+  const fetchCustomers = useCustomerStore((s) => s.fetchCustomers);
+
   const vehicles = useVehicleStore((s) => s.vehicles);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const { selectedBranchId } = useBranchScope();
@@ -102,51 +139,43 @@ export default function CustomersPage() {
     return new Set(scoped.map((jc) => jc.customerId));
   }, [jobCards, selectedBranchId]);
 
-  const tableData = useMemo(() => {
-    const source =
-      activeFilter === DASHBOARD_FILTER.INACTIVE
-        // Mirror the dashboard definition exactly: has job history + inactive by date
-        ? customers.filter((c) => jobCustomerIds.has(c.id) && isInactiveCustomer(c))
-        : customers;
-    return source.map((c) => {
-      const customerVehicles = vehicles.filter((v) => v.customerId === c.id);
-      const vehiclesCount = customerVehicles.length;
-      const vehicleRegNormalizedList = customerVehicles.map((v) =>
-        normalizeVehicleToken(v.registrationNumber)
-      );
-      return {
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        email: c.email,
-        avatar: c.avatar ?? null,
-        vehiclesCount,
-        totalVisits: c.totalVisits,
-        rewardPoints: c.rewardPoints,
-        walletBalance: c.walletBalance,
-        lastVisitDate: c.lastVisitDate,
-        isInactive: Boolean(c.isInactive) || isInactiveCustomer(c),
-        memberSince: c.createdAt,
-        /** Hidden field for search (comma-separated normalized regs). */
-        _vehicleRegSearch: vehicleRegNormalizedList.join(","),
-      };
-    }) as Record<string, unknown>[];
-  }, [customers, vehicles, activeFilter]);
+  const hasMore = currentPage < totalPages;
 
-  const filteredData = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return tableData;
-    return tableData.filter((item) => {
-      const name = String(item.name ?? "").toLowerCase();
-      const phone = String(item.phone ?? "").toLowerCase();
-      const email = String(item.email ?? "").toLowerCase();
-      if (name.includes(q) || phone.includes(q) || email.includes(q)) return true;
-      const qReg = normalizeVehicleToken(q);
-      if (qReg.length < 2) return false;
-      const blob = String(item._vehicleRegSearch ?? "");
-      return blob.split(",").some((reg) => reg.includes(qReg));
-    });
-  }, [tableData, searchQuery]);
+  const filters = useMemo(() => {
+    const params: Record<string, unknown> = {};
+    if (activeFilter === DASHBOARD_FILTER.INACTIVE) params.isInactive = true;
+    if (selectedBranchId && jobCustomerIds.size > 0) {
+      // NOTE: For true server-side pagination by branch, we should ideally send branchId.
+      // But passing an array of matching customerIds might be too large. 
+      // Assuming the API supports branchId parameter:
+      params.branchId = selectedBranchId;
+    }
+    return params;
+  }, [activeFilter, selectedBranchId, jobCustomerIds]);
+
+  const isFirstMount = React.useRef(true);
+
+  React.useEffect(() => {
+    const isDefaultFilters = Object.keys(filters).length === 0;
+
+    if (isFirstMount.current && isInitialLoaded && !searchQuery && isDefaultFilters) {
+      isFirstMount.current = false;
+      return;
+    }
+    isFirstMount.current = false;
+
+    fetchPaginatedCustomers({ page: 1, pageSize: 50, search: searchQuery, filters });
+  }, [searchQuery, filters, fetchPaginatedCustomers, isInitialLoaded]);
+
+  const loadMore = () => {
+    if (!isLoading && hasMore) {
+      fetchPaginatedCustomers({ page: currentPage + 1, pageSize: 50, search: searchQuery, filters }, true);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    fetchPaginatedCustomers({ page: newPage, pageSize: 50, search: searchQuery, filters });
+  };
 
   /** Hide noemail placeholder addresses from display. */
   function displayEmail(email: string): string | null {
@@ -323,7 +352,7 @@ export default function CustomersPage() {
     }
   };
 
-  if (!storesReady && customers.length === 0) return <PageSkeleton />;
+  if (!storesReady && !isInitialLoaded && filteredData.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -478,15 +507,23 @@ export default function CustomersPage() {
           )}
         </div>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredData.map((item) => {
+        <VirtuosoGrid
+          useWindowScroll
+          data={filteredData}
+          endReached={loadMore}
+          components={{
+            List: GridList,
+            Item: GridItem,
+          }}
+          itemContent={(index, itemRaw) => {
+            const item = itemRaw as any;
             const avatarSrc = item.avatar as string | null | undefined;
             const email = displayEmail(String(item.email ?? ""));
             return (
               <Link
                 key={String(item.id)}
                 href={`/customers/${String(item.id)}`}
-                className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200"
+                className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200 h-full"
               >
                 {/* Header: avatar + name + contact */}
                 <div className="p-4 flex items-start gap-3">
@@ -523,58 +560,68 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 bg-muted/20">
-                  <div className="flex flex-col items-center py-2.5 gap-0.5">
-                    <div className="flex items-center gap-1">
-                      <Car className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm font-bold tabular-nums">{String(item.vehiclesCount)}</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">Vehicles</span>
-                  </div>
-                  <div className="flex flex-col items-center py-2.5 gap-0.5">
-                    <span className="text-sm font-bold tabular-nums">{String(item.totalVisits)}</span>
-                    <span className="text-[10px] text-muted-foreground">Visits</span>
-                  </div>
-                  <div className="flex flex-col items-center py-2.5 gap-0.5">
-                    <div className="flex items-center gap-1">
-                      <Star className="h-3 w-3 text-amber-500" />
-                      <span className="text-sm font-bold tabular-nums">{String(item.rewardPoints)}</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">Points</span>
-                  </div>
-                </div>
-
-                {/* Footer: wallet + last visit + arrow */}
-                <div className="px-4 py-2.5 border-t border-border/60 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex items-center gap-1 text-xs">
-                      <Wallet className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="font-semibold tabular-nums">
-                        {formatCurrency((item.walletBalance as number) ?? 0)}
-                      </span>
-                    </div>
-                    {item.lastVisitDate ? (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
-                        <CalendarDays className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{formatDate(String(item.lastVisitDate))}</span>
+                <div className="mt-auto">
+                  {/* Stats row */}
+                  <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 bg-muted/20">
+                    <div className="flex flex-col items-center py-2.5 gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <Car className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm font-bold tabular-nums">{String(item.vehiclesCount)}</span>
                       </div>
-                    ) : null}
+                      <span className="text-[10px] text-muted-foreground">Vehicles</span>
+                    </div>
+                    <div className="flex flex-col items-center py-2.5 gap-0.5">
+                      <span className="text-sm font-bold tabular-nums">{String(item.totalVisits)}</span>
+                      <span className="text-[10px] text-muted-foreground">Visits</span>
+                    </div>
+                    <div className="flex flex-col items-center py-2.5 gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <Star className="h-3 w-3 text-amber-500" />
+                        <span className="text-sm font-bold tabular-nums">{String(item.rewardPoints)}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">Points</span>
+                    </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+
+                  {/* Footer: wallet + last visit + arrow */}
+                  <div className="px-4 py-2.5 border-t border-border/60 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-1 text-xs">
+                        <Wallet className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="font-semibold tabular-nums">
+                          {formatCurrency((item.walletBalance as number) ?? 0)}
+                        </span>
+                      </div>
+                      {item.lastVisitDate ? (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+                          <CalendarDays className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{formatDate(String(item.lastVisitDate))}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                  </div>
                 </div>
               </Link>
             );
-          })}
-        </div>
+          }}
+        />
       ) : (
         /* ── List view — original DataTable ── */
-        <DataTable
+        <DataTable<any>
           data={filteredData}
           columns={columns}
           defaultSortKey="memberSince"
           defaultSortDir="desc"
           hideSearch
+          serverPagination={{
+            page: currentPage,
+            pageSize: 50,
+            total,
+            totalPages,
+            onPageChange: handlePageChange,
+            isLoading,
+          }}
           onRowClick={(item) => router.push(`/customers/${String(item.id)}`)}
           renderMobileCard={(item) => (
             <>

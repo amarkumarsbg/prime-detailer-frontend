@@ -28,7 +28,7 @@ function routeResources(pathname: string): DomainResource[] {
 export async function revalidateRouteDomainData(pathname: string): Promise<void> {
   const resources = routeResources(pathname);
   lastRouteRevalidateAt = Date.now();
-  invalidateDomainResources(resources);
+  // We no longer invalidate here so that hasFetched flags are respected on sidebar navigation
   await ensureDomainResources(["appSettings", ...resources]);
 }
 

@@ -105,6 +105,7 @@ export default function AttendancePage() {
 
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
+  const [activeTab, setActiveTab] = useState("overview");
   const now = new Date();
   const [monthlyMonth, setMonthlyMonth] = useState(now.getMonth() + 1);
   const [monthlyYear, setMonthlyYear] = useState(now.getFullYear());
@@ -125,23 +126,23 @@ export default function AttendancePage() {
   }, [staff, selectedBranchId]);
 
   const recordsForDate = useMemo(() => {
+    if (activeTab !== "records") return [];
     const list = attendanceRecords.filter((r) => {
       if (r.date !== selectedDate) return false;
       if (!selectedBranchId) return true;
       return r.branchId === selectedBranchId;
     });
     return [...list].sort((a, b) => a.staffName.localeCompare(b.staffName));
-  }, [attendanceRecords, selectedDate, selectedBranchId]);
+  }, [attendanceRecords, selectedDate, selectedBranchId, activeTab]);
 
-  const todayRecords = useMemo(
-    () =>
-      attendanceRecords.filter((r) => {
-        if (r.date !== today) return false;
-        if (!selectedBranchId) return true;
-        return r.branchId === selectedBranchId;
-      }),
-    [attendanceRecords, today, selectedBranchId]
-  );
+  const todayRecords = useMemo(() => {
+    if (activeTab !== "overview") return [];
+    return attendanceRecords.filter((r) => {
+      if (r.date !== today) return false;
+      if (!selectedBranchId) return true;
+      return r.branchId === selectedBranchId;
+    });
+  }, [attendanceRecords, today, selectedBranchId, activeTab]);
 
   const kpis = useMemo(() => {
     /** Headcount: one row per staff. Short shifts are HALF_DAY, not PRESENT — still “showed up”. */
@@ -176,7 +177,7 @@ export default function AttendancePage() {
         : "0";
 
     return { present, late, absent, avgHours };
-  }, [todayRecords, staffForBranch]);
+  }, [todayRecords, staffForBranch, activeTab]);
 
   const absenceAlerts = useMemo(() => {
     const cutoff = "09:30";
@@ -188,7 +189,7 @@ export default function AttendancePage() {
       if (record.checkIn > cutoff) return true;
       return false;
     });
-  }, [todayRecords, staffForBranch]);
+  }, [todayRecords, staffForBranch, activeTab]);
 
   const summaryPeriodLabel = useMemo(() => {
     const [y, m, d] = selectedDate.split("-").map(Number);
@@ -199,6 +200,7 @@ export default function AttendancePage() {
   }, [selectedDate]);
 
   const staffSummary = useMemo(() => {
+    if (activeTab !== "summary") return [];
     const [y, m, d] = selectedDate.split("-").map(Number);
     const end = new Date(y, m - 1, d);
     const start = new Date(y, m - 1, d);
@@ -238,7 +240,7 @@ export default function AttendancePage() {
         avgHours,
       };
     });
-  }, [selectedDate, attendanceRecords, selectedBranchId, staffForBranch]);
+  }, [selectedDate, attendanceRecords, selectedBranchId, staffForBranch, activeTab]);
 
   const approvedLeave = useMemo(
     () => leaveRequests.filter((r) => r.status === "APPROVED"),
@@ -255,6 +257,7 @@ export default function AttendancePage() {
   }, [staff]);
 
   const monthlySummary = useMemo(() => {
+    if (activeTab !== "monthly") return [];
     const { fromDate, toDate } = monthDateRange(monthlyYear, monthlyMonth);
     return buildStaffAttendanceSummary({
       attendance: attendanceRecords,
@@ -271,6 +274,7 @@ export default function AttendancePage() {
     monthlyYear,
     monthlyMonth,
     selectedBranchId,
+    activeTab,
   ]);
 
   const downloadMonthlyCsv = () => {
@@ -313,8 +317,8 @@ export default function AttendancePage() {
         </Badge>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full max-w-xl grid-cols-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto sm:h-9 w-max">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="records">Records</TabsTrigger>
           <TabsTrigger value="summary">Summary</TabsTrigger>

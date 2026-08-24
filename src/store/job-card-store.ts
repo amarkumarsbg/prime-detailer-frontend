@@ -2,8 +2,9 @@
 
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { JobCard } from "@/types";
+import type { JobCard, PaginationParams } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
+import { apiGet, ApiError } from "@/lib/api-client";
 import { refreshJobCardFromServer } from "@/lib/job-card-inspection-photo-upload";
 import { syncPickupFromJobCard } from "@/lib/sync-pickup-from-job-card";
 import { jobCardUpdateAllowed } from "@/lib/job-card-edit-policy";
@@ -14,6 +15,15 @@ import { useInvoiceStore } from "@/store/invoice-store";
 
 interface JobCardStore {
   jobCards: JobCard[];
+  jobCardsLoading: boolean;
+  jobCardsError: string | null;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  isInitialLoaded: boolean;
+
+  fetchPaginatedJobCards: (params: PaginationParams, append?: boolean) => Promise<void>;
   addJobCard: (jobCard: JobCard) => Promise<void>;
   updateJobCard: (id: string, updates: Partial<JobCard>) => Promise<boolean>;
   deleteJobCard: (id: string) => Promise<void>;
@@ -22,6 +32,52 @@ interface JobCardStore {
 
 export const useJobCardStore = create<JobCardStore>((set, get) => ({
   jobCards: [],
+  jobCardsLoading: false,
+  jobCardsError: null,
+  total: 0,
+  page: 1,
+  pageSize: 50,
+  totalPages: 1,
+  isInitialLoaded: false,
+
+  fetchPaginatedJobCards: async (params, append = false) => {
+    set({ jobCardsLoading: true, jobCardsError: null });
+    try {
+      const query = new URLSearchParams();
+      query.append("page", params.page.toString());
+      query.append("pageSize", params.pageSize.toString());
+      if (params.search) query.append("search", params.search);
+      if (params.sortBy) query.append("sortBy", params.sortBy);
+      if (params.sortDir) query.append("sortDir", params.sortDir);
+      if (params.filters) {
+        Object.entries(params.filters).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== "") {
+            query.append(k, String(v));
+          }
+        });
+      }
+
+      const data = await apiGet<{ 
+        items: JobCard[]; 
+        metadata?: { total: number; page: number; pageSize: number; totalPages: number } 
+      }>(`/api/collections/jobCards?${query.toString()}`);
+      
+      const newItems = data.items;
+      
+      set((state) => ({ 
+        jobCards: append ? [...state.jobCards, ...newItems] : newItems, 
+        jobCardsLoading: false,
+        isInitialLoaded: true,
+        total: data.metadata?.total ?? (append ? state.total + newItems.length : newItems.length),
+        page: data.metadata?.page ?? params.page,
+        pageSize: data.metadata?.pageSize ?? params.pageSize,
+        totalPages: data.metadata?.totalPages ?? 1,
+      }));
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Failed to load job cards";
+      set({ jobCardsError: message, jobCardsLoading: false });
+    }
+  },
 
   addJobCard: async (jobCard) => {
     await putCollectionDocument("jobCards", jobCard.id, jobCard);

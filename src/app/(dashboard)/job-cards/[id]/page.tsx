@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -2609,8 +2610,7 @@ export default function JobCardDetailPage() {
                     className="rounded-xl border border-border overflow-hidden bg-card transition-all hover:shadow-lg"
                   >
                     <div className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
+                      <Image src={photo.url} alt={photo.label || "Inspection photo"} width={800} height={600} className="w-full aspect-4/3 object-cover" />
                     </div>
                     <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                       <button
@@ -2698,8 +2698,7 @@ export default function JobCardDetailPage() {
               )}
 
               <div className="max-w-3xl max-h-[80vh] mx-16" onClick={(e) => e.stopPropagation()}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={viewingPhotoData.url} alt={viewingPhotoData.label} className="w-full h-full object-contain rounded-lg" />
+                <Image src={viewingPhotoData.url} alt={viewingPhotoData.label || "Full screen photo"} width={1920} height={1080} className="w-full h-full object-contain rounded-lg" />
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-white text-sm font-medium">{viewingPhotoData.label}</p>
                   <div className="flex items-center gap-2">
@@ -2958,8 +2957,7 @@ export default function JobCardDetailPage() {
                   .filter((p) => p.type === "BEFORE")
                   .map((photo) => (
                     <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
+                      <Image src={photo.url} alt={photo.label || "Before photo"} width={800} height={600} className="w-full aspect-4/3 object-cover" />
                       <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
                         <span className="truncate font-medium">{photo.label}</span>
                         {canDeleteInspectionPhotos && (
@@ -3088,8 +3086,7 @@ export default function JobCardDetailPage() {
                   .filter((p) => p.type === "AFTER")
                   .map((photo) => (
                     <div key={photo.id} className="rounded-lg border overflow-hidden bg-muted/30">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.label} className="w-full aspect-4/3 object-cover" />
+                      <Image src={photo.url} alt={photo.label || "After photo"} width={800} height={600} className="w-full aspect-4/3 object-cover" />
                       <div className="flex items-center justify-between px-2 py-1.5 border-t text-xs">
                         <span className="truncate font-medium">{photo.label}</span>
                         {canDeleteInspectionPhotos && (
@@ -3542,8 +3539,7 @@ function CompareView({ photos }: { photos: { id: string; url: string; type: "BEF
           <div className="rounded-xl border border-border overflow-hidden bg-muted/30">
             {beforePhotos[i] ? (
               <div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={beforePhotos[i].url} alt={beforePhotos[i].label} className="w-full aspect-4/3 object-cover" />
+                <Image src={beforePhotos[i].url} alt={beforePhotos[i].label || "Before photo"} width={800} height={600} className="w-full aspect-4/3 object-cover" />
                 <p className="text-xs font-medium text-center py-2 border-t border-border">{beforePhotos[i].label}</p>
               </div>
             ) : (
@@ -3555,8 +3551,7 @@ function CompareView({ photos }: { photos: { id: string; url: string; type: "BEF
           <div className="rounded-xl border border-border overflow-hidden bg-muted/30">
             {afterPhotos[i] ? (
               <div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={afterPhotos[i].url} alt={afterPhotos[i].label} className="w-full aspect-4/3 object-cover" />
+                <Image src={afterPhotos[i].url} alt={afterPhotos[i].label || "After photo"} width={800} height={600} className="w-full aspect-4/3 object-cover" />
                 <p className="text-xs font-medium text-center py-2 border-t border-border">{afterPhotos[i].label}</p>
               </div>
             ) : (

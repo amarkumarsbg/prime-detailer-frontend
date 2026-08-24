@@ -1,12 +1,22 @@
 "use client";
 
 import { create } from "zustand";
-import type { Invoice, InvoiceStatus, Payment } from "@/types";
+import type { Invoice, InvoiceStatus, Payment, PaginationParams } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
+import { apiGet, ApiError } from "@/lib/api-client";
 import { useReminderStore } from "@/store/reminder-store";
 
 interface InvoiceStore {
   invoices: Invoice[];
+  invoicesLoading: boolean;
+  invoicesError: string | null;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  isInitialLoaded: boolean;
+
+  fetchPaginatedInvoices: (params: PaginationParams, append?: boolean) => Promise<void>;
   addInvoice: (invoice: Invoice) => Promise<void>;
   getNextInvoiceNumber: () => string;
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
@@ -38,6 +48,52 @@ function queuePaymentReminderSync(invoice: Invoice) {
 
 export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
   invoices: [],
+  invoicesLoading: false,
+  invoicesError: null,
+  total: 0,
+  page: 1,
+  pageSize: 50,
+  totalPages: 1,
+  isInitialLoaded: false,
+
+  fetchPaginatedInvoices: async (params, append = false) => {
+    set({ invoicesLoading: true, invoicesError: null });
+    try {
+      const query = new URLSearchParams();
+      query.append("page", params.page.toString());
+      query.append("pageSize", params.pageSize.toString());
+      if (params.search) query.append("search", params.search);
+      if (params.sortBy) query.append("sortBy", params.sortBy);
+      if (params.sortDir) query.append("sortDir", params.sortDir);
+      if (params.filters) {
+        Object.entries(params.filters).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== "") {
+            query.append(k, String(v));
+          }
+        });
+      }
+
+      const data = await apiGet<{ 
+        items: Invoice[]; 
+        metadata?: { total: number; page: number; pageSize: number; totalPages: number } 
+      }>(`/api/collections/invoices?${query.toString()}`);
+      
+      const newItems = data.items;
+      
+      set((state) => ({ 
+        invoices: append ? [...state.invoices, ...newItems] : newItems, 
+        invoicesLoading: false,
+        isInitialLoaded: true,
+        total: data.metadata?.total ?? (append ? state.total + newItems.length : newItems.length),
+        page: data.metadata?.page ?? params.page,
+        pageSize: data.metadata?.pageSize ?? params.pageSize,
+        totalPages: data.metadata?.totalPages ?? 1,
+      }));
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Failed to load invoices";
+      set({ invoicesError: message, invoicesLoading: false });
+    }
+  },
 
   addInvoice: async (invoice) => {
     await putCollectionDocument("invoices", invoice.id, invoice);

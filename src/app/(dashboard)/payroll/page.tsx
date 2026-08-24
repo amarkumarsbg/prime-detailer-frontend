@@ -137,6 +137,7 @@ export default function PayrollPage() {
   const today = new Date();
   const todayLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const [viewDate, setViewDate] = useState(() => todayLocal);
+  const [activeTab, setActiveTab] = useState("records");
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [filterMonth, setFilterMonth] = useState(today.getMonth() + 1);
   const [filterYear, setFilterYear] = useState(today.getFullYear());
@@ -210,6 +211,7 @@ export default function PayrollPage() {
     selectedBranchId ?? (branchFilter === "all" ? null : branchFilter);
 
   const filteredRecords = useMemo(() => {
+    if (activeTab !== "records") return [];
     return branchScopedRecords.filter((r) => {
       if (r.periodMonth !== filterMonth || r.periodYear !== filterYear) return false;
       if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
@@ -217,7 +219,7 @@ export default function PayrollPage() {
         return false;
       return true;
     });
-  }, [branchScopedRecords, filterMonth, filterYear, statusFilter, search]);
+  }, [branchScopedRecords, filterMonth, filterYear, statusFilter, search, activeTab]);
 
   const kpis = useMemo(() => {
     const gross = filteredRecords.reduce((s, r) => s + r.grossEarnings, 0);
@@ -291,17 +293,27 @@ export default function PayrollPage() {
     setStructDialogOpen(false);
   };
 
-  const branchScopedAdvances = useMemo(
-    () =>
-      applyBranchFilters(
-        salaryAdvances,
-        (a) => a.branchId,
-        selectedBranchId,
-        showBranchPicker,
-        branchFilter
-      ),
-    [salaryAdvances, selectedBranchId, showBranchPicker, branchFilter]
-  );
+  const branchScopedStructures = useMemo(() => {
+    if (activeTab !== "structures") return [];
+    return applyBranchFilters(
+      salaryStructures,
+      (s) => s.branchId,
+      selectedBranchId,
+      showBranchPicker,
+      branchFilter
+    );
+  }, [salaryStructures, selectedBranchId, showBranchPicker, branchFilter, activeTab]);
+
+  const branchScopedAdvances = useMemo(() => {
+    if (activeTab !== "advances") return [];
+    return applyBranchFilters(
+      salaryAdvances,
+      (a) => a.branchId,
+      selectedBranchId,
+      showBranchPicker,
+      branchFilter
+    );
+  }, [salaryAdvances, selectedBranchId, showBranchPicker, branchFilter, activeTab]);
 
   const eligibleAdvanceStaff = useMemo(() => {
     return staff
@@ -310,6 +322,7 @@ export default function PayrollPage() {
   }, [staff, branchFilterId]);
 
   const filteredAdvanceStaff = useMemo(() => {
+    if (activeTab !== "advances") return [];
     const query = employeeSearch.trim().toLowerCase();
     if (!query) return eligibleAdvanceStaff;
     const digits = query.replace(/\D/g, "");
@@ -319,7 +332,7 @@ export default function PayrollPage() {
       const phoneMatch = digits ? s.phone.replace(/\D/g, "").includes(digits) : false;
       return nameMatch || roleMatch || phoneMatch;
     });
-  }, [eligibleAdvanceStaff, employeeSearch]);
+  }, [eligibleAdvanceStaff, employeeSearch, activeTab]);
 
   const selectedAdvanceEmployee = useMemo(() => {
     return eligibleAdvanceStaff.find((s) => s.id === advanceEmployeeId) ?? null;
@@ -468,8 +481,8 @@ export default function PayrollPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="records" className="space-y-4">
-        <TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto sm:h-9">
           <TabsTrigger value="records">Payroll Records</TabsTrigger>
           <TabsTrigger value="structures">Salary Structures</TabsTrigger>
           <TabsTrigger value="advances">Salary Advances</TabsTrigger>
