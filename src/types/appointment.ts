@@ -45,6 +45,10 @@ export interface Appointment {
   /** Alternate WhatsApp; defaults to customerPhone */
   whatsappPhone?: string;
   customerAddress?: string;
+  /** True when the customer's vehicle needs to be picked up before the appointment. */
+  vehiclePickupRequired?: boolean;
+  /** Tracks pickup progress: PENDING = not yet picked up, AT_WORKSHOP = vehicle arrived. */
+  vehiclePickupStatus?: "PENDING" | "AT_WORKSHOP";
   /** e.g. list − discount = net (−additional disc) *One Time Only* */
   bookingPricingLine?: string;
   /** GST-exclusive subtotal for PRICE DETAILS */

@@ -62,6 +62,8 @@ import {
   Calendar,
   Wrench,
   User,
+  Truck,
+  MapPin,
 } from "lucide-react";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
@@ -133,6 +135,7 @@ export default function BookingsPage() {
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker } = useBranchScope();
   const appointments = useAppointmentStore((s) => s.appointments);
+  const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const customers = useCustomerStore((s) => s.customers);
@@ -146,6 +149,7 @@ export default function BookingsPage() {
   const [creatingFromAppointmentId, setCreatingFromAppointmentId] = useState<string | null>(
     null
   );
+  const [markingPickupId, setMarkingPickupId] = useState<string | null>(null);
   const [editingReservation, setEditingReservation] = useState<Appointment | null>(null);
   const [editReservationOpen, setEditReservationOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<JobCardStatus | "ALL">("ALL");
@@ -249,6 +253,34 @@ export default function BookingsPage() {
       );
   }, [bookingReservations]);
 
+  const markVehicleAtWorkshop = async (apt: Appointment) => {
+    setMarkingPickupId(apt.id);
+    try {
+      await updateAppointment(apt.id, { vehiclePickupStatus: "AT_WORKSHOP" });
+      toast.success("Vehicle marked as at workshop", {
+        description: `${getAppointmentDisplayId(apt)} — you can now create the job card.`,
+      });
+    } catch {
+      toast.error("Could not update pickup status.");
+    } finally {
+      setMarkingPickupId(null);
+    }
+  };
+
+  const markVehicleAtWorkshop = async (apt: Appointment) => {
+    setMarkingPickupId(apt.id);
+    try {
+      await updateAppointment(apt.id, { vehiclePickupStatus: "AT_WORKSHOP" });
+      toast.success("Vehicle marked as at workshop", {
+        description: `${getAppointmentDisplayId(apt)} — you can now create the job card.`,
+      });
+    } catch {
+      toast.error("Could not update pickup status.");
+    } finally {
+      setMarkingPickupId(null);
+    }
+  };
+
   const createJobFromAppointment = async (apt: Appointment) => {
     if (apt.jobCardId) return;
     setCreatingFromAppointmentId(apt.id);
@@ -269,7 +301,7 @@ export default function BookingsPage() {
       toast.success("Job card created", {
         description: `${getAppointmentDisplayId(apt)} → ${job.jobNumber}`,
       });
-      router.push(`/job-cards/${job.id}`);
+      router.push(`/job-cards/${job.id}?checkIn=1`);
     } catch {
       toast.error("Could not create job card", {
         description: "Check that the API server is running and try again.",
@@ -575,6 +607,12 @@ export default function BookingsPage() {
                           {apt.vehicleRegNumber}
                         </span>
                       )}
+                      {apt.vehiclePickupRequired && !isConverted && (
+                        <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${apt.vehiclePickupStatus === "AT_WORKSHOP" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"}`}>
+                          <Truck className="h-3 w-3 shrink-0" />
+                          {apt.vehiclePickupStatus === "AT_WORKSHOP" ? "At workshop" : "Pickup pending"}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -601,6 +639,20 @@ export default function BookingsPage() {
                         <Eye className="h-3.5 w-3.5" />
                         View job card
                       </Link>
+                    ) : apt.vehiclePickupRequired && apt.vehiclePickupStatus !== "AT_WORKSHOP" ? (
+                      <button
+                        type="button"
+                        disabled={markingPickupId === apt.id}
+                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-60 disabled:pointer-events-none"
+                        onClick={() => void markVehicleAtWorkshop(apt)}
+                      >
+                        {markingPickupId === apt.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <MapPin className="h-3.5 w-3.5" />
+                        )}
+                        Mark at Workshop
+                      </button>
                     ) : (
                       <button
                         type="button"

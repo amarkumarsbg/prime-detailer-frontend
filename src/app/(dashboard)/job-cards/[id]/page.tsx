@@ -387,6 +387,17 @@ export default function JobCardDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-open before photo check-in from ?checkIn=1 (set when creating a job
+  // card from the bookings page). Clear param immediately.
+  useEffect(() => {
+    if (searchParams.get("checkIn") !== "1") return;
+    router.replace(`/job-cards/${id}`, { scroll: false });
+    if (currentStatus === "RECEIVED" || currentStatus === "INSPECTION") {
+      setBeforePhotoRequiredOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [deliverVehicleSubmitting, setDeliverVehicleSubmitting] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);

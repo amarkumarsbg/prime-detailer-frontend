@@ -1122,17 +1122,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return serviceCatalog.filter((s) => ids.has(s.id));
   }, [serviceCatalog, selectedMainIds, selectedAddonIds]);
 
-  const catalogAvgIncentivePercent = useMemo(() => {
-    return averageServiceRewardPercent(selectedCatalogItems, rewardCategoryIncentivePercents, {
-      fallbackPercent: defaultMechanicIncentivePercent,
-      highEndPercent: highEndIncentivePercent,
-    });
-  }, [
-    selectedCatalogItems,
-    rewardCategoryIncentivePercents,
-    defaultMechanicIncentivePercent,
-    highEndIncentivePercent,
-  ]);
+  // Incentive is always 0 by default — staff can override per job.
+  const catalogAvgIncentivePercent = 0;
 
   useEffect(() => {
     setMechanicIncentivePercentOverride("");

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -64,6 +65,7 @@ export function EditReservationDialog({
   const [vehicleMakeModel, setVehicleMakeModel] = useState("");
   const [serviceType, setServiceType] = useState("");
   const [notes, setNotes] = useState("");
+  const [vehiclePickupRequired, setVehiclePickupRequired] = useState(false);
   const [mechanicId, setMechanicId] = useState<string>("");
   const [branchId, setBranchId] = useState<string>("");
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
@@ -80,6 +82,7 @@ export function EditReservationDialog({
     setVehicleMakeModel(appointment.vehicleMakeModel);
     setServiceType(appointment.serviceType);
     setNotes(appointment.notes ?? "");
+    setVehiclePickupRequired(appointment.vehiclePickupRequired ?? false);
     setMechanicId(appointment.mechanicId ?? "");
     setBranchId(appointment.branchId ?? "");
     setExpectedDeliveryDate(appointment.expectedDeliveryDate ?? "");
@@ -137,6 +140,7 @@ export function EditReservationDialog({
       branchId: branchId || undefined,
       expectedDeliveryDate: expectedDeliveryDate.trim() || undefined,
       advancePaid: advanceValue,
+      vehiclePickupRequired: vehiclePickupRequired || undefined,
     };
     if (slotChanged) {
       patch.whatsappSent = false;
@@ -359,6 +363,16 @@ export function EditReservationDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Checkbox
+              id="res-pickup"
+              checked={vehiclePickupRequired}
+              onCheckedChange={(c) => setVehiclePickupRequired(c === true)}
+            />
+            <Label htmlFor="res-pickup" className="text-sm font-normal cursor-pointer">
+              Vehicle pickup required
+            </Label>
           </div>
         </div>
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
