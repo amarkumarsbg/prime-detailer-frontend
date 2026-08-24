@@ -131,7 +131,7 @@ import {
   quotationCanConvertToJob,
 } from "@/components/quotations/quotation-status-filters";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 const SEGMENT_OPTIONS: { value: VehicleSegment; label: string }[] = [
   { value: "HATCHBACK", label: "Hatchback" },
@@ -1139,10 +1139,11 @@ export default function QuotationsPage() {
     return c;
   }, [quotationList]);
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && quotationList.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <Suspense fallback={null}>
         <QuotationFromQueryEffect setNewDialogOpen={setNewDialogOpen} />
       </Suspense>

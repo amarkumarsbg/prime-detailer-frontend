@@ -72,7 +72,7 @@ import { FilterBanner } from "@/components/shared/filter-banner";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 type StockTableFilter = "all" | "low" | "out";
 
@@ -460,10 +460,11 @@ export default function InventoryPage() {
     setAdjustAmount("");
   };
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && catalog.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Inventory"
         description="Parts catalog, branch stock, transfers, purchases, and movement history"

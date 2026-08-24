@@ -111,7 +111,7 @@ import {
   queryLooksLikeVehicleReg,
 } from "@/lib/customer-vehicle-lookup";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 const STATUS_COLORS: Record<AppointmentStatus, { bg: string; text: string; dot: string }> = {
   SCHEDULED: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", dot: "bg-blue-500" },
@@ -695,10 +695,11 @@ export default function AppointmentsPage() {
     (a) => a.status === "CANCELLED" || a.status === "NOT_ATTENDED"
   ).length;
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && appointments.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <Suspense fallback={null}>
         <AppointmentFromQueryEffect setDialogOpen={setDialogOpen} />
       </Suspense>

@@ -66,7 +66,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 const MONTHS = [
   { v: 1, label: "January" },
@@ -383,10 +383,11 @@ export default function PayrollPage() {
 
   const viewLabel = `Today (${formatDate(viewDate)})`;
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && staff.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 md:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Salary & Payroll"
         description="Manage staff salaries, bonuses, and disbursements. Configure pay rules by role and experience band."

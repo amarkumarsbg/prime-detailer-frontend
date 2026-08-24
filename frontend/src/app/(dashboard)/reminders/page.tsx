@@ -65,7 +65,7 @@ import {
   X,
 } from "lucide-react";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 function reminderWasSent(r: ServiceReminder): boolean {
   return Boolean(r.lastMessageSentAt || r.whatsappSent);
@@ -567,10 +567,11 @@ export default function RemindersPage() {
     </div>
   );
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && reminders.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Reminders"
         description={`Service follow-ups and pending payment reminders for ${viewingLabel}.`}

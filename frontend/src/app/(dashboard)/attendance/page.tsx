@@ -47,7 +47,7 @@ import {
 } from "@/lib/attendance-reports";
 import { toast } from "sonner";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 const MONTH_OPTIONS = [
   { v: 1, label: "January" },
@@ -298,10 +298,11 @@ export default function AttendancePage() {
     );
   }
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && staff.length === 0 && attendanceRecords.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <PageHeader
           title="Staff Attendance"

@@ -6,6 +6,23 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse rounded-md bg-muted", className)} />;
 }
 
+/**
+ * Subtle top-of-page indicator shown during background revalidation when the
+ * page already has cached data. Does NOT replace existing content.
+ */
+export function RefreshingBar({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div
+      aria-live="polite"
+      aria-label="Refreshing data"
+      className="pointer-events-none fixed left-0 right-0 top-0 z-[200] h-[2px] overflow-hidden"
+    >
+      <div className="h-full w-full animate-[shimmer_1.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
+    </div>
+  );
+}
+
 export function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
   return (
     <div className="space-y-4">

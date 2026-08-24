@@ -195,3 +195,9 @@ input[type="number"] {
   -moz-appearance: textfield !important;
   appearance: textfield !important;
 }
+
+/* RefreshingBar shimmer animation */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

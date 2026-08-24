@@ -63,7 +63,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 const fuelTypes: FuelType[] = ["PETROL", "DIESEL", "CNG", "ELECTRIC", "HYBRID"];
 
@@ -290,10 +290,11 @@ export default function VehiclesPage() {
     }
   };
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && vehicleList.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Vehicles"
         actions={

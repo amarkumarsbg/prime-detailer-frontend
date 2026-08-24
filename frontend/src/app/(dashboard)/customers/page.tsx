@@ -58,7 +58,7 @@ import { cn, formatDate, formatCurrency, getInitials } from "@/lib/utils";
 import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
@@ -323,10 +323,11 @@ export default function CustomersPage() {
     }
   };
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && customers.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Customers"
         actions={

@@ -64,7 +64,7 @@ import {
   User,
 } from "lucide-react";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 function compactRegForSearch(s: string): string {
   return normalizeRegistrationNumber(s).replace(/-/g, "").toLowerCase();
@@ -413,10 +413,11 @@ export default function BookingsPage() {
     [branchNameById]
   );
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && jobCards.length === 0) return <PageSkeleton />;
 
   return (
     <div className="w-full min-w-0 space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Bookings"
         inlineActionsOnMobile

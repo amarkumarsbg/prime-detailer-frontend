@@ -71,7 +71,7 @@ import type { User, UserRole, Customer } from "@/types";
 import { toast } from "sonner";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
-import { PageSkeleton } from "@/components/shared/skeleton-loader";
+import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
 const ROLE_BADGE_MAP: Record<
   UserRole,
@@ -648,10 +648,11 @@ export default function StaffPage() {
     }
   };
 
-  if (!storesReady) return <PageSkeleton />;
+  if (!storesReady && staff.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RefreshingBar show={!storesReady} />
       <PageHeader
         title="Users Management"
         description="Directory and attendance PINs for staff. Super Admin and Admin can create accounts (no public signup)."
