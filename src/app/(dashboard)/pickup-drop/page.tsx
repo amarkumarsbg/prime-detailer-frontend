@@ -134,7 +134,7 @@ const dialogSurfaceClass =
 export default function PickupDropPage() {
   const storesReady = useDashboardStoresReady();
   const { jobCards } = useJobCardStore();
-  const { requests, addRequest, updateRequest, assignDriver, advanceStatus, repairPrematureDropDeliveries } =
+  const { requests, addRequest, updateRequest, assignDriver, advanceStatus, repairPrematureDropDeliveries, writesBlocked } =
     usePickupDropStore();
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
@@ -802,6 +802,11 @@ export default function PickupDropPage() {
 
   return (
     <div>
+      {writesBlocked && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          ⚠ Pickup &amp; Drop writes are temporarily blocked by the server. This section is read-only.
+        </div>
+      )}
       <PageHeader
         title="Pickup & Drop Management"
         description={`Manage vehicle pickup and delivery for ${viewingLabel}.`}

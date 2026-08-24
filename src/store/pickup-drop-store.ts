@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { JobCard, PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { postCollectionSnapshot } from "@/lib/collection-sync";
+import { ApiError } from "@/lib/api-client";
 import {
   dropDeliveryIsPremature,
   findPickupDropRequest,
@@ -12,8 +13,21 @@ import {
   validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
 
+import { ApiError } from "@/lib/api-client";
+
+/** Module-level flag: set true during bootstrap reconcile to suppress snapshot pushes. */
+let _bootReconciling = false;
+export function setPickupDropBootReconciling(v: boolean) { _bootReconciling = v; }
+
 function pushPickupSnapshot(requests: PickupDropRequest[]) {
+  if (_bootReconciling) return;
+  if (process.env.NEXT_PUBLIC_BLOCK_PICKUP_DROP_WRITES === "true") return;
+  if (usePickupDropStore.getState().writesBlocked) return;
   void postCollectionSnapshot("pickupDropRequests", requests).catch((err) => {
+    if (err instanceof ApiError && err.status === 403) {
+      usePickupDropStore.getState().setWritesBlocked(true);
+      return;
+    }
     if (process.env.NODE_ENV !== "production") console.error(err);
   });
 }
@@ -55,6 +69,9 @@ interface PickupDropStore {
   requests: PickupDropRequest[];
   /** False until domain bootstrap has loaded this collection (do not persist before then). */
   hydrated: boolean;
+  /** True when server returns 403 write-block — UI becomes read-only, no retries. */
+  writesBlocked: boolean;
+  setWritesBlocked: (blocked: boolean) => void;
   /** Hydrated by bootstrap — replaces prior browser-local persistence */
   setRequestsFromBootstrap: (requests: PickupDropRequest[]) => void;
   addRequest: (input: AddPickupDropInput) => PickupDropRequest;
@@ -76,6 +93,9 @@ interface PickupDropStore {
 export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
   requests: [],
   hydrated: false,
+  writesBlocked: false,
+
+  setWritesBlocked: (blocked) => set({ writesBlocked: blocked }),
 
   setRequestsFromBootstrap: (requests) => set({ requests, hydrated: true }),
 

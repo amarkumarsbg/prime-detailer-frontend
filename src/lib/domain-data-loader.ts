@@ -81,7 +81,7 @@ import type {
   StaffRewardSettings,
   StaffTarget,
 } from "@/types";
-import { usePickupDropStore } from "@/store/pickup-drop-store";
+import { usePickupDropStore, setPickupDropBootReconciling } from "@/store/pickup-drop-store";
 import { useQuotationStore } from "@/store/quotation-store";
 import {
   mergeReferralProgramPayload,
@@ -349,7 +349,13 @@ async function loadOne(resource: DomainResource): Promise<void> {
     case "pickupDropRequests": {
       const items = await getCollectionItems<PickupDropRequest>("pickupDropRequests");
       usePickupDropStore.getState().setRequestsFromBootstrap(items);
-      reconcilePickupWithJobCards();
+      // Suppress snapshot pushes during boot reconcile — server is source of truth.
+      setPickupDropBootReconciling(true);
+      try {
+        reconcilePickupWithJobCards();
+      } finally {
+        setPickupDropBootReconciling(false);
+      }
       return;
     }
     case "dashboardStats": {
