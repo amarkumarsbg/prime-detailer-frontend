@@ -50,8 +50,10 @@ export type AddPackageForm = {
   muv: string;
   gstApplicable: boolean;
   gstPercent: string;
-  durationMin: string;
-  maxDuration: string;
+  durationHr: string;
+  durationMinPart: string;
+  maxDurationHr: string;
+  maxDurationMinPart: string;
   active: boolean;
   incentivePercent: string;
   isHighEnd: boolean;
@@ -71,8 +73,10 @@ function emptyAddPackage(gstOn = true): AddPackageForm {
     muv: "",
     gstApplicable: gstOn,
     gstPercent: "18",
-    durationMin: "",
-    maxDuration: "",
+    durationHr: "",
+    durationMinPart: "",
+    maxDurationHr: "",
+    maxDurationMinPart: "",
     active: true,
     incentivePercent: "0",
     isHighEnd: false,
@@ -237,11 +241,11 @@ export function AddServicePackageDialog({
     const gstPct = gstApplicable
       ? Math.min(100, Math.max(0, parseFloat(addForm.gstPercent) || 0))
       : undefined;
-    const durationMinutes = addForm.durationMin.trim()
-      ? Math.max(0, parseInt(addForm.durationMin, 10))
+    const durationMinutes = (addForm.durationHr || addForm.durationMinPart)
+      ? (parseInt(addForm.durationHr || "0", 10) * 60) + parseInt(addForm.durationMinPart || "0", 10)
       : undefined;
-    const maxDurationMinutes = addForm.maxDuration.trim()
-      ? Math.max(0, parseInt(addForm.maxDuration, 10))
+    const maxDurationMinutes = (addForm.maxDurationHr || addForm.maxDurationMinPart)
+      ? (parseInt(addForm.maxDurationHr || "0", 10) * 60) + parseInt(addForm.maxDurationMinPart || "0", 10)
       : undefined;
 
     const newItem: ServiceCatalogItem = {
@@ -434,34 +438,62 @@ export function AddServicePackageDialog({
                   </div>
                 ) : null}
 
-                <div className={cn("grid grid-cols-2 gap-3", !gstOn && "lg:col-span-2")}>
+                <div className={cn("space-y-3", !gstOn && "lg:col-span-2")}>
                   <div className="space-y-2">
-                    <Label htmlFor="asp-pkg-dur">Duration (min)</Label>
-                    <Input
-                      id="asp-pkg-dur"
-                      type="number"
-                      min={0}
-                      className="h-9"
-                      placeholder="e.g. 40"
-                      value={addForm.durationMin}
-                      onChange={(e) =>
-                        setAddForm((f) => ({ ...f, durationMin: e.target.value }))
-                      }
-                    />
+                    <Label>Duration</Label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          className="h-9 pr-8"
+                          placeholder="Hrs"
+                          value={addForm.durationHr}
+                          onChange={(e) => setAddForm((f) => ({ ...f, durationHr: e.target.value }))}
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">hr</span>
+                      </div>
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={59}
+                          className="h-9 pr-8"
+                          placeholder="Min"
+                          value={addForm.durationMinPart}
+                          onChange={(e) => setAddForm((f) => ({ ...f, durationMinPart: e.target.value }))}
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">min</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="asp-pkg-max-dur">Max duration</Label>
-                    <Input
-                      id="asp-pkg-max-dur"
-                      type="number"
-                      min={0}
-                      className="h-9"
-                      placeholder="e.g. 50"
-                      value={addForm.maxDuration}
-                      onChange={(e) =>
-                        setAddForm((f) => ({ ...f, maxDuration: e.target.value }))
-                      }
-                    />
+                    <Label>Max Duration</Label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          className="h-9 pr-8"
+                          placeholder="Hrs"
+                          value={addForm.maxDurationHr}
+                          onChange={(e) => setAddForm((f) => ({ ...f, maxDurationHr: e.target.value }))}
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">hr</span>
+                      </div>
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={59}
+                          className="h-9 pr-8"
+                          placeholder="Min"
+                          value={addForm.maxDurationMinPart}
+                          onChange={(e) => setAddForm((f) => ({ ...f, maxDurationMinPart: e.target.value }))}
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">min</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
