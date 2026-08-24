@@ -54,7 +54,7 @@ export function defaultStaffRewardSettings(
 ): StaffRewardSettings {
   return {
     rewardMode: "PERCENT_OF_JOB",
-    defaultPercent: 5,
+    defaultPercent: 0,
     defaultFixedAmount: 0,
     tiersEnabled: false,
     tiers: [

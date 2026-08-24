@@ -90,7 +90,7 @@ export function buildJobCardFromAppointment(params: {
     durationMinutes: cat?.durationMinutes,
   };
 
-  const incentivePercent = 5;
+  const incentivePercent = 0;
   const incentiveAmount = Math.round(((estimatedAmount || linePrice) * incentivePercent) / 100);
 
   const expectedDelivery =
