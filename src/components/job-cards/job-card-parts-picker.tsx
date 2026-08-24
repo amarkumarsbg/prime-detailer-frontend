@@ -80,7 +80,7 @@ export function buildJobCardPartItems(
         priceSource: isCustomPrice ? ("CUSTOM" as const) : ("CATALOG" as const),
       };
     })
-    .filter((x): x is JobCardPartItem => x != null);
+    .filter((x): x is NonNullable<typeof x> => x != null) as JobCardPartItem[];
 }
 
 export function jobCardPartsSubtotal(parts: JobCardPartItem[]): number {
