@@ -13,8 +13,6 @@ import {
   validatePickupDropAdvance,
 } from "@/lib/pickup-drop-flow";
 
-import { ApiError } from "@/lib/api-client";
-
 /** Module-level flag: set true during bootstrap reconcile to suppress snapshot pushes. */
 let _bootReconciling = false;
 export function setPickupDropBootReconciling(v: boolean) { _bootReconciling = v; }
