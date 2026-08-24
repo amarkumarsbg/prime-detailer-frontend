@@ -3,7 +3,6 @@
 import { create } from "zustand";
 import type { JobCard, PickupDropRequest, PickupDropStatus, PickupDropType } from "@/types";
 import { postCollectionSnapshot } from "@/lib/collection-sync";
-import { ApiError } from "@/lib/api-client";
 import {
   dropDeliveryIsPremature,
   findPickupDropRequest,
@@ -22,7 +21,7 @@ function pushPickupSnapshot(requests: PickupDropRequest[]) {
   if (process.env.NEXT_PUBLIC_BLOCK_PICKUP_DROP_WRITES === "true") return;
   if (usePickupDropStore.getState().writesBlocked) return;
   void postCollectionSnapshot("pickupDropRequests", requests).catch((err) => {
-    if (err instanceof ApiError && err.status === 403) {
+    if (err != null && typeof err === "object" && "status" in err && (err as { status: number }).status === 403) {
       usePickupDropStore.getState().setWritesBlocked(true);
       return;
     }
