@@ -135,7 +135,8 @@ export default function PayrollPage() {
   const removeSalaryStructure = usePayrollStore((s) => s.removeSalaryStructure);
 
   const today = new Date();
-  const [viewDate, setViewDate] = useState(() => today.toISOString().slice(0, 10));
+  const todayLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [viewDate, setViewDate] = useState(() => todayLocal);
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [filterMonth, setFilterMonth] = useState(today.getMonth() + 1);
   const [filterYear, setFilterYear] = useState(today.getFullYear());

@@ -858,19 +858,21 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
             </CardContent>
           </Card>
         )}
-        <Card>
-          <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30">
-              <Target className="w-6 h-6 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(totalCompanyTargetIncentive)}
-              </p>
-              <p className="text-sm text-muted-foreground">Company Target ({targetYear})</p>
-            </div>
-          </CardContent>
-        </Card>
+        {settings.companyTargetEnabled && totalCompanyTargetIncentive > 0 && (
+          <Card>
+            <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                <Target className="w-6 h-6 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(totalCompanyTargetIncentive)}
+                </p>
+                <p className="text-sm text-muted-foreground">Company Target ({targetYear})</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {settings.companyTargetEnabled && (
