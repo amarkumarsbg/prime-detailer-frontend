@@ -19,6 +19,7 @@ import {
   messagingPaths,
   organizationPaths,
   platformPaths,
+  platformExtPaths,
 } from "./paths/messaging-platform.paths.js";
 import type { OpenApiPaths } from "./helpers.js";
 
@@ -110,6 +111,7 @@ export function buildOpenApiDocument(options?: { serverUrl?: string }) {
       attendancePaths,
       organizationPaths,
       platformPaths,
+      platformExtPaths,
       jobsPaths
     ),
     components: openApiComponents,

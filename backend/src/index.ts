@@ -40,7 +40,14 @@ app.use(compression());
 
 app.use(
   cors({
-    origin: env.FRONTEND_ORIGIN,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // same-origin / curl
+      const allowed = (env.FRONTEND_ORIGIN ?? "http://localhost:3000")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      cb(null, allowed.includes(origin) ? origin : false);
+    },
     credentials: true,
   })
 );

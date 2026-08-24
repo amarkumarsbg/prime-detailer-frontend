@@ -500,3 +500,135 @@ export const jobsPaths: OpenApiPaths = {
     },
   },
 };
+
+const orgIdParam = { name: "orgId", in: "path", required: true, schema: { type: "string" }, description: "Organization ID." };
+const crossOrgPageParams = [
+  { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+  { name: "limit", in: "query", schema: { type: "integer", default: 100, maximum: 200 } },
+];
+const crossOrgDateFilters = [
+  { name: "since", in: "query", schema: { type: "string", format: "date-time" } },
+  { name: "until", in: "query", schema: { type: "string", format: "date-time" } },
+];
+
+export const platformExtPaths: OpenApiPaths = {
+  "/api/platform/renewals": {
+    get: {
+      tags: ["SaaS Admin"],
+      summary: "List renewal history across all organizations",
+      security: platformSecurity,
+      parameters: [
+        ...crossOrgPageParams,
+        ...crossOrgDateFilters,
+        { name: "orgId", in: "query", schema: { type: "string" } },
+        { name: "paymentStatus", in: "query", schema: { type: "string", enum: ["PAID","PENDING","PROCESSING","FAILED"] } },
+      ],
+      responses: {
+        "200": okResponse({ type: "object", required: ["renewals"], properties: { renewals: { type: "array", items: { type: "object", additionalProperties: true } }, total: { type: "integer" } } }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/bills": {
+    get: {
+      tags: ["SaaS Admin"],
+      summary: "List subscription bills across all organizations",
+      security: platformSecurity,
+      parameters: [
+        ...crossOrgPageParams,
+        ...crossOrgDateFilters,
+        { name: "orgId", in: "query", schema: { type: "string" } },
+        { name: "search", in: "query", schema: { type: "string" } },
+        { name: "paymentStatus", in: "query", schema: { type: "string", enum: ["PAID","PENDING","PROCESSING","FAILED"] } },
+      ],
+      responses: {
+        "200": okResponse({ type: "object", required: ["bills"], properties: { bills: { type: "array", items: { type: "object", additionalProperties: true } }, total: { type: "integer" } } }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/payments": {
+    get: {
+      tags: ["SaaS Admin"],
+      summary: "List subscription payments across all organizations",
+      security: platformSecurity,
+      parameters: [
+        ...crossOrgPageParams,
+        ...crossOrgDateFilters,
+        { name: "orgId", in: "query", schema: { type: "string" } },
+        { name: "status", in: "query", schema: { type: "string", enum: ["PAID","PENDING","PROCESSING","FAILED"] } },
+      ],
+      responses: {
+        "200": okResponse({ type: "object", required: ["payments"], properties: { payments: { type: "array", items: { type: "object", additionalProperties: true } }, total: { type: "integer" } } }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/audit": {
+    get: {
+      tags: ["SaaS Admin"],
+      summary: "List platform audit log entries",
+      security: platformSecurity,
+      parameters: [
+        ...crossOrgPageParams,
+        ...crossOrgDateFilters,
+        { name: "orgId", in: "query", schema: { type: "string" } },
+        { name: "action", in: "query", schema: { type: "string" }, description: "Partial match on action name." },
+      ],
+      responses: {
+        "200": okResponse({ type: "object", required: ["logs"], properties: { logs: { type: "array", items: { type: "object", additionalProperties: true } }, total: { type: "integer" } } }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/referrals": {
+    get: {
+      tags: ["SaaS Admin"],
+      summary: "List platform subscription referral codes",
+      security: platformSecurity,
+      parameters: [
+        { name: "showInactive", in: "query", schema: { type: "boolean" } },
+      ],
+      responses: {
+        "200": okResponse({ type: "object", required: ["referralCodes"], properties: { referralCodes: { type: "array", items: { type: "object", additionalProperties: true } } } }),
+        ...commonErrorResponses(),
+      },
+    },
+    post: {
+      tags: ["SaaS Admin"],
+      summary: "Create a platform subscription referral code",
+      security: platformSecurity,
+      requestBody: jsonBody({ type: "object", required: ["code"], properties: { code: { type: "string", minLength: 4, maxLength: 24, pattern: "^[A-Z0-9-]+$" }, discountAmount: { type: "number", minimum: 0, default: 1000 }, notes: { type: "string" } } }),
+      responses: {
+        "201": okResponse({ type: "object", additionalProperties: true }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/organizations/{orgId}/suspend": {
+    post: {
+      tags: ["SaaS Admin"],
+      summary: "Suspend organization subscription",
+      security: platformSecurity,
+      parameters: [orgIdParam],
+      requestBody: jsonBody({ type: "object", required: ["reason"], properties: { reason: { type: "string", minLength: 1, maxLength: 500 } } }),
+      responses: {
+        "200": okResponse({ type: "object", properties: { suspended: { type: "boolean" }, reason: { type: "string" } } }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/organizations/{orgId}/restore": {
+    post: {
+      tags: ["SaaS Admin"],
+      summary: "Restore suspended organization subscription",
+      security: platformSecurity,
+      parameters: [orgIdParam],
+      requestBody: jsonBody({ type: "object", properties: { reason: { type: "string", maxLength: 500 } } }, false),
+      responses: {
+        "200": okResponse({ type: "object", properties: { restored: { type: "boolean" } } }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+};

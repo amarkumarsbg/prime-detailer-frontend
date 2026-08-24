@@ -81,6 +81,18 @@ model PlatformAuditLog {
   @@index([organizationId, createdAt])
 }
 
+/** Platform-managed referral codes for subscription discounts. */
+model PlatformReferralCode {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  discountAmount Float    @default(1000)
+  isActive       Boolean  @default(true)
+  createdBy      String
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model OrganizationSubscription {
   id                  String                    @id @default(cuid())
   organizationId      String                    @unique
