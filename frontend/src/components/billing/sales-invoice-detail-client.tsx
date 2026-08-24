@@ -1996,6 +1996,12 @@ ${businessNameVal}`;
         open={recordDialogOpen}
         onOpenChange={setRecordDialogOpen}
         invoiceId={invoice?.id ?? null}
+        onSuccess={() => {
+          setRecordDialogOpen(false);
+          if (invoice?.jobCardId) {
+            router.push(`/job-cards/${invoice.jobCardId}?deliverVehicle=1`);
+          }
+        }}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -225,6 +225,7 @@ type TaskChecklistRow =
 export default function JobCardDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
   const { jobCards, updateJobCard } = useJobCardStore();
   const pickupDropRequests = usePickupDropStore((s) => s.requests);
@@ -372,7 +373,9 @@ export default function JobCardDetailPage() {
     null
   );
   const [whatsAppNotifyOpen, setWhatsAppNotifyOpen] = useState(false);
-  const [deliverVehicleOpen, setDeliverVehicleOpen] = useState(false);
+  const [deliverVehicleOpen, setDeliverVehicleOpen] = useState(
+    () => searchParams.get("deliverVehicle") === "1"
+  );
   const [deliverVehicleSubmitting, setDeliverVehicleSubmitting] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
@@ -3440,6 +3443,10 @@ export default function JobCardDetailPage() {
         open={recordPaymentOpen}
         onOpenChange={setRecordPaymentOpen}
         invoiceId={invoiceForJob?.id ?? null}
+        onSuccess={() => {
+          setRecordPaymentOpen(false);
+          setDeliverVehicleOpen(true);
+        }}
       />
       <EditJobCardDetailsDialog
         jobCard={jobCard}
