@@ -537,6 +537,13 @@ export default function StaffPage() {
       toast.error("Please enter name, email, and mobile.");
       return;
     }
+    // Accept formats like 9876543210, +919876543210, +91-98765-43210, etc.
+    const digits = phone.replace(/[\s\-()]/g, "");
+    const phoneDigits = digits.startsWith("+91") ? digits.slice(3) : digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
+    if (!/^\d{10}$/.test(phoneDigits)) {
+      toast.error("Please enter a valid 10-digit mobile number.");
+      return;
+    }
     const pwd = newPassword.trim();
     const pwdConfirm = newPasswordConfirm.trim();
     if (pwd !== pwdConfirm) {
@@ -707,6 +714,16 @@ export default function StaffPage() {
                             autoComplete="tel"
                             required
                           />
+                          {(() => {
+                            const raw = newPhone.trim();
+                            if (!raw) return null;
+                            const digits = raw.replace(/[\s\-()]/g, "");
+                            const core = digits.startsWith("+91") ? digits.slice(3) : digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
+                            if (!/^\d{10}$/.test(core)) {
+                              return <p className="text-xs text-destructive">Enter a valid 10-digit mobile number.</p>;
+                            }
+                            return null;
+                          })()}
                         </div>
                         <p className="text-xs text-muted-foreground sm:col-span-2">
                           Optional manual password — {PASSWORD_POLICY_HINT} Leave both fields blank to generate a compliant temporary password automatically.
