@@ -43,22 +43,25 @@ const SEGMENT_LABELS: Record<keyof SegmentPricing, string> = {
 const SEGMENT_KEYS = Object.keys(SEGMENT_LABELS) as (keyof SegmentPricing)[];
 
 const QUICK_SEGMENTS: {
-  key: "BIKE" | "HATCHBACK" | "SEDAN" | "SUV";
+  key: keyof SegmentPricing;
   label: string;
   icon: string;
 }[] = [
-  { key: "BIKE", label: "Bike", icon: "🏍️" },
   { key: "HATCHBACK", label: "Hatchback", icon: "🚗" },
   { key: "SEDAN", label: "Sedan", icon: "🚙" },
+  { key: "COMPACT_SUV", label: "Compact SUV", icon: "🚙" },
   { key: "SUV", label: "SUV", icon: "🚐" },
+  { key: "MUV", label: "MUV", icon: "🚐" },
+  { key: "LUXURY", label: "Luxury", icon: "🏎️" },
+  { key: "BIKE", label: "Bike", icon: "🏍️" },
 ];
 
 type EditFormState = {
   name: string;
   description: string;
   category: string;
-  /** Which of the four primary segments are offered for this package */
-  compatible: Record<"BIKE" | "HATCHBACK" | "SEDAN" | "SUV", boolean>;
+  /** Which segments are offered for this package */
+  compatible: Record<keyof SegmentPricing, boolean>;
   segmentPricing: Record<keyof SegmentPricing, string>;
   gstApplicable: boolean;
   gstPercent: string;
@@ -76,16 +79,16 @@ function serviceToForm(s: ServiceCatalogItem): EditFormState {
     {} as Record<keyof SegmentPricing, string>
   );
   const gstPct = s.gstPercent ?? 18;
-  const q = (key: "BIKE" | "HATCHBACK" | "SEDAN" | "SUV") =>
+  const q = (key: keyof SegmentPricing) =>
     Number.parseFloat(segmentPricing[key]) > 0;
-  const anyQuick = q("BIKE") || q("HATCHBACK") || q("SEDAN") || q("SUV");
+  const anyQuick = SEGMENT_KEYS.some((k) => q(k));
   return {
     name: s.name,
     description: s.description,
     category: s.category,
     compatible: anyQuick
-      ? { BIKE: q("BIKE"), HATCHBACK: q("HATCHBACK"), SEDAN: q("SEDAN"), SUV: q("SUV") }
-      : { BIKE: true, HATCHBACK: true, SEDAN: true, SUV: true },
+      ? SEGMENT_KEYS.reduce((acc, k) => ({ ...acc, [k]: q(k) }), {} as Record<keyof SegmentPricing, boolean>)
+      : SEGMENT_KEYS.reduce((acc, k) => ({ ...acc, [k]: true }), {} as Record<keyof SegmentPricing, boolean>),
     segmentPricing,
     gstApplicable: s.gstApplicable !== false,
     gstPercent: String(gstPct),
@@ -165,7 +168,7 @@ export function EditServiceCatalogDialog({
     });
   }, [service, open]);
 
-  const setCompatible = (key: keyof EditFormState["compatible"], on: boolean) => {
+  const setCompatible = (key: keyof SegmentPricing, on: boolean) => {
     setForm((f) => {
       if (!f) return f;
       const next = { ...f.compatible, [key]: on };
@@ -182,12 +185,11 @@ export function EditServiceCatalogDialog({
     if (!form.name.trim()) return;
     if (!form.description.trim()) return;
     if (!form.durationMin.trim()) return;
-    const h = Math.max(0, parseFloat(form.segmentPricing.HATCHBACK) || 0);
-    const sed = Math.max(0, parseFloat(form.segmentPricing.SEDAN) || 0);
-    const u = Math.max(0, parseFloat(form.segmentPricing.SUV) || 0);
-    const bike = Math.max(0, parseFloat(form.segmentPricing.BIKE) || 0);
-    if (h === 0 && sed === 0 && u === 0 && bike === 0) {
-      toast.error("Enter at least one vehicle price under compatibility.");
+    const anyPrice = SEGMENT_KEYS.some(
+      (k) => Math.max(0, parseFloat(form.segmentPricing[k]) || 0) > 0
+    );
+    if (!anyPrice) {
+      toast.error("Enter at least one vehicle price.");
       return;
     }
     onSave(formToService(service, form, gstOn));
@@ -276,12 +278,12 @@ export function EditServiceCatalogDialog({
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {QUICK_SEGMENTS.map(({ key, label, icon }) => {
-                  const on = form.compatible[key];
+                  const on = form.compatible[key as keyof SegmentPricing];
                   return (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setCompatible(key, !on)}
+                      onClick={() => setCompatible(key as keyof SegmentPricing, !on)}
                       className={cn(
                         "flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-center transition-colors",
                         on
@@ -339,7 +341,7 @@ export function EditServiceCatalogDialog({
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {QUICK_SEGMENTS.map(({ key, label, icon }) => {
-                  const disabled = !form.compatible[key];
+                  const disabled = !form.compatible[key as keyof SegmentPricing];
                   return (
                     <div key={key} className="space-y-1.5">
                       <Label
