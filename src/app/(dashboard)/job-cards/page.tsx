@@ -59,7 +59,7 @@ import {
   jobCardDeliveryAt,
 } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
-import { formatDate, cn, formatCurrency } from "@/lib/utils";
+import { formatDate, formatDateTime, cn, formatCurrency } from "@/lib/utils";
 import { jobNumberSortKey, sortJobCardsByNumberThenCreated } from "@/lib/sort-by-date";
 import { normalizeRegistrationNumber } from "@/lib/vehicle-registration";
 import type { JobCard, JobCardStatus } from "@/types";
@@ -545,7 +545,7 @@ export default function JobCardsPage() {
         sortable: true,
         sortValue: (item: JobCard) => item.createdAt,
         className: "align-top whitespace-nowrap text-muted-foreground",
-        render: (item: JobCard) => formatDate(item.createdAt),
+        render: (item: JobCard) => formatDateTime(item.createdAt),
       },
     ],
     [showBranchColumn, renderBranchLabel]
@@ -1055,7 +1055,7 @@ export default function JobCardsPage() {
                   <div className="px-4 py-3 border-t border-border/40 space-y-1.5 bg-background">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground font-semibold">
-                        Created {formatDate(jc.createdAt || jc.expectedDelivery)}
+                        Created {formatDateTime(jc.createdAt || jc.expectedDelivery)}
                       </span>
                       <span className="text-base font-black text-foreground tabular-nums">
                         {formatCurrency(jc.estimatedAmount)}
