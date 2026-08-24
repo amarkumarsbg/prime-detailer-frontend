@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Truck } from "lucide-react";
 import {
   Dialog,
@@ -75,27 +75,35 @@ export function DeliverVehicleDialog({
   const [dropDriverId, setDropDriverId] = useState("unassigned");
   const [dropDriverName, setDropDriverName] = useState<string | undefined>();
   const [dropScheduledLocal, setDropScheduledLocal] = useState("");
+  const wasOpenRef = useRef(false);
 
-  // Reset form state only when dialog opens (not when dropOff changes while open).
+  // Sync drop-off fields whenever dropOff changes or dialog opens.
+  // Only reset checklist/notes on the open transition (false → true).
   useEffect(() => {
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
     if (!open) return;
-    setNotes("");
-    setChecks({
-      customerSatisfaction: false,
-      keysDelivered: false,
-      finalWalkthrough: false,
-    });
+
+    if (justOpened) {
+      setNotes("");
+      setChecks({
+        customerSatisfaction: false,
+        keysDelivered: false,
+        finalWalkthrough: false,
+      });
+    }
+
     setDropAddress(dropOff?.address?.trim() ?? "");
     setDropDriverId(dropOff?.driverId || "unassigned");
-    setDropDriverName(undefined);
+    if (justOpened) setDropDriverName(undefined);
     const scheduled = dropOff?.scheduledTime ? new Date(dropOff.scheduledTime) : null;
     const local =
       scheduled && !Number.isNaN(scheduled.getTime())
         ? datetimeLocalValue(scheduled)
         : datetimeLocalValue(new Date(Date.now() + 2 * 60 * 60 * 1000));
     setDropScheduledLocal(isDatetimeLocalInPast(local) ? localDatetimeLocalInputMin() : local);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, dropOff]);
 
   const allChecked = DELIVERY_CHECKLIST_ITEMS.every((item) => checks[item.id]);
   const dropOffReady =
