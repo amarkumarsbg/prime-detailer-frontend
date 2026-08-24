@@ -5157,7 +5157,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         </DialogContent>
       </Dialog>
 
-      {isJobCard && (
+      {useBookingWizard && (
         <Dialog
           open={checkInOpen}
           onOpenChange={(open) => {
