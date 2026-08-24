@@ -65,8 +65,10 @@ type EditFormState = {
   segmentPricing: Record<keyof SegmentPricing, string>;
   gstApplicable: boolean;
   gstPercent: string;
-  durationMin: string;
-  maxDuration: string;
+  durationHr: string;
+  durationMinPart: string;
+  maxDurationHr: string;
+  maxDurationMinPart: string;
   scopeGlobal: boolean;
   isHighEnd: boolean;
   isActive: boolean;
@@ -92,8 +94,10 @@ function serviceToForm(s: ServiceCatalogItem): EditFormState {
     segmentPricing,
     gstApplicable: s.gstApplicable !== false,
     gstPercent: String(gstPct),
-    durationMin: s.durationMinutes != null ? String(s.durationMinutes) : "",
-    maxDuration: s.maxDurationMinutes != null ? String(s.maxDurationMinutes) : "",
+    durationHr: s.durationMinutes != null ? String(Math.floor(s.durationMinutes / 60)) : "",
+    durationMinPart: s.durationMinutes != null ? String(s.durationMinutes % 60) : "",
+    maxDurationHr: s.maxDurationMinutes != null ? String(Math.floor(s.maxDurationMinutes / 60)) : "",
+    maxDurationMinPart: s.maxDurationMinutes != null ? String(s.maxDurationMinutes % 60) : "",
     scopeGlobal: (s.scope ?? "GLOBAL") === "GLOBAL",
     isHighEnd: s.isHighEnd,
     isActive: s.isActive,
@@ -120,11 +124,11 @@ function formToService(
   const gstPct = gstApplicable
     ? Math.min(100, Math.max(0, parseFloat(form.gstPercent) || 0))
     : undefined;
-  const durationMinutes = form.durationMin.trim()
-    ? Math.max(0, parseInt(form.durationMin, 10))
+  const durationMinutes = (form.durationHr || form.durationMinPart)
+    ? (parseInt(form.durationHr || "0", 10) * 60) + parseInt(form.durationMinPart || "0", 10)
     : undefined;
-  const maxDurationMinutes = form.maxDuration.trim()
-    ? Math.max(0, parseInt(form.maxDuration, 10))
+  const maxDurationMinutes = (form.maxDurationHr || form.maxDurationMinPart)
+    ? (parseInt(form.maxDurationHr || "0", 10) * 60) + parseInt(form.maxDurationMinPart || "0", 10)
     : undefined;
 
   return {
@@ -184,7 +188,6 @@ export function EditServiceCatalogDialog({
     if (!service || !form) return;
     if (!form.name.trim()) return;
     if (!form.description.trim()) return;
-    if (!form.durationMin.trim()) return;
     const anyPrice = SEGMENT_KEYS.some(
       (k) => Math.max(0, parseFloat(form.segmentPricing[k]) || 0) > 0
     );
@@ -442,34 +445,61 @@ export function EditServiceCatalogDialog({
             {/* Duration */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="esp-dur">
-                  Duration (min) <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="esp-dur"
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 40"
-                  required
-                  value={form.durationMin}
-                  onChange={(e) =>
-                    setForm((f) => (f ? { ...f, durationMin: e.target.value } : f))
-                  }
-                />
+                <Label>Duration</Label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-9 pr-8"
+                      placeholder="Hrs"
+                      value={form.durationHr}
+                      onChange={(e) => setForm((f) => f ? { ...f, durationHr: e.target.value } : f)}
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">hr</span>
+                  </div>
+                  <div className="relative flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      className="h-9 pr-8"
+                      placeholder="Min"
+                      value={form.durationMinPart}
+                      onChange={(e) => setForm((f) => f ? { ...f, durationMinPart: e.target.value } : f)}
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">min</span>
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="esp-max-dur">Max Duration (min)</Label>
-                <Input
-                  id="esp-max-dur"
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 50"
-                  value={form.maxDuration}
-                  onChange={(e) =>
-                    setForm((f) => (f ? { ...f, maxDuration: e.target.value } : f))
-                  }
-                />
-                <p className="text-xs text-muted-foreground">For ranges (e.g. 40–50 min)</p>
+                <Label>Max Duration</Label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-9 pr-8"
+                      placeholder="Hrs"
+                      value={form.maxDurationHr}
+                      onChange={(e) => setForm((f) => f ? { ...f, maxDurationHr: e.target.value } : f)}
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">hr</span>
+                  </div>
+                  <div className="relative flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      className="h-9 pr-8"
+                      placeholder="Min"
+                      value={form.maxDurationMinPart}
+                      onChange={(e) => setForm((f) => f ? { ...f, maxDurationMinPart: e.target.value } : f)}
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">min</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Optional upper bound</p>
               </div>
             </div>
 
