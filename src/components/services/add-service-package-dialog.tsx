@@ -74,7 +74,7 @@ function emptyAddPackage(gstOn = true): AddPackageForm {
     durationMin: "",
     maxDuration: "",
     active: true,
-    incentivePercent: "3",
+    incentivePercent: "0",
     isHighEnd: false,
   };
 }

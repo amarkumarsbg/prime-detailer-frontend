@@ -109,7 +109,7 @@ export function AddAddonDialog({
       scope: form.globalAddon ? "GLOBAL" : "BRANCH",
       isActive: form.active,
       isHighEnd: false,
-      incentivePercent: 3,
+      incentivePercent: 0,
       durationMinutes,
       gstPercent: gstOn ? 18 : undefined,
       gstApplicable: gstOn,

@@ -900,7 +900,7 @@ export default function QuotationsPage() {
       };
     });
 
-    const incentivePercent = 5;
+    const incentivePercent = 0;
     const incentiveAmount = Math.round((q.subtotal * incentivePercent) / 100);
 
     const newJob: JobCard = {
