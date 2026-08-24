@@ -63,4 +63,6 @@ export interface User {
   permissions?: string[];
   /** Whether the payroll system should strictly deduct absence based on missed punches. Default: true */
   isAttendanceTracked?: boolean;
+  /** Individual fixed monthly basic salary (overrides role-based salary structure). */
+  baseSalary?: number;
 }

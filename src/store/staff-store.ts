@@ -32,6 +32,7 @@ interface AddStaffInput {
   anniversary?: string;
   notes?: string;
   isAttendanceTracked?: boolean;
+  baseSalary?: number;
   /** Omit for server-generated temporary password (recommended). */
   password?: string;
 }
@@ -49,7 +50,7 @@ interface StaffStoreState {
   updateStaff: (
     id: string,
     updates: Partial<
-      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions" | "avatar" | "isAttendanceTracked">
+      Pick<User, "name" | "email" | "phone" | "role" | "branchId" | "isActive" | "permissions" | "avatar" | "isAttendanceTracked" | "baseSalary">
     > &
       Partial<{
         employeeCode: string | null;
@@ -123,6 +124,7 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       branchId: input.branchId,
       isActive: input.isActive ?? true,
       isAttendanceTracked: input.isAttendanceTracked ?? true,
+      baseSalary: input.baseSalary ?? null,
       attendancePin: allocateAttendancePin(() => get().staff),
       employeeCode: hr.employeeCode ?? null,
       designation: hr.designation ?? null,
@@ -179,6 +181,8 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
         updates.notes !== undefined ? updates.notes?.trim() || undefined : current.notes,
       isAttendanceTracked:
         updates.isAttendanceTracked !== undefined ? updates.isAttendanceTracked : current.isAttendanceTracked,
+      baseSalary:
+        updates.baseSalary !== undefined ? updates.baseSalary : current.baseSalary,
     };
 
     if (
@@ -208,6 +212,7 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
         isActive: next.isActive,
         permissions: next.permissions,
         avatar: next.avatar ?? null,
+        baseSalary: next.baseSalary ?? null,
         employeeCode: hr.employeeCode ?? null,
         designation: hr.designation ?? null,
         department: hr.department ?? null,

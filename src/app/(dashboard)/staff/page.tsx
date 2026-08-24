@@ -195,6 +195,7 @@ export default function StaffPage() {
   const [newNotes, setNewNotes] = useState("");
   const [newIsActive, setNewIsActive] = useState(true);
   const [newIsAttendanceTracked, setNewIsAttendanceTracked] = useState(true);
+  const [newBaseSalary, setNewBaseSalary] = useState("");
 
   const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole), [authRole]);
 
@@ -266,6 +267,7 @@ export default function StaffPage() {
     setNewNotes("");
     setNewIsActive(true);
     setNewIsAttendanceTracked(true);
+    setNewBaseSalary("");
   };
 
   const filteredStaff = useMemo(() => {
@@ -605,6 +607,7 @@ export default function StaffPage() {
         ...(newJoiningDate.trim() ? { joiningDate: newJoiningDate.trim() } : {}),
         ...(newNotes.trim() ? { notes: newNotes.trim() } : {}),
         isAttendanceTracked: newIsAttendanceTracked,
+        ...(newBaseSalary.trim() && !Number.isNaN(Number(newBaseSalary)) ? { baseSalary: Number(newBaseSalary) } : {}),
       });
       pushActivityLog({
         action: "CREATED",
@@ -878,6 +881,16 @@ export default function StaffPage() {
                             className="date-input-icon-end pr-9"
                             value={newJoiningDate}
                             onChange={(e) => setNewJoiningDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="baseSalary">Basic Salary (₹)</Label>
+                          <Input
+                            id="baseSalary"
+                            inputMode="numeric"
+                            placeholder="e.g. 15000"
+                            value={newBaseSalary}
+                            onChange={(e) => setNewBaseSalary(e.target.value)}
                           />
                         </div>
                         <div className="space-y-2">

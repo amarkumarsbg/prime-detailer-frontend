@@ -206,6 +206,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [editAnniversary, setEditAnniversary] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editIsAttendanceTracked, setEditIsAttendanceTracked] = useState(true);
+  const [editBaseSalary, setEditBaseSalary] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
@@ -264,6 +265,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setEditAnniversary(member.anniversary ?? "");
     setEditNotes(member.notes ?? "");
     setEditIsAttendanceTracked(member.isAttendanceTracked ?? true);
+    setEditBaseSalary(member.baseSalary !== undefined ? String(member.baseSalary) : "");
   };
 
   const handleStartEditProfile = () => {
@@ -411,6 +413,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       anniversary: editAnniversary.trim() || null,
       notes: editNotes.trim() || null,
       isAttendanceTracked: editIsAttendanceTracked,
+      baseSalary: editBaseSalary.trim() && !Number.isNaN(Number(editBaseSalary)) ? Number(editBaseSalary) : undefined,
     });
     if (result.ok) {
       pushActivityLog({
@@ -720,6 +723,16 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                     className="date-input-icon-end pr-9"
                     value={editAnniversary}
                     onChange={(e) => setEditAnniversary(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-base-salary">Basic Salary (₹)</Label>
+                  <Input
+                    id="staff-base-salary"
+                    inputMode="numeric"
+                    placeholder="e.g. 15000"
+                    value={editBaseSalary}
+                    onChange={(e) => setEditBaseSalary(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2 xl:col-span-3">
