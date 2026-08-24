@@ -373,9 +373,20 @@ export default function JobCardDetailPage() {
     null
   );
   const [whatsAppNotifyOpen, setWhatsAppNotifyOpen] = useState(false);
-  const [deliverVehicleOpen, setDeliverVehicleOpen] = useState(
-    () => searchParams.get("deliverVehicle") === "1"
-  );
+  const [deliverVehicleOpen, setDeliverVehicleOpen] = useState(false);
+
+  // Open deliver-vehicle dialog from ?deliverVehicle=1 query param (set by
+  // billing invoice page after recording payment), but only when the job card
+  // is not already delivered. Clear the param from the URL immediately so
+  // navigating back to this page later doesn't re-open the dialog.
+  useEffect(() => {
+    if (searchParams.get("deliverVehicle") !== "1") return;
+    router.replace(`/job-cards/${id}`, { scroll: false });
+    if (currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED") {
+      setDeliverVehicleOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [deliverVehicleSubmitting, setDeliverVehicleSubmitting] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
