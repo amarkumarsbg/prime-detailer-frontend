@@ -126,7 +126,13 @@ export const usePickupDropStore = create<PickupDropStore>((set, get) => ({
 
   setWritesBlocked: (blocked) => set({ writesBlocked: blocked }),
 
-  setRequestsFromBootstrap: (requests) => set({ requests, hydrated: true }),
+  setRequestsFromBootstrap: (serverRequests) => set((s) => {
+    // Keep any locally created requests that the server doesn't know about yet
+    // (e.g. created while writes were blocked or before first sync).
+    const serverIds = new Set(serverRequests.map((r) => r.id));
+    const localOnly = s.requests.filter((r) => !serverIds.has(r.id));
+    return { requests: [...serverRequests, ...localOnly], hydrated: true };
+  }),
 
   addRequest: (input) => {
     const existing = findPickupDropRequest(input.jobCardId, input.type, get().requests);

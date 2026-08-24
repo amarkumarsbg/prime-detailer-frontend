@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -226,6 +227,9 @@ export default function JobCardsPage() {
 
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [recordPaymentInvoiceId, setRecordPaymentInvoiceId] = useState<string | null>(null);
+  const [deleteConfirmJobCard, setDeleteConfirmJobCard] = useState<(typeof jobCards)[0] | null>(null);
+  const [deleteConfirmHasInvoice, setDeleteConfirmHasInvoice] = useState(false);
+  const [deletingJobCard, setDeletingJobCard] = useState(false);
 
   const handleOpenRecordPayment = (jc: JobCard) => {
     let invoice = useInvoiceStore.getState().invoices.find((inv) => inv.jobCardId === jc.id);
@@ -950,16 +954,11 @@ export default function JobCardsPage() {
                               Download Invoice
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 const hasInvoice = invoices.some((inv) => inv.jobCardId === jc.id);
-                                const confirmMsg = hasInvoice 
-                                  ? "This job card has an invoice. Deleting it may impact billing records. Are you sure you want to delete this job card?"
-                                  : "Are you sure you want to delete this job card?";
-                                if (window.confirm(confirmMsg)) {
-                                  await deleteJobCard(jc.id);
-                                  toast.success("Job card deleted successfully.");
-                                }
+                                setDeleteConfirmHasInvoice(hasInvoice);
+                                setDeleteConfirmJobCard(jc);
                               }}
                               className="gap-2 text-xs text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
                             >
@@ -1108,6 +1107,44 @@ export default function JobCardsPage() {
         onOpenChange={setRecordPaymentOpen}
         invoiceId={recordPaymentInvoiceId}
       />
+
+      <Dialog open={!!deleteConfirmJobCard} onOpenChange={(o) => { if (!o) setDeleteConfirmJobCard(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete Job Card?</DialogTitle>
+            <DialogDescription className="pt-1">
+              {deleteConfirmHasInvoice
+                ? "This job card has an invoice. Deleting it may impact billing records. This action cannot be undone."
+                : "Are you sure you want to delete this job card? This action cannot be undone."}
+              {deleteConfirmJobCard && (
+                <span className="block mt-2 font-mono font-semibold text-foreground">{deleteConfirmJobCard.jobNumber} &mdash; {deleteConfirmJobCard.customerName}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" disabled={deletingJobCard} onClick={() => setDeleteConfirmJobCard(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deletingJobCard}
+              onClick={async () => {
+                if (!deleteConfirmJobCard) return;
+                setDeletingJobCard(true);
+                try {
+                  await deleteJobCard(deleteConfirmJobCard.id);
+                  toast.success("Job card deleted.");
+                  setDeleteConfirmJobCard(null);
+                } catch {
+                  toast.error("Could not delete job card.");
+                } finally {
+                  setDeletingJobCard(false);
+                }
+              }}
+            >
+              {deletingJobCard ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

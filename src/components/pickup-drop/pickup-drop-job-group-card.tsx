@@ -130,7 +130,9 @@ function LegRow({
             >
               {nextStatus && !advanceBlock
                 ? pickupAdvanceActionLabel(leg.type, nextStatus)
-                : "Waiting for workshop"}
+                : leg.type === "DROP" && job && (job.status === "READY" || job.status === "DELIVERED")
+                  ? "Assign driver to proceed"
+                  : "Waiting for workshop"}
             </Button>
           ) : null}
           {legComplete ? null : (

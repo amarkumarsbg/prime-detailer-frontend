@@ -62,6 +62,7 @@ import {
   Wrench,
   ListChecks,
   Pencil,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -499,6 +500,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     getValues: () => AddVehicleFormData & { registrationNumber: string; isVin: boolean };
   } | null>(null);
   const isSubmittingJobRef = useRef(false);
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
 
   const [jobCreateStep, setJobCreateStep] = useState(0);
   const [isDesktopWide, setIsDesktopWide] = useState(false);
@@ -1461,6 +1463,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
 
     isSubmittingJobRef.current = true;
+    setIsCreatingBooking(true);
     try {
     const now = new Date().toISOString();
     const jobNumber = getNextJobNumber();
@@ -1997,6 +2000,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     });
     } finally {
       isSubmittingJobRef.current = false;
+      setIsCreatingBooking(false);
     }
   };
 
@@ -4932,12 +4936,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={bookingWizardIncomplete}
+                    disabled={bookingWizardIncomplete || isCreatingBooking}
                     title={
                       bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
                     }
                   >
-                    {isJobCard ? "Create job card" : "Create booking"}
+                    {isCreatingBooking ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        {isJobCard ? "Creating job card..." : "Creating booking..."}
+                      </>
+                    ) : (
+                      isJobCard ? "Create job card" : "Create booking"
+                    )}
                   </Button>
                 </div>
               )}
