@@ -45,6 +45,9 @@ export type AddPackageForm = {
   sedan: string;
   suv: string;
   bike: string;
+  luxury: string;
+  compactSuv: string;
+  muv: string;
   gstApplicable: boolean;
   gstPercent: string;
   durationMin: string;
@@ -63,6 +66,9 @@ function emptyAddPackage(gstOn = true): AddPackageForm {
     sedan: "",
     suv: "",
     bike: "",
+    luxury: "",
+    compactSuv: "",
+    muv: "",
     gstApplicable: gstOn,
     gstPercent: "18",
     durationMin: "",
@@ -74,25 +80,28 @@ function emptyAddPackage(gstOn = true): AddPackageForm {
 }
 
 const PRICING_QUICK_SEGMENTS: {
-  key: keyof Pick<SegmentPricing, "HATCHBACK" | "SEDAN" | "SUV" | "BIKE">;
+  key: keyof SegmentPricing;
   label: string;
   hint: string;
   icon: string;
 }[] = [
   { key: "HATCHBACK", label: "Hatchback", hint: "Small cars", icon: "🚗" },
   { key: "SEDAN", label: "Sedan", hint: "Mid-size", icon: "🚙" },
+  { key: "COMPACT_SUV", label: "Compact SUV", hint: "Crossover", icon: "🚙" },
   { key: "SUV", label: "SUV", hint: "Large", icon: "🚐" },
+  { key: "MUV", label: "MUV", hint: "Multi-utility", icon: "🚐" },
+  { key: "LUXURY", label: "Luxury", hint: "Premium", icon: "🏎️" },
   { key: "BIKE", label: "Bike", hint: "Two-wheeler", icon: "🏍️" },
 ];
 
-const PRICING_FORM_FIELD: Record<
-  "HATCHBACK" | "SEDAN" | "SUV" | "BIKE",
-  keyof Pick<AddPackageForm, "hatch" | "sedan" | "suv" | "bike">
-> = {
+const PRICING_FORM_FIELD: Record<keyof SegmentPricing, keyof Pick<AddPackageForm, "hatch" | "sedan" | "suv" | "bike" | "luxury" | "compactSuv" | "muv">> = {
   HATCHBACK: "hatch",
   SEDAN: "sedan",
   SUV: "suv",
   BIKE: "bike",
+  LUXURY: "luxury",
+  COMPACT_SUV: "compactSuv",
+  MUV: "muv",
 };
 
 function slugifyCategoryName(name: string): string {
@@ -207,6 +216,9 @@ export function AddServicePackageDialog({
     const s = Math.max(0, parseFloat(addForm.sedan) || 0);
     const u = Math.max(0, parseFloat(addForm.suv) || 0);
     const bike = Math.max(0, parseFloat(addForm.bike) || 0);
+    const luxury = addForm.luxury.trim() ? Math.max(0, parseFloat(addForm.luxury) || 0) : Math.round(Math.max(s * 1.35, u * 1.1));
+    const compactSuv = addForm.compactSuv.trim() ? Math.max(0, parseFloat(addForm.compactSuv) || 0) : Math.round((h + u) / 2);
+    const muv = addForm.muv.trim() ? Math.max(0, parseFloat(addForm.muv) || 0) : Math.round((s + u) / 2);
     if (h === 0 && s === 0 && u === 0 && bike === 0) {
       toast.error("Enter at least one vehicle price");
       return;
@@ -215,9 +227,9 @@ export function AddServicePackageDialog({
       HATCHBACK: h,
       SEDAN: s,
       SUV: u,
-      LUXURY: Math.round(Math.max(s * 1.35, u * 1.1)),
-      MUV: Math.round((s + u) / 2),
-      COMPACT_SUV: Math.round((h + u) / 2),
+      LUXURY: luxury,
+      MUV: muv,
+      COMPACT_SUV: compactSuv,
       BIKE: bike,
     };
     const incentive = Math.min(100, Math.max(0, parseFloat(addForm.incentivePercent) || 0));
@@ -345,7 +357,7 @@ export function AddServicePackageDialog({
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {PRICING_QUICK_SEGMENTS.map(({ key, label, hint, icon }) => {
-                    const fk = PRICING_FORM_FIELD[key];
+                    const fk = PRICING_FORM_FIELD[key as keyof SegmentPricing];
                     return (
                       <div key={key} className="space-y-1">
                         <Label className="text-xs font-normal flex items-center gap-1.5">
