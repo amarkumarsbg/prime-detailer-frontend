@@ -629,7 +629,7 @@ export default function BookingsPage() {
                       <button
                         type="button"
                         disabled={markingPickupId === apt.id}
-                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-60 disabled:pointer-events-none"
+                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-60 disabled:pointer-events-none whitespace-nowrap"
                         onClick={() => void markVehicleAtWorkshop(apt)}
                       >
                         {markingPickupId === apt.id ? (
@@ -640,19 +640,31 @@ export default function BookingsPage() {
                         Mark at Workshop
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={creatingFromAppointmentId === apt.id}
-                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:pointer-events-none"
-                        onClick={() => void createJobFromAppointment(apt)}
-                      >
-                        {creatingFromAppointmentId === apt.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Plus className="h-3.5 w-3.5" />
+                      <>
+                        {!apt.vehiclePickupRequired && (
+                          <button
+                            type="button"
+                            title="Enable pickup workflow"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600 transition-colors dark:hover:bg-amber-950/30"
+                            onClick={() => void updateAppointment(apt.id, { vehiclePickupRequired: true, vehiclePickupStatus: "PENDING" })}
+                          >
+                            <Truck className="h-3.5 w-3.5" />
+                          </button>
                         )}
-                        Create job card
-                      </button>
+                        <button
+                          type="button"
+                          disabled={creatingFromAppointmentId === apt.id}
+                          className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:pointer-events-none whitespace-nowrap"
+                          onClick={() => void createJobFromAppointment(apt)}
+                        >
+                          {creatingFromAppointmentId === apt.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Plus className="h-3.5 w-3.5" />
+                          )}
+                          Create job card
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

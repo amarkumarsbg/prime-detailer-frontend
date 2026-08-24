@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
+import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import {
   Printer,
   CreditCard,
@@ -310,6 +312,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const searchParams = useSearchParams();
   const returnQuery = searchParams.toString();
   const currentReturnPath = returnQuery ? `${pathname}?${returnQuery}` : pathname;
+  const storesReady = useDashboardStoresReady();
 
   const invoices = useInvoiceStore((s) => s.invoices);
   const updateInvoice = useInvoiceStore((s) => s.updateInvoice);
@@ -1341,6 +1344,13 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   };
 
   if (!invoice) {
+    if (!storesReady) {
+      return (
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
         <p className="text-muted-foreground">Invoice not found</p>

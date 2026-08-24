@@ -76,6 +76,7 @@ export function DeliverVehicleDialog({
   const [dropDriverName, setDropDriverName] = useState<string | undefined>();
   const [dropScheduledLocal, setDropScheduledLocal] = useState("");
 
+  // Reset form state only when dialog opens (not when dropOff changes while open).
   useEffect(() => {
     if (!open) return;
     setNotes("");
@@ -93,7 +94,8 @@ export function DeliverVehicleDialog({
         ? datetimeLocalValue(scheduled)
         : datetimeLocalValue(new Date(Date.now() + 2 * 60 * 60 * 1000));
     setDropScheduledLocal(isDatetimeLocalInPast(local) ? localDatetimeLocalInputMin() : local);
-  }, [open, dropOff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const allChecked = DELIVERY_CHECKLIST_ITEMS.every((item) => checks[item.id]);
   const dropOffReady =
