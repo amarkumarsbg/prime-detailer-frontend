@@ -19,7 +19,7 @@ export function setPickupDropBootReconciling(v: boolean) { _bootReconciling = v;
 /** Call this from the console or a dev tool to re-enable writes after unblocking on the server. */
 export function clearPickupDropWriteBlock() {
   _writesBlocked = false;
-  try { localStorage.removeItem(_WRITES_BLOCKED_KEY); } catch { /* non-critical */ }
+  try { if (typeof window !== "undefined") localStorage.removeItem(_WRITES_BLOCKED_KEY); } catch { /* non-critical */ }
   usePickupDropStore.getState().setWritesBlocked(false);
 }
 
@@ -27,25 +27,30 @@ const _WRITES_BLOCKED_KEY = "pnd_writes_blocked";
 
 /**
  * Module-level flag: set synchronously on first 403 to block all subsequent
- * calls immediately. Persisted to localStorage so hot-reloads don't re-fire.
+ * calls immediately. Initialized lazily from localStorage on first use.
  */
-let _writesBlocked: boolean = (() => {
-  try {
-    return localStorage.getItem(_WRITES_BLOCKED_KEY) === "1";
-  } catch {
-    return false;
+let _writesBlocked: boolean | null = null;
+
+function isWritesBlocked(): boolean {
+  if (_writesBlocked === null) {
+    try {
+      _writesBlocked = typeof window !== "undefined" && localStorage.getItem(_WRITES_BLOCKED_KEY) === "1";
+    } catch {
+      _writesBlocked = false;
+    }
   }
-})();
+  return _writesBlocked;
+}
 
 function blockWrites() {
   _writesBlocked = true;
-  try { localStorage.setItem(_WRITES_BLOCKED_KEY, "1"); } catch { /* non-critical */ }
+  try { if (typeof window !== "undefined") localStorage.setItem(_WRITES_BLOCKED_KEY, "1"); } catch { /* non-critical */ }
   usePickupDropStore.getState().setWritesBlocked(true);
 }
 
 function pushPickupSnapshot(requests: PickupDropRequest[]) {
   if (_bootReconciling) return;
-  if (_writesBlocked) return;
+  if (isWritesBlocked()) return;
   if (process.env.NEXT_PUBLIC_BLOCK_PICKUP_DROP_WRITES === "true") { blockWrites(); return; }
   void postCollectionSnapshot("pickupDropRequests", requests).catch((err) => {
     if (err != null && typeof err === "object" && "status" in err && (err as { status: number }).status === 403) {
