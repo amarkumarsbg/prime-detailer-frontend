@@ -15,6 +15,7 @@ import {
 import {
   attendancePaths,
   bootstrapPaths,
+  jobsPaths,
   messagingPaths,
   organizationPaths,
   platformPaths,
@@ -50,6 +51,7 @@ const tags = [
   { name: "Bootstrap", description: "Studio bootstrap payload" },
   { name: "Organization", description: "Studio subscription entitlement" },
   { name: "SaaS Admin", description: "Platform-owner control plane (/api/platform)" },
+  { name: "Jobs", description: "Internal cron/job endpoints (/api/jobs). Auth via X-Internal-Job-Key or JWT." },
   { name: "Public", description: "Unauthenticated public invoice/branding" },
 ];
 
@@ -107,7 +109,8 @@ export function buildOpenApiDocument(options?: { serverUrl?: string }) {
       messagingPaths,
       attendancePaths,
       organizationPaths,
-      platformPaths
+      platformPaths,
+      jobsPaths
     ),
     components: openApiComponents,
   };

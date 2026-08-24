@@ -9,6 +9,12 @@ import {
   type OpenApiPaths,
 } from "../helpers.js";
 
+const termMonthsSchema = {
+  type: "integer",
+  enum: [12, 24, 36, 60],
+  description: "Subscription term in months.",
+};
+
 export const messagingPaths: OpenApiPaths = {
   "/api/messaging/sms/test": {
     post: {
@@ -203,6 +209,121 @@ export const organizationPaths: OpenApiPaths = {
       },
     },
   },
+  "/api/organization/subscription/pricing": {
+    post: {
+      tags: ["Organization"],
+      summary: "Get subscription pricing quote",
+      description: "Returns a pricing quote for the given plan term and add-ons. Does not create a renewal. Requires JWT.",
+      security: bearerSecurity,
+      requestBody: jsonBody({
+        type: "object",
+        required: ["termMonths"],
+        properties: {
+          termMonths: termMonthsSchema,
+          extraBranches: { type: "integer", minimum: 0, default: 0, description: "Additional branch slots beyond the plan default." },
+          extraUsers: { type: "integer", minimum: 0, default: 0, description: "Additional staff user slots beyond the plan default." },
+          referralCode: { type: "string", nullable: true, maxLength: 32, description: "Optional partner/referral code." },
+        },
+      }),
+      responses: {
+        "200": okResponse({
+          type: "object",
+          description: "Pricing quote with line items and totals.",
+          additionalProperties: true,
+        }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/organization/subscription/renew": {
+    post: {
+      tags: ["Organization"],
+      summary: "Submit subscription renewal request",
+      description: "Creates a pending renewal (bill) for the caller's organization. Requires JWT. After submission, payment must be verified via the platform `/verify-payment` endpoint.",
+      security: bearerSecurity,
+      requestBody: jsonBody(
+        {
+          type: "object",
+          properties: {
+            termMonths: { ...termMonthsSchema, description: "Desired renewal term in months. Defaults to 12 if omitted." },
+            extraBranches: { type: "integer", minimum: 0, description: "Additional branch slots." },
+            extraUsers: { type: "integer", minimum: 0, description: "Additional user slots." },
+            referralCode: { type: "string", nullable: true, maxLength: 32 },
+            method: { type: "string", maxLength: 64, description: "Preferred payment method hint (e.g. 'UPI', 'Bank Transfer')." },
+            notes: { type: "string", maxLength: 500, description: "Free-form notes to include with the renewal request." },
+          },
+        },
+        false
+      ),
+      responses: {
+        "200": okResponse({
+          type: "object",
+          description: "Created renewal record.",
+          additionalProperties: true,
+        }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/organization/subscription/bills": {
+    get: {
+      tags: ["Organization"],
+      summary: "List subscription bills",
+      description: "Returns all subscription bills (invoices) for the caller's organization. Requires JWT.",
+      security: bearerSecurity,
+      responses: {
+        "200": okResponse({
+          type: "object",
+          required: ["bills"],
+          properties: {
+            bills: {
+              type: "array",
+              items: { type: "object", additionalProperties: true },
+              description: "List of subscription bill records.",
+            },
+          },
+        }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/organization/subscription/bills/{billId}": {
+    get: {
+      tags: ["Organization"],
+      summary: "Get a single subscription bill",
+      description: "Returns one subscription bill by ID for the caller's organization. Returns 404 if not found or belongs to a different org. Requires JWT.",
+      security: bearerSecurity,
+      parameters: [
+        { name: "billId", in: "path", required: true, schema: { type: "string" }, description: "Subscription bill ID." },
+      ],
+      responses: {
+        "200": okResponse({ type: "object", additionalProperties: true }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/organization/subscription/renewals": {
+    get: {
+      tags: ["Organization"],
+      summary: "List subscription renewal history",
+      description: "Returns the renewal history for the caller's organization. Requires JWT.",
+      security: bearerSecurity,
+      responses: {
+        "200": okResponse({
+          type: "object",
+          required: ["renewals"],
+          properties: {
+            renewals: {
+              type: "array",
+              items: { type: "object", additionalProperties: true },
+              description: "List of renewal records ordered by date.",
+            },
+          },
+        }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
 };
 
 export const platformPaths: OpenApiPaths = {
@@ -279,6 +400,101 @@ export const platformPaths: OpenApiPaths = {
       }),
       responses: {
         "200": okResponse({ type: "object", additionalProperties: true }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/organizations/{orgId}/subscription/verify-payment": {
+    post: {
+      tags: ["SaaS Admin"],
+      summary: "Verify subscription payment (platform)",
+      description:
+        "Records the outcome of a payment attempt for a pending subscription bill. " +
+        "Use `outcome: 'PAID'` to activate the subscription, or `'FAILED'` to mark it as failed. " +
+        "Requires PLATFORM_OWNER JWT **or** `X-Platform-Admin-Key`.",
+      security: platformSecurity,
+      parameters: [
+        { name: "orgId", in: "path", required: true, schema: { type: "string" }, description: "Organization ID." },
+      ],
+      requestBody: jsonBody({
+        type: "object",
+        required: ["paymentId", "outcome"],
+        properties: {
+          paymentId: { type: "string", minLength: 1, description: "The payment/bill ID to verify." },
+          outcome: { type: "string", enum: ["PAID", "FAILED"], description: "Result of the payment." },
+          txnReference: { type: "string", nullable: true, description: "External transaction reference (e.g. gateway txn ID)." },
+          amount: { type: "number", minimum: 0, nullable: true, description: "Amount received." },
+          notes: { type: "string", nullable: true, description: "Internal notes." },
+        },
+      }),
+      responses: {
+        "200": okResponse({ type: "object", additionalProperties: true, description: "Updated entitlement record." }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+  "/api/platform/organizations/{orgId}/subscription/mark-paid": {
+    post: {
+      tags: ["SaaS Admin"],
+      summary: "Manually mark subscription as paid (platform)",
+      description:
+        "Admin shortcut to mark an organization's subscription as paid without a formal payment verification flow. " +
+        "Creates a renewal record and activates the entitlement. " +
+        "Requires PLATFORM_OWNER JWT **or** `X-Platform-Admin-Key`.",
+      security: platformSecurity,
+      parameters: [
+        { name: "orgId", in: "path", required: true, schema: { type: "string" }, description: "Organization ID." },
+      ],
+      requestBody: jsonBody(
+        {
+          type: "object",
+          properties: {
+            txnReference: { type: "string", nullable: true, description: "External transaction reference." },
+            amount: { type: "number", minimum: 0, nullable: true, description: "Amount paid." },
+            termMonths: { ...termMonthsSchema, description: "Term to activate. Defaults to 12." },
+            notes: { type: "string", nullable: true, description: "Internal admin notes." },
+          },
+        },
+        false
+      ),
+      responses: {
+        "200": okResponse({ type: "object", additionalProperties: true, description: "Updated entitlement record." }),
+        ...commonErrorResponses(),
+      },
+    },
+  },
+};
+
+/** Internal/cron job endpoints. */
+export const jobsPaths: OpenApiPaths = {
+  "/api/jobs/reminders/process": {
+    post: {
+      tags: ["Jobs"],
+      summary: "Process service/payment reminder WhatsApp messages",
+      description:
+        "Daily cron endpoint. Scans all service reminders and pending invoices across all orgs " +
+        "(or a single org when `organizationId` is provided) and sends WhatsApp notifications via Twilio. " +
+        "\n\n**Auth:** `X-Internal-Job-Key: $INTERNAL_JOB_SECRET` header **or** a valid Bearer JWT " +
+        "(org-scoped, for single-org use). This endpoint is not for studio users.",
+      security: [{ InternalJobKey: [] }, { BearerAuth: [] }],
+      requestBody: jsonBody(
+        {
+          type: "object",
+          properties: {
+            organizationId: {
+              type: "string",
+              description: "When provided with a job-secret, limits processing to a single organization. Ignored when using a JWT (already org-scoped).",
+            },
+          },
+        },
+        false
+      ),
+      responses: {
+        "200": okResponse({
+          type: "object",
+          description: "Summary of processed reminders per organization.",
+          additionalProperties: true,
+        }),
         ...commonErrorResponses(),
       },
     },
