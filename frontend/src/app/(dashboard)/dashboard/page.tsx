@@ -93,6 +93,7 @@ import { useSettingsStore } from "@/store/settings-store";
 import { useAuthStore } from "@/store/auth-store";
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { notifyJobReadyWhatsApp } from "@/lib/whatsapp-automation-triggers";
+import { useSidebarStore } from "@/store/sidebar-store";
 
 const FUNNEL_IN_PROGRESS: JobCard["status"][] = [
   "INSPECTION",
@@ -181,6 +182,7 @@ const QUICK_ACTIONS = [
 export default function DashboardPage() {
   const router = useRouter();
   const setActiveFilter = useDashboardFilterStore((s) => s.setActiveFilter);
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const branches = useBranchStore((s) => s.branches);
   const { jobCards } = useJobCardStore();
   const appointments = useAppointmentStore((s) => s.appointments);
@@ -1258,7 +1260,7 @@ export default function DashboardPage() {
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             Revenue &amp; collections
           </p>
-          <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <StaggerGrid className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 ${sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4 2xl:grid-cols-5"}`}>
             <KPICard
               tone="emerald"
               title="Total Revenue"
