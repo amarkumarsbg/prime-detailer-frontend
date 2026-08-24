@@ -631,6 +631,10 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                     <CalendarDays className="w-4 h-4 shrink-0" />
                     Anniversary: {member.anniversary?.trim() || "—"}
                   </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <IndianRupee className="w-4 h-4 shrink-0" />
+                    Basic Salary: {member.baseSalary != null ? formatCurrency(member.baseSalary) : "—"}
+                  </div>
                   {member.notes?.trim() ? (
                     <div className="sm:col-span-2 lg:col-span-3 text-muted-foreground">
                       Notes: {member.notes.trim()}
