@@ -267,20 +267,6 @@ export default function BookingsPage() {
     }
   };
 
-  const markVehicleAtWorkshop = async (apt: Appointment) => {
-    setMarkingPickupId(apt.id);
-    try {
-      await updateAppointment(apt.id, { vehiclePickupStatus: "AT_WORKSHOP" });
-      toast.success("Vehicle marked as at workshop", {
-        description: `${getAppointmentDisplayId(apt)} — you can now create the job card.`,
-      });
-    } catch {
-      toast.error("Could not update pickup status.");
-    } finally {
-      setMarkingPickupId(null);
-    }
-  };
-
   const createJobFromAppointment = async (apt: Appointment) => {
     if (apt.jobCardId) return;
     setCreatingFromAppointmentId(apt.id);
