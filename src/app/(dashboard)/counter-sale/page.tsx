@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Pencil, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { Clock, Minus, Pencil, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { PageSkeleton } from "@/components/shared/skeleton-loader";
@@ -52,11 +52,13 @@ import {
   counterSaleCartSubtotal,
   counterSaleInvoiceStatus,
   counterSaleLineTotal,
+  isCounterSaleInvoice,
   type CounterSaleCartLine,
 } from "@/lib/counter-sale";
 import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
-import { formatCurrency } from "@/lib/utils";
+import { InvoiceStatusBadge } from "@/components/shared/status-badge";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { normalizePhoneDigits } from "@/lib/phone";
 import type { Customer, PaymentMethod, Part } from "@/types";
 
@@ -75,8 +77,17 @@ export default function CounterSalePage() {
   const vehicles = useVehicleStore((s) => s.vehicles);
   const addInvoice = useInvoiceStore((s) => s.addInvoice);
   const getNextInvoiceNumber = useInvoiceStore((s) => s.getNextInvoiceNumber);
+  const allInvoices = useInvoiceStore((s) => s.invoices);
   const gstRegistrationStatus = useSettingsStore((s) => s.gstRegistrationStatus);
   const cashBankAccounts = useCashBankStore((s) => s.accounts);
+
+  const recentCounterSales = useMemo(() => {
+    return allInvoices
+      .filter(isCounterSaleInvoice)
+      .filter((inv) => !selectedBranchId || inv.branchId === selectedBranchId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 15);
+  }, [allInvoices, selectedBranchId]);
 
   const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches]);
   const [branchId, setBranchId] = useState("");
@@ -632,6 +643,47 @@ export default function CounterSalePage() {
                     </ul>
                   )}
                 </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="px-5 py-4 pb-0">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                Recent Sales
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 py-4">
+              {recentCounterSales.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No counter sales recorded yet.</p>
+              ) : (
+                <ul className="divide-y">
+                  {recentCounterSales.map((inv) => (
+                    <li key={inv.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left py-2.5 hover:bg-muted/40 rounded-md px-1 transition-colors"
+                        onClick={() => router.push(`/billing/invoices/${inv.id}`)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{inv.customerName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {inv.invoiceNumber} · {formatDate(inv.createdAt)}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="text-sm font-semibold tabular-nums">
+                              {formatCurrency(inv.grandTotal)}
+                            </span>
+                            <InvoiceStatusBadge status={inv.status} />
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>

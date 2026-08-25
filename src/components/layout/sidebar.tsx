@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { format, addDays } from "date-fns";
 import { cn, getInitials } from "@/lib/utils";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,6 +11,8 @@ import { useSidebarStore } from "@/store/sidebar-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useDashboardFilterStore } from "@/store/dashboard-filter-store";
 import { useSettingsStore } from "@/store/settings-store";
+import { useAppointmentStore } from "@/store/appointment-store";
+import { resolveAppointmentKind } from "@/lib/appointment-ids";
 import { canAccessNavItem } from "@/lib/rbac";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import {
@@ -61,6 +64,18 @@ function SidebarContent({
   const userRole = useAuthStore((s) => s.user?.role);
   const userPermissions = useAuthStore((s) => s.user?.permissions);
   const clearDashboardFilter = useDashboardFilterStore((s) => s.setActiveFilter);
+  const allAppointments = useAppointmentStore((s) => s.appointments);
+
+  const tomorrowScheduledCount = (() => {
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    const tomorrowKey = format(addDays(new Date(), 1), "yyyy-MM-dd");
+    return allAppointments.filter(
+      (a) =>
+        resolveAppointmentKind(a) === "APPOINTMENT" &&
+        (a.status === "SCHEDULED" || a.status === "CONFIRMED") &&
+        (a.date === todayKey || a.date === tomorrowKey)
+    ).length;
+  })();
 
   const filteredGroups = NAV_GROUPS.map((group) => ({
     ...group,
@@ -174,7 +189,12 @@ function SidebarContent({
                           isActive ? "opacity-100" : "opacity-90 motion-safe:group-hover:scale-125"
                         )}
                       />
-                      <span>{item.label}</span>
+                      <span className="flex-1 min-w-0">{item.label}</span>
+                      {item.href === "/appointments" && tomorrowScheduledCount > 0 && (
+                        <span className="ml-auto inline-flex items-center justify-center rounded-full bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                          {tomorrowScheduledCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

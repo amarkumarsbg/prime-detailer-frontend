@@ -62,6 +62,7 @@ export type CustomerMembershipStatus = "ACTIVE" | "EXPIRED" | "CANCELLED";
 export interface MembershipPackage {
   id: string;
   name: string;
+  description?: string;
   tier: MembershipTier;
   /** Demo list price (no payment processing). */
   price: number;

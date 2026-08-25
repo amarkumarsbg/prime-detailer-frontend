@@ -19,7 +19,12 @@ export function setPickupDropBootReconciling(v: boolean) { _bootReconciling = v;
 /** Call this from the console or a dev tool to re-enable writes after unblocking on the server. */
 export function clearPickupDropWriteBlock() {
   _writesBlocked = false;
-  try { if (typeof window !== "undefined") localStorage.removeItem(_WRITES_BLOCKED_KEY); } catch { /* non-critical */ }
+  try {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem(_WRITES_BLOCKED_KEY);
+      localStorage.removeItem(_WRITES_BLOCKED_KEY);
+    }
+  } catch { /* non-critical */ }
   usePickupDropStore.getState().setWritesBlocked(false);
 }
 
@@ -34,17 +39,26 @@ let _writesBlocked: boolean | null = null;
 function isWritesBlocked(): boolean {
   if (_writesBlocked === null) {
     try {
-      _writesBlocked = typeof window !== "undefined" && localStorage.getItem(_WRITES_BLOCKED_KEY) === "1";
+      // Only restore the block if it was set in this session (sessionStorage),
+      // not from a stale localStorage key that may outlive the server guard.
+      const session = typeof window !== "undefined" && sessionStorage.getItem(_WRITES_BLOCKED_KEY) === "1";
+      _writesBlocked = session;
+      // Migrate old localStorage flag to session-only (clear stale localStorage).
+      if (typeof window !== "undefined") {
+        try { localStorage.removeItem(_WRITES_BLOCKED_KEY); } catch { /* ok */ }
+      }
     } catch {
       _writesBlocked = false;
     }
   }
-  return _writesBlocked;
+  return _writesBlocked as boolean;
 }
 
 function blockWrites() {
   _writesBlocked = true;
-  try { if (typeof window !== "undefined") localStorage.setItem(_WRITES_BLOCKED_KEY, "1"); } catch { /* non-critical */ }
+  // Use sessionStorage so the block only lasts for this browser session,
+  // not permanently across restarts (which was causing lost pickup requests).
+  try { if (typeof window !== "undefined") sessionStorage.setItem(_WRITES_BLOCKED_KEY, "1"); } catch { /* non-critical */ }
   usePickupDropStore.getState().setWritesBlocked(true);
 }
 

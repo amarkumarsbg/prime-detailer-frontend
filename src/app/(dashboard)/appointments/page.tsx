@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import {
   format,
+  addDays,
   startOfDay,
   startOfMonth,
   endOfMonth,
@@ -79,7 +80,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
 import { getBookingConfirmationBusiness } from "@/lib/booking-confirmation-message";
-import { getNextAppointmentNumber, getAppointmentDisplayId } from "@/lib/appointment-ids";
+import { getNextAppointmentNumber, getAppointmentDisplayId, resolveAppointmentKind } from "@/lib/appointment-ids";
 import { convertAppointmentToJobCard } from "@/lib/convert-appointment-to-job";
 import { findCatalogServiceForAppointment } from "@/lib/job-from-appointment";
 import { useReservationReminders } from "@/hooks/use-reservation-reminders";
@@ -165,7 +166,8 @@ export default function AppointmentsPage() {
   const addCustomer = useCustomerStore((s) => s.addCustomer);
   const findByReferralCode = useCustomerStore((s) => s.findByReferralCode);
   const staff = useStaffStore((s) => s.staff);
-  const appointments = useScopedAppointments();
+  const allScopedAppointments = useScopedAppointments();
+  const appointments = allScopedAppointments.filter((a) => resolveAppointmentKind(a) === "APPOINTMENT");
   const jobCards = useJobCardStore((s) => s.jobCards);
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
@@ -258,6 +260,19 @@ export default function AppointmentsPage() {
 
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
+
+  // Auto-select tomorrow if today has no appointments but tomorrow does
+  useEffect(() => {
+    const todayK = format(new Date(), "yyyy-MM-dd");
+    const tomorrowDate = addDays(new Date(), 1);
+    const tomorrowK = format(tomorrowDate, "yyyy-MM-dd");
+    const hasTodayApts = appointments.some((a) => a.date === todayK);
+    const hasTomorrowApts = appointments.some((a) => a.date === tomorrowK);
+    if (!hasTodayApts && hasTomorrowApts) {
+      setSelectedDate(tomorrowDate);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointments.length]);
 
   const vehiclesForCustomer = useMemo(() => {
     if (!formCustomerId) return [];
@@ -684,9 +699,13 @@ export default function AppointmentsPage() {
   }, [appointments]);
 
   const todayKey = format(new Date(), "yyyy-MM-dd");
+  const tomorrowKey = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const todayCount = appointmentsByDate.get(todayKey)?.length ?? 0;
   const scheduledCount = appointments.filter(
     (a) => a.status === "SCHEDULED" && !isAppointmentSlotElapsed(a.date, a.time)
+  ).length;
+  const tomorrowScheduledCount = appointments.filter(
+    (a) => a.status === "SCHEDULED" && a.date === tomorrowKey
   ).length;
   const confirmedCount = appointments.filter(
     (a) => a.status === "CONFIRMED" && !isAppointmentSlotElapsed(a.date, a.time)
@@ -698,7 +717,7 @@ export default function AppointmentsPage() {
   if (!storesReady && appointments.length === 0) return <PageSkeleton />;
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+    <div className="space-y-2 sm:space-y-3">
       <RefreshingBar show={!storesReady} />
       <Suspense fallback={null}>
         <AppointmentFromQueryEffect setDialogOpen={setDialogOpen} />
@@ -706,7 +725,7 @@ export default function AppointmentsPage() {
       <PageHeader
         title="Appointments"
         inlineActionsOnMobile
-        className="mb-3 sm:mb-6"
+        className="mb-1"
         actions={
           <Dialog open={dialogOpen} onOpenChange={handleAppointmentDialogChange}>
             <DialogTrigger asChild>
@@ -1223,7 +1242,7 @@ export default function AppointmentsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-4 gap-2">
         <KPICard
           size="compact"
           title="Today"
@@ -1239,6 +1258,7 @@ export default function AppointmentsPage() {
           icon={Clock}
           tone="violet"
           titleClassName="whitespace-nowrap"
+          subtitle={tomorrowScheduledCount > 0 ? `${tomorrowScheduledCount} tomorrow` : undefined}
         />
         <KPICard
           size="compact"
@@ -1259,40 +1279,40 @@ export default function AppointmentsPage() {
       </div>
 
       <Card className="border-border/80 shadow-sm overflow-hidden">
-        <CardHeader className="border-b border-border/70 bg-muted/20 px-4 py-3 sm:px-6 sm:pb-4 sm:pt-4">
-          <CardTitle className="text-base">Booking workspace</CardTitle>
+        <CardHeader className="border-b border-border/70 bg-muted/20 px-4 py-2 sm:px-6">
+          <CardTitle className="text-sm">Booking workspace</CardTitle>
         </CardHeader>
-        <CardContent className="px-3 pt-3 sm:px-6 sm:pt-5">
+        <CardContent className="px-3 pt-2 sm:px-4">
       <Tabs defaultValue="calendar" className="w-full">
         <TabsList className="w-full flex flex-wrap justify-start rounded-none border-0 border-b border-border/70 bg-transparent p-0 h-auto gap-0 mb-1">
           <TabsTrigger
             value="calendar"
             className={cn(
-              "rounded-none border-b-2 border-transparent bg-transparent shadow-none px-4 py-2.5 gap-2 text-muted-foreground",
+              "rounded-none border-b-2 border-transparent bg-transparent shadow-none px-3 py-2 gap-2 text-muted-foreground text-xs",
               "data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-800 data-[state=active]:bg-transparent",
               "dark:data-[state=active]:text-emerald-400"
             )}
           >
-            <Calendar className="w-4 h-4 shrink-0" />
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
             Calendar
           </TabsTrigger>
           <TabsTrigger
             value="list"
             className={cn(
-              "rounded-none border-b-2 border-transparent bg-transparent shadow-none px-4 py-2.5 gap-2 text-muted-foreground",
+              "rounded-none border-b-2 border-transparent bg-transparent shadow-none px-3 py-2 gap-2 text-muted-foreground text-xs",
               "data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-800 data-[state=active]:bg-transparent",
               "dark:data-[state=active]:text-emerald-400"
             )}
           >
-            <Clock className="w-4 h-4 shrink-0" />
+            <Clock className="w-3.5 h-3.5 shrink-0" />
             List view
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="calendar" className="mt-5 outline-none">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-2">
+        <TabsContent value="calendar" className="mt-2 outline-none">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+            <Card className="lg:col-span-2 shadow-none border-border/60">
+              <CardHeader className="pb-1 pt-2 px-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <CardTitle className="text-base">{format(currentMonth, "MMMM yyyy")}</CardTitle>
@@ -1323,10 +1343,10 @@ export default function AppointmentsPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2 pb-2 pt-1">
                 <div className="grid grid-cols-7 gap-px">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                    <div key={d} className="text-center text-xs font-medium text-muted-foreground py-2">{d}</div>
+                    <div key={d} className="text-center text-[10px] font-medium text-muted-foreground py-0.5">{d}</div>
                   ))}
                   {calendarDays.map((day) => {
                     const key = format(day, "yyyy-MM-dd");
@@ -1339,13 +1359,13 @@ export default function AppointmentsPage() {
                       <button
                         key={key}
                         onClick={() => setSelectedDate(day)}
-                        className={`relative flex flex-col items-center justify-start p-1 sm:p-2 min-h-[48px] sm:min-h-[64px] rounded-lg transition-colors text-sm
+                        className={`relative flex flex-col items-center justify-start p-0.5 min-h-[30px] sm:min-h-[36px] rounded-md transition-colors
                           ${!inMonth ? "text-muted-foreground/40" : ""}
                           ${isSelected ? "bg-primary/10 ring-1 ring-primary" : "hover:bg-muted/50"}
                           ${isCurrent && !isSelected ? "bg-accent" : ""}
                         `}
                       >
-                        <span className={`text-xs sm:text-sm font-medium ${isCurrent ? "text-primary font-bold" : ""}`}>
+                        <span className={`text-[11px] font-medium leading-tight ${isCurrent ? "text-primary font-bold" : ""}`}>
                           {format(day, "d")}
                         </span>
                         {dayAppts.length > 0 && (

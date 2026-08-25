@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -234,6 +235,7 @@ export function MembershipPageClient() {
   const [pkgDialogOpen, setPkgDialogOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<MembershipPackage | null>(null);
   const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
   const [formTier, setFormTier] = useState<MembershipTier>("MONTHLY");
   const [formPrice, setFormPrice] = useState("");
   const [formServiceQuantities, setFormServiceQuantities] = useState<Record<string, number>>({});
@@ -249,6 +251,7 @@ export function MembershipPageClient() {
   const openNewPackage = () => {
     setEditingPackage(null);
     setFormName("");
+    setFormDescription("");
     setFormTier("MONTHLY");
     setFormPrice("");
     setFormServiceQuantities({});
@@ -260,6 +263,7 @@ export function MembershipPageClient() {
   const openEditPackage = (p: MembershipPackage) => {
     setEditingPackage(p);
     setFormName(p.name);
+    setFormDescription(p.description ?? "");
     setFormTier(p.tier);
     setFormPrice(String(p.price));
     setFormServiceQuantities(
@@ -305,6 +309,7 @@ export function MembershipPageClient() {
     const pkg: MembershipPackage = {
       id: editingPackage?.id ?? `mem-pkg-${Date.now()}`,
       name: formName.trim(),
+      description: formDescription.trim() || undefined,
       tier: formTier,
       price,
       includedServiceIds: selectedServiceIds,
@@ -888,6 +893,17 @@ export function MembershipPageClient() {
               <div className="space-y-2">
                 <Label htmlFor="pkg-name">Name</Label>
                 <Input id="pkg-name" value={formName} onChange={(e) => setFormName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pkg-description">Description <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                <Textarea
+                  id="pkg-description"
+                  rows={2}
+                  placeholder="Describe what this package includes…"
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="resize-y"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Tier</Label>

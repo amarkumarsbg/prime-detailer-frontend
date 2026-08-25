@@ -68,6 +68,13 @@ function vehicleColorHex(colorName: string): string {
   return "#6366f1";
 }
 
+function vehicleMakeModelLabel(vehicle: Partial<Pick<Vehicle, "make" | "model">>): string {
+  const make = vehicle.make?.trim() ?? "";
+  const model = vehicle.model?.trim() ?? "";
+  const label = [make, model].filter(Boolean).join(" ");
+  return label || "Make/model not set";
+}
+
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -221,7 +228,7 @@ export default function CustomerDetailPage() {
     for (const sub of membershipSubscriptions.filter((s) => s.customerId === customer.id)) {
       const veh = sub.vehicleId ? vehicleList.find((x) => x.id === sub.vehicleId) : undefined;
       const vehicleLabel = veh
-        ? `${veh.registrationNumber} (${veh.make} ${veh.model})`
+        ? `${veh.registrationNumber} (${vehicleMakeModelLabel(veh)})`
         : sub.vehicleId
           ? sub.vehicleId
           : "Customer-wide";
@@ -741,7 +748,7 @@ export default function CustomerDetailPage() {
                                   {vehicle.registrationNumber}
                                 </p>
                                 <p className="text-sm font-medium leading-snug text-foreground">
-                                  {vehicle.make} {vehicle.model}
+                                  {vehicleMakeModelLabel(vehicle)}
                                   {vehicle.variant ? (
                                     <span className="font-normal text-muted-foreground">
                                       {" "}
@@ -1045,7 +1052,7 @@ export default function CustomerDetailPage() {
                             {vehicle.registrationNumber}
                           </p>
                           <p className="text-sm text-muted-foreground break-words">
-                            {vehicle.make} {vehicle.model}
+                            {vehicleMakeModelLabel(vehicle)}
                           </p>
                         </div>
                         {daysLeft <= 7 && daysLeft >= 0 && (
