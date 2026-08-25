@@ -218,9 +218,9 @@ export default function BillingPage() {
     const filters: Record<string, unknown> = {};
     if (selectedBranchId) filters.branchId = selectedBranchId;
     if (activeTab !== "all") filters.status = activeTab;
-    if (activeFilter !== DASHBOARD_FILTER.NONE) filters.dashboardFilter = activeFilter;
+    if (activeFilter) filters.dashboardFilter = activeFilter;
 
-    const isDefaultFilters = !selectedBranchId && activeTab === "all" && activeFilter === DASHBOARD_FILTER.NONE;
+    const isDefaultFilters = !selectedBranchId && activeTab === "all" && !activeFilter;
 
     if (isFirstMount.current && isInitialLoaded && !searchQuery && isDefaultFilters) {
       isFirstMount.current = false;
@@ -235,7 +235,7 @@ export default function BillingPage() {
     const filters: Record<string, unknown> = {};
     if (selectedBranchId) filters.branchId = selectedBranchId;
     if (activeTab !== "all") filters.status = activeTab;
-    if (activeFilter !== DASHBOARD_FILTER.NONE) filters.dashboardFilter = activeFilter;
+    if (activeFilter) filters.dashboardFilter = activeFilter;
 
     fetchPaginatedInvoices({ page: newPage, pageSize: 50, search: searchQuery, filters });
   };
