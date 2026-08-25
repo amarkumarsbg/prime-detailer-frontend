@@ -652,7 +652,7 @@ export default function AppointmentsPage() {
       toast.success("Job card created", {
         description: `${getAppointmentDisplayId(apt)} → ${job.jobNumber}`,
       });
-      router.push(`/job-cards/${job.id}`);
+      router.push(`/job-cards/${job.id}?checkIn=1`);
     } catch {
       toast.error("Could not create job card");
     } finally {
