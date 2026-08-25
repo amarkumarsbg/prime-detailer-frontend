@@ -61,6 +61,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { computeCustomerLookupMatches } from "@/lib/customer-vehicle-lookup";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import type { Customer } from "@/types";
+import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
+import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 
 const TIER_OPTIONS: { value: MembershipTier; label: string }[] = [
   { value: "MONTHLY", label: "Monthly (~30 days)" },
@@ -213,6 +215,8 @@ export function MembershipPageClient() {
 
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const customers = useCustomerStore((s) => s.customers);
+  const addCustomer = useCustomerStore((s) => s.addCustomer);
+  const findByReferralCode = useCustomerStore((s) => s.findByReferralCode);
   const vehicles = useVehicleStore((s) => s.vehicles);
   const businessName = useSettingsStore((s) => s.businessName);
   const currentBranch = useAuthStore((s) => s.currentBranch);
@@ -333,6 +337,13 @@ export function MembershipPageClient() {
 
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[]>([]);
+  const [addCustomerDialogOpen, setAddCustomerDialogOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
+  const [newCustomerReferralCode, setNewCustomerReferralCode] = useState("");
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
 
   const [addVehicleForExistingCustomerDialogOpen, setAddVehicleForExistingCustomerDialogOpen] = useState(false);
 
@@ -377,6 +388,63 @@ export function MembershipPageClient() {
   const clearSelectedCustomer = () => {
     setAssignCustomerId("");
     setAssignVehicleId("");
+  };
+
+  const createCustomerFromAssign = async () => {
+    if (creatingCustomer) return;
+    const name = newCustomerName.trim();
+    const phoneDigits = newCustomerPhone.replace(/\D/g, "").slice(-10);
+    if (!name) {
+      toast.error("Enter customer name");
+      return;
+    }
+    if (phoneDigits.length !== 10) {
+      toast.error("Enter a valid 10-digit mobile number");
+      return;
+    }
+    const referred = referredByFromOptionalInput(newCustomerReferralCode, findByReferralCode);
+    if (referred.error) {
+      toast.error(referred.error);
+      return;
+    }
+    setCreatingCustomer(true);
+    try {
+      const referralCode = `REF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const created = await addCustomer({
+        name,
+        phone: phoneDigits,
+        email: newCustomerEmail.trim() || `noemail+${phoneDigits}@customers.placeholder`,
+        address: newCustomerAddress.trim(),
+        referralCode,
+        referredBy: referred.referredBy,
+        totalVisits: 0,
+        rewardPoints: 0,
+        walletBalance: 0,
+      });
+      if (!created) {
+        toast.error("This phone number is already registered.");
+        return;
+      }
+      setAssignCustomerId(created.id);
+      setAssignVehicleId("");
+      setLookupQuery("");
+      setLookupPanelCustomers([]);
+      setNewCustomerName("");
+      setNewCustomerPhone("");
+      setNewCustomerEmail("");
+      setNewCustomerAddress("");
+      setNewCustomerReferralCode("");
+      setAddCustomerDialogOpen(false);
+      toast.success("Customer created", {
+        description: `${created.name} is ready. Add or select a vehicle next.`,
+      });
+    } catch {
+      toast.error("Could not create customer", {
+        description: "Check that the API server is running.",
+      });
+    } finally {
+      setCreatingCustomer(false);
+    }
   };
 
   const activePackages = useMemo(() => packages.filter((p) => p.isActive), [packages]);
@@ -654,7 +722,20 @@ export function MembershipPageClient() {
               </CardHeader>
               <CardContent className="grid gap-5 sm:max-w-lg">
                 <div className="space-y-3">
-                  <Label className="text-sm font-semibold">Customer</Label>
+                  <div className="flex items-center justify-between gap-4">
+                    <Label className="text-sm font-semibold">Customer</Label>
+                    {!assignCustomerId && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-violet-200 text-violet-700 bg-white hover:bg-violet-50 text-[11px] font-medium"
+                        onClick={() => setAddCustomerDialogOpen(true)}
+                      >
+                        + Add New Customer
+                      </Button>
+                    )}
+                  </div>
                   {!assignCustomerId ? (
                     <div className="space-y-2">
                       <div className="relative">
@@ -844,6 +925,73 @@ export function MembershipPageClient() {
           setAssignVehicleId(vehicle.id);
         }}
       />
+
+      <Dialog open={addCustomerDialogOpen} onOpenChange={setAddCustomerDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add New Customer</DialogTitle>
+            <DialogDescription>
+              Create a customer first, then register a vehicle to activate membership.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="mem-new-customer-name">Full Name *</Label>
+              <Input
+                id="mem-new-customer-name"
+                value={newCustomerName}
+                onChange={(e) => setNewCustomerName(e.target.value)}
+                placeholder="Customer name"
+                autoComplete="name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mem-new-customer-phone">Phone Number *</Label>
+              <Input
+                id="mem-new-customer-phone"
+                value={newCustomerPhone}
+                onChange={(e) => setNewCustomerPhone(e.target.value.replace(/\D/g, "").slice(-10))}
+                placeholder="10-digit mobile"
+                maxLength={10}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mem-new-customer-email">Email (Optional)</Label>
+              <Input
+                id="mem-new-customer-email"
+                type="email"
+                value={newCustomerEmail}
+                onChange={(e) => setNewCustomerEmail(e.target.value)}
+                placeholder="Email address"
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mem-new-customer-address">Address (Optional)</Label>
+              <Input
+                id="mem-new-customer-address"
+                value={newCustomerAddress}
+                onChange={(e) => setNewCustomerAddress(e.target.value)}
+                placeholder="City / area"
+              />
+            </div>
+            <NewCustomerReferralCodeField
+              id="mem-new-customer-referral"
+              value={newCustomerReferralCode}
+              onChange={setNewCustomerReferralCode}
+              compact
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddCustomerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void createCustomerFromAssign()} disabled={creatingCustomer}>
+              {creatingCustomer ? "Creating…" : "Create Customer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
           <Card>
             <CardHeader>

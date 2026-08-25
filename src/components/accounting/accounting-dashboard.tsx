@@ -76,7 +76,8 @@ import {
   totalPayables,
   totalReceivables,
 } from "@/lib/accounting/dashboard-metrics";
-import { expenseOutstanding, invoicePaidTotal } from "@/lib/party/ledger-math";
+import { invoicePaidTotal } from "@/lib/party/ledger-math";
+import { buildRecentExpenseRows, type RecentExpenseRow } from "@/lib/accounting/recent-expenses";
 import { useAuthStore } from "@/store/auth-store";
 import { useAppBootstrapStore } from "@/store/app-bootstrap-store";
 import { revalidateRouteDomainData } from "@/lib/domain-route-revalidate";
@@ -324,10 +325,8 @@ export function AccountingDashboard() {
   }, [branchInvoices]);
 
   const recentExpenses = useMemo(() => {
-    return [...branchExpenses]
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 6);
-  }, [branchExpenses]);
+    return buildRecentExpenseRows(branchExpenses, branchPurchases, 6);
+  }, [branchExpenses, branchPurchases]);
 
   const recentMemberships = useMemo(() => {
     const pkgName = new Map(packages.map((p) => [p.id, p.name]));
@@ -1353,7 +1352,7 @@ function RecentExpensesTable({
   rows,
   onViewAll,
 }: {
-  rows: Expense[];
+  rows: RecentExpenseRow[];
   onViewAll: () => void;
 }) {
   return (
@@ -1386,17 +1385,18 @@ function RecentExpensesTable({
                 </td>
               </tr>
             ) : (
-              rows.map((e) => {
-                const due = expenseOutstanding(e);
+              rows.map((row) => {
+                const e = row.expense;
+                const due = row.dueAmount;
                 return (
                   <tr key={e.id} className="border-t border-border/50">
                     <td className="whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground">
-                      {formatDate(e.date)}
+                      {formatDate(row.displayDate)}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="max-w-[7rem] truncate text-xs font-medium">{e.title}</div>
                       <div className="text-[10px] font-medium uppercase text-orange-600 dark:text-orange-400">
-                        {e.paymentStatus} • {expenseMethodLabel(e.paymentMethod)}
+                        {row.displayPaymentStatus} • {expenseMethodLabel(row.displayPaymentMethod)}
                       </div>
                     </td>
                     <td className="max-w-[5rem] truncate px-3 py-2.5 text-xs text-muted-foreground">
@@ -1404,7 +1404,7 @@ function RecentExpensesTable({
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="text-xs font-semibold tabular-nums text-rose-600 dark:text-rose-400">
-                        -{formatCurrency(e.amount)}
+                        -{formatCurrency(row.displayAmount)}
                       </div>
                       {due > 0 ? (
                         <div className="text-[10px] text-rose-500">
