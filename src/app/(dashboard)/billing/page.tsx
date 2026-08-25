@@ -15,6 +15,7 @@ import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { notifyInvoiceCreatedWhatsApp } from "@/lib/whatsapp-automation-triggers";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useJobCardStore } from "@/store/job-card-store";
+import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
 import {
   applyInvoiceBranchFilters,
@@ -191,6 +192,7 @@ export default function BillingPage() {
   const fetchPaginatedInvoices = useInvoiceStore((s) => s.fetchPaginatedInvoices);
   const deleteInvoice = useInvoiceStore((s) => s.deleteInvoice);
   const jobCards = useJobCardStore((s) => s.jobCards);
+  const customers = useCustomerStore((s) => s.customers);
   const businessName = useSettingsStore((s) => s.businessName);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
 
@@ -282,8 +284,13 @@ export default function BillingPage() {
 
   const allTableData = useMemo(() => toTableRows(invoicesForView), [invoicesForView]);
   const pendingCustomers = useMemo(
-    () => groupPendingPaymentCustomers(invoicesForView),
-    [invoicesForView]
+    () => {
+      const liveCustomerIds = new Set(customers.map((customer) => customer.id));
+      return groupPendingPaymentCustomers(invoicesForView).filter((row) =>
+        liveCustomerIds.has(row.customerId)
+      );
+    },
+    [invoicesForView, customers]
   );
   const pendingCustomerRows = useMemo(
     () => pendingCustomers as unknown as Record<string, unknown>[],

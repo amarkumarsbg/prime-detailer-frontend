@@ -54,6 +54,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon";
 import { downloadInvoicePdf, type InvoicePdfOpts } from "@/lib/invoice-pdf";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
 import { filterByBranchId, useBranchScope } from "@/lib/branch-scope";
+import { computeGstFromSubtotal } from "@/lib/gst-tax";
 import {
   isOverdueJobCard,
   isTodaysBookingsJob,
@@ -177,6 +178,7 @@ export default function JobCardsPage() {
   const updateJobCard = useJobCardStore((s) => s.updateJobCard);
   const deleteJobCard = useJobCardStore((s) => s.deleteJobCard);
   const invoices = useInvoiceStore((s) => s.invoices);
+    const gstRegistrationStatus = useSettingsStore((s) => s.gstRegistrationStatus);
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId } = useBranchScope();
 
@@ -411,6 +413,12 @@ export default function JobCardsPage() {
     }
     return sortJobCardsByNumberThenCreated(list);
   }, [branchScopedJobCards, activeFilter]);
+
+  const payableForJobCard = useCallback((jc: JobCard) => {
+    const invoice = invoices.find((inv) => inv.jobCardId === jc.id);
+    if (invoice) return invoice.grandTotal;
+    return computeGstFromSubtotal(jc.estimatedAmount ?? 0, gstRegistrationStatus).grandTotal;
+  }, [invoices, gstRegistrationStatus]);
 
   const filteredJobCards = useMemo(() => {
     return jobCardsForView.filter((jc) => {
@@ -1078,9 +1086,10 @@ export default function JobCardsPage() {
                         const paid = invoice
                           ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
                           : (jc.paidAmount ?? 0);
+                        const payable = payableForJobCard(jc);
                         const due = invoice
                           ? invoice.grandTotal - paid
-                          : jc.estimatedAmount - paid;
+                          : payable - paid;
                         
                         let statusLabel = "Unpaid";
                         let badgeColor = "bg-rose-50 text-rose-700 border-rose-200/50 dark:bg-rose-950/40 dark:text-rose-400";
@@ -1141,7 +1150,7 @@ export default function JobCardsPage() {
                           Created {formatDateTime(jc.createdAt || jc.expectedDelivery)}
                         </span>
                         <span className="text-base font-black text-foreground tabular-nums">
-                          {formatCurrency(jc.estimatedAmount)}
+                          {formatCurrency(payableForJobCard(jc))}
                         </span>
                       </div>
                       {(() => {
@@ -1149,9 +1158,10 @@ export default function JobCardsPage() {
                         const paid = invoice
                           ? (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0) + (invoice.walletAmountUsed || 0)
                           : (jc.paidAmount ?? 0);
+                        const payable = payableForJobCard(jc);
                         const due = invoice
                           ? invoice.grandTotal - paid
-                          : jc.estimatedAmount - paid;
+                          : payable - paid;
                         
                         if (paid <= 0) return null;
                         return (

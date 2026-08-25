@@ -139,6 +139,7 @@ import {
   HIGH_END_COMPLETION_PRESETS,
   highEndCompletionSelectValue,
 } from "@/lib/high-end-follow-up";
+import { computeGstFromSubtotal } from "@/lib/gst-tax";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { useBranchScope } from "@/lib/branch-scope";
@@ -276,10 +277,16 @@ export default function JobCardDetailPage() {
 
   const invoices = useInvoiceStore((s) => s.invoices);
   const businessName = useSettingsStore((s) => s.businessName);
+  const gstRegistrationStatus = useSettingsStore((s) => s.gstRegistrationStatus);
   const invoiceForJob = useMemo(
     () => (jobCard ? invoices.find((inv) => inv.jobCardId === jobCard.id) : undefined),
     [invoices, jobCard]
   );
+  const jobCardPayableAmount = useMemo(() => {
+    if (!jobCard) return 0;
+    if (invoiceForJob) return invoiceForJob.grandTotal;
+    return computeGstFromSubtotal(jobCard.estimatedAmount ?? 0, gstRegistrationStatus).grandTotal;
+  }, [jobCard, invoiceForJob, gstRegistrationStatus]);
 
   const mechanics = useMemo(
     () => staff.filter((s) => s.role === "MECHANIC"),
@@ -1927,7 +1934,7 @@ export default function JobCardDetailPage() {
                 <CardContent className="pt-3 space-y-3">
                   <div className="flex flex-wrap gap-1.5">
                     <Badge variant="secondary" className="tabular-nums font-semibold">
-                      {formatCurrency(jobCard.estimatedAmount)}
+                      {formatCurrency(jobCardPayableAmount)}
                     </Badge>
                     <Badge variant="outline">{formatSegmentLabel(jobCard.vehicleSegment)}</Badge>
                     <Badge variant="outline">{currentMechanicName ?? "No mechanic"}</Badge>
@@ -1937,8 +1944,8 @@ export default function JobCardDetailPage() {
                   </div>
                   <div className="hidden sm:grid sm:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimate</p>
-                      <p className="font-semibold mt-1 tabular-nums">{formatCurrency(jobCard.estimatedAmount)}</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total payable</p>
+                      <p className="font-semibold mt-1 tabular-nums">{formatCurrency(jobCardPayableAmount)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Incentive</p>
