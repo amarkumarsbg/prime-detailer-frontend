@@ -49,6 +49,7 @@ import { useSettingsStore } from "@/store/settings-store";
 import type { MembershipPackage, MembershipTier } from "@/types";
 import type { VehicleSegment } from "@/types/vehicle";
 import { cn, formatDate, formatInrFull } from "@/lib/utils";
+import { filterMembershipPackagesForVehicleSegment } from "@/lib/membership-package-eligibility";
 import { Crown, Package, Pencil, UserPlus, Search, X, Plus, CheckCircle2, ChevronRight } from "lucide-react";
 import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
 import { ServiceSearchInput } from "@/components/services/searchable-service-select";
@@ -379,7 +380,21 @@ export function MembershipPageClient() {
   };
 
   const activePackages = useMemo(() => packages.filter((p) => p.isActive), [packages]);
+  const selectedAssignVehicle = useMemo(
+    () => vehicles.find((v) => v.id === assignVehicleId),
+    [vehicles, assignVehicleId]
+  );
+  const filteredActivePackages = useMemo(
+    () => filterMembershipPackagesForVehicleSegment(activePackages, selectedAssignVehicle?.segment ?? null),
+    [activePackages, selectedAssignVehicle?.segment]
+  );
   const [assigning, setAssigning] = useState(false);
+
+  useEffect(() => {
+    if (!assignPackageId) return;
+    if (filteredActivePackages.some((pkg) => pkg.id === assignPackageId)) return;
+    setAssignPackageId("");
+  }, [assignPackageId, filteredActivePackages]);
 
   const onAssign = async () => {
     if (assigning) return;
@@ -391,8 +406,16 @@ export function MembershipPageClient() {
       toast.error("Select the vehicle this pass applies to.");
       return;
     }
+    if (filteredActivePackages.length === 0) {
+      toast.error("No memberships available for this vehicle type.");
+      return;
+    }
     if (!assignPackageId) {
       toast.error("Select a package.");
+      return;
+    }
+    if (!filteredActivePackages.some((pkg) => pkg.id === assignPackageId)) {
+      toast.error("No memberships available for this vehicle type.");
       return;
     }
     const start = assignStartDate
@@ -777,13 +800,18 @@ export function MembershipPageClient() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Select package</SelectItem>
-                      {activePackages.map((p) => (
+                      {filteredActivePackages.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.name} · {formatInrFull(p.price)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {assignVehicleId && filteredActivePackages.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No memberships available for this vehicle type.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mem-start">Start date (optional)</Label>
@@ -930,7 +958,15 @@ export function MembershipPageClient() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Applicable vehicle categories <span className="text-xs font-normal text-muted-foreground">(leave blank for all)</span></Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label>Applicable vehicle categories</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formVehicleSegments.length} selected
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to make this package available for all vehicle types.
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["HATCHBACK","SEDAN","SUV","COMPACT_SUV","MUV","LUXURY","BIKE"] as VehicleSegment[]).map((seg) => {
                     const labels: Record<VehicleSegment,string> = { HATCHBACK:"Hatchback", SEDAN:"Sedan", SUV:"SUV", COMPACT_SUV:"Compact SUV", MUV:"MUV", LUXURY:"Luxury", BIKE:"Bike" };

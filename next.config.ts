@@ -5,6 +5,18 @@ const backendProxyTarget =
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@sparticuz/chromium-min", "puppeteer-core"],
+  images: {
+    remotePatterns: [
+      // Local backend dev server
+      { protocol: "http", hostname: "127.0.0.1", port: "4000" },
+      { protocol: "http", hostname: "localhost", port: "4000" },
+      // Production / Render deploy
+      { protocol: "https", hostname: "**.onrender.com" },
+      { protocol: "https", hostname: "**.vercel.app" },
+      // Any custom domain (catch-all for uploads CDN)
+      { protocol: "https", hostname: "**" },
+    ],
+  },
   async redirects() {
     return [
       { source: "/signup", destination: "/login", permanent: true },

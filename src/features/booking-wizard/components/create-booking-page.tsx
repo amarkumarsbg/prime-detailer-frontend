@@ -111,6 +111,7 @@ import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end
 import { useSettingsStore } from "@/store/settings-store"
 import { averageServiceRewardPercent } from "@/lib/reward-category-rates";
 import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
+import { filterMembershipPackagesForVehicleSegment } from "@/lib/membership-package-eligibility";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useAppointmentStore } from "@/store/appointment-store";
@@ -323,6 +324,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleSegment, setVehicleSegment] = useState<VehicleSegment | "">("");
+  const eligibleActiveMembershipPackages = useMemo(
+    () => filterMembershipPackagesForVehicleSegment(activeMembershipPackages, vehicleSegment || null),
+    [activeMembershipPackages, vehicleSegment]
+  );
   const [vehicleVariant, setVehicleVariant] = useState("");
   const [vehicleFuelType, setVehicleFuelType] = useState<FuelType>("PETROL");
   const [vehicleColor, setVehicleColor] = useState("");
@@ -1008,6 +1013,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   }, [dbMembershipForSelectedVehicle]);
 
   useEffect(() => {
+    if (!wizardMembershipPackageId) return;
+    const stillEligible = eligibleActiveMembershipPackages.some(
+      (pkg) => pkg.id === wizardMembershipPackageId
+    );
+    if (stillEligible) return;
+    setWizardMembershipPackageId(null);
+    setMembershipVisitChoice(null);
+    setMembershipRedeemServiceIds([]);
+  }, [wizardMembershipPackageId, eligibleActiveMembershipPackages]);
+
+  useEffect(() => {
     setMembershipVisitChoice(null);
     setMembershipRedeemServiceIds([]);
   }, [existingCustomerId, selectedVehicleId, membershipLookupVehicleId, activeMembershipForSelectedVehicle?.id]);
@@ -1581,6 +1597,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
 
     if (wizardMembershipPackageId) {
+      const selectedPackageIsEligible = eligibleActiveMembershipPackages.some(
+        (pkg) => pkg.id === wizardMembershipPackageId
+      );
+      if (!selectedPackageIsEligible) {
+        toast.error("No memberships available for this vehicle type.");
+        return;
+      }
       const memRes = assignMembership({
         customerId: custId,
         packageId: wizardMembershipPackageId,
@@ -3624,7 +3647,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     <div className="space-y-4 pt-4 border-t border-dashed">
                       <p className="text-sm font-semibold text-foreground">Select a different plan or tap to clear</p>
                       <div className="grid min-w-0 w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {activeMembershipPackages.map((pkg) => {
+                        {eligibleActiveMembershipPackages.map((pkg) => {
                           const selected = wizardMembershipPackageId === pkg.id;
                           const durationDays = MEMBERSHIP_TIER_DAYS[pkg.tier];
                           return (
@@ -3682,6 +3705,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     Add packages in Membership
                   </Link>
                 </p>
+              ) : eligibleActiveMembershipPackages.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center">
+                  No memberships available for this vehicle type.
+                </p>
               ) : (
                 <>
                   <div className="rounded-lg border border-violet-200/70 bg-violet-50/50 px-3 py-2.5 text-xs text-muted-foreground dark:border-violet-900/45 dark:bg-violet-950/25">
@@ -3698,7 +3725,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     . Tap a selected plan again to clear.
                   </p>
                   <div className="grid min-w-0 w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {activeMembershipPackages.map((pkg) => {
+                    {eligibleActiveMembershipPackages.map((pkg) => {
                       const selected = wizardMembershipPackageId === pkg.id;
                       const durationDays = MEMBERSHIP_TIER_DAYS[pkg.tier];
                       return (

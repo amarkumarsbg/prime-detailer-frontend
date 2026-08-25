@@ -104,6 +104,15 @@ function normalizeVehicleToken(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function safeNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
 export default function CustomersPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
@@ -140,6 +149,21 @@ export default function CustomersPage() {
   }, [jobCards, selectedBranchId]);
 
   const hasMore = currentPage < totalPages;
+
+  const vehicleCountByCustomerId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of vehicles) {
+      counts.set(v.customerId, (counts.get(v.customerId) ?? 0) + 1);
+    }
+    return counts;
+  }, [vehicles]);
+
+  const customerVehicleCount = (item: Record<string, unknown>): number => {
+    const fromRow = safeNumber(item.vehiclesCount, Number.NaN);
+    if (Number.isFinite(fromRow)) return fromRow;
+    const customerId = String(item.id ?? "");
+    return vehicleCountByCustomerId.get(customerId) ?? 0;
+  };
 
   const filters = useMemo(() => {
     const params: Record<string, unknown> = {};
@@ -221,7 +245,7 @@ export default function CustomersPage() {
       key: "vehiclesCount",
       label: "Vehicles",
       render: (item: Record<string, unknown>) => (
-        <span className="text-muted-foreground">{item.vehiclesCount as number}</span>
+        <span className="text-muted-foreground">{customerVehicleCount(item)}</span>
       ),
       sortable: true,
     },
@@ -566,7 +590,7 @@ export default function CustomersPage() {
                     <div className="flex flex-col items-center py-2.5 gap-0.5">
                       <div className="flex items-center gap-1">
                         <Car className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-sm font-bold tabular-nums">{String(item.vehiclesCount)}</span>
+                        <span className="text-sm font-bold tabular-nums">{customerVehicleCount(item)}</span>
                       </div>
                       <span className="text-[10px] text-muted-foreground">Vehicles</span>
                     </div>
@@ -654,7 +678,7 @@ export default function CustomersPage() {
                 </div>
               </div>
               <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-snug text-muted-foreground">
-                <span><span className="font-medium text-foreground tabular-nums">{String(item.vehiclesCount)}</span>{" "}veh</span>
+                <span><span className="font-medium text-foreground tabular-nums">{customerVehicleCount(item)}</span>{" "}veh</span>
                 <span aria-hidden className="text-border/80">·</span>
                 <span><span className="font-medium text-foreground tabular-nums">{String(item.totalVisits)}</span>{" "}visits</span>
                 <span aria-hidden className="text-border/80">·</span>

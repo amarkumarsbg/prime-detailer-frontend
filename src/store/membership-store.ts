@@ -40,16 +40,34 @@ function normalizeIncludedServiceIds(ids: string[]): string[] {
   return out;
 }
 
+function normalizeApplicableVehicleSegments(
+  segments: MembershipPackage["applicableVehicleSegments"]
+): MembershipPackage["applicableVehicleSegments"] {
+  if (!segments || segments.length === 0) return undefined;
+  const seen = new Set<string>();
+  const out: NonNullable<MembershipPackage["applicableVehicleSegments"]> = [];
+  for (const segment of segments) {
+    if (!segment || seen.has(segment)) continue;
+    seen.add(segment);
+    out.push(segment);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 export function normalizeMembershipPackage(pkg: MembershipPackage): MembershipPackage {
   const includedServiceIds = normalizeIncludedServiceIds(pkg.includedServiceIds ?? []);
   const includedServiceQuantities: Record<string, number> = {};
   for (const sid of includedServiceIds) {
     includedServiceQuantities[sid] = membershipIncludedQuantity(pkg, sid);
   }
+  const applicableVehicleSegments = normalizeApplicableVehicleSegments(
+    pkg.applicableVehicleSegments
+  );
   return {
     ...pkg,
     includedServiceIds,
     includedServiceQuantities,
+    applicableVehicleSegments,
   };
 }
 
