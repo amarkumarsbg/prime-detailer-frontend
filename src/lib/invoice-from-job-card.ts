@@ -160,7 +160,27 @@ export function buildInvoiceFromJobCard(
     total: p.lineTotal,
   }));
 
-  const lineItems: InvoiceLineItem[] = [...catalogLines, ...programLines, ...partLines];
+  const membershipActivationLine: InvoiceLineItem[] =
+    (job.membershipActivationAmount ?? 0) > 0
+      ? [
+          {
+            id: `li-${invoiceId}-membership-activation`,
+            description: `${job.membershipActivationPackageName ?? "Membership"} membership`,
+            type: "SERVICE",
+            quantity: 1,
+            unitPrice: Math.round((job.membershipActivationAmount ?? 0) * 100) / 100,
+            total: Math.round((job.membershipActivationAmount ?? 0) * 100) / 100,
+            hsnSac: "998714",
+          },
+        ]
+      : [];
+
+  const lineItems: InvoiceLineItem[] = [
+    ...catalogLines,
+    ...programLines,
+    ...partLines,
+    ...membershipActivationLine,
+  ];
 
   const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0);
   const { taxRate: effectiveTaxRate, taxAmount, grandTotal } = currentInvoiceTaxTotals(subtotal);
@@ -234,8 +254,10 @@ export function buildInvoiceFromJobCard(
     mechanicName: job.mechanicName,
     notes: job.notes,
     createdAt,
-    membershipId: membership?.id,
-    membershipPackageName,
+    membershipId: job.membershipActivationId ?? membership?.id,
+    membershipPackageName: job.membershipActivationPackageName ?? membershipPackageName,
+    membershipStartDate: job.membershipActivationStartDate,
+    membershipEndDate: job.membershipActivationEndDate,
   };
 }
 

@@ -138,6 +138,14 @@ export interface JobCard {
   highEndAdvanceCollectedAt?: string;
   highEndAdvanceMethod?: PaymentMethod;
   highEndAdvanceReference?: string;
+  /** Membership activated during this job creation; billed on the job invoice. */
+  membershipActivationId?: string;
+  membershipActivationPackageId?: string;
+  membershipActivationPackageName?: string;
+  /** Ex-GST package amount captured at activation time. */
+  membershipActivationAmount?: number;
+  membershipActivationStartDate?: string;
+  membershipActivationEndDate?: string;
   whatsappLog?: WhatsAppLog[];
   /** Set when materials were deducted from stock at Ready (billing no longer deducts). */
   inventoryConsumedAt?: string;

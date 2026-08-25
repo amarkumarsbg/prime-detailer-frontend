@@ -1309,11 +1309,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return Math.min(catalogSubtotalExclGst, discountAmount + directDiscountAmount);
   }, [catalogSubtotalExclGst, discountAmount, directDiscountAmount]);
 
+  const selectedMembershipPurchaseAmount = useMemo(() => {
+    if (!wizardMembershipPackageId) return 0;
+    const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
+    if (!pkg) return 0;
+    return Math.round((pkg.price ?? 0) * 100) / 100;
+  }, [wizardMembershipPackageId, membershipPackagesAll]);
+
   /** Catalog after coupon + high-end program amounts + parts (all excl. GST). */
   const afterDiscount =
     Math.max(0, catalogSubtotalExclGst - totalDiscount) +
     highEndSubtotalExclGst +
-    partsSubtotalExclGst;
+    partsSubtotalExclGst +
+    selectedMembershipPurchaseAmount;
   const { taxAmount: gstAmount, grandTotal: totalPayable } = computeGstFromSubtotal(
     afterDiscount,
     gstRegistrationStatus
@@ -1596,6 +1604,17 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       resolvedVehicleId = `veh-local-${Date.now()}`;
     }
 
+    let activatedMembershipMeta:
+      | {
+          membershipId: string;
+          packageId: string;
+          packageName: string;
+          amount: number;
+          startDate?: string;
+          endDate?: string;
+        }
+      | null = null;
+
     if (wizardMembershipPackageId) {
       const selectedPackageIsEligible = eligibleActiveMembershipPackages.some(
         (pkg) => pkg.id === wizardMembershipPackageId
@@ -1616,10 +1635,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
       const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
       const subRow = useMembershipStore.getState().subscriptions.find((s) => s.id === memRes.id);
-      if (pkg && subRow) {
+      if (pkg) {
         try {
           const invRes = await createInvoiceForMembershipActivation({
-            membershipId: subRow.id,
+            membershipId: memRes.id,
             pkg,
             customerId: custId,
             customerName: customerName.trim(),
@@ -1628,8 +1647,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             vehicleMakeModel: matchedVehicle
               ? `${matchedVehicle.make} ${matchedVehicle.model}`.trim()
               : `${vehicleBrand} ${vehicleModel}`.trim(),
-            membershipStartDate: subRow.startDate,
-            membershipEndDate: subRow.endDate,
+            membershipStartDate: subRow?.startDate,
+            membershipEndDate: subRow?.endDate,
             branchId,
           });
           if (invRes.ok) {
@@ -1646,6 +1665,14 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             description: e instanceof Error ? e.message : "Please try again.",
           });
         }
+        activatedMembershipMeta = {
+          membershipId: memRes.id,
+          packageId: pkg.id,
+          packageName: pkg.name,
+          amount: Math.round((pkg.price ?? 0) * 100) / 100,
+          startDate: subRow?.startDate,
+          endDate: subRow?.endDate,
+        };
         const names = pkg.includedServiceIds
           .map((sid) => serviceCatalog.find((c) => c.id === sid)?.name)
           .filter((n): n is string => Boolean(n));
@@ -1656,12 +1683,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           businessName,
           packageName: pkg.name,
           tier: pkg.tier,
-          validUntilIso: subRow.endDate,
+          validUntilIso: subRow?.endDate ?? new Date().toISOString(),
           vehicleReg: regStored,
           includedServiceNames: names,
         });
       } else {
-        toast.success("Membership activated", { description: pkg?.name ?? "Membership" });
+        toast.success("Membership activated", { description: "Membership" });
       }
     }
 
@@ -1735,7 +1762,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     const estimatedAmount =
       serviceItems.reduce((s, x) => s + x.price, 0) +
       highEndSubtotalExclGst +
-      (isJobCard ? jobCardPartsSubtotal(buildJobCardPartItems(id, selectedPartLines, inventoryParts)) : 0);
+      (isJobCard ? jobCardPartsSubtotal(buildJobCardPartItems(id, selectedPartLines, inventoryParts)) : 0) +
+      (activatedMembershipMeta?.amount ?? 0);
 
     const jobCardPartItems: JobCardPartItem[] = isJobCard
       ? buildJobCardPartItems(id, selectedPartLines, inventoryParts)
@@ -1951,6 +1979,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               return Object.keys(o).length > 0 ? o : undefined;
             })()
           : undefined,
+      membershipActivationId: activatedMembershipMeta?.membershipId,
+      membershipActivationPackageId: activatedMembershipMeta?.packageId,
+      membershipActivationPackageName: activatedMembershipMeta?.packageName,
+      membershipActivationAmount: activatedMembershipMeta?.amount,
+      membershipActivationStartDate: activatedMembershipMeta?.startDate,
+      membershipActivationEndDate: activatedMembershipMeta?.endDate,
       ...advanceAmountPatch,
       createdBy: user?.id ?? "USR-001",
       createdAt: now,
