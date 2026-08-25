@@ -1,6 +1,10 @@
 import { format } from "date-fns";
 import type { StockMovement, Part } from "@/types";
-import { movementKindLabel } from "@/lib/inventory/movement-labels";
+import {
+  movementDirectionLabel,
+  movementKindLabel,
+  movementSignedQuantityText,
+} from "@/lib/inventory/movement-labels";
 import { requireCanExportData } from "@/lib/assert-can-export";
 
 export type InventoryHistoryExportRow = {
@@ -54,14 +58,12 @@ export function buildInventoryHistoryExportRows(
 ): InventoryHistoryExportRow[] {
   return movements.map((m) => {
     const part = parts.find((p) => p.id === m.partId);
-    const qty = m.displayQuantity ?? m.quantity;
-    const unit = m.displayUnit ?? m.unit;
     return {
       date: format(new Date(m.createdAt), "dd MMM yyyy HH:mm"),
       part: part?.name ?? m.partId,
       sku: part?.sku ?? "",
       type: movementKindLabel(m),
-      qty: `${m.type === "OUT" ? "-" : "+"}${qty} ${unit}`,
+      qty: `${movementSignedQuantityText(m)} (${movementDirectionLabel(m)})`,
       branch: branchName(m.branchId),
       reference: m.jobCardId ?? m.purchaseId ?? m.transferId ?? m.invoiceId ?? m.reason,
       customer: m.customerName ?? "",

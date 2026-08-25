@@ -2,9 +2,9 @@ import type { StockMovement, StockMovementKind, StockTransferStatus } from "@/ty
 
 export const MOVEMENT_KIND_LABEL: Record<StockMovementKind, string> = {
   PURCHASE: "Purchase",
-  ADJUSTMENT: "Stock Adjustment",
-  TRANSFER_OUT: "Stock Transfer",
-  TRANSFER_IN: "Transfer Received",
+  ADJUSTMENT: "Adjustment",
+  TRANSFER_OUT: "Transfer Out",
+  TRANSFER_IN: "Transfer In",
   JOB_CARD: "Job Card Usage",
   DIRECT_ISSUE: "Direct Issue",
   RETURN: "Return",
@@ -38,6 +38,28 @@ export function movementKindLabel(m: StockMovement): string {
   const kind = inferMovementKind(m);
   if (kind === "DIRECT_ISSUE" && /counter sale/i.test(m.reason)) return "Counter Sale";
   return MOVEMENT_KIND_LABEL[kind];
+}
+
+export function movementDirectionLabel(m: Pick<StockMovement, "type">): "Stock In" | "Stock Out" {
+  return m.type === "OUT" ? "Stock Out" : "Stock In";
+}
+
+export function movementQuantityText(m: Pick<StockMovement, "quantity" | "displayQuantity" | "unit" | "displayUnit">): string {
+  const rawQty = Number(m.displayQuantity ?? m.quantity) || 0;
+  const qty = Math.abs(rawQty);
+  const qtyText = qty.toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Number.isInteger(qty) ? 0 : 3,
+  });
+  const unit = (m.displayUnit ?? m.unit ?? "").trim();
+  return unit ? `${qtyText} ${unit}` : qtyText;
+}
+
+export function movementSignedQuantityText(
+  m: Pick<StockMovement, "type" | "quantity" | "displayQuantity" | "unit" | "displayUnit">
+): string {
+  const sign = m.type === "OUT" ? "-" : "+";
+  return `${sign} ${movementQuantityText(m)}`;
 }
 
 export const TRANSFER_STATUS_LABEL: Record<StockTransferStatus, string> = {

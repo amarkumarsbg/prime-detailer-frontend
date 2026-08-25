@@ -47,6 +47,13 @@ export function lineRateDisplay(li: InvoiceLineItem): number {
   return li.total + d;
 }
 
+function lineQuantityDisplay(li: InvoiceLineItem): string {
+  const qty = Number.isFinite(li.quantity) ? li.quantity : 0;
+  return Number.isInteger(qty)
+    ? qty.toLocaleString("en-IN")
+    : qty.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
 export function lineGrandWithTax(
   li: InvoiceLineItem,
   invoice: Invoice
@@ -376,6 +383,7 @@ export function buildTaxInvoicePrintHtml(
         <td class="desc">
           <div style="font-weight:600; color:#171717;">${escapeHtml(li.description)}</div>
         </td>
+        <td class="c">${lineQuantityDisplay(li)}</td>
         ${isGstRegistered ? `<td class="c">${escapeHtml(hsn)}</td>` : ""}
         <td class="r">${formatCurrency(lineRateDisplay(li))}</td>
         <td class="r">${discCell}</td>
@@ -638,6 +646,7 @@ table.inv .b { font-weight: 700; color: #171717; }
       <tr>
         <th style="width:28px">#</th>
         <th class="desc">Service / Description</th>
+        <th style="width:52px">Qty</th>
         ${isGstRegistered ? `<th style="width:52px">HSN/SAC</th>` : ""}
         <th style="width:72px">Rate (Rs.)</th>
         <th style="width:64px">Discount</th>

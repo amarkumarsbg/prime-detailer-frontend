@@ -17,7 +17,9 @@ import {
   ALL_MOVEMENT_KINDS,
   inferMovementKind,
   MOVEMENT_KIND_LABEL,
+  movementDirectionLabel,
   movementKindLabel,
+  movementSignedQuantityText,
 } from "@/lib/inventory/movement-labels";
 import {
   buildInventoryHistoryExportRows,
@@ -71,7 +73,8 @@ export function InventoryHistoryTab() {
           kindLabel: movementKindLabel(m),
           branchName: branchName(m.branchId),
           userName: userName(m.performedBy),
-          qtyLabel: `${m.type === "OUT" ? "-" : "+"}${m.displayQuantity ?? m.quantity} ${m.displayUnit ?? m.unit}`,
+          qtyLabel: movementSignedQuantityText(m),
+          directionLabel: movementDirectionLabel(m),
           ref: m.jobCardId ?? m.purchaseId ?? m.transferId ?? m.invoiceId ?? "—",
         };
       });
@@ -188,9 +191,14 @@ export function InventoryHistoryTab() {
             key: "qtyLabel",
             label: "Qty",
             render: (m) => (
-              <span className={cn("tabular-nums", m.type === "OUT" ? "text-red-600" : "text-emerald-700")}>
-                {m.qtyLabel}
-              </span>
+              <div className="leading-tight">
+                <p className={cn("tabular-nums font-semibold", m.type === "OUT" ? "text-red-600" : "text-emerald-700")}>
+                  {m.qtyLabel}
+                </p>
+                <p className={cn("text-[11px]", m.type === "OUT" ? "text-red-600/80" : "text-emerald-700/80")}>
+                  {m.directionLabel}
+                </p>
+              </div>
             ),
           },
           { key: "branchName", label: "Branch", className: "hidden md:table-cell" },
@@ -233,7 +241,11 @@ export function InventoryHistoryTab() {
         renderMobileCard={(m) => (
           <button type="button" className="w-full text-left space-y-1" onClick={() => setHistoryPartId(m.partId)}>
             <p className="font-medium">{m.partName}</p>
-            <p className="text-xs text-muted-foreground">{m.kindLabel} · {m.qtyLabel}</p>
+            <p className="text-xs text-muted-foreground">{m.kindLabel}</p>
+            <p className={cn("text-xs font-semibold", m.type === "OUT" ? "text-red-600" : "text-emerald-700")}>
+              {m.qtyLabel}
+              <span className="ml-2 text-[11px] font-medium opacity-80">{m.directionLabel}</span>
+            </p>
             <p className="text-xs text-muted-foreground">{formatDateTime(m.createdAt)}</p>
           </button>
         )}

@@ -880,6 +880,9 @@ export default function JobCardsPage() {
                         <p className="text-[#0b5cda] dark:text-[#3b82f6] font-bold text-sm leading-tight truncate">
                           {jc.vehicleMakeModel}
                         </p>
+                        <p className="text-[11px] font-mono font-semibold text-muted-foreground leading-none">
+                          {jc.jobNumber}
+                        </p>
                       </div>
 
                       {/* Top-Right Badge & Three dots dropdown */}

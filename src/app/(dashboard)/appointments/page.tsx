@@ -169,6 +169,13 @@ export default function AppointmentsPage() {
   const allScopedAppointments = useScopedAppointments();
   const appointments = allScopedAppointments.filter((a) => resolveAppointmentKind(a) === "APPOINTMENT");
   const jobCards = useJobCardStore((s) => s.jobCards);
+  const jobNumberById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const jc of jobCards) {
+      map.set(jc.id, jc.jobNumber);
+    }
+    return map;
+  }, [jobCards]);
   const addAppointment = useAppointmentStore((s) => s.addAppointment);
   const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
   const reconcileStaleAppointments = useAppointmentStore((s) => s.reconcileStaleAppointments);
@@ -1414,6 +1421,11 @@ export default function AppointmentsPage() {
                           <p className="text-xs text-muted-foreground">
                             {getAppointmentDisplayId(apt)} &middot; {apt.vehicleRegNumber} &middot; {apt.serviceType}
                           </p>
+                          {apt.jobCardId ? (
+                            <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                              Job Card: {jobNumberById.get(apt.jobCardId) ?? apt.jobCardId}
+                            </p>
+                          ) : null}
                           <div className="flex flex-col gap-2 mt-3">
                             {apt.mechanicName && (
                               <p className="text-xs text-muted-foreground">Mechanic: {apt.mechanicName}</p>
@@ -1515,6 +1527,11 @@ export default function AppointmentsPage() {
                             {apt.status.replace(/_/g, " ")}
                           </span>
                           <span className="text-xs text-muted-foreground font-mono">{getAppointmentDisplayId(apt)}</span>
+                          {apt.jobCardId ? (
+                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                              Job Card: {jobNumberById.get(apt.jobCardId) ?? apt.jobCardId}
+                            </span>
+                          ) : null}
                           {apt.whatsappSent && (
                             <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                               <Check className="w-3 h-3" /> WhatsApp sent

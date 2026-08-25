@@ -19,7 +19,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency, formatDateTime, cn } from "@/lib/utils";
-import { inferMovementKind, movementKindLabel } from "@/lib/inventory/movement-labels";
+import {
+  inferMovementKind,
+  movementDirectionLabel,
+  movementKindLabel,
+  movementSignedQuantityText,
+} from "@/lib/inventory/movement-labels";
 import {
   formatMlAndLitres,
   formatPartStockQuantity,
@@ -308,7 +313,8 @@ export function InventoryPartHistoryDialog({
                     const purchase = m.purchaseId
                       ? purchases.find((p) => p.id === m.purchaseId)
                       : undefined;
-                    const qty = m.displayQuantity ?? m.quantity;
+                    const directionLabel = movementDirectionLabel(m);
+                    const qtySigned = movementSignedQuantityText(m);
                     return (
                       <article
                         key={m.id}
@@ -331,17 +337,28 @@ export function InventoryPartHistoryDialog({
                               {movementRef(m, purchase?.purchaseNumber)}
                             </span>
                           </div>
-                          <span
-                            className={cn(
-                              "shrink-0 text-sm font-semibold tabular-nums",
-                              m.type === "OUT"
-                                ? "text-red-600 dark:text-red-400"
-                                : "text-emerald-700 dark:text-emerald-400"
-                            )}
-                          >
-                            {m.type === "OUT" ? "-" : "+"}
-                            {formatQty(qty)}
-                          </span>
+                          <div className="shrink-0 text-right leading-tight">
+                            <span
+                              className={cn(
+                                "block text-sm font-semibold tabular-nums",
+                                m.type === "OUT"
+                                  ? "text-red-600 dark:text-red-400"
+                                  : "text-emerald-700 dark:text-emerald-400"
+                              )}
+                            >
+                              {qtySigned}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[11px]",
+                                m.type === "OUT"
+                                  ? "text-red-600/80 dark:text-red-400/80"
+                                  : "text-emerald-700/80 dark:text-emerald-400/80"
+                              )}
+                            >
+                              {directionLabel}
+                            </span>
+                          </div>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
