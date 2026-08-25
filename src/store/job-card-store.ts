@@ -137,6 +137,41 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
   },
 
   deleteJobCard: async (id) => {
+    const jobCard = get().jobCards.find((jc) => jc.id === id);
+    // 1. Revert any inventory deducted for this job card back to stock.
+    if (jobCard?.inventoryConsumedAt) {
+      try {
+        const { useInventoryStore } = await import("@/store/inventory-store");
+        useInventoryStore.getState().revertDeductionForJobCard(id, jobCard.jobNumber);
+      } catch {
+        // Non-critical — deletion proceeds even if stock reversal fails.
+      }
+    }
+
+    // 2. Find and delete linked invoice, reversing any wallet deduction first.
+    const invoiceStore = useInvoiceStore.getState();
+    const linkedInvoice = invoiceStore.invoices.find((inv) => inv.jobCardId === id);
+    if (linkedInvoice) {
+      // Reverse wallet amount used so customer balance is restored.
+      const walletUsed = linkedInvoice.walletAmountUsed ?? 0;
+      if (walletUsed > 0 && linkedInvoice.customerId) {
+        try {
+          const { useCustomerStore } = await import("@/store/customer-store");
+          await useCustomerStore.getState().creditWallet(
+            linkedInvoice.customerId,
+            walletUsed,
+            "CREDIT",
+            `Wallet refund — job card ${id} deleted`
+          );
+        } catch {
+          // Non-critical: invoice deletion proceeds even if wallet reversal fails.
+        }
+      }
+      // Delete the invoice (and its payments) from DB and store.
+      await invoiceStore.deleteInvoice(linkedInvoice.id);
+    }
+
+    // 2. Delete the job card.
     await deleteCollectionDocument("jobCards", id);
     set((state) => ({
       jobCards: state.jobCards.filter((jc) => jc.id !== id),

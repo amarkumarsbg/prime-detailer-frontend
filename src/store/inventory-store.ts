@@ -124,6 +124,8 @@ interface InventoryStore {
     jobCard: JobCard,
     performedBy: string
   ) => { ok: boolean; error?: string };
+  /** Reverses all OUT stock movements for a job card — called on job card deletion. */
+  revertDeductionForJobCard: (jobCardId: string, jobNumber: string) => void;
 }
 
 function persistInventorySnapshot(get: () => InventoryStore): void {
@@ -1065,6 +1067,66 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     });
     persistInventorySnapshot(get);
     return { ok: true };
+  },
+
+  revertDeductionForJobCard: (jobCardId, jobNumber) => {
+    const { parts, stockMovements, branchStocks } = get();
+    // Find all OUT movements for this job card.
+    const jobMovements = stockMovements.filter(
+      (m) => m.jobCardId === jobCardId && m.type === "OUT"
+    );
+    if (jobMovements.length === 0) return;
+
+    const now = new Date().toISOString();
+    let nextParts = parts.map((p) => ({ ...p }));
+    let nextStocks = branchStocks;
+    const reversalMovements: StockMovement[] = [];
+
+    for (const mov of jobMovements) {
+      // Add quantity back to part.
+      const idx = nextParts.findIndex((p) => p.id === mov.partId);
+      if (idx >= 0) {
+        const p = nextParts[idx];
+        nextParts[idx] = {
+          ...p,
+          quantity: p.quantity + (mov.displayQuantity ?? mov.quantity ?? 0),
+        };
+      }
+      // Add back to branch stock.
+      if (mov.branchId) {
+        const part = nextParts.find((p) => p.id === mov.partId);
+        if (part) {
+          const canonicalQty = mov.stockBeforeSecondary != null && mov.stockAfterSecondary != null
+            ? Math.max(0, mov.stockBeforeSecondary - mov.stockAfterSecondary)
+            : mov.quantity ?? 0;
+          const applied = applyBranchCanonicalDelta(nextStocks, part, mov.branchId, canonicalQty, now);
+          if (applied.ok) nextStocks = applied.stocks;
+        }
+      }
+      // Create reversal IN movement.
+      reversalMovements.push({
+        id: `sm-revert-${jobCardId}-${mov.id}-${Date.now()}`,
+        partId: mov.partId,
+        type: "IN",
+        quantity: mov.quantity,
+        unit: mov.unit,
+        reason: `Stock returned — job card ${jobNumber} deleted`,
+        jobCardId,
+        performedBy: "system",
+        createdAt: now,
+        movementKind: "JOB_CARD",
+        branchId: mov.branchId,
+        displayQuantity: mov.displayQuantity,
+        displayUnit: mov.displayUnit,
+      });
+    }
+
+    set({
+      parts: nextParts,
+      branchStocks: nextStocks,
+      stockMovements: [...reversalMovements, ...get().stockMovements],
+    });
+    persistInventorySnapshot(get);
   },
 }));
 
