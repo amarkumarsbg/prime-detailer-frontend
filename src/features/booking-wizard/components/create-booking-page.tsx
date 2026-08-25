@@ -20,7 +20,6 @@ import {
   requestCameraStream,
 } from "@/components/job-cards/multi-photo-camera-capture";
 import { notifyMembershipWelcomeWhatsApp, notifyReservationConfirmedWhatsApp } from "@/lib/whatsapp-automation-triggers";
-import { createInvoiceForMembershipActivation } from "@/lib/membership-invoice";
 import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { getNextBookingId } from "@/lib/appointment-ids";
@@ -1636,35 +1635,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
       const subRow = useMembershipStore.getState().subscriptions.find((s) => s.id === memRes.id);
       if (pkg) {
-        try {
-          const invRes = await createInvoiceForMembershipActivation({
-            membershipId: memRes.id,
-            pkg,
-            customerId: custId,
-            customerName: customerName.trim(),
-            customerPhone,
-            vehicleRegNumber: regStored,
-            vehicleMakeModel: matchedVehicle
-              ? `${matchedVehicle.make} ${matchedVehicle.model}`.trim()
-              : `${vehicleBrand} ${vehicleModel}`.trim(),
-            membershipStartDate: subRow?.startDate,
-            membershipEndDate: subRow?.endDate,
-            branchId,
-          });
-          if (invRes.ok) {
-            toast.success("Membership activated", {
-              description: `${pkg.name} · Invoice ${invRes.invoiceNumber}`,
-            });
-          } else {
-            toast.success("Membership activated", { description: pkg.name });
-            toast.error("Membership invoice was not created", { description: invRes.error });
-          }
-        } catch (e) {
-          toast.success("Membership activated", { description: pkg.name });
-          toast.error("Membership invoice was not created", {
-            description: e instanceof Error ? e.message : "Please try again.",
-          });
-        }
+        toast.success("Membership activated", { description: pkg.name });
         activatedMembershipMeta = {
           membershipId: memRes.id,
           packageId: pkg.id,

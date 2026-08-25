@@ -446,13 +446,27 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const membershipDetails = useMemo(() => {
     if (!invoice) return null;
-    return resolveMembershipInvoiceDetails({
+    const resolved = resolveMembershipInvoiceDetails({
       invoice,
       membership: membershipForInvoice,
       packageName: membershipPackageName,
       vehicle: membershipVehicle,
     });
-  }, [invoice, membershipForInvoice, membershipPackageName, membershipVehicle]);
+    if (resolved) return resolved;
+    if (!invoice.membershipId && !invoice.membershipPackageName) return null;
+    return {
+      packageName: invoice.membershipPackageName || membershipPackageName || "Membership",
+      validFrom: invoice.membershipStartDate || membershipForInvoice?.startDate || "",
+      validUntil: invoice.membershipEndDate || membershipForInvoice?.endDate || "",
+      vehicleName:
+        invoice.vehicleMakeModel ||
+        jobCard?.vehicleMakeModel ||
+        vehicleMakeModelLabel(membershipVehicle) ||
+        "",
+      vehicleRegNumber: invoice.vehicleRegNumber || membershipVehicle?.registrationNumber || "",
+      membershipId: invoice.membershipId || membershipForInvoice?.id || "",
+    };
+  }, [invoice, membershipForInvoice, membershipPackageName, membershipVehicle, jobCard?.vehicleMakeModel]);
 
   const resolvedVehicleMakeModel =
     membershipDetails?.vehicleName ||

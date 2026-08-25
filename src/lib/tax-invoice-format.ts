@@ -243,6 +243,7 @@ export function buildTaxInvoicePrintHtml(
       : "";
 
   const isGstRegistered = business.gstRegistrationStatus !== "NOT_REGISTERED";
+  const isDedicatedMembershipInvoice = invoice.source === "MEMBERSHIP";
   const displayTaxRate = isGstRegistered ? invoice.taxRate : 0;
   const displayTaxAmount = isGstRegistered ? invoice.taxAmount : 0;
   const displayGrandTotal = isGstRegistered
@@ -561,7 +562,7 @@ table.inv .b { font-weight: 700; color: #171717; }
     </div>
   </div>
 
-  <div class="metadata-bar${membershipDetails ? " membership" : ""}">
+  <div class="metadata-bar${isDedicatedMembershipInvoice && membershipDetails ? " membership" : ""}">
     <div class="metadata-item">
       <div>Invoice No.</div>
       <div>${escapeHtml(invoice.invoiceNumber)}</div>
@@ -571,7 +572,7 @@ table.inv .b { font-weight: 700; color: #171717; }
       <div>${escapeHtml(formatDate(invoice.createdAt))}</div>
     </div>
     ${
-      membershipDetails
+      isDedicatedMembershipInvoice && membershipDetails
         ? ""
         : `<div class="metadata-item">
       <div>Due Date</div>
@@ -627,7 +628,7 @@ table.inv .b { font-weight: 700; color: #171717; }
       }
     </div>
     ${
-      membershipDetails
+      isDedicatedMembershipInvoice && membershipDetails
         ? ""
         : `<div style="flex: 1; border: 1px solid #d4d4d4; border-radius: 4px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; background: #fafafa;">
       <h4 style="font-size: 9.5px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; border-bottom: 1px solid #e5e5e5; padding-bottom: 4px;">Booking Details</h4>
