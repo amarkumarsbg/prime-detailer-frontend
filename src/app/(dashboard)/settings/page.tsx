@@ -444,21 +444,21 @@ export default function SettingsPage() {
     <div className="space-y-4 sm:space-y-6">
       <PageHeader title="Settings" />
 
-      <Tabs defaultValue="business" className="space-y-4">
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="business">Business</TabsTrigger>
-          <TabsTrigger value="branding">Branding & Theme</TabsTrigger>
-          <TabsTrigger value="tax">Tax & Billing</TabsTrigger>
-          <TabsTrigger value="rewards">Rewards</TabsTrigger>
-          <TabsTrigger value="terms">Terms & Conditions</TabsTrigger>
-          <TabsTrigger value="incentives">Incentives</TabsTrigger>
-          <TabsTrigger value="vehicles">Vehicle Catalog</TabsTrigger>
-          <TabsTrigger value="high-end">High-End Services</TabsTrigger>
-          <TabsTrigger value="reminders">Reminders</TabsTrigger>
-          <TabsTrigger value="staff-permissions">Staff Permissions</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="plan">Plan & billing</TabsTrigger>
-          <TabsTrigger value="general">General</TabsTrigger>
+      <Tabs defaultValue="business" className="space-y-6">
+        <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 border border-border/60 rounded-xl p-1.5">
+          <TabsTrigger value="business" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Business</TabsTrigger>
+          <TabsTrigger value="branding" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Branding & Theme</TabsTrigger>
+          <TabsTrigger value="tax" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Tax & Billing</TabsTrigger>
+          <TabsTrigger value="rewards" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Rewards</TabsTrigger>
+          <TabsTrigger value="terms" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Terms & Conditions</TabsTrigger>
+          <TabsTrigger value="incentives" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Incentives</TabsTrigger>
+          <TabsTrigger value="vehicles" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Vehicle Catalog</TabsTrigger>
+          <TabsTrigger value="high-end" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">High-End Services</TabsTrigger>
+          <TabsTrigger value="reminders" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Reminders</TabsTrigger>
+          <TabsTrigger value="staff-permissions" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Staff Permissions</TabsTrigger>
+          <TabsTrigger value="notifications" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Notifications</TabsTrigger>
+          <TabsTrigger value="plan" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Plan & billing</TabsTrigger>
+          <TabsTrigger value="general" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">General</TabsTrigger>
         </TabsList>
 
         <TabsContent value="branding" className="space-y-4">
