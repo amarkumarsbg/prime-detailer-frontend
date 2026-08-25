@@ -81,6 +81,14 @@ const VEHICLE_SEGMENT_LABELS: Record<VehicleSegment, string> = {
   BIKE: "Bike",
 };
 
+function vehicleSegmentLabel(segment: VehicleSegment | "ALL"): string {
+  return segment === "ALL" ? "All vehicles" : VEHICLE_SEGMENT_LABELS[segment];
+}
+
+function packageVehicleSegmentLabels(pkg: Pick<MembershipPackage, "applicableVehicleSegments">): Array<VehicleSegment | "ALL"> {
+  return pkg.applicableVehicleSegments?.length ? pkg.applicableVehicleSegments : ["ALL"];
+}
+
 function tierBadgeVariant(tier: MembershipTier): "default" | "secondary" | "outline" {
   switch (tier) {
     case "MONTHLY":
@@ -128,9 +136,9 @@ function MembershipPackageMobileCard({
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold leading-tight">{pkg.name}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {(pkg.applicableVehicleSegments?.length ? pkg.applicableVehicleSegments : ["ALL"]).map((seg) => (
+            {packageVehicleSegmentLabels(pkg).map((seg) => (
               <Badge key={seg} variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
-                {seg === "ALL" ? "All vehicles" : VEHICLE_SEGMENT_LABELS[seg]}
+                {vehicleSegmentLabel(seg)}
               </Badge>
             ))}
           </div>
@@ -679,9 +687,9 @@ export function MembershipPageClient() {
                           <div className="space-y-1.5">
                             <div>{p.name}</div>
                             <div className="flex flex-wrap gap-1.5">
-                              {(p.applicableVehicleSegments?.length ? p.applicableVehicleSegments : ["ALL"]).map((seg) => (
+                              {packageVehicleSegmentLabels(p).map((seg) => (
                                 <Badge key={seg} variant="outline" className="text-[10px] font-medium">
-                                  {seg === "ALL" ? "All vehicles" : VEHICLE_SEGMENT_LABELS[seg]}
+                                  {vehicleSegmentLabel(seg)}
                                 </Badge>
                               ))}
                             </div>
