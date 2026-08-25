@@ -326,6 +326,8 @@ export default function CounterSalePage() {
           partId: part.id,
           direction: "OUT",
           ...(isMlTrackedPart(part) ? { amountMl: canonical } : { amountCount: canonical }),
+          displayQuantity: line.quantity,
+          displayUnit: line.unit,
           reason: `Counter Sale ${invoice.invoiceNumber}`,
           performedBy: user?.email ?? user?.name ?? "staff",
           branchId,

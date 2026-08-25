@@ -87,6 +87,8 @@ interface InventoryStore {
     direction: "IN" | "OUT";
     amountMl?: number;
     amountCount?: number;
+    displayQuantity?: number;
+    displayUnit?: string;
     reason: string;
     notes?: string;
     performedBy: string;
@@ -735,8 +737,8 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
         ? addCanonicalSecondary(part, canonicalDelta)
         : deductCanonicalSecondary(part, canonicalDelta);
     const after = getCanonicalStockSecondary(nextPart);
-    const qty = amountMl ?? amountCount ?? 0;
-    const unit = amountMl != null ? "ML" : part.primaryUnit;
+    const qty = input.displayQuantity ?? amountMl ?? amountCount ?? 0;
+    const unit = input.displayUnit ?? (amountMl != null ? "ML" : part.primaryUnit);
     const movementKind: StockMovementKind =
       input.movementKind ??
       (reason.toLowerCase().includes("direct issue")
