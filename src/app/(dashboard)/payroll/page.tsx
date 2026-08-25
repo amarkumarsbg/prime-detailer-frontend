@@ -295,14 +295,9 @@ export default function PayrollPage() {
 
   const branchScopedStructures = useMemo(() => {
     if (activeTab !== "structures") return [];
-    return applyBranchFilters(
-      salaryStructures,
-      (s) => s.branchId,
-      selectedBranchId,
-      showBranchPicker,
-      branchFilter
-    );
-  }, [salaryStructures, selectedBranchId, showBranchPicker, branchFilter, activeTab]);
+    // Salary structures are global (role-based), not branch-scoped.
+    return salaryStructures;
+  }, [salaryStructures, activeTab]);
 
   const branchScopedAdvances = useMemo(() => {
     if (activeTab !== "advances") return [];
@@ -960,7 +955,7 @@ export default function PayrollPage() {
           <Card>
             <CardContent className="p-0">
               <MobileCardList className="p-3">
-                {salaryStructures.map((s) => (
+                {branchScopedStructures.map((s) => (
                   <MobileRowCard key={s.id}>
                     <p className="font-medium leading-snug">{s.label}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -997,7 +992,7 @@ export default function PayrollPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {salaryStructures.map((s, i) => (
+                  {branchScopedStructures.map((s, i) => (
                     <tr
                       key={s.id}
                       className={
