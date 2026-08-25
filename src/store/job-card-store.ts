@@ -13,6 +13,30 @@ import { userHasPermission } from "@/lib/rbac";
 import { useAuthStore } from "@/store/auth-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 
+function rewardPointReversalForInvoice(invoice: {
+  subtotal: number;
+  rewardDiscount?: number;
+  discountAmount?: number;
+  referralDiscount?: number;
+  grandTotal: number;
+  payments: Array<{ amount: number }>;
+  walletAmountUsed?: number;
+}): { shouldReverse: boolean; pointsEarned: number; pointsRedeemed: number } {
+  const totalPaid =
+    invoice.payments.reduce((sum, payment) => sum + payment.amount, 0) +
+    (invoice.walletAmountUsed || 0);
+  const isFullyPaid = totalPaid >= invoice.grandTotal - 0.01;
+  if (!isFullyPaid) {
+    return { shouldReverse: false, pointsEarned: 0, pointsRedeemed: 0 };
+  }
+  const pointsRedeemed = invoice.rewardDiscount || 0;
+  const discountAmt = invoice.discountAmount || 0;
+  const refDiscount = invoice.referralDiscount || 0;
+  const taxable = Math.max(0, invoice.subtotal - discountAmt - pointsRedeemed - refDiscount);
+  const pointsEarned = Math.floor(taxable / 100);
+  return { shouldReverse: true, pointsEarned, pointsRedeemed };
+}
+
 interface JobCardStore {
   jobCards: JobCard[];
   jobCardsLoading: boolean;
@@ -167,6 +191,30 @@ export const useJobCardStore = create<JobCardStore>((set, get) => ({
           // Non-critical: invoice deletion proceeds even if wallet reversal fails.
         }
       }
+
+      const rewardReversal = rewardPointReversalForInvoice(linkedInvoice);
+      if (rewardReversal.shouldReverse && linkedInvoice.customerId) {
+        try {
+          const { useCustomerStore } = await import("@/store/customer-store");
+          const buyer = useCustomerStore
+            .getState()
+            .customers.find((customer) => customer.id === linkedInvoice.customerId);
+          if (buyer) {
+            const nextRewardPoints = Math.max(
+              0,
+              buyer.rewardPoints - rewardReversal.pointsEarned + rewardReversal.pointsRedeemed
+            );
+            const nextTotalVisits = Math.max(0, (buyer.totalVisits || 0) - 1);
+            await useCustomerStore.getState().updateCustomer(buyer.id, {
+              rewardPoints: nextRewardPoints,
+              totalVisits: nextTotalVisits,
+            });
+          }
+        } catch {
+          // Non-critical: invoice deletion proceeds even if reward reversal fails.
+        }
+      }
+
       // Delete the invoice (and its payments) from DB and store.
       await invoiceStore.deleteInvoice(linkedInvoice.id);
     }

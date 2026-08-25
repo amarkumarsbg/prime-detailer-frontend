@@ -225,7 +225,7 @@ export default function InventoryPage() {
     },
     {
       key: "quantity",
-      label: "Stock",
+      label: "Stock in hand",
       sortable: true,
       className: "whitespace-nowrap",
       render: (item: Part) => {
