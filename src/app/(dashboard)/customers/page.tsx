@@ -191,6 +191,14 @@ export default function CustomersPage() {
     fetchPaginatedCustomers({ page: 1, pageSize: 50, search: searchQuery, filters });
   }, [searchQuery, filters, fetchPaginatedCustomers, isInitialLoaded]);
 
+  const visibleCustomers = useMemo(() => {
+    if (activeFilter !== DASHBOARD_FILTER.INACTIVE) return filteredData;
+    return filteredData.filter((customer) => {
+      const customerId = String(customer.id ?? "");
+      return jobCustomerIds.has(customerId) && isInactiveCustomer(customer as any);
+    });
+  }, [activeFilter, filteredData, jobCustomerIds]);
+
   const loadMore = () => {
     if (!isLoading && hasMore) {
       fetchPaginatedCustomers({ page: currentPage + 1, pageSize: 50, search: searchQuery, filters }, true);
@@ -376,7 +384,7 @@ export default function CustomersPage() {
     }
   };
 
-  if (!storesReady && !isInitialLoaded && filteredData.length === 0) return <PageSkeleton />;
+  if (!storesReady && !isInitialLoaded && visibleCustomers.length === 0) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -512,12 +520,12 @@ export default function CustomersPage() {
       {/* Results count */}
       <p className="text-xs text-muted-foreground">
         {activeFilter === DASHBOARD_FILTER.INACTIVE
-          ? `${filteredData.length} inactive customer${filteredData.length !== 1 ? "s" : ""}`
-          : `${filteredData.length} customer${filteredData.length !== 1 ? "s" : ""}`}
+          ? `${visibleCustomers.length} inactive customer${visibleCustomers.length !== 1 ? "s" : ""}`
+          : `${visibleCustomers.length} customer${visibleCustomers.length !== 1 ? "s" : ""}`}
       </p>
 
       {/* Card grid / List view */}
-      {filteredData.length === 0 ? (
+      {visibleCustomers.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/85 py-16 text-muted-foreground">
           <p className="text-sm font-medium">No customers found</p>
           {searchQuery && (
@@ -533,7 +541,7 @@ export default function CustomersPage() {
       ) : viewMode === "grid" ? (
         <VirtuosoGrid
           useWindowScroll
-          data={filteredData}
+          data={visibleCustomers}
           endReached={loadMore}
           components={{
             List: GridList,
@@ -633,7 +641,7 @@ export default function CustomersPage() {
       ) : (
         /* ── List view — original DataTable ── */
         <DataTable<any>
-          data={filteredData}
+          data={visibleCustomers}
           columns={columns}
           defaultSortKey="memberSince"
           defaultSortDir="desc"
