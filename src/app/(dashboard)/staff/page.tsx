@@ -1364,7 +1364,7 @@ export default function StaffPage() {
                 try {
                   await deleteStaff(deletingUser.id);
                   pushActivityLog({
-                    action: "DELETED",
+                    action: "STATUS_CHANGED",
                     entityType: "STAFF",
                     entityId: deletingUser.id,
                     entityLabel: deletingUser.name,
