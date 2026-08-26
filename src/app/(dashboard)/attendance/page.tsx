@@ -125,6 +125,7 @@ export default function AttendancePage() {
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [manualRecordId, setManualRecordId] = useState<string | null>(null);
   const [manualStaffId, setManualStaffId] = useState("");
+  const today = format(new Date(), "yyyy-MM-dd");
   const [manualDate, setManualDate] = useState(today);
   const [manualCheckIn, setManualCheckIn] = useState("");
   const [manualCheckOut, setManualCheckOut] = useState("");
@@ -171,7 +172,6 @@ export default function AttendancePage() {
     void loadDirectoryStaff();
   }, []);
 
-  const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
   const [activeTab, setActiveTab] = useState("overview");
   const now = new Date();
