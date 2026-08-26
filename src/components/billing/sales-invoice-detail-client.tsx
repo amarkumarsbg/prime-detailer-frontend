@@ -80,7 +80,7 @@ import {
 import { appendReturnTo } from "@/lib/navigation/return-to";
 import { DetailBackButton } from "@/components/shared/detail-back-button";
 import { useNotificationStore } from "@/store/notification-store";
-import { ApiError } from "@/lib/api-client";
+import { apiGet, ApiError } from "@/lib/api-client";
 import {
   invoicePdfFilename,
   prefetchInvoicePdf,
@@ -317,6 +317,15 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const invoices = useInvoiceStore((s) => s.invoices);
   const updateInvoice = useInvoiceStore((s) => s.updateInvoice);
   const jobCards = useJobCardStore((s) => s.jobCards);
+  const [singleInvoice, setSingleInvoice] = useState<Invoice | null>(null);
+  const [singleJobCard, setSingleJobCard] = useState<JobCard | null>(null);
+  const [singleFetchDone, setSingleFetchDone] = useState(false);
+
+  useEffect(() => {
+    setSingleInvoice(null);
+    setSingleJobCard(null);
+    setSingleFetchDone(false);
+  }, [id]);
   const user = useAuthStore((s) => s.user);
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
   const membershipPackages = useMembershipStore((s) => s.packages);
@@ -327,14 +336,63 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
 
   const invoice = useMemo(
-    () => invoices.find((inv) => inv.id === id),
-    [invoices, id]
+    () => invoices.find((inv) => inv.id === id) ?? singleInvoice,
+    [invoices, id, singleInvoice]
   );
 
-  const jobCard = useMemo(
-    () => (invoice ? jobCards.find((jc) => jc.id === invoice.jobCardId) : null),
-    [invoice, jobCards]
-  );
+  const jobCard = useMemo(() => {
+    if (!invoice) return null;
+    const fromStore = jobCards.find((jc) => jc.id === invoice.jobCardId);
+    return fromStore ?? (singleJobCard && singleJobCard.id === invoice.jobCardId ? singleJobCard : null);
+  }, [invoice, jobCards, singleJobCard]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (invoice || singleFetchDone) return;
+    void (async () => {
+      try {
+        const data = await apiGet<{ item: Invoice }>(`/api/invoices/${encodeURIComponent(id)}`);
+        if (cancelled || !data.item) return;
+        setSingleInvoice(data.item);
+        useInvoiceStore.setState((state) => {
+          if (state.invoices.some((inv) => inv.id === data.item.id)) return state;
+          return { invoices: [data.item, ...state.invoices] };
+        });
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) {
+          // Keep not-found UX.
+        }
+      } finally {
+        if (!cancelled) setSingleFetchDone(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, invoice, singleFetchDone]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!invoice || jobCard) return;
+    void (async () => {
+      try {
+        const data = await apiGet<{ item: JobCard }>(
+          `/api/job-cards/${encodeURIComponent(invoice.jobCardId)}`
+        );
+        if (cancelled || !data.item) return;
+        setSingleJobCard(data.item);
+        useJobCardStore.setState((state) => {
+          if (state.jobCards.some((jc) => jc.id === data.item.id)) return state;
+          return { jobCards: [data.item, ...state.jobCards] };
+        });
+      } catch {
+        // Optional optimization only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice, jobCard]);
 
   const { customers } = useCustomerStore();
   const addWalletTransaction = useWalletStore((s) => s.addTransaction);

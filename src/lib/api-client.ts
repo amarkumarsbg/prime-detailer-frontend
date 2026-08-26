@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/store/auth-store";
 import { buildApiUrl } from "./api-base";
+import { toast } from "sonner";
 
 export class ApiError extends Error {
   constructor(
@@ -11,6 +12,13 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+function showApiConflictToast(message?: string): void {
+  if (typeof window === "undefined") return;
+  toast.error(
+    message ?? "Data conflict — operation was blocked to prevent data loss."
+  );
 }
 
 async function parseResponse<T>(res: Response): Promise<T> {
@@ -34,6 +42,13 @@ async function parseResponse<T>(res: Response): Promise<T> {
   }
   if (!res.ok || body.error) {
     const { message, code, ...rest } = body.error ?? {};
+    if (res.status === 409) {
+      showApiConflictToast(
+        typeof message === "string" && message.trim().length > 0
+          ? message
+          : "Data conflict — operation was blocked to prevent data loss."
+      );
+    }
     throw new ApiError(
       res.status,
       (typeof message === "string" ? message : null) ?? res.statusText ?? "Request failed",

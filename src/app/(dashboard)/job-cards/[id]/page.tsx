@@ -110,7 +110,7 @@ import {
   canUseLiveCameraPreview,
   requestCameraStream,
 } from "@/components/job-cards/multi-photo-camera-capture";
-import { ApiError } from "@/lib/api-client";
+import { apiGet, ApiError } from "@/lib/api-client";
 import { ensureDomainResources, invalidateDomainResources } from "@/lib/domain-data-loader";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
@@ -229,6 +229,11 @@ export default function JobCardDetailPage() {
   const searchParams = useSearchParams();
   const id = params.id as string;
   const { jobCards, updateJobCard } = useJobCardStore();
+  const [singleFetchDone, setSingleFetchDone] = useState(false);
+
+  useEffect(() => {
+    setSingleFetchDone(false);
+  }, [id]);
   const pickupDropRequests = usePickupDropStore((s) => s.requests);
   const pickupDropHydrated = usePickupDropStore((s) => s.hydrated);
   const { selectedBranchId } = useBranchScope();
@@ -239,6 +244,32 @@ export default function JobCardDetailPage() {
     () => jobCards.find((jc) => jc.id === id),
     [jobCards, id]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!id || jobCard || singleFetchDone) return;
+    void (async () => {
+      try {
+        const data = await apiGet<{ item: JobCard }>(`/api/job-cards/${encodeURIComponent(id)}`);
+        if (cancelled || !data.item) return;
+        useJobCardStore.setState((state) => {
+          if (state.jobCards.some((j) => j.id === data.item.id)) return state;
+          return { jobCards: [data.item, ...state.jobCards] };
+        });
+      } catch (e) {
+        if (!(e instanceof ApiError && e.status === 404)) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error(e);
+          }
+        }
+      } finally {
+        if (!cancelled) setSingleFetchDone(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, jobCard, singleFetchDone]);
 
   useEffect(() => {
     if (!jobCard || !pickupDropHydrated) return;
@@ -1605,6 +1636,15 @@ export default function JobCardDetailPage() {
       description: `${jobCard.jobNumber} is now delivered.`,
     });
   };
+
+  if (!jobCard && !singleFetchDone) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader title="Loading Job Card" />
+        <p className="text-muted-foreground">Loading latest job card data…</p>
+      </div>
+    );
+  }
 
   if (!jobCard) {
     return (

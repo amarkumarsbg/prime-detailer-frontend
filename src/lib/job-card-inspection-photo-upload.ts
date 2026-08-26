@@ -1,4 +1,4 @@
-import { apiGet, apiPostForm } from "./api-client";
+import { apiGet, apiPostForm, ApiError } from "./api-client";
 import {
   mergeInspectionPhotosById,
   toInspectionPhotoUploadQueryType,
@@ -71,9 +71,14 @@ export async function uploadJobInspectionPhoto(
  * that have already been saved locally or are already in the store.
  */
 export async function refreshJobCardFromServer(jobCardId: string): Promise<JobCard | null> {
-  const data = await apiGet<{ items?: JobCard[] }>("/api/job-cards");
-  const items = Array.isArray(data?.items) ? data.items : [];
-  const found = items.find((j) => j.id === jobCardId) ?? null;
+  let found: JobCard | null = null;
+  try {
+    const data = await apiGet<{ item: JobCard }>(`/api/job-cards/${encodeURIComponent(jobCardId)}`);
+    found = data.item ?? null;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
   if (!found) return null;
 
   useJobCardStore.setState((state) => {

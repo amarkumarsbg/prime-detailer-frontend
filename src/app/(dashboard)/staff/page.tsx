@@ -161,8 +161,11 @@ export default function StaffPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [deletingUserBusy, setDeletingUserBusy] = useState(false);
   const staff = useStaffStore((s) => s.staff);
   const addStaff = useStaffStore((s) => s.addStaff);
+  const deleteStaff = useStaffStore((s) => s.deleteStaff);
   const customers = useCustomerStore((s) => s.customers);
   const jobCards = useJobCardStore((s) => s.jobCards);
 
@@ -198,6 +201,7 @@ export default function StaffPage() {
   const [newBaseSalary, setNewBaseSalary] = useState("");
 
   const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole), [authRole]);
+  const canManageUsers = canManageStaffUsers(authRole);
 
   useEffect(() => {
     if (assignableRoles.length && !assignableRoles.includes(newRole)) {
@@ -468,8 +472,9 @@ export default function StaffPage() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-destructive"
-              disabled
+              disabled={!canManageUsers || deletingUserBusy}
               aria-label="Delete"
+              onClick={() => setDeletingUser(item)}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -477,7 +482,7 @@ export default function StaffPage() {
         ),
       },
     ],
-    [staff, branches, staffJobStatsById]
+    [staff, branches, staffJobStatsById, canManageUsers, deletingUserBusy]
   );
 
   const customerColumns = useMemo(
@@ -1324,6 +1329,72 @@ export default function StaffPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!deletingUser}
+        onOpenChange={(open) => {
+          if (!open && !deletingUserBusy) setDeletingUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete staff user?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {" "}
+              <span className="font-semibold text-foreground">{deletingUser?.name}</span>? This
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletingUserBusy}
+              onClick={() => setDeletingUser(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingUserBusy}
+              onClick={async () => {
+                if (!deletingUser) return;
+                setDeletingUserBusy(true);
+                try {
+                  await deleteStaff(deletingUser.id);
+                  pushActivityLog({
+                    action: "DELETED",
+                    entityType: "STAFF",
+                    entityId: deletingUser.id,
+                    entityLabel: deletingUser.name,
+                    details: "Staff user deleted",
+                  });
+                  toast.success("Staff user deleted");
+                  setDeletingUser(null);
+                } catch (e) {
+                  if (e instanceof ApiError) {
+                    if (e.status === 403 || e.status === 404) {
+                      toast.error(e.message);
+                    } else {
+                      toast.error(e.message || "Could not delete staff user.");
+                    }
+                  } else {
+                    toast.error(
+                      e instanceof Error ? e.message : "Could not delete staff user."
+                    );
+                  }
+                } finally {
+                  setDeletingUserBusy(false);
+                }
+              }}
+            >
+              {deletingUserBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

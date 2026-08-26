@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { User, UserRole } from "@/types";
-import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api-client";
+import { apiDelete, apiGet, apiPost, apiPut, ApiError } from "@/lib/api-client";
 import { normalizeStaffHrFields } from "@/lib/staff-hr-fields";
 
 function normalizePin(pin: string): string {
@@ -63,6 +63,7 @@ interface StaffStoreState {
       }>
   ) => Promise<UpdateStaffResult>;
   updateAttendancePin: (staffId: string, pin: string) => Promise<UpdatePinResult>;
+  deleteStaff: (staffId: string) => Promise<void>;
   findByAttendancePin: (pin: string) => User | undefined;
   resetToSeed: () => Promise<void>;
 }
@@ -253,6 +254,13 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
     } catch {
       return { ok: false, error: "INVALID" };
     }
+  },
+
+  deleteStaff: async (staffId) => {
+    await apiDelete<{ success: boolean; message?: string }>(`/api/users/${staffId}`);
+    set((s) => ({
+      staff: s.staff.filter((u) => u.id !== staffId),
+    }));
   },
 
   findByAttendancePin: (pin) => {

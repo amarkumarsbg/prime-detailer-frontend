@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { format } from "date-fns";
 import type { AttendanceRecord, User } from "@/types";
-import { apiGet, apiDelete } from "@/lib/api-client";
+import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api-client";
 
 export type PunchResult =
   | { ok: true; kind: "checkIn"; time: string; record: AttendanceRecord }
@@ -18,6 +18,25 @@ interface AttendanceStoreState {
   /** @returns whether the server returned fresh records */
   sync: () => Promise<boolean>;
   punch: (args: { staff: User; branchId: string }) => Promise<PunchResult>;
+  upsertManual: (payload: {
+    staffId: string;
+    date: string;
+    checkIn?: string;
+    checkOut?: string;
+    durationMinutes?: number;
+    status: AttendanceRecord["status"];
+  }) => Promise<AttendanceRecord>;
+  updateManual: (
+    id: string,
+    payload: {
+      staffId: string;
+      date: string;
+      checkIn?: string;
+      checkOut?: string;
+      durationMinutes?: number;
+      status: AttendanceRecord["status"];
+    }
+  ) => Promise<AttendanceRecord>;
   resetToSeed: () => Promise<void>;
 }
 
@@ -86,5 +105,31 @@ export const useAttendanceStore = create<AttendanceStoreState>((set) => ({
     } catch {
       return { ok: false, error: "NETWORK" };
     }
+  },
+
+  upsertManual: async (payload) => {
+    const data = await apiPost<{ record: AttendanceRecord }>("/api/attendance", payload);
+    const record = data.record;
+    set((s) => {
+      const idx = s.records.findIndex((r) => r.id === record.id);
+      if (idx === -1) return { records: [record, ...s.records] };
+      const next = [...s.records];
+      next[idx] = record;
+      return { records: next };
+    });
+    return record;
+  },
+
+  updateManual: async (id, payload) => {
+    const data = await apiPut<{ record: AttendanceRecord }>(`/api/attendance/${id}`, payload);
+    const record = data.record;
+    set((s) => {
+      const idx = s.records.findIndex((r) => r.id === record.id);
+      if (idx === -1) return { records: [record, ...s.records] };
+      const next = [...s.records];
+      next[idx] = record;
+      return { records: next };
+    });
+    return record;
   },
 }));

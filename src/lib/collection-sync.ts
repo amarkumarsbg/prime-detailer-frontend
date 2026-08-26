@@ -1,4 +1,4 @@
-import { apiDelete, apiPost, apiPut } from "./api-client";
+import { apiDelete, apiGet, apiPost, apiPut } from "./api-client";
 
 /**
  * Graduated AppJsonRow modules (Phase 4): FE talks to dedicated aliases.
@@ -41,6 +41,15 @@ export async function deleteCollectionDocument(
 ): Promise<void> {
   const base = documentCollectionBasePath(collection);
   await apiDelete(`${base}/${entityId}`);
+}
+
+export async function getCollectionDocument<T>(
+  collection: string,
+  entityId: string
+): Promise<T> {
+  const base = documentCollectionBasePath(collection);
+  const data = await apiGet<{ item: T }>(`${base}/${entityId}`);
+  return data.item;
 }
 
 export async function putSingletonDocument(

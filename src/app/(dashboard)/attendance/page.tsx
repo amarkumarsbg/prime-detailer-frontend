@@ -13,6 +13,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -28,6 +37,7 @@ import { useLeaveStore } from "@/store/leave-store";
 import { AttendanceQrPanel } from "@/components/attendance/attendance-qr-panel";
 import { format } from "date-fns";
 import { roleDisplayLabel } from "@/lib/rbac";
+import { ApiError, apiGet } from "@/lib/api-client";
 import {
   Clock,
   UserCheck,
@@ -35,6 +45,8 @@ import {
   AlertTriangle,
   Calendar,
   Download,
+  Pencil,
+  Plus,
 } from "lucide-react";
 import { getShiftStatusDisplay } from "@/lib/attendance-display";
 import { canViewStaffAttendanceDashboard } from "@/lib/attendance-access";
@@ -64,6 +76,16 @@ const MONTH_OPTIONS = [
   { v: 12, label: "December" },
 ];
 
+const ATTENDANCE_STATUS_OPTIONS = ["PRESENT", "ABSENT", "LATE", "HALF_DAY"] as const;
+
+type DirectoryUser = {
+  id: string;
+  name: string;
+  role: "PLATFORM_OWNER" | "SUPER_ADMIN" | "ADMIN" | "BRANCH_MANAGER" | "MANAGER" | "SUPERVISOR" | "RECEPTIONIST" | "MECHANIC";
+  branchId: string;
+  isActive: boolean;
+};
+
 function formatDuration(minutes?: number): string {
   if (minutes == null) return "—";
   const h = Math.floor(minutes / 60);
@@ -77,6 +99,16 @@ function formatDateOptionLabel(isoDate: string): string {
   return format(new Date(yy, mm - 1, dd), "EEE, MMM d, yyyy");
 }
 
+function calcDurationMinutes(checkIn?: string, checkOut?: string): number | undefined {
+  const inParts = checkIn?.split(":").map(Number);
+  const outParts = checkOut?.split(":").map(Number);
+  if (!inParts || !outParts || inParts.length !== 2 || outParts.length !== 2) return undefined;
+  const inMins = inParts[0] * 60 + inParts[1];
+  const outMins = outParts[0] * 60 + outParts[1];
+  if (!Number.isFinite(inMins) || !Number.isFinite(outMins) || outMins <= inMins) return undefined;
+  return outMins - inMins;
+}
+
 export default function AttendancePage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
@@ -84,8 +116,20 @@ export default function AttendancePage() {
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, viewingLabel } = useBranchScope();
   const attendanceRecords = useAttendanceStore((s) => s.records);
+  const syncAttendance = useAttendanceStore((s) => s.sync);
+  const upsertManualAttendance = useAttendanceStore((s) => s.upsertManual);
+  const updateManualAttendance = useAttendanceStore((s) => s.updateManual);
   const staff = useStaffStore((s) => s.staff);
   const leaveRequests = useLeaveStore((s) => s.requests);
+  const [directoryStaff, setDirectoryStaff] = useState<DirectoryUser[]>([]);
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [manualRecordId, setManualRecordId] = useState<string | null>(null);
+  const [manualStaffId, setManualStaffId] = useState("");
+  const [manualDate, setManualDate] = useState(today);
+  const [manualCheckIn, setManualCheckIn] = useState("");
+  const [manualCheckOut, setManualCheckOut] = useState("");
+  const [manualStatus, setManualStatus] = useState<(typeof ATTENDANCE_STATUS_OPTIONS)[number]>("PRESENT");
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const qrDefaultBranchId = useMemo(() => {
     if (selectedBranchId) return selectedBranchId;
@@ -102,6 +146,30 @@ export default function AttendancePage() {
       router.replace("/dashboard");
     }
   }, [user, router]);
+
+  const loadDirectoryStaff = async (): Promise<DirectoryUser[]> => {
+    try {
+      const res = await apiGet<{ users: DirectoryUser[] }>("/api/users/directory");
+      const users = Array.isArray(res.users) ? res.users : [];
+      setDirectoryStaff(users);
+      return users;
+    } catch {
+      // Fallback to current staff store data if directory endpoint fails.
+      const fallback = staff.map((s) => ({
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          branchId: s.branchId,
+          isActive: s.isActive,
+        }));
+      setDirectoryStaff(fallback);
+      return fallback;
+    }
+  };
+
+  useEffect(() => {
+    void loadDirectoryStaff();
+  }, []);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
@@ -134,6 +202,94 @@ export default function AttendancePage() {
     });
     return [...list].sort((a, b) => a.staffName.localeCompare(b.staffName));
   }, [attendanceRecords, selectedDate, selectedBranchId, activeTab]);
+
+  const attendanceDirectory = useMemo(() => {
+    const list = directoryStaff.length > 0
+      ? directoryStaff
+      : staff.map((s) => ({
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          branchId: s.branchId,
+          isActive: s.isActive,
+        }));
+    return list
+      .filter((u) => (selectedBranchId ? u.branchId === selectedBranchId : true))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [directoryStaff, staff, selectedBranchId]);
+
+  const openAddAttendanceDialog = async () => {
+    const users = await loadDirectoryStaff();
+    const initialDate = activeTab === "records" ? selectedDate : today;
+    setManualRecordId(null);
+    setManualDate(initialDate);
+    setManualCheckIn("");
+    setManualCheckOut("");
+    setManualStatus("PRESENT");
+    const visible = users
+      .filter((u) => (selectedBranchId ? u.branchId === selectedBranchId : true))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    setManualStaffId(visible[0]?.id ?? "");
+    setManualDialogOpen(true);
+  };
+
+  const openEditAttendanceDialog = async (recordId: string) => {
+    await loadDirectoryStaff();
+    const record = attendanceRecords.find((r) => r.id === recordId);
+    if (!record) {
+      toast.error("Attendance record not found.");
+      return;
+    }
+    setManualRecordId(record.id);
+    setManualStaffId(record.staffId);
+    setManualDate(record.date);
+    setManualCheckIn(record.checkIn ?? "");
+    setManualCheckOut(record.checkOut ?? "");
+    setManualStatus(record.status);
+    setManualDialogOpen(true);
+  };
+
+  const submitManualAttendance = async () => {
+    if (!manualStaffId) {
+      toast.error("Please select a staff member.");
+      return;
+    }
+    if (!manualDate) {
+      toast.error("Please select a date.");
+      return;
+    }
+    const durationMinutes = calcDurationMinutes(
+      manualCheckIn || undefined,
+      manualCheckOut || undefined
+    );
+    const payload = {
+      staffId: manualStaffId,
+      date: manualDate,
+      checkIn: manualCheckIn || undefined,
+      checkOut: manualCheckOut || undefined,
+      durationMinutes,
+      status: manualStatus,
+    };
+    setManualSubmitting(true);
+    try {
+      if (manualRecordId) {
+        await updateManualAttendance(manualRecordId, payload);
+      } else {
+        await upsertManualAttendance(payload);
+      }
+      await syncAttendance();
+      toast.success(manualRecordId ? "Attendance updated." : "Attendance saved.");
+      setManualDialogOpen(false);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error(e instanceof Error ? e.message : "Could not save attendance.");
+      }
+    } finally {
+      setManualSubmitting(false);
+    }
+  };
 
   const todayRecords = useMemo(() => {
     if (activeTab !== "overview") return [];
@@ -312,9 +468,15 @@ export default function AttendancePage() {
           title="Staff Attendance"
           description={`Managers and admins only — QR + PIN punch, check-in/out, and hours. Viewing: ${viewingLabel}.`}
         />
-        <Badge variant="success" className="w-fit shrink-0">
-          Live
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="success" className="w-fit shrink-0">
+            Live
+          </Badge>
+          <Button type="button" size="sm" onClick={() => void openAddAttendanceDialog()}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add / Edit Attendance
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
@@ -442,6 +604,18 @@ export default function AttendancePage() {
                             <p className="font-medium">{formatDuration(r.durationMinutes)}</p>
                           </div>
                         </div>
+                        <div className="mt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => void openEditAttendanceDialog(r.id)}
+                          >
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                        </div>
                       </MobileRowCard>
                     );
                   })
@@ -458,13 +632,14 @@ export default function AttendancePage() {
                       <th className="text-left py-3 px-2 font-semibold">Check-Out</th>
                       <th className="text-left py-3 px-2 font-semibold">Duration</th>
                       <th className="text-left py-3 px-2 font-semibold">Shift</th>
+                      <th className="text-left py-3 px-2 font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {recordsForDate.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="py-8 text-center text-muted-foreground"
                         >
                           No attendance records for this date
@@ -492,6 +667,18 @@ export default function AttendancePage() {
                             </td>
                             <td className="py-3 px-2">
                               <Badge variant={shift.variant}>{shift.label}</Badge>
+                            </td>
+                            <td className="py-3 px-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => void openEditAttendanceDialog(r.id)}
+                              >
+                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                Edit
+                              </Button>
                             </td>
                           </tr>
                         );
@@ -814,6 +1001,101 @@ export default function AttendancePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={manualDialogOpen}
+        onOpenChange={(open) => {
+          if (!manualSubmitting) setManualDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {manualRecordId ? "Edit Attendance" : "Add Attendance"}
+            </DialogTitle>
+            <DialogDescription>
+              Save manual attendance entry for staff.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Staff</Label>
+              <Select value={manualStaffId} onValueChange={setManualStaffId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  {attendanceDirectory.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} · {roleDisplayLabel(u.role)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="attendance-date">Date</Label>
+              <Input
+                id="attendance-date"
+                type="date"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="attendance-checkin">Check-in</Label>
+                <Input
+                  id="attendance-checkin"
+                  type="time"
+                  value={manualCheckIn}
+                  onChange={(e) => setManualCheckIn(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="attendance-checkout">Check-out</Label>
+                <Input
+                  id="attendance-checkout"
+                  type="time"
+                  value={manualCheckOut}
+                  onChange={(e) => setManualCheckOut(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select
+                value={manualStatus}
+                onValueChange={(v) => setManualStatus(v as (typeof ATTENDANCE_STATUS_OPTIONS)[number])}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ATTENDANCE_STATUS_OPTIONS.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status.replace("_", " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={manualSubmitting}
+                onClick={() => setManualDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="button" disabled={manualSubmitting} onClick={() => void submitManualAttendance()}>
+                {manualSubmitting ? "Saving..." : "Save attendance"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
