@@ -19,6 +19,16 @@ export function hasDualUnitPart(part: Part): boolean {
 const PACK_UNIT_RE = /^(box|pack|carton|case)$/i;
 const COUNT_UNIT_RE = /^(pcs|pc|piece|pieces|ea|each|unit|units)$/i;
 
+function isLitreLikeUnit(raw: string | undefined): boolean {
+  const t = (raw ?? "").trim().toLowerCase();
+  return t === "litre" || t === "liter" || t === "l";
+}
+
+function isMlLikeUnit(raw: string | undefined): boolean {
+  const t = (raw ?? "").trim().toLowerCase();
+  return t === "ml";
+}
+
 function titleUnit(raw: string): string {
   const t = raw.trim();
   if (!t) return t;
@@ -34,7 +44,15 @@ function titleUnit(raw: string): string {
  * (model is 1 primary pack = N secondary count units).
  */
 export function normalizePartUnits(part: Part): Part {
-  if (part.stockQuantityMl != null) {
+  const shouldNormalizeAsMlTracked =
+    part.stockQuantityMl != null &&
+    (
+      isLitreLikeUnit(part.primaryUnit) ||
+      isMlLikeUnit(part.secondaryUnit) ||
+      !(part.primaryUnit?.trim())
+    );
+
+  if (shouldNormalizeAsMlTracked) {
     return {
       ...part,
       primaryUnit: "Litre",
