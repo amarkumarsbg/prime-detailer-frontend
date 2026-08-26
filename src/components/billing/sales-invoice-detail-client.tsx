@@ -103,7 +103,7 @@ import { DEFAULT_GST_RATE, isGstRegistered } from "@/lib/gst-tax";
 import { cn, formatInrTable } from "@/lib/utils";
 import { toast } from "sonner";
 import { assertCanExportData } from "@/lib/assert-can-export";
-import type { Invoice, InvoiceLineItem, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
+import type { Invoice, InvoiceLineItem, JobCard, Part, PaymentMethod, ServiceCatalogItem } from "@/types";
 import { Textarea } from "@/components/ui/textarea";
 
 function InvoicePartPickSelect({
@@ -374,10 +374,12 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   useEffect(() => {
     let cancelled = false;
     if (!invoice || jobCard) return;
+    const invoiceJobCardId = invoice.jobCardId;
+    if (!invoiceJobCardId) return;
     void (async () => {
       try {
         const data = await apiGet<{ item: JobCard }>(
-          `/api/job-cards/${encodeURIComponent(invoice.jobCardId)}`
+          `/api/job-cards/${encodeURIComponent(invoiceJobCardId)}`
         );
         if (cancelled || !data.item) return;
         setSingleJobCard(data.item);
