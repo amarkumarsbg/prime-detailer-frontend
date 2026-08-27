@@ -114,6 +114,7 @@ export default function InventoryPage() {
   const [historyPartId, setHistoryPartId] = useState<string | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
+  const [inventoryTab, setInventoryTab] = useState("parts");
 
   const openEditPart = useCallback((part: Part) => {
     setEditingPart(part);
@@ -536,14 +537,9 @@ export default function InventoryPage() {
                 </form>
               </DialogContent>
             </Dialog>
-            <Button
-              onClick={() => {
-                setEditingPart(null);
-                setAddDialogOpen(true);
-              }}
-            >
+            <Button onClick={() => setInventoryTab("purchases")}>
               <Plus className="w-4 h-4 mr-2" />
-              New item
+              Create purchase
             </Button>
             <CatalogItemFormDialog
               open={addDialogOpen}
@@ -644,7 +640,7 @@ export default function InventoryPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="parts" className="space-y-4">
+      <Tabs value={inventoryTab} onValueChange={setInventoryTab} className="space-y-4">
         <TabsList className="h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 flex-nowrap scrollbar-none">
           {(
             [
