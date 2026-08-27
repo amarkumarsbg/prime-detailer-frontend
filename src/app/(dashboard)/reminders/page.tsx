@@ -111,6 +111,12 @@ const STATUS_CONFIG: Record<ReminderStatus, { label: string; color: string }> = 
   },
 };
 
+const FALLBACK_STATUS_CONFIG = {
+  label: "Active",
+  color:
+    "text-slate-700 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-slate-900/40 dark:border-slate-800",
+};
+
 const ALL_STATUSES: ReminderStatus[] = [
   "OVERDUE",
   "DUE",
@@ -141,8 +147,11 @@ function displayNextDue(r: ServiceReminder): string {
   return "—";
 }
 
-function StatusBadge({ status }: { status: ReminderStatus }) {
-  const cfg = STATUS_CONFIG[status];
+function StatusBadge({ status }: { status?: string }) {
+  const cfg =
+    status && Object.prototype.hasOwnProperty.call(STATUS_CONFIG, status)
+      ? STATUS_CONFIG[status as ReminderStatus]
+      : FALLBACK_STATUS_CONFIG;
   return (
     <span
       className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${cfg.color}`}
@@ -513,7 +522,7 @@ export default function RemindersPage() {
           <Label className="text-xs text-muted-foreground">Due from</Label>
           <Input
             type="date"
-            className="h-9"
+            className="h-9 date-input-icon-end pr-9"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
@@ -522,7 +531,7 @@ export default function RemindersPage() {
           <Label className="text-xs text-muted-foreground">Due to</Label>
           <Input
             type="date"
-            className="h-9"
+            className="h-9 date-input-icon-end pr-9"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />

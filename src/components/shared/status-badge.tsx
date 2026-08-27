@@ -49,10 +49,13 @@ export function InvoiceStatusBadge({
   status,
   className,
 }: {
-  status: InvoiceStatus;
+  status: InvoiceStatus | string | undefined | null;
   className?: string;
 }) {
-  const config = INVOICE_STATUS_CONFIG[status];
+  const config =
+    status && Object.prototype.hasOwnProperty.call(INVOICE_STATUS_CONFIG, status)
+      ? INVOICE_STATUS_CONFIG[status as InvoiceStatus]
+      : { label: (status ?? "Unknown").toString() || "Unknown", variant: "secondary" as const };
   return (
     <Badge variant={config.variant} className={className}>
       {config.label}

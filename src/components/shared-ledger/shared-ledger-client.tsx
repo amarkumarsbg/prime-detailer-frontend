@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  BookMarked,
   Download,
   Search,
   Building2,
@@ -356,15 +355,10 @@ export function SharedLedgerClient({
     <div className={cn("space-y-4", !embedded && "mx-auto max-w-[1600px]")}>
       {!embedded ? (
         <div className="flex flex-col gap-4 border-b border-border/80 pb-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm">
-              <BookMarked className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {navDescriptionForPath("/shared-ledger")}
-              </p>
-            </div>
+          <div>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {navDescriptionForPath("/shared-ledger")}
+            </p>
           </div>
         </div>
       ) : null}

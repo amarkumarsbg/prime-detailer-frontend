@@ -106,9 +106,11 @@ const PIE_COLORS = [
   "#64748b",
 ];
 
-function expenseMethodLabel(m: string): string {
-  if (m === "BANK_TRANSFER") return "Transfer";
-  return m.charAt(0) + m.slice(1).toLowerCase();
+function expenseMethodLabel(m?: string | null): string {
+  const method = (m ?? "").trim();
+  if (!method) return "Unknown";
+  if (method === "BANK_TRANSFER") return "Transfer";
+  return method.charAt(0) + method.slice(1).toLowerCase();
 }
 
 export function AccountingDashboard() {

@@ -67,9 +67,11 @@ function categoryLabel(c: string): string {
   return c;
 }
 
-function paymentMethodShort(m: string): string {
-  if (m === "BANK_TRANSFER") return "Bank";
-  return m.charAt(0) + m.slice(1).toLowerCase();
+function paymentMethodShort(m?: string | null): string {
+  const method = (m ?? "").trim();
+  if (!method) return "Unknown";
+  if (method === "BANK_TRANSFER") return "Bank";
+  return method.charAt(0) + method.slice(1).toLowerCase();
 }
 
 function statusBadgeVariant(

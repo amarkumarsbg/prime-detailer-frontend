@@ -102,11 +102,14 @@ export default function FollowUpsPage() {
                   key={fu.id}
                   className="flex items-start gap-2 rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/50 sm:p-3"
                 >
-                  <Link href={`/customers/${fu.customerId}`} className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium leading-tight">
+                      <Link
+                        href={`/customers/${fu.customerId}`}
+                        className="min-w-0 flex-1 truncate text-sm font-medium leading-tight hover:text-primary"
+                      >
                         {fu.customerName}
-                      </span>
+                      </Link>
                       <Badge
                         variant={STATUS_VARIANTS[fu.status] ?? "secondary"}
                         className="h-5 shrink-0 px-1.5 text-[10px] font-medium"
@@ -125,7 +128,7 @@ export default function FollowUpsPage() {
                     <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                       Last visit: {formatDate(fu.lastVisitDate)} · {fu.daysSinceLastVisit} days ago
                     </p>
-                  </Link>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
