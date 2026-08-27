@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import type { Part, ServiceConsumption, VehicleSegment } from "@/types";
 import { ArrowLeft, Box, ChevronDown, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatLitresFromMl, isMlTrackedPart } from "@/lib/inventory-units";
+import { partUsedInServices } from "@/lib/inventory/part-used-in";
 
 const VEHICLE_QTY_SEGMENTS: { value: VehicleSegment; label: string }[] = [
   { value: "HATCHBACK", label: "Hatchback" },
@@ -28,11 +30,14 @@ const VEHICLE_QTY_SEGMENTS: { value: VehicleSegment; label: string }[] = [
 ];
 
 function stockLabel(p: Part): string {
-  if (p.stockQuantityMl != null) {
-    const L = p.stockQuantityMl / 1000;
-    return `${L.toFixed(0)} L`;
+  if (isMlTrackedPart(p)) {
+    return `${formatLitresFromMl(p.stockQuantityMl ?? 0)} L`;
   }
   return `${p.quantity} ${p.primaryUnit}`;
+}
+
+function resolvePartUnit(part: Part): string {
+  return isMlTrackedPart(part) ? "L" : part.primaryUnit;
 }
 
 /** Isolated row so local input state doesn't re-render the whole page on each keystroke. */
@@ -51,6 +56,8 @@ function SelectedPartRow({
   onUpdateSegmentQty: (seg: VehicleSegment, value: number | null) => void;
   onUpdateRequired: (required: boolean) => void;
 }) {
+  const displayUnit = part ? resolvePartUnit(part) : line.unit;
+
   const [defaultQty, setDefaultQty] = useState(String(line.quantityPerCar));
   const [segQtys, setSegQtys] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -87,7 +94,7 @@ function SelectedPartRow({
       </div>
       <div className="space-y-2">
         <div className="space-y-1">
-          <Label className="text-xs font-medium">Default Quantity ({line.unit})</Label>
+          <Label className="text-xs font-medium">Default Quantity ({displayUnit})</Label>
           <Input
             type="number"
             min={0}
@@ -171,10 +178,31 @@ export default function ConfigureServicePartsPage() {
 
   const selected = useMemo(() => service?.consumptionProfile ?? [], [service]);
 
+  useEffect(() => {
+    if (!service) return;
+    const current = service.consumptionProfile ?? [];
+    let hasChanges = false;
+    const normalized = current.map((line) => {
+      const part = parts.find((p) => p.id === line.partId);
+      if (!part) return line;
+      const expectedUnit = resolvePartUnit(part);
+      if (line.unit === expectedUnit) return line;
+      hasChanges = true;
+      return { ...line, unit: expectedUnit };
+    });
+    if (!hasChanges) return;
+    setCatalog((prev) =>
+      prev.map((s) =>
+        s.id === service.id ? { ...s, consumptionProfile: normalized } : s
+      )
+    );
+  }, [service, parts, setCatalog]);
+
   const available = useMemo(() => {
     const selectedIds = new Set(selected.map((s) => s.partId));
     const q = search.trim().toLowerCase();
     return parts.filter((p) => {
+      if (!partUsedInServices(p)) return false;
       if (selectedIds.has(p.id)) return false;
       if (!q) return true;
       return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
@@ -183,11 +211,16 @@ export default function ConfigureServicePartsPage() {
 
   const addPart = (p: Part) => {
     if (!service) return;
+    if (!partUsedInServices(p)) {
+      toast.error("This part is marked for Direct Sale only.");
+      return;
+    }
+    const isFluid = isMlTrackedPart(p);
     const line: ServiceConsumption = {
       partId: p.id,
       partName: p.name,
-      quantityPerCar: p.stockQuantityMl != null ? 0.05 : 1,
-      unit: p.stockQuantityMl != null ? "L" : p.primaryUnit,
+      quantityPerCar: isFluid ? 0.05 : 1,
+      unit: isFluid ? "L" : p.primaryUnit,
       requiredPart: true,
     };
     setCatalog((prev) =>
@@ -282,7 +315,7 @@ export default function ConfigureServicePartsPage() {
           <div className="min-w-0">
             <h1 className="text-lg font-bold tracking-tight sm:text-xl">
               <span className="text-muted-foreground font-semibold">Parts · </span>
-              <span className="break-words">{service.name}</span>
+              <span className="wrap-break-word">{service.name}</span>
             </h1>
             <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
               Select which parts are required when performing this service.
