@@ -330,7 +330,11 @@ export function pendingSalaryTotal(records: PayrollRecord[]): number {
 
 export function totalAdvanceReceipts(jobCards: JobCard[]): number {
   return (
-    Math.round(jobCards.reduce((s, j) => s + (j.highEndAdvanceAmountInr ?? 0), 0) * 100) / 100
+    Math.round(
+      jobCards
+        .filter((j) => j.status !== "CANCELLED")
+        .reduce((s, j) => s + (j.highEndAdvanceAmountInr ?? 0), 0) * 100
+    ) / 100
   );
 }
 
@@ -339,6 +343,7 @@ export function filterJobCardsByAdvanceDate(
   filter: ExpenseDateFilter
 ): JobCard[] {
   return jobCards.filter((j) => {
+    if (j.status === "CANCELLED") return false;
     const at = j.highEndAdvanceCollectedAt;
     if (!at || !(j.highEndAdvanceAmountInr && j.highEndAdvanceAmountInr > 0)) return false;
     return matchesExpenseDate(at, filter);

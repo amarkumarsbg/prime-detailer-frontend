@@ -3,13 +3,15 @@ import {
   paymentMethodBreakdownForPeriod,
   recognizedExpenseAmount,
   sumPurchasePaymentsInPeriod,
+  totalAdvanceReceipts,
   totalExpenseAmount,
   totalExpenseCashOutInPeriod,
+  filterJobCardsByAdvanceDate,
   totalPayables,
 } from "@/lib/accounting/dashboard-metrics";
 import { expenseOutstanding, expensePaidAmount } from "@/lib/party/ledger-math";
 import { purchaseDue } from "@/lib/inventory/purchase-math";
-import type { Expense, Invoice, ProductPurchase } from "@/types";
+import type { Expense, Invoice, JobCard, ProductPurchase } from "@/types";
 
 function purchaseExpense(amount: number, paid: number, purchaseId = "pur-1"): Expense {
   const paymentStatus = paid <= 0 ? "PENDING" : paid >= amount ? "PAID" : "PARTIAL";
@@ -49,6 +51,38 @@ function purchase(
     amountPaid,
     paymentStatus: amountPaid >= grandTotal ? "PAID" : amountPaid > 0 ? "PARTIAL" : "UNPAID",
     payments,
+  };
+}
+
+function jobCardAdvance(
+  id: string,
+  status: JobCard["status"],
+  amount: number,
+  collectedAt = "2026-08-10T10:00:00.000Z"
+): JobCard {
+  return {
+    id,
+    jobNumber: `JC-${id}`,
+    branchId: "br-1",
+    customerId: "c-1",
+    customerName: "Customer",
+    customerPhone: "9000000000",
+    vehicleId: "v-1",
+    vehicleRegNumber: "DL01AA0001",
+    vehicleMakeModel: "Car",
+    vehicleSegment: "SEDAN",
+    status,
+    reportedIssues: "",
+    expectedDelivery: "2026-08-10T18:00:00.000Z",
+    services: [],
+    estimatedAmount: 0,
+    incentivePercent: 0,
+    incentiveAmount: 0,
+    highEndAdvanceAmountInr: amount,
+    highEndAdvanceCollectedAt: collectedAt,
+    createdBy: "u1",
+    createdAt: "2026-08-10T09:00:00.000Z",
+    updatedAt: collectedAt,
   };
 }
 
@@ -164,6 +198,28 @@ describe("totalPayables", () => {
       paymentStatus: "PENDING",
     };
     expect(totalPayables([purchaseBill, direct])).toBe(1500);
+  });
+});
+
+describe("cancelled jobs in advance income", () => {
+  const filter = { kind: "custom" as const, start: "2026-08-01", end: "2026-08-31" };
+
+  it("excludes cancelled job advances from total receipts", () => {
+    const rows = [
+      jobCardAdvance("1", "RECEIVED", 1500),
+      jobCardAdvance("2", "CANCELLED", 2500),
+    ];
+
+    expect(totalAdvanceReceipts(rows)).toBe(1500);
+  });
+
+  it("excludes cancelled jobs from date-filtered advance rows", () => {
+    const rows = [
+      jobCardAdvance("1", "READY", 1500),
+      jobCardAdvance("2", "CANCELLED", 2500),
+    ];
+
+    expect(filterJobCardsByAdvanceDate(rows, filter).map((row) => row.id)).toEqual(["1"]);
   });
 });
 

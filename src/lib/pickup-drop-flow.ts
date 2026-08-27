@@ -94,6 +94,10 @@ export function getLinkedDropRequest(
   return requests.find((r) => r.jobCardId === jobCardId && r.type === "DROP");
 }
 
+function hasTemporaryNewJobRef(req: Pick<PickupDropRequest, "jobCardId" | "jobNumber">): boolean {
+  return (req.jobCardId ?? "").startsWith("new-") || req.jobNumber === "NEW";
+}
+
 export function findPickupDropRequest(
   jobCardId: string,
   type: PickupDropType,
@@ -125,7 +129,7 @@ export function dropDeliveryIsPremature(
   requests: PickupDropRequest[] = []
 ): boolean {
   if (drop.type !== "DROP" || drop.status !== "DELIVERED") return false;
-  if (drop.jobCardId.startsWith("new-") || drop.jobNumber === "NEW") return true;
+  if (hasTemporaryNewJobRef(drop)) return true;
   if (!job) return false;
   if (job.status === "CANCELLED") return true;
   if (job.status === "DELIVERED") return false;
@@ -237,7 +241,7 @@ export function validatePickupDropAdvance(
     }
     const linkedToOpenJob = Boolean(job) && job!.status !== "CANCELLED";
     const stillUnlinked =
-      !linkedToOpenJob && (req.jobCardId.startsWith("new-") || req.jobNumber === "NEW");
+      !linkedToOpenJob && hasTemporaryNewJobRef(req);
     if (stillUnlinked) {
       return "The vehicle is at the workshop. Create the job card and finish service before drop-off.";
     }
@@ -285,9 +289,7 @@ export function orphanPickupRequestIdForJob(
   requests: PickupDropRequest[]
 ): string | undefined {
   if (requests.some((r) => r.jobCardId === job.id)) return undefined;
-  const orphans = requests.filter(
-    (r) => r.jobCardId.startsWith("new-") || r.jobNumber === "NEW"
-  );
+  const orphans = requests.filter((r) => hasTemporaryNewJobRef(r));
   if (!orphans.length) return undefined;
 
   const jobReg = (job.vehicleRegNumber ?? "").replace(/[\s-]/g, "").toUpperCase();

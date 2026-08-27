@@ -116,6 +116,7 @@ export function topServicesByRevenue(
   const map = new Map<string, { bookings: number; revenue: number }>();
   for (const jc of jobCards) {
     if (!inRange(jc.createdAt, start, end)) continue;
+    if (jc.status === "CANCELLED") continue;
     for (const s of jc.services) {
       const cur = map.get(s.name) ?? { bookings: 0, revenue: 0 };
       cur.bookings += 1;

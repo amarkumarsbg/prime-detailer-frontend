@@ -1318,6 +1318,18 @@ export default function JobCardDetailPage() {
     if (nextIndex < WORKFLOW_STATUSES.length) {
       const nextStatus = WORKFLOW_STATUSES[nextIndex];
 
+      if (currentStatus === "RECEIVED" && nextStatus === "INSPECTION") {
+        const beforePhotos =
+          useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id)?.inspectionPhotos ??
+          jobCard.inspectionPhotos;
+        if (!hasBeforeInspectionPhoto(beforePhotos)) {
+          setDetailTab("photos");
+          setPhotoTab("BEFORE");
+          setBeforePhotoRequiredOpen(true);
+          return;
+        }
+      }
+
       if (currentStatus === "INSPECTION" && nextStatus === "AWAITING_SERVICE") {
         // Before photos are captured during Vehicle Check-In — no additional
         // photo check is needed at this transition.
@@ -2943,7 +2955,7 @@ export default function JobCardDetailPage() {
           <DialogHeader className={cn(dialogMobileSheetHeaderClasses, "pb-2")}>
             <DialogTitle>Before photos required</DialogTitle>
             <DialogDescription>
-              Add at least one &quot;Before&quot; inspection photo to move this job from Inspection to In Service.
+              Add at least one &quot;Before&quot; inspection photo before moving this job forward in the workflow.
               {advanceBlockedByMechanic ? (
                 <span className="mt-2 block text-amber-600 dark:text-amber-500">
                   Assign a mechanic before you can continue to In Service.

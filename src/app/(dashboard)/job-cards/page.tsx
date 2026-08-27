@@ -175,7 +175,6 @@ export default function JobCardsPage() {
   const isLoading = useJobCardStore((s) => s.jobCardsLoading);
   const isInitialLoaded = useJobCardStore((s) => s.isInitialLoaded);
   const fetchPaginatedJobCards = useJobCardStore((s) => s.fetchPaginatedJobCards);
-  const updateJobCard = useJobCardStore((s) => s.updateJobCard);
   const deleteJobCard = useJobCardStore((s) => s.deleteJobCard);
   const invoices = useInvoiceStore((s) => s.invoices);
     const gstRegistrationStatus = useSettingsStore((s) => s.gstRegistrationStatus);
@@ -946,31 +945,16 @@ export default function JobCardsPage() {
                                 </DropdownMenuItem>
                               );
                             })()}
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger className="gap-2 text-xs">
-                                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                                Change Status
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuPortal>
-                                <DropdownMenuSubContent>
-                                  {KANBAN_COLUMNS.map((st) => (
-                                    <DropdownMenuItem
-                                      key={st}
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        const ok = await updateJobCard(jc.id, { status: st });
-                                        if (ok) {
-                                          toast.success(`Job card status updated to ${TAB_LABELS[st]}`);
-                                        }
-                                      }}
-                                      className="text-xs"
-                                    >
-                                      {TAB_LABELS[st]}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuPortal>
-                            </DropdownMenuSub>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/job-cards/${jc.id}`);
+                              }}
+                              className="gap-2 text-xs"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                              Change Status
+                            </DropdownMenuItem>
                             <DropdownMenuSub>
                               <DropdownMenuSubTrigger className="gap-2 text-xs">
                                 <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
