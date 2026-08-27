@@ -178,7 +178,6 @@ import {
 import {
   computeGstFromSubtotal,
   DEFAULT_GST_RATE,
-  isGstRegistered as isGstRegisteredStatus,
 } from "@/lib/gst-tax";
 import { wizardTrackerMilestone, wizardTrackerLabels } from "@/features/booking-wizard/lib/wizard-steps";
 import {
@@ -269,7 +268,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     businessWebsite,
     gstRegistrationStatus,
   } = useSettingsStore();
-  const isGstRegistered = isGstRegisteredStatus(gstRegistrationStatus);
+  // Be strict here so unexpected payload values never accidentally enable GST.
+  const isGstRegistered = gstRegistrationStatus === "REGISTERED";
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
 
   const rewardCategoryIncentivePercents = useSettingsStore((s) => s.rewardCategoryIncentivePercents);
@@ -552,8 +552,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   }, [referralCode, isJobCard, findByReferralCode]);
 
   useEffect(() => {
+    // Keep current membership selection stable while creating + check-in modal is open.
+    if (isCreatingBooking || checkInOpen) return;
     setWizardMembershipPackageId(null);
-  }, [existingCustomerId]);
+  }, [existingCustomerId, isCreatingBooking, checkInOpen]);
 
   useEffect(() => {
     if (!existingCustomerId) return;
@@ -1323,7 +1325,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     selectedMembershipPurchaseAmount;
   const { taxAmount: gstAmount, grandTotal: totalPayable } = computeGstFromSubtotal(
     afterDiscount,
-    gstRegistrationStatus
+    isGstRegistered ? "REGISTERED" : "NOT_REGISTERED"
   );
 
   /** Parsed advance for summary & cap (matches submit logic). */
@@ -2292,12 +2294,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     (stepId: JobWizardStepId) => {
       if (!useBookingWizard) return false;
       if (!redeemingMembershipVisit) return false;
-      return stepId === "serviceSelection" || stepId === "highEndServices";
+      return stepId === "highEndServices";
     },
     [useBookingWizard, redeemingMembershipVisit]
   );
 
-  /** Membership "Yes" hides service + high-end steps; keep step index from pointing at a hidden step (e.g. after Back). */
+  /** Membership "Yes" hides high-end step; keep step index from pointing at a hidden step (e.g. after Back). */
   useEffect(() => {
     if (!useBookingWizard || !redeemingMembershipVisit) return;
     setJobCreateStep((prev) => {
@@ -3814,6 +3816,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     );
                     const exhausted = remaining <= 0;
                     const checked = membershipRedeemServiceIds.includes(sid);
+                    const selectedNow = checked ? 1 : 0;
+                    const remainingAfterThisVisit = Math.max(0, remaining - selectedNow);
                     return (
                       <label
                         key={sid}
@@ -3847,7 +3851,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                           <span className="font-medium block">{cat?.name ?? sid}</span>
                           <span className="text-[11px] text-muted-foreground">{cat?.category}</span>
                           <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                            Included: {included} · Used: {used} · Remaining: {remaining}
+                            Included: {included} · Used (completed visits): {used} · Selected now: {selectedNow} · Remaining after this visit: {remainingAfterThisVisit}
                           </span>
                           {exhausted ? (
                             <span className="block text-[11px] text-amber-700 dark:text-amber-300">

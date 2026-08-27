@@ -55,6 +55,39 @@ function lineQuantityDisplay(li: InvoiceLineItem): string {
     : qty.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
+function splitServiceAndDescription(raw: string | null | undefined): {
+  service: string;
+  description: string;
+} {
+  const text = String(raw ?? "").replace(/\r/g, "").trim();
+  if (!text) return { service: "—", description: "—" };
+
+  const lineBreakAt = text.indexOf("\n");
+  if (lineBreakAt > -1) {
+    const service = text.slice(0, lineBreakAt).trim() || "—";
+    const description = text.slice(lineBreakAt + 1).trim() || "—";
+    return { service, description };
+  }
+
+  for (const sep of [" — ", " - ", " : "]) {
+    const idx = text.indexOf(sep);
+    if (idx > -1) {
+      const service = text.slice(0, idx).trim() || "—";
+      const description = text.slice(idx + sep.length).trim() || "—";
+      return { service, description };
+    }
+  }
+
+  return { service: text, description: "—" };
+}
+
+function serviceDisplayLines(service: string): string[] {
+  return service
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export function lineGrandWithTax(
   li: InvoiceLineItem,
   invoice: Invoice
@@ -367,34 +400,51 @@ export function buildTaxInvoicePrintHtml(
 </div>`
       : "";
 
-  const lineRows =
-    invoice.lineItems
-      .map((li, idx) => {
-        const hsn = li.hsnSac ?? DEFAULT_SERVICE_HSN;
-        const disc = li.lineDiscount ?? 0;
-        const lineTaxShare = invoice.subtotal > 0 ? (displayTaxAmount * li.total) / invoice.subtotal : 0;
-        const gTot = li.total + lineTaxShare;
-        const discCell =
-          disc > 0
-            ? li.description.includes("Membership benefit")
-              ? `<span class="disc-lbl">Membership</span><br>${formatCurrency(disc)}`
-              : formatCurrency(disc)
-            : "—";
-        return `<tr>
-        <td class="c">${idx + 1}</td>
-        <td class="desc">
-          <div style="font-weight:600; color:#171717;">${escapeHtml(li.description)}</div>
+  const lineRows = (() => {
+    let renderedRowNumber = 0;
+    return (
+      invoice.lineItems
+        .map((li) => {
+          const { service, description } = splitServiceAndDescription(li.description);
+          const serviceLines = serviceDisplayLines(service);
+          const hsn = li.hsnSac ?? DEFAULT_SERVICE_HSN;
+          const disc = li.lineDiscount ?? 0;
+          const lineTaxShare =
+            invoice.subtotal > 0 ? (displayTaxAmount * li.total) / invoice.subtotal : 0;
+          const gTot = li.total + lineTaxShare;
+          const discCell =
+            disc > 0
+              ? li.description.includes("Membership benefit")
+                ? `<span class="disc-lbl">Membership</span><br>${formatCurrency(disc)}`
+                : formatCurrency(disc)
+              : "—";
+
+          return serviceLines
+            .map((line, serviceIndex) => {
+              renderedRowNumber += 1;
+              const isFirstServiceRow = serviceIndex === 0;
+              return `<tr>
+        <td class="c">${renderedRowNumber}</td>
+        <td class="svc">
+          <div style="font-weight:600; color:#171717;">${escapeHtml(line)}</div>
         </td>
-        <td class="c">${lineQuantityDisplay(li)}</td>
-        ${isGstRegistered ? `<td class="c">${escapeHtml(hsn)}</td>` : ""}
-        <td class="r">${formatCurrency(lineRateDisplay(li))}</td>
-        <td class="r">${discCell}</td>
-        <td class="r">${formatCurrency(li.total)}</td>
-        ${isGstRegistered ? `<td class="c">${gstPct}%</td>` : ""}
-        <td class="r b">${formatCurrency(gTot)}</td>
+        <td class="desc">
+          <div style="color:#404040;">${isFirstServiceRow ? escapeHtml(description) : "—"}</div>
+        </td>
+        <td class="c">${isFirstServiceRow ? lineQuantityDisplay(li) : "—"}</td>
+        ${isGstRegistered ? `<td class="c">${isFirstServiceRow ? escapeHtml(hsn) : "—"}</td>` : ""}
+        <td class="r">${isFirstServiceRow ? formatCurrency(lineRateDisplay(li)) : "—"}</td>
+        <td class="r">${isFirstServiceRow ? discCell : "—"}</td>
+        <td class="r">${isFirstServiceRow ? formatCurrency(li.total) : "—"}</td>
+        ${isGstRegistered ? `<td class="c">${isFirstServiceRow ? `${gstPct}%` : "—"}</td>` : ""}
+        <td class="r b">${isFirstServiceRow ? formatCurrency(gTot) : "—"}</td>
       </tr>`;
-      })
-      .join("") ?? "";
+            })
+            .join("");
+        })
+        .join("") ?? ""
+    );
+  })();
 
   const payRows =
     payments.length > 0
@@ -446,10 +496,10 @@ body { font-family: 'Outfit', system-ui, sans-serif; font-size: 10.5px; color: #
 .bill-to h3 { font-size: 11px; font-weight: 700; color: #3b82f6; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px; }
 table.inv { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; border: 1px solid #d4d4d4; }
 table.inv th { background: #f1f5f9; border: 1px solid #d4d4d4; padding: 8px 6px; font-weight: 700; text-align: center; color: #1e3a8a; text-transform: uppercase; font-size: 9px; }
-table.inv th.desc { text-align: left; }
+table.inv th.svc, table.inv th.desc { text-align: left; }
 table.inv td { border: 1px solid #e5e5e5; padding: 8px 6px; vertical-align: top; color: #262626; }
 table.inv tbody tr:nth-child(even) { background: #fafafa; }
-table.inv td.desc { text-align: left; }
+table.inv td.svc, table.inv td.desc { text-align: left; }
 table.inv .c { text-align: center; }
 table.inv .r { text-align: right; font-variant-numeric: tabular-nums; }
 table.inv .b { font-weight: 700; color: #171717; }
@@ -647,7 +697,8 @@ table.inv .b { font-weight: 700; color: #171717; }
     <thead>
       <tr>
         <th style="width:28px">#</th>
-        <th class="desc">Service / Description</th>
+        <th class="svc" style="width:210px">Service</th>
+        <th class="desc">Description</th>
         <th style="width:52px">Qty</th>
         ${isGstRegistered ? `<th style="width:52px">HSN/SAC</th>` : ""}
         <th style="width:72px">Rate (Rs.)</th>

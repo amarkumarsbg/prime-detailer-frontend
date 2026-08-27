@@ -151,6 +151,7 @@ import {
   jobNeedsDropOffForm,
   orphanPickupRequestIdForJob,
 } from "@/lib/pickup-drop-flow";
+import { isMembershipPricedLine } from "@/lib/service-line-price";
 import type {
   JobCard,
   JobCardStatus,
@@ -3274,7 +3275,7 @@ export default function JobCardDetailPage() {
                         <p className="text-xs text-muted-foreground tabular-nums">
                           {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(item.price)}
                         </p>
-                        {membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
+                        {isMembershipPricedLine(item) && membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
                           <p className="text-xs text-muted-foreground mt-0.5">
                             Included: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.included} · Used: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.used} · Remaining: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.remaining}
                           </p>

@@ -1,7 +1,11 @@
 import type { Quotation, QuotationPartLine, QuotationSource } from "@/types";
 
+function safeServicesCount(services: Quotation["services"] | null | undefined): number {
+  return Array.isArray(services) ? services.length : 0;
+}
+
 export function quotationHasServices(q: Pick<Quotation, "services">): boolean {
-  return q.services.length > 0;
+  return safeServicesCount(q.services) > 0;
 }
 
 export function quotationHasParts(q: Pick<Quotation, "parts">): boolean {
@@ -9,10 +13,10 @@ export function quotationHasParts(q: Pick<Quotation, "parts">): boolean {
 }
 
 export function deriveQuotationSource(
-  services: Quotation["services"],
+  services: Quotation["services"] | null | undefined,
   parts: QuotationPartLine[] | undefined
 ): QuotationSource {
-  const hasServices = services.length > 0;
+  const hasServices = safeServicesCount(services) > 0;
   const hasParts = (parts ?? []).length > 0;
   if (hasServices && hasParts) return "MIXED";
   if (hasParts) return "COUNTER_SALE";

@@ -3,6 +3,7 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { isMembershipPricedLine } from "@/lib/service-line-price";
 import type { ServiceItem } from "@/types";
 
 export type MembershipUsageInfo = {
@@ -74,7 +75,7 @@ export function JobCardServiceChecklist({
                       currency: "INR",
                     }).format(item.price)}
                   </p>
-                  {membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
+                  {isMembershipPricedLine(item) && membershipUsageByCatalogId.get(item.serviceCatalogId)?.isIncluded ? (
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Included: {membershipUsageByCatalogId.get(item.serviceCatalogId)!.included} · Used:{" "}
                       {membershipUsageByCatalogId.get(item.serviceCatalogId)!.used} · Remaining:{" "}
