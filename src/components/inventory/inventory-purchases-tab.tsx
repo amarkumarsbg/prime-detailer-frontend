@@ -87,6 +87,7 @@ export function InventoryPurchasesTab({
   const suppressDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [supplierName, setSupplierName] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [supplierQuery, setSupplierQuery] = useState("");
   const [branchId, setBranchId] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
@@ -158,6 +159,16 @@ export function InventoryPurchasesTab({
     return [...byId.values()];
   }, [activeParts, items, parts]);
   const branchLabel = (id?: string) => (id ? branches.find((b) => b.id === id)?.name ?? id : "—");
+  const filteredVendors = useMemo(() => {
+    const q = supplierQuery.trim().toLowerCase();
+    if (!q) return vendors;
+    return vendors.filter((v) => {
+      const name = v.name.toLowerCase();
+      const phone = (v.phone ?? "").toLowerCase();
+      const contact = (v.contactPerson ?? "").toLowerCase();
+      return name.includes(q) || phone.includes(q) || contact.includes(q);
+    });
+  }, [vendors, supplierQuery]);
 
   const scopedPurchases = useMemo(() => {
     if (!selectedBranchId) return purchases;
@@ -205,6 +216,7 @@ export function InventoryPurchasesTab({
   const reset = () => {
     setSupplierName("");
     setSupplierId("");
+    setSupplierQuery("");
     setBranchId(defaultBranchId());
     setPurchaseDate(new Date().toISOString().slice(0, 10));
     setDueDate("");
@@ -471,25 +483,50 @@ export function InventoryPurchasesTab({
                     Supplier <span className="text-destructive">*</span>
                   </Label>
                   <div className="flex items-center gap-2">
-                    <Input
-                      id="purchase-supplier"
-                      list="purchase-supplier-list"
-                      placeholder="Select or type supplier"
-                      value={supplierName}
-                      autoComplete="off"
-                      className="min-w-0 flex-1"
-                      onChange={(e) => {
-                        const name = e.target.value;
-                        setSupplierName(name);
-                        const vendor = vendors.find((x) => x.name === name);
+                    <Select
+                      value={supplierId || (supplierName ? "__current_supplier__" : undefined)}
+                      onValueChange={(value) => {
+                        if (value === "__current_supplier__") return;
+                        const vendor = vendors.find((v) => v.id === value);
                         setSupplierId(vendor?.id ?? "");
+                        setSupplierName(vendor?.name ?? "");
                       }}
-                    />
-                    <datalist id="purchase-supplier-list">
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.name} />
-                      ))}
-                    </datalist>
+                      onOpenChange={(nextOpen) => {
+                        if (!nextOpen) setSupplierQuery("");
+                      }}
+                    >
+                      <SelectTrigger id="purchase-supplier" className="min-w-0 flex-1">
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[min(18rem,50vh)]">
+                        <div
+                          className="sticky top-0 z-10 border-b border-border bg-popover p-2"
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <Input
+                            value={supplierQuery}
+                            onChange={(e) => setSupplierQuery(e.target.value)}
+                            placeholder="Search supplier"
+                            className="h-9"
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        {supplierName && !supplierId ? (
+                          <SelectItem value="__current_supplier__">{supplierName}</SelectItem>
+                        ) : null}
+                        {filteredVendors.length === 0 ? (
+                          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                            No supplier found
+                          </div>
+                        ) : (
+                          filteredVendors.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                     <Button
                       type="button"
                       variant="outline"
