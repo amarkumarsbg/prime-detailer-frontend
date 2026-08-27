@@ -220,6 +220,11 @@ export default function DashboardPage() {
     return jobCards.filter((jc) => jc.branchId === selectedBranchId);
   }, [jobCards, selectedBranchId]);
 
+  const scopedInvoices = useMemo(
+    () => filterInvoicesByBranch(invoices, jobCards, selectedBranchId),
+    [invoices, jobCards, selectedBranchId]
+  );
+
   const stats = useMemo(
     () =>
       computeBranchScopedDashboardStats(
@@ -255,13 +260,17 @@ export default function DashboardPage() {
   const executive = useMemo(() => {
     const d30 = daysAgoMidnight(30);
     const d60 = daysAgoMidnight(60);
-    const createdIn30 = scopedJobCards.filter((jc) => new Date(jc.createdAt) >= d30);
-    const createdPrevWindow = scopedJobCards.filter((jc) => {
-      const c = new Date(jc.createdAt);
+    const invoiceIn30 = scopedInvoices.filter((inv) => {
+      if (inv.status === "DRAFT") return false;
+      return new Date(inv.createdAt) >= d30;
+    });
+    const invoicePrevWindow = scopedInvoices.filter((inv) => {
+      if (inv.status === "DRAFT") return false;
+      const c = new Date(inv.createdAt);
       return c >= d60 && c < d30;
     });
-    const rev30 = createdIn30.reduce((s, j) => s + j.estimatedAmount, 0);
-    const revPrev = createdPrevWindow.reduce((s, j) => s + j.estimatedAmount, 0);
+    const rev30 = invoiceIn30.reduce((sum, inv) => sum + inv.grandTotal, 0);
+    const revPrev = invoicePrevWindow.reduce((sum, inv) => sum + inv.grandTotal, 0);
     const revenueTrend =
       revPrev > 0
         ? {
@@ -293,7 +302,7 @@ export default function DashboardPage() {
       completed30d,
       activeCustomers,
     };
-  }, [scopedJobCards, customers, jobsToday]);
+  }, [scopedJobCards, scopedInvoices, customers, jobsToday]);
 
   const todaysFunnel = useMemo(() => {
     const total = jobsToday.length;
@@ -318,9 +327,16 @@ export default function DashboardPage() {
       const scoped = scopedJobCards.filter(
         (jc) => jc.branchId === branch.id && new Date(jc.createdAt) >= d30
       );
+      const scopedBranchInvoices = invoices.filter((inv) => {
+        if (inv.status === "DRAFT") return false;
+        if (new Date(inv.createdAt) < d30) return false;
+        return (inv.jobCardId
+          ? jobCards.find((jc) => jc.id === inv.jobCardId)?.branchId
+          : undefined) === branch.id;
+      });
       const bookings = scoped.length;
       const completed = scoped.filter((jc) => jc.status === "DELIVERED").length;
-      const revenue = scoped.reduce((s, j) => s + j.estimatedAmount, 0);
+      const revenue = scopedBranchInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
       const completionRate =
         bookings > 0 ? Math.round((completed / bookings) * 100) : 0;
       return {
@@ -334,7 +350,7 @@ export default function DashboardPage() {
         rating: 0,
       };
     });
-  }, [scopedJobCards, branches, selectedBranchId]);
+  }, [scopedJobCards, branches, selectedBranchId, invoices, jobCards]);
 
   const recentBookings = useMemo(
     () =>

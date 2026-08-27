@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  invoiceRevenueInPeriod,
   paymentMethodBreakdownForPeriod,
   recognizedExpenseAmount,
   sumPurchasePaymentsInPeriod,
+  totalIncomeReceipts,
   totalAdvanceReceipts,
   totalExpenseAmount,
   totalExpenseCashOutInPeriod,
@@ -261,6 +263,31 @@ function invoiceWithPayment(
   } as Invoice;
 }
 
+function membershipPackage() {
+  return {
+    id: "pkg-1",
+    name: "Gold",
+    price: 999,
+    validityDays: 365,
+    includedServiceIds: [],
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+  };
+}
+
+function membershipSubscription(status: "ACTIVE" | "EXPIRED" | "CANCELLED" = "ACTIVE") {
+  return {
+    id: "sub-1",
+    customerId: "c1",
+    packageId: "pkg-1",
+    status,
+    startDate: "2026-08-12T10:00:00.000Z",
+    endDate: "2027-08-12T10:00:00.000Z",
+    createdAt: "2026-08-12T10:00:00.000Z",
+    updatedAt: "2026-08-12T10:00:00.000Z",
+  };
+}
+
 describe("paymentMethodBreakdownForPeriod — otherIncome", () => {
   const filter = { kind: "custom" as const, start: "2026-08-01", end: "2026-08-31" };
 
@@ -304,5 +331,49 @@ describe("paymentMethodBreakdownForPeriod — otherIncome", () => {
     const result = paymentMethodBreakdownForPeriod(invoices, [], filter);
     expect(result.onlineIncome).toBe(1000);
     expect(result.otherIncome).toBe(0);
+  });
+});
+
+describe("invoice recognition in total income", () => {
+  const filter = { kind: "custom" as const, start: "2026-08-01", end: "2026-08-31" };
+
+  it("counts invoice totals even when bills are unpaid or partially paid", () => {
+    const invoices = [
+      invoiceWithPayment("i1", 5000, 0, "CASH"),
+      { ...invoiceWithPayment("i2", 4000, 1000, "UPI"), status: "PARTIALLY_PAID" as const },
+      invoiceWithPayment("i3", 3000, 3000, "CASH"),
+    ];
+
+    expect(invoiceRevenueInPeriod(invoices, filter)).toEqual({ amount: 12000, count: 3 });
+  });
+
+  it("counts billed invoices once and excludes the same job advance from income", () => {
+    const packages = [membershipPackage()];
+    const memberships = [membershipSubscription()];
+    const advances = [jobCardAdvance("job-1", "READY", 2000)];
+    const invoices = [
+      {
+        ...invoiceWithPayment("i1", 5000, 0, "CASH"),
+        jobCardId: "job-1",
+        status: "ISSUED" as const,
+      },
+    ];
+
+    expect(
+      totalIncomeReceipts({
+        invoices,
+        advances,
+        memberships,
+        packages,
+        filter,
+      })
+    ).toMatchObject({
+      total: 5999,
+      invoiceRevenue: 5000,
+      invoiceCount: 1,
+      advances: 0,
+      memberships: 999,
+      membershipCount: 1,
+    });
   });
 });

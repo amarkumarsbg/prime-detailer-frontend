@@ -367,9 +367,37 @@ export function membershipRevenueInPeriod(
   return { amount: Math.round(amount * 100) / 100, count };
 }
 
+export function invoiceRevenueInPeriod(
+  invoices: Invoice[],
+  filter: ExpenseDateFilter
+): { amount: number; count: number } {
+  let amount = 0;
+  let count = 0;
+  for (const inv of invoices) {
+    if (inv.status === "DRAFT") continue;
+    if (!matchesExpenseDate(inv.createdAt, filter)) continue;
+    amount += inv.grandTotal;
+    count += 1;
+  }
+  return { amount: Math.round(amount * 100) / 100, count };
+}
+
+function totalUnbilledAdvanceReceipts(jobCards: JobCard[], invoices: Invoice[]): number {
+  const billedJobIds = new Set(
+    invoices
+      .filter((inv) => inv.status !== "DRAFT" && !!inv.jobCardId)
+      .map((inv) => inv.jobCardId as string)
+  );
+  return Math.round(
+    jobCards
+      .filter((job) => !billedJobIds.has(job.id))
+      .reduce((sum, job) => sum + (job.highEndAdvanceAmountInr ?? 0), 0) * 100
+  ) / 100;
+}
+
 /**
- * Total Income from actual receipts in period:
- * invoice payments + advances + memberships. Wallet usage excluded.
+ * Total Income recognized in period:
+ * invoice totals + unbilled advances + memberships.
  */
 export function totalIncomeReceipts(args: {
   invoices: Invoice[];
@@ -379,27 +407,20 @@ export function totalIncomeReceipts(args: {
   filter: ExpenseDateFilter;
 }): {
   total: number;
-  invoicePayments: number;
-  invoicePaymentCount: number;
+  invoiceRevenue: number;
+  invoiceCount: number;
   advances: number;
   memberships: number;
   membershipCount: number;
 } {
-  const invoicePayments = sumInvoicePaymentsInPeriod(args.invoices, args.filter, "all");
-  let invoicePaymentCount = 0;
-  for (const inv of args.invoices) {
-    if (inv.status === "DRAFT") continue;
-    for (const p of inv.payments) {
-      if (matchesExpenseDate(p.paidAt, args.filter)) invoicePaymentCount += 1;
-    }
-  }
-  const advances = totalAdvanceReceipts(args.advances);
+  const invoiceRevenue = invoiceRevenueInPeriod(args.invoices, args.filter);
+  const advances = totalUnbilledAdvanceReceipts(args.advances, args.invoices);
   const mem = membershipRevenueInPeriod(args.memberships, args.packages, args.filter);
-  const total = Math.round((invoicePayments + advances + mem.amount) * 100) / 100;
+  const total = Math.round((invoiceRevenue.amount + advances + mem.amount) * 100) / 100;
   return {
     total,
-    invoicePayments,
-    invoicePaymentCount,
+    invoiceRevenue: invoiceRevenue.amount,
+    invoiceCount: invoiceRevenue.count,
     advances,
     memberships: mem.amount,
     membershipCount: mem.count,
@@ -691,18 +712,18 @@ export function incomeSourceBreakdown(invoiceRevenue: number, advanceReceipts: n
 }
 
 export function incomeSourceBreakdownFromReceipts(parts: {
-  invoicePayments: number;
+  invoiceRevenue: number;
   advances: number;
   memberships: number;
 }) {
-  const total = parts.invoicePayments + parts.advances + parts.memberships;
+  const total = parts.invoiceRevenue + parts.advances + parts.memberships;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
   const sources = [
     {
       id: "invoice",
       label: "Invoice Revenue",
-      amount: parts.invoicePayments,
-      percent: pct(parts.invoicePayments),
+      amount: parts.invoiceRevenue,
+      percent: pct(parts.invoiceRevenue),
     },
     {
       id: "advance",

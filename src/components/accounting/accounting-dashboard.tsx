@@ -313,7 +313,7 @@ export function AccountingDashboard() {
   const incomeSources = useMemo(
     () =>
       incomeSourceBreakdownFromReceipts({
-        invoicePayments: incomeReceipts.invoicePayments,
+        invoiceRevenue: incomeReceipts.invoiceRevenue,
         advances: incomeReceipts.advances,
         memberships: incomeReceipts.memberships,
       }),
@@ -555,17 +555,17 @@ export function AccountingDashboard() {
               headerBg="bg-emerald-50/90 dark:bg-emerald-950/30"
               delta={incomeDelta}
               breakdownTitle="Calculation Breakdown"
-              breakdownNote="Total Income = Sum of all actual receipts (invoice payments, pre-invoice advances, and memberships) collected during this period. Customer wallet usage is excluded."
+              breakdownNote="Total Income = Non-draft invoice totals created during this period, plus unbilled advances and memberships. Paid, partially paid, and unpaid bills are all counted once created."
               breakdown={[
                 {
-                  label: `Invoice Revenue (${incomeReceipts.invoicePaymentCount})`,
-                  amount: incomeReceipts.invoicePayments,
+                  label: `Invoice Revenue (${incomeReceipts.invoiceCount})`,
+                  amount: incomeReceipts.invoiceRevenue,
                   dot: "bg-emerald-500",
                 },
                 ...(incomeReceipts.advances > 0
                   ? [
                       {
-                        label: "Advance Receipts",
+                        label: "Unbilled Advances",
                         amount: incomeReceipts.advances,
                         dot: "bg-blue-500",
                       },
