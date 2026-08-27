@@ -46,7 +46,6 @@ import {
   TrendingDown,
   TrendingUp,
   Trash2,
-  Pencil,
   History,
   ArrowLeftRight,
   Warehouse,
@@ -62,6 +61,7 @@ import { InventoryHistoryTab } from "@/components/inventory/inventory-history-ta
 import { InventoryPartHistoryDialog } from "@/components/inventory/inventory-part-history-dialog";
 import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-dialog";
 import { mergePartCategoryNames } from "@/lib/inventory/part-categories";
+import { buildLatestPurchaseByPartId } from "@/lib/inventory/purchase-item-flow";
 import { toast } from "sonner";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
@@ -115,6 +115,14 @@ export default function InventoryPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
   const [inventoryTab, setInventoryTab] = useState("parts");
+  const [openCreatePurchaseToken, setOpenCreatePurchaseToken] = useState(0);
+  const [openPurchaseRequest, setOpenPurchaseRequest] = useState<{ purchaseId: string; token: number } | null>(null);
+  const consumeCreatePurchaseToken = useCallback(() => {
+    setOpenCreatePurchaseToken(0);
+  }, []);
+  const consumeOpenPurchaseRequest = useCallback(() => {
+    setOpenPurchaseRequest(null);
+  }, []);
 
   const openEditPart = useCallback((part: Part) => {
     setEditingPart(part);
@@ -171,6 +179,21 @@ export default function InventoryPage() {
   const outstandingPurchases = productPurchases.reduce((sum, p) => sum + purchaseDue(p), 0);
 
   const partsById = useMemo(() => new Map(scopedParts.map((p) => [p.id, p])), [scopedParts]);
+
+  const latestPurchaseByPartId = useMemo(
+    () => buildLatestPurchaseByPartId(productPurchases),
+    [productPurchases]
+  );
+
+  const openRelatedPurchase = useCallback((partId: string) => {
+    const meta = latestPurchaseByPartId.get(partId);
+    if (!meta?.purchaseId) {
+      toast.error("No related purchase found for this item.");
+      return;
+    }
+    setInventoryTab("purchases");
+    setOpenPurchaseRequest({ purchaseId: meta.purchaseId, token: Date.now() });
+  }, [latestPurchaseByPartId]);
 
   const openDeletePart = useCallback((part: Part) => {
     setDeleteTarget(part);
@@ -353,12 +376,28 @@ export default function InventoryPage() {
     {
       key: "supplier",
       label: "Supplier",
-      className: "hidden lg:table-cell",
+      className: "hidden lg:table-cell min-w-[13rem]",
+      render: (item: Part) => {
+        const meta = latestPurchaseByPartId.get(item.id);
+        if (!meta) return <span className="text-xs text-muted-foreground">Vendor: — · Purchase: —</span>;
+        return (
+          <div className="max-w-[13rem] text-xs text-muted-foreground">
+            <p className="truncate">Vendor: {meta.vendorName || "—"}</p>
+            <button
+              type="button"
+              className="truncate text-left text-primary hover:underline"
+              onClick={() => openRelatedPurchase(item.id)}
+            >
+              Open purchase: {meta.supplierInvoiceNumber ?? meta.purchaseNumber ?? "—"}
+            </button>
+          </div>
+        );
+      },
     },
     {
       key: "actions",
       label: "",
-      className: "w-[8.5rem] text-right",
+      className: "w-[10rem] text-right",
       render: (item: Part) => (
         <div className="inline-flex items-center justify-end gap-0.5">
           <Button
@@ -379,45 +418,19 @@ export default function InventoryPage() {
             variant="ghost"
             size="sm"
             className="h-8 px-2 text-xs text-muted-foreground"
+            aria-label={`Open purchase for ${item.name}`}
             onClick={(e) => {
               e.stopPropagation();
-              updatePart(item.id, { isActive: item.isActive === false });
-              toast.success(item.isActive === false ? "Part activated" : "Part deactivated");
+              openRelatedPurchase(item.id);
             }}
           >
-            {item.isActive === false ? "Activate" : "Deactivate"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label={`Edit ${item.name}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              openEditPart(item);
-            }}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            aria-label={`Delete ${item.name}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              openDeletePart(item);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
+            Open purchase
           </Button>
         </div>
       ),
     },
   ],
-    [openDeletePart, openEditPart, branches, updatePart]
+    [branches, latestPurchaseByPartId, openRelatedPurchase]
   );
 
   const handleAdjustSubmit = (e: React.FormEvent) => {
@@ -537,7 +550,12 @@ export default function InventoryPage() {
                 </form>
               </DialogContent>
             </Dialog>
-            <Button onClick={() => setInventoryTab("purchases")}>
+            <Button
+              onClick={() => {
+                setInventoryTab("purchases");
+                setOpenCreatePurchaseToken((v) => v + 1);
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Create purchase
             </Button>
@@ -734,6 +752,26 @@ export default function InventoryPage() {
                       <span className="mt-2 inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
                         {item.category}
                       </span>
+                      {(() => {
+                        const meta = latestPurchaseByPartId.get(item.id);
+                        if (!meta) {
+                          return (
+                            <p className="mt-1 text-xs text-muted-foreground">Vendor: — · Purchase: —</p>
+                          );
+                        }
+                        return (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            <p>Vendor: {meta.vendorName || "—"}</p>
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                              onClick={() => openRelatedPurchase(item.id)}
+                            >
+                              Open purchase: {meta.supplierInvoiceNumber ?? meta.purchaseNumber ?? "—"}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="font-semibold text-sm tabular-nums whitespace-nowrap">
@@ -756,20 +794,10 @@ export default function InventoryPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => openEditPart(item)}
+                        onClick={() => openRelatedPurchase(item.id)}
                       >
-                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => openDeletePart(item)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                        Delete
+                        <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                        Open purchase
                       </Button>
                     </div>
                   </div>
@@ -788,7 +816,12 @@ export default function InventoryPage() {
           <InventoryTransferLedgerTab />
         </TabsContent>
         <TabsContent value="purchases" className="mt-4 space-y-4">
-          <InventoryPurchasesTab />
+          <InventoryPurchasesTab
+            openCreateToken={openCreatePurchaseToken}
+            onCreateTokenConsumed={consumeCreatePurchaseToken}
+            openPurchaseRequest={openPurchaseRequest}
+            onOpenPurchaseRequestConsumed={consumeOpenPurchaseRequest}
+          />
         </TabsContent>
         <TabsContent value="history" className="mt-4 space-y-4">
           <InventoryHistoryTab />

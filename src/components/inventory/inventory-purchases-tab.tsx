@@ -36,6 +36,12 @@ import {
   postPurchasePaymentToCashBank,
   syncPurchaseToExpense,
 } from "@/lib/inventory/sync-purchase-expense";
+import {
+  applyCreatedPartAndAppendBlank,
+  createEmptyDraftItem,
+  removeDraftItem,
+  type DraftItemRow,
+} from "@/lib/inventory/purchase-item-flow";
 import { CatalogItemFormDialog } from "@/components/inventory/catalog-item-form-dialog";
 import { PurchaseExpandableTable } from "@/components/inventory/purchase-expandable-table";
 import { VendorFormDialog } from "@/components/expenses/vendor-form-dialog";
@@ -43,49 +49,19 @@ import { VendorPurchasePaymentDialog } from "@/components/vendors/vendor-purchas
 import type { InventoryPurchaseLine, Part, ProductPurchase } from "@/types";
 import { Package, CircleDollarSign, Wallet, AlertCircle } from "lucide-react";
 
-type DraftItem = {
-  key: string;
-  partId: string;
-  quantity: string;
-  unitPrice: string;
-  discount: string;
-  gstRate: string;
-};
+type DraftItem = DraftItemRow;
 
-function emptyItem(): DraftItem {
-  return { key: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, partId: "", quantity: "1", unitPrice: "", discount: "0", gstRate: "18" };
-}
-
-function applyPartToDraftItems(prev: DraftItem[], part: Part, targetKey?: string | null): DraftItem[] {
-  // Derive opening stock in primary unit so the purchase QTY defaults to it.
-  let openingQty = 1;
-  if (part.stockQuantityMl != null && part.stockQuantityMl > 0) {
-    openingQty = part.stockQuantityMl / 1000; // ml → litres
-  } else if (part.stockQuantitySecondary != null && part.stockQuantitySecondary > 0 && (part.conversionFactor ?? 1) > 1) {
-    openingQty = Math.round(part.stockQuantitySecondary / (part.conversionFactor ?? 1));
-  } else if (part.quantity > 0) {
-    openingQty = part.quantity;
-  }
-
-  const patch = {
-    partId: part.id,
-    quantity: String(openingQty),
-    unitPrice: String(part.costPrice ?? part.unitPrice ?? ""),
-    gstRate: part.gstApplicable === false ? "0" : String(part.gstRate ?? 18),
-  };
-  if (targetKey && prev.some((i) => i.key === targetKey)) {
-    return prev.map((i) => (i.key === targetKey ? { ...i, ...patch } : i));
-  }
-  const emptyIdx = prev.findIndex((i) => !i.partId);
-  if (emptyIdx >= 0) {
-    const next = [...prev];
-    next[emptyIdx] = { ...next[emptyIdx]!, ...patch };
-    return next;
-  }
-  return [...prev, { ...emptyItem(), ...patch }];
-}
-
-export function InventoryPurchasesTab() {
+export function InventoryPurchasesTab({
+  openCreateToken = 0,
+  onCreateTokenConsumed,
+  openPurchaseRequest,
+  onOpenPurchaseRequestConsumed,
+}: {
+  openCreateToken?: number;
+  onCreateTokenConsumed?: () => void;
+  openPurchaseRequest?: { purchaseId: string; token: number } | null;
+  onOpenPurchaseRequestConsumed?: () => void;
+}) {
   const purchases = useInventoryStore((s) => s.productPurchases);
   const parts = useInventoryStore((s) => s.parts);
   const addInventoryPurchase = useInventoryStore((s) => s.addInventoryPurchase);
@@ -119,7 +95,7 @@ export function InventoryPurchasesTab() {
   const [notes, setNotes] = useState("");
   const [roundOff, setRoundOff] = useState("0");
   const [amountPaid, setAmountPaid] = useState("0");
-  const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
+  const [items, setItems] = useState<DraftItem[]>([createEmptyDraftItem()]);
   const [payTarget, setPayTarget] = useState<ProductPurchase | null>(null);
 
   const beginNestedDialog = () => {
@@ -154,7 +130,7 @@ export function InventoryPurchasesTab() {
       useInventoryStore.getState().parts.find((p) => p.id === pending.id) ?? pending;
     const targetKey = quickPartTargetKeyRef.current;
     quickPartTargetKeyRef.current = null;
-    setItems((prev) => applyPartToDraftItems(prev, fromStore, targetKey));
+    setItems((prev) => applyCreatedPartAndAppendBlank(prev, fromStore, targetKey));
     // Zero out the opening stock immediately — the purchase line will be the
     // source of truth for initial stock. Without this, opening stock + purchase
     // qty would both be counted, doubling the actual quantity.
@@ -237,7 +213,7 @@ export function InventoryPurchasesTab() {
     setNotes("");
     setRoundOff("0");
     setAmountPaid("0");
-    setItems([emptyItem()]);
+    setItems([createEmptyDraftItem()]);
     setEditTarget(null);
   };
 
@@ -261,7 +237,7 @@ export function InventoryPurchasesTab() {
         unitPrice: String(line.unitPrice),
         discount: String(line.discount ?? 0),
         gstRate: String(line.gstRate ?? 18),
-      })) ?? [emptyItem()]
+      })) ?? [createEmptyDraftItem()]
     );
     setOpen(true);
   };
@@ -388,6 +364,26 @@ export function InventoryPurchasesTab() {
       ),
     [scopedPurchases]
   );
+
+  useEffect(() => {
+    if (openCreateToken <= 0) return;
+    reset();
+    setOpen(true);
+    onCreateTokenConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCreateToken, onCreateTokenConsumed]);
+
+  useEffect(() => {
+    if (!openPurchaseRequest || openPurchaseRequest.token <= 0) return;
+    const purchase = purchases.find((p) => p.id === openPurchaseRequest.purchaseId);
+    if (!purchase) {
+      toast.error("Purchase record not found for this item.");
+      onOpenPurchaseRequestConsumed?.();
+      return;
+    }
+    openEdit(purchase);
+    onOpenPurchaseRequestConsumed?.();
+  }, [openPurchaseRequest, purchases, onOpenPurchaseRequestConsumed]);
 
   return (
     <div className="space-y-4">
@@ -586,27 +582,18 @@ export function InventoryPurchasesTab() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      const empty = items.find((i) => !i.partId);
-                      quickPartTargetKeyRef.current = empty?.key ?? items[0]?.key ?? null;
+                      quickPartTargetKeyRef.current = null;
                       beginNestedDialog();
                       setQuickPartOpen(true);
                     }}
                   >
-                    New part
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => {
-                    setItems((prev) => [...prev, emptyItem()]);
-                    requestAnimationFrame(() => {
-                      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-                    });
-                  }}>
                     <Plus className="w-3.5 h-3.5 mr-1" />
                     Add item
                   </Button>
                 </div>
               </div>
 
-              <div className="hidden gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_4.5rem_4rem_5.5rem_2rem]">
+              <div className="hidden gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_4.5rem_4rem_5.5rem_8rem]">
                 <span>Part</span>
                 <span>Qty</span>
                 <span>Price</span>
@@ -622,32 +609,40 @@ export function InventoryPurchasesTab() {
                   return (
                     <div
                       key={item.key}
-                      className="relative grid grid-cols-2 items-end gap-2 rounded-md border border-border/60 p-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_4.5rem_4rem_5.5rem_2rem] sm:items-center sm:border-0 sm:p-0"
+                      className="grid grid-cols-2 items-end gap-2 rounded-md border border-border/60 p-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_4.5rem_4rem_5.5rem_8rem] sm:items-center sm:border-0 sm:p-0"
                     >
-                      <div className="col-span-2 min-w-0 pr-9 sm:col-span-1 sm:pr-0">
+                      <div className="col-span-2 min-w-0 sm:col-span-1">
                         <Label className="mb-1 text-xs sm:sr-only">Part</Label>
-                        <Select
-                          value={item.partId || undefined}
-                          onValueChange={(partId) => {
-                            const part = parts.find((p) => p.id === partId);
-                            patchItem(item.key, {
-                              partId,
-                              unitPrice: part ? String(part.costPrice ?? part.unitPrice ?? "") : item.unitPrice,
-                              gstRate: part?.gstApplicable === false ? "0" : String(part?.gstRate ?? 18),
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Select part" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {partsForSelect.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {item.lockPart && item.partId ? (
+                          <Input
+                            className="h-9"
+                            value={parts.find((p) => p.id === item.partId)?.name ?? item.partId}
+                            readOnly
+                          />
+                        ) : (
+                          <Select
+                            value={item.partId || undefined}
+                            onValueChange={(partId) => {
+                              const part = parts.find((p) => p.id === partId);
+                              patchItem(item.key, {
+                                partId,
+                                unitPrice: part ? String(part.costPrice ?? part.unitPrice ?? "") : item.unitPrice,
+                                gstRate: part?.gstApplicable === false ? "0" : String(part?.gstRate ?? 18),
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Select part" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {partsForSelect.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                       <div className="min-w-0">
                         <Label className="mb-1 text-xs sm:sr-only">Qty</Label>
@@ -696,25 +691,35 @@ export function InventoryPurchasesTab() {
                       <p className="col-span-2 text-right text-xs tabular-nums text-muted-foreground sm:col-span-1 sm:text-sm sm:text-foreground">
                         {formatCurrency(matched?.lineTotal ?? 0)}
                       </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-3 top-2 h-8 w-8 text-destructive sm:static sm:justify-self-end"
-                        onClick={() =>
-                          setItems((prev) =>
-                            prev.length === 1
-                              ? [emptyItem()]
-                              : prev.filter((l) => l.key !== item.key)
-                          )
-                        }
-                        aria-label="Remove item"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="col-span-2 flex items-center justify-end gap-1 sm:col-span-1 sm:justify-self-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs"
+                          onClick={() => patchItem(item.key, { lockPart: false })}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-destructive"
+                          onClick={() => setItems((prev) => removeDraftItem(prev, item.key))}
+                          aria-label="Remove item"
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
+                {items.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-xs text-muted-foreground">
+                    No items added.
+                  </div>
+                ) : null}
               </div>
             </div>
             <DialogFooter className="shrink-0 flex-col gap-3 border-t border-border/60 bg-background/95 px-6 py-3 sm:flex-row sm:items-end sm:justify-between">
