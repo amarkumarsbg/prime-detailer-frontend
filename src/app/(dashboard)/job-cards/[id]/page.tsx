@@ -92,7 +92,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useStaffStore } from "@/store/staff-store";
-import { useHighEndServiceStore } from "@/store/high-end-service-store";
+import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import { useMembershipStore } from "@/store/membership-store";
@@ -314,11 +314,24 @@ export default function JobCardDetailPage() {
     () => (jobCard ? invoices.find((inv) => inv.jobCardId === jobCard.id) : undefined),
     [invoices, jobCard]
   );
+  const jobCardSubtotalExGst = useMemo(() => {
+    if (!jobCard) return 0;
+    const servicesSubtotal = jobCard.services.reduce((sum, line) => sum + (line.price ?? 0), 0);
+    const partsSubtotal = (jobCard.parts ?? []).reduce((sum, part) => sum + (part.lineTotal ?? 0), 0);
+    const highEndSubtotal = (jobCard.highEndServiceIds ?? []).reduce((sum, hesId) => {
+      const cfg = useHighEndServiceStore.getState().services.find((item) => item.id === hesId);
+      return sum + (cfg ? highEndPriceForSegment(cfg, jobCard.vehicleSegment) : 0);
+    }, 0);
+    return Math.round(
+      (servicesSubtotal + partsSubtotal + highEndSubtotal + (jobCard.membershipActivationAmount ?? 0)) *
+        100
+    ) / 100;
+  }, [jobCard]);
   const jobCardPayableAmount = useMemo(() => {
     if (!jobCard) return 0;
     if (invoiceForJob) return invoiceForJob.grandTotal;
-    return computeGstFromSubtotal(jobCard.estimatedAmount ?? 0, gstRegistrationStatus).grandTotal;
-  }, [jobCard, invoiceForJob, gstRegistrationStatus]);
+    return computeGstFromSubtotal(jobCardSubtotalExGst, gstRegistrationStatus).grandTotal;
+  }, [jobCard, invoiceForJob, gstRegistrationStatus, jobCardSubtotalExGst]);
 
   const mechanics = useMemo(
     () => staff.filter((s) => s.role === "MECHANIC"),
@@ -1999,6 +2012,11 @@ export default function JobCardDetailPage() {
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Total payable</p>
                       <p className="font-semibold mt-1 tabular-nums">{formatCurrency(jobCardPayableAmount)}</p>
+                      {(jobCard.membershipActivationAmount ?? 0) > 0 ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Membership: {formatCurrency(jobCard.membershipActivationAmount ?? 0)}
+                        </p>
+                      ) : null}
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Incentive</p>

@@ -40,14 +40,18 @@ function normalizedServicePrices(job: JobCard): ServiceItem[] {
   }
   const hesSubtotal = highEndSubtotalExclGst(job);
   const partsSubtotal = (job.parts ?? []).reduce((s, p) => s + p.lineTotal, 0);
-  const catalogTarget = Math.max(0, job.estimatedAmount - hesSubtotal - partsSubtotal);
+  const membershipSubtotal = Math.max(0, job.membershipActivationAmount ?? 0);
+  const catalogTarget = Math.max(
+    0,
+    job.estimatedAmount - hesSubtotal - partsSubtotal - membershipSubtotal
+  );
   const rawSubtotal = job.services.reduce((s, x) => s + x.price, 0);
   if (rawSubtotal <= 0 || Math.abs(rawSubtotal - catalogTarget) < 0.01) {
     return job.services;
   }
   // Only rescale when the estimate is clearly the services-only target (legacy coupon bug).
   // If estimate looks tax-inclusive vs services (≈1.18×), skip rescaling.
-  if (rawSubtotal > 0 && Math.abs(job.estimatedAmount / rawSubtotal - 1.18) < 0.05) {
+  if (rawSubtotal > 0 && Math.abs(catalogTarget / rawSubtotal - 1.18) < 0.05) {
     return job.services;
   }
   const factor = catalogTarget / rawSubtotal;

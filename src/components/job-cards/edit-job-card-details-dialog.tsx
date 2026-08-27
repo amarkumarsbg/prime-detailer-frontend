@@ -205,7 +205,9 @@ export function EditJobCardDetailsDialog({
       const cfg = highEndServices.find((h) => h.id === hesId);
       hesTotal += cfg ? highEndPriceForSegment(cfg, jobCard.vehicleSegment) : 0;
     }
-    const estimatedAmount = Math.round((servicesTotal + partsTotal + hesTotal) * 100) / 100;
+    const membershipTotal = Math.max(0, jobCard.membershipActivationAmount ?? 0);
+    const estimatedAmount =
+      Math.round((servicesTotal + partsTotal + hesTotal + membershipTotal) * 100) / 100;
     const incentiveAmount =
       Math.round(((estimatedAmount * (jobCard.incentivePercent ?? 0)) / 100) * 100) / 100;
 

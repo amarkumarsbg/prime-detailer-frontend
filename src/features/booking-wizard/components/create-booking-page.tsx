@@ -1310,19 +1310,28 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     return Math.min(catalogSubtotalExclGst, discountAmount + directDiscountAmount);
   }, [catalogSubtotalExclGst, discountAmount, directDiscountAmount]);
 
-  const selectedMembershipPurchaseAmount = useMemo(() => {
-    if (!wizardMembershipPackageId) return 0;
-    const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
+  const membershipActivationPreviewAmount = useMemo(() => {
+    if (activeMembershipForSelectedVehicle?.id !== "virtual-new-sub") return 0;
+    const pkg =
+      activeMembershipPackageRow ??
+      (wizardMembershipPackageId
+        ? membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId)
+        : undefined);
     if (!pkg) return 0;
     return Math.round((pkg.price ?? 0) * 100) / 100;
-  }, [wizardMembershipPackageId, membershipPackagesAll]);
+  }, [
+    activeMembershipForSelectedVehicle?.id,
+    activeMembershipPackageRow,
+    wizardMembershipPackageId,
+    membershipPackagesAll,
+  ]);
 
   /** Catalog after coupon + high-end program amounts + parts (all excl. GST). */
   const afterDiscount =
     Math.max(0, catalogSubtotalExclGst - totalDiscount) +
     highEndSubtotalExclGst +
     partsSubtotalExclGst +
-    selectedMembershipPurchaseAmount;
+    membershipActivationPreviewAmount;
   const { taxAmount: gstAmount, grandTotal: totalPayable } = computeGstFromSubtotal(
     afterDiscount,
     isGstRegistered ? "REGISTERED" : "NOT_REGISTERED"
@@ -2878,6 +2887,12 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             </span>
             <span className="tabular-nums">{formatCurrency(afterDiscount)}</span>
           </div>
+          {membershipActivationPreviewAmount > 0 ? (
+            <div className="flex justify-between text-violet-700 dark:text-violet-400">
+              <span>Membership in subtotal</span>
+              <span className="tabular-nums">{formatCurrency(membershipActivationPreviewAmount)}</span>
+            </div>
+          ) : null}
           {isGstRegistered ? (
             <div className="flex justify-between text-amber-700 dark:text-amber-400">
               <span>GST ({Math.round(DEFAULT_GST_RATE * 100)}%)</span>
