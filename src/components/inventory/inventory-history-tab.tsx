@@ -36,6 +36,7 @@ import { toast } from "sonner";
 export function InventoryHistoryTab() {
   const movements = useInventoryStore((s) => s.stockMovements);
   const parts = useInventoryStore((s) => s.parts);
+  const purchases = useInventoryStore((s) => s.productPurchases);
   const branches = useBranchStore((s) => s.branches);
   const staff = useStaffStore((s) => s.staff);
 
@@ -66,6 +67,9 @@ export function InventoryHistoryTab() {
       })
       .map((m) => {
         const part = parts.find((p) => p.id === m.partId);
+        const purchase = m.purchaseId
+          ? purchases.find((p) => p.id === m.purchaseId)
+          : undefined;
         return {
           ...m,
           partName: part?.name ?? m.partId,
@@ -75,10 +79,16 @@ export function InventoryHistoryTab() {
           userName: userName(m.performedBy),
           qtyLabel: movementSignedQuantityText(m),
           directionLabel: movementDirectionLabel(m),
-          ref: m.jobCardId ?? m.purchaseId ?? m.transferId ?? m.invoiceId ?? "—",
+          ref:
+            m.jobCardId ??
+            purchase?.purchaseNumber ??
+            m.purchaseId ??
+            m.transferId ??
+            m.invoiceId ??
+            "—",
         };
       });
-  }, [movements, parts, kind, branchId, partId, from, to, branches, staff]);
+  }, [movements, parts, purchases, kind, branchId, partId, from, to, branches, staff]);
 
   const exportRows = () =>
     buildInventoryHistoryExportRows(
