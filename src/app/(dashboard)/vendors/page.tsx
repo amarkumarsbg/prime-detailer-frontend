@@ -11,6 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,6 +48,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   TrendingDown,
   TrendingUp,
   Wallet,
@@ -54,6 +63,7 @@ export default function VendorsPage() {
   const expenses = useExpenseStore((s) => s.expenses);
   const addVendorDirectoryEntry = useExpenseStore((s) => s.addVendorDirectoryEntry);
   const updateVendorDirectoryEntry = useExpenseStore((s) => s.updateVendorDirectoryEntry);
+  const removeVendorDirectoryEntry = useExpenseStore((s) => s.removeVendorDirectoryEntry);
   const branches = useBranchStore((s) => s.branches);
   const invoices = useInvoiceStore((s) => s.invoices);
   const cashAccounts = useCashBankStore((s) => s.accounts);
@@ -74,8 +84,22 @@ export default function VendorsPage() {
   const [editingVendor, setEditingVendor] = useState<ExpenseVendorProfile | null>(null);
   const [createNameHint, setCreateNameHint] = useState("");
   const [statementKey, setStatementKey] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VendorSummary | null>(null);
+  const [deletingVendor, setDeletingVendor] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshedAt, setRefreshedAt] = useState(() => new Date().toISOString());
+
+  const deleteLinkCounts = useMemo(() => {
+    if (!deleteTarget) return { purchases: 0, expenses: 0, total: 0 };
+    const vendorName = deleteTarget.vendorName.trim();
+    const purchasesCount = purchases.filter((p) => p.vendorName?.trim() === vendorName).length;
+    const expensesCount = expenses.filter((e) => e.vendorName?.trim() === vendorName).length;
+    return {
+      purchases: purchasesCount,
+      expenses: expensesCount,
+      total: purchasesCount + expensesCount,
+    };
+  }, [deleteTarget, purchases, expenses]);
 
   const summaries = useMemo(
     () => buildVendorSummaries(vendorDirectory, purchases, expenses),
@@ -183,6 +207,35 @@ export default function VendorsPage() {
     }
     toast.success("Vendor created.");
     return true;
+  };
+
+  const confirmDeleteVendor = async () => {
+    if (!deleteTarget) return;
+    if (!deleteTarget.profile) {
+      toast.error("Cannot delete this vendor", {
+        description: "This vendor exists from transactions only and has no vendor profile entry.",
+      });
+      setDeleteTarget(null);
+      return;
+    }
+    if (deleteLinkCounts.total > 0) {
+      toast.error("Vendor is linked to transactions", {
+        description: `Linked to ${deleteLinkCounts.purchases} purchase(s) and ${deleteLinkCounts.expenses} expense(s). Remove or reassign them first.`,
+      });
+      return;
+    }
+    setDeletingVendor(true);
+    try {
+      const ok = await removeVendorDirectoryEntry(deleteTarget.profile.id);
+      if (!ok) {
+        toast.error("Could not delete vendor.");
+        return;
+      }
+      toast.success("Vendor deleted.");
+      setDeleteTarget(null);
+    } finally {
+      setDeletingVendor(false);
+    }
   };
 
   const refresh = async () => {
@@ -407,6 +460,18 @@ export default function VendorsPage() {
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Delete ${r.vendorName}`}
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(r)}
+                      disabled={!r.profile}
+                      title={!r.profile ? "No vendor profile to delete" : "Delete vendor"}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -438,6 +503,49 @@ export default function VendorsPage() {
           openEdit(statementVendor);
         }}
       />
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deletingVendor && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete vendor?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This will remove the vendor profile for ${deleteTarget.vendorName}.`
+                : "This will remove the vendor profile."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteTarget ? (
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <p>
+                Linked purchases: <span className="font-medium text-foreground">{deleteLinkCounts.purchases}</span>
+              </p>
+              <p>
+                Linked expenses: <span className="font-medium text-foreground">{deleteLinkCounts.expenses}</span>
+              </p>
+              {deleteLinkCounts.total > 0 ? (
+                <p className="text-destructive">
+                  Delete blocked: remove or reassign linked transactions first.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deletingVendor} onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingVendor || deleteLinkCounts.total > 0 || !deleteTarget?.profile}
+              onClick={() => void confirmDeleteVendor()}
+            >
+              {deletingVendor ? "Deleting…" : "Delete vendor"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
