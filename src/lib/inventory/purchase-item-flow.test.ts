@@ -26,21 +26,19 @@ function makePart(overrides: Partial<Part> = {}): Part {
 }
 
 describe("purchase item creation flow", () => {
-  it("adds created item and appends the next blank row", () => {
+  it("adds created item without appending a blank row", () => {
     const created = makePart({ id: "part-new", name: "MICROFIBRE", costPrice: 50, quantity: 5 });
     const initial = [createEmptyDraftItem()];
 
     const next = applyCreatedPartAndAppendBlank(initial, created, null);
 
-    expect(next.length).toBe(2);
+    expect(next.length).toBe(1);
     expect(next[0]?.partId).toBe("part-new");
     expect(next[0]?.quantity).toBe("5");
     expect(next[0]?.unitPrice).toBe("50");
-    expect(next[1]?.partId).toBe("");
-    expect(next[1]?.lockPart).toBeUndefined();
   });
 
-  it("keeps created item in previous row and does not auto-select part in new row", () => {
+  it("fills targeted row and does not add extra rows", () => {
     const created = makePart({ id: "part-new-2", quantity: 1 });
     const seeded = [
       { ...createEmptyDraftItem(), key: "k1", partId: "part-old", quantity: "2" },
@@ -49,9 +47,8 @@ describe("purchase item creation flow", () => {
 
     const next = applyCreatedPartAndAppendBlank(seeded, created, "k2");
 
-    expect(next.length).toBe(3);
+    expect(next.length).toBe(2);
     expect(next[1]?.partId).toBe("part-new-2");
-    expect(next[2]?.partId).toBe("");
   });
 
   it("deletes purchase line directly from purchase rows", () => {

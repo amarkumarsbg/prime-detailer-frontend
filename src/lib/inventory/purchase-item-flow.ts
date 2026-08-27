@@ -28,6 +28,18 @@ export function createEmptyDraftItem(): DraftItemRow {
   };
 }
 
+export function createLockedBlankDraftItem(): DraftItemRow {
+  return {
+    key: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    partId: "",
+    quantity: "",
+    unitPrice: "",
+    discount: "",
+    gstRate: "",
+    lockPart: true,
+  };
+}
+
 export function applyPartToDraftItems(
   prev: DraftItemRow[],
   part: Part,
@@ -69,10 +81,10 @@ export function applyPartToDraftItems(
 }
 
 export function ensureTrailingBlankRow(rows: DraftItemRow[]): DraftItemRow[] {
-  if (rows.length === 0) return [createEmptyDraftItem()];
+  if (rows.length === 0) return [createLockedBlankDraftItem()];
   const last = rows[rows.length - 1];
   if (last && !last.partId) return rows;
-  return [...rows, createEmptyDraftItem()];
+  return [...rows, createLockedBlankDraftItem()];
 }
 
 export function applyCreatedPartAndAppendBlank(
@@ -80,7 +92,7 @@ export function applyCreatedPartAndAppendBlank(
   part: Part,
   targetKey?: string | null
 ): DraftItemRow[] {
-  return ensureTrailingBlankRow(applyPartToDraftItems(prev, part, targetKey));
+  return applyPartToDraftItems(prev, part, targetKey);
 }
 
 export function removeDraftItem(rows: DraftItemRow[], key: string): DraftItemRow[] {

@@ -38,7 +38,6 @@ import {
 } from "@/lib/inventory/sync-purchase-expense";
 import {
   applyCreatedPartAndAppendBlank,
-  createEmptyDraftItem,
   removeDraftItem,
   type DraftItemRow,
 } from "@/lib/inventory/purchase-item-flow";
@@ -78,6 +77,7 @@ export function InventoryPurchasesTab({
   const [editTarget, setEditTarget] = useState<ProductPurchase | null>(null);
   const isEditing = editTarget !== null;
   const [quickPartOpen, setQuickPartOpen] = useState(false);
+  const [quickPartEditingPart, setQuickPartEditingPart] = useState<Part | null>(null);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const quickPartTargetKeyRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -95,7 +95,7 @@ export function InventoryPurchasesTab({
   const [notes, setNotes] = useState("");
   const [roundOff, setRoundOff] = useState("0");
   const [amountPaid, setAmountPaid] = useState("0");
-  const [items, setItems] = useState<DraftItem[]>([createEmptyDraftItem()]);
+  const [items, setItems] = useState<DraftItem[]>([]);
   const [payTarget, setPayTarget] = useState<ProductPurchase | null>(null);
 
   const beginNestedDialog = () => {
@@ -213,32 +213,41 @@ export function InventoryPurchasesTab({
     setNotes("");
     setRoundOff("0");
     setAmountPaid("0");
-    setItems([createEmptyDraftItem()]);
+    setItems([]);
     setEditTarget(null);
   };
 
   const openEdit = (purchase: ProductPurchase) => {
+    const safePurchaseDate =
+      typeof purchase.purchasedAt === "string" && purchase.purchasedAt.length >= 10
+        ? purchase.purchasedAt.slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+    const safeDueDate =
+      typeof purchase.dueDate === "string" && purchase.dueDate.length >= 10
+        ? purchase.dueDate.slice(0, 10)
+        : "";
     setEditTarget(purchase);
-    setSupplierName(purchase.vendorName);
+    setSupplierName(purchase.vendorName ?? "");
     setSupplierId(purchase.supplierId ?? "");
     setBranchId(purchase.branchId ?? defaultBranchId());
-    setPurchaseDate(purchase.purchasedAt.slice(0, 10));
-    setDueDate(purchase.dueDate?.slice(0, 10) ?? "");
+    setPurchaseDate(safePurchaseDate);
+    setDueDate(safeDueDate);
     setInvoiceNo(purchase.supplierInvoiceNumber ?? "");
     setInvoiceFileName(purchase.invoiceFileName ?? "");
     setNotes(purchase.notes ?? "");
     setRoundOff(String(purchase.roundOff ?? 0));
     setAmountPaid(String(purchase.amountPaid ?? 0));
-    setItems(
-      purchase.items?.map((line) => ({
-        key: `line-edit-${line.partId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        partId: line.partId,
-        quantity: String(line.quantity),
-        unitPrice: String(line.unitPrice),
+    const mappedItems =
+      purchase.items?.map((line, index) => ({
+        key: `line-edit-${line.partId ?? index}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        partId: line.partId ?? "",
+        quantity: String(line.quantity ?? 1),
+        unitPrice: String(line.unitPrice ?? ""),
         discount: String(line.discount ?? 0),
         gstRate: String(line.gstRate ?? 18),
-      })) ?? [createEmptyDraftItem()]
-    );
+        lockPart: true,
+      })) ?? [];
+    setItems(mappedItems.length > 0 ? mappedItems : []);
     setOpen(true);
   };
 
@@ -583,6 +592,7 @@ export function InventoryPurchasesTab({
                       e.preventDefault();
                       e.stopPropagation();
                       quickPartTargetKeyRef.current = null;
+                      setQuickPartEditingPart(null);
                       beginNestedDialog();
                       setQuickPartOpen(true);
                     }}
@@ -613,10 +623,11 @@ export function InventoryPurchasesTab({
                     >
                       <div className="col-span-2 min-w-0 sm:col-span-1">
                         <Label className="mb-1 text-xs sm:sr-only">Part</Label>
-                        {item.lockPart && item.partId ? (
+                        {item.lockPart ? (
                           <Input
                             className="h-9"
-                            value={parts.find((p) => p.id === item.partId)?.name ?? item.partId}
+                            value={item.partId ? (parts.find((p) => p.id === item.partId)?.name ?? item.partId) : ""}
+                            placeholder={item.partId ? undefined : "Blank item"}
                             readOnly
                           />
                         ) : (
@@ -697,7 +708,23 @@ export function InventoryPurchasesTab({
                           variant="ghost"
                           size="sm"
                           className="h-8 px-2 text-xs"
-                          onClick={() => patchItem(item.key, { lockPart: false })}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!item.partId) {
+                              patchItem(item.key, { lockPart: false });
+                              return;
+                            }
+                            const part = parts.find((p) => p.id === item.partId);
+                            if (!part) {
+                              toast.error("Part not found in catalog. Please reselect it.");
+                              patchItem(item.key, { lockPart: false });
+                              return;
+                            }
+                            setQuickPartEditingPart(part);
+                            beginNestedDialog();
+                            setQuickPartOpen(true);
+                          }}
                         >
                           Edit
                         </Button>
@@ -792,6 +819,7 @@ export function InventoryPurchasesTab({
 
       <CatalogItemFormDialog
         open={quickPartOpen}
+        editingPart={quickPartEditingPart}
         onOpenChange={(next) => {
           if (next) beginNestedDialog();
           setQuickPartOpen(next);
@@ -799,6 +827,7 @@ export function InventoryPurchasesTab({
             if (!pendingCreatedPartRef.current) {
               quickPartTargetKeyRef.current = null;
             }
+            setQuickPartEditingPart(null);
             endNestedDialogSoon();
           }
         }}

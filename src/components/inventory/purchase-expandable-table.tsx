@@ -120,8 +120,11 @@ export function PurchaseExpandableTable({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          aria-label="Edit purchase"
-                          onClick={() => onEdit(p)}
+                          aria-label={`Edit purchase ${p.purchaseNumber ?? p.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(p);
+                          }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
