@@ -317,8 +317,8 @@ export default function BillingPage() {
   };
 
   const kpis = useMemo(() => {
-    const paidInvoices = branchScopedInvoices.filter((i) => i.status === "PAID");
-    const totalRevenue = paidInvoices.reduce((sum, i) => sum + i.grandTotal, 0);
+    const recognizedInvoices = branchScopedInvoices.filter((i) => i.status !== "DRAFT");
+    const totalRevenue = recognizedInvoices.reduce((sum, i) => sum + i.grandTotal, 0);
     const outstanding = branchScopedInvoices
       .filter((i) => i.status === "ISSUED" || i.status === "PARTIALLY_PAID")
       .reduce((sum, i) => {
@@ -331,7 +331,7 @@ export default function BillingPage() {
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
     const avgValue =
-      paidInvoices.length > 0 ? totalRevenue / paidInvoices.length : 0;
+      recognizedInvoices.length > 0 ? totalRevenue / recognizedInvoices.length : 0;
 
     return {
       totalRevenue,

@@ -10,8 +10,9 @@ export const TAX_INVOICE_DISCLAIMER = `No detailing service is perfect. Most com
 (a) GST invoice provided digitally. (b) Services subject to availability. (c) Advance is non-refundable on customer cancellation. (d) Pickup/visit charges: Rs. 200 min + Rs. 10/km beyond 10 km.
 This is a computer-generated document. No signature required.  |  Quality Never Goes Out of Cost — Prime Detailers`;
 
-export function escapeHtml(s: string): string {
-  return s
+export function escapeHtml(s: string | number | null | undefined): string {
+  const text = s == null ? "" : String(s);
+  return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
