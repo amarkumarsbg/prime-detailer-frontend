@@ -225,9 +225,9 @@ export function BrandingThemePanel() {
             tabIndex={-1}
             onChange={onLogoChange}
           />
-          <div className="flex flex-wrap items-start gap-4">
+          <div className="flex flex-col items-start gap-3">
             {logoPreview ? (
-              <div className="rounded-md border border-border p-3 bg-background">
+              <div className="rounded-md border border-border bg-background p-3 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logoPreview}
@@ -236,11 +236,11 @@ export function BrandingThemePanel() {
                 />
               </div>
             ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed border-border bg-muted/30 text-[10px] text-muted-foreground">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/30 text-[10px] text-muted-foreground">
                 No logo
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
