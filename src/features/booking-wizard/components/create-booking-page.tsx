@@ -1010,8 +1010,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   ]);
 
   useEffect(() => {
+    // During create/check-in transition, keep the selected package so summary totals remain stable.
+    if (isCreatingBooking || checkInOpen) return;
     if (dbMembershipForSelectedVehicle) setWizardMembershipPackageId(null);
-  }, [dbMembershipForSelectedVehicle]);
+  }, [dbMembershipForSelectedVehicle, isCreatingBooking, checkInOpen]);
 
   useEffect(() => {
     if (!wizardMembershipPackageId) return;
@@ -1025,9 +1027,18 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   }, [wizardMembershipPackageId, eligibleActiveMembershipPackages]);
 
   useEffect(() => {
+    // Avoid resetting the membership choice while the check-in modal is open for the newly created job.
+    if (isCreatingBooking || checkInOpen) return;
     setMembershipVisitChoice(null);
     setMembershipRedeemServiceIds([]);
-  }, [existingCustomerId, selectedVehicleId, membershipLookupVehicleId, activeMembershipForSelectedVehicle?.id]);
+  }, [
+    existingCustomerId,
+    selectedVehicleId,
+    membershipLookupVehicleId,
+    activeMembershipForSelectedVehicle?.id,
+    isCreatingBooking,
+    checkInOpen,
+  ]);
 
   /** Keep redeem ids in the job selection without replacing other picks (e.g. smart suggestions). */
   useEffect(() => {
@@ -1311,20 +1322,11 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   }, [catalogSubtotalExclGst, discountAmount, directDiscountAmount]);
 
   const membershipActivationPreviewAmount = useMemo(() => {
-    if (activeMembershipForSelectedVehicle?.id !== "virtual-new-sub") return 0;
-    const pkg =
-      activeMembershipPackageRow ??
-      (wizardMembershipPackageId
-        ? membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId)
-        : undefined);
+    if (!wizardMembershipPackageId) return 0;
+    const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
     if (!pkg) return 0;
     return Math.round((pkg.price ?? 0) * 100) / 100;
-  }, [
-    activeMembershipForSelectedVehicle?.id,
-    activeMembershipPackageRow,
-    wizardMembershipPackageId,
-    membershipPackagesAll,
-  ]);
+  }, [wizardMembershipPackageId, membershipPackagesAll]);
 
   /** Catalog after coupon + high-end program amounts + parts (all excl. GST). */
   const afterDiscount =

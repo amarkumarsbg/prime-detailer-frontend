@@ -367,6 +367,7 @@ export default function JobCardDetailPage() {
   const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const serviceCategories = useServiceCategoryStore((s) => s.categories);
   const membershipPackages = useMembershipStore((s) => s.packages);
+  const cancelMembership = useMembershipStore((s) => s.cancelMembership);
   const getActiveMembership = useMembershipStore((s) => s.getActiveMembership);
   const getUsedIncludedServiceCount = useMembershipStore((s) => s.getUsedIncludedServiceCount);
   const getRemainingIncludedServiceCount = useMembershipStore((s) => s.getRemainingIncludedServiceCount);
@@ -1502,6 +1503,10 @@ export default function JobCardDetailPage() {
   const handleCancel = () => {
     if (!jobCard || currentStatus === "DELIVERED" || currentStatus === "CANCELLED") return;
     const nowIso = new Date().toISOString();
+    const activationId = jobCard.membershipActivationId?.trim();
+    if (activationId) {
+      cancelMembership(activationId);
+    }
     setCurrentStatus("CANCELLED");
     updateJobCard(jobCard.id, { status: "CANCELLED", updatedAt: nowIso });
     pushActivityLog({
@@ -1509,10 +1514,10 @@ export default function JobCardDetailPage() {
       entityType: "JOB_CARD",
       entityId: jobCard.id,
       entityLabel: jobCard.jobNumber,
-      details: `${jobCard.jobNumber} cancelled`,
+      details: `${jobCard.jobNumber} cancelled${activationId ? " and linked membership deactivated" : ""}`,
     });
     toast.error("Job card cancelled", {
-      description: `${jobCard.jobNumber} has been cancelled.`,
+      description: `${jobCard.jobNumber} has been cancelled.${activationId ? " Linked membership has been cancelled too." : ""}`,
     });
   };
 
