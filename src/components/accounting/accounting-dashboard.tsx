@@ -38,6 +38,7 @@ import { AddExpenseDialog } from "@/components/expenses/add-expense-dialog";
 import {
   ExpenseDateRangePicker,
   formatExpenseDateFilterLabel,
+  matchesExpenseDate,
   type ExpenseDateFilter,
 } from "@/components/expenses/expense-date-range-picker";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,7 @@ import type { Expense, Invoice } from "@/types";
 import type { LucideIcon } from "lucide-react";
 
 const DEFAULT_DATE: ExpenseDateFilter = { kind: "preset", preset: "this_month" };
+type RecentMembershipsPreset = "today" | "yesterday" | "this_week" | "this_month" | "all";
 
 const PIE_COLORS = [
   "#3b82f6",
@@ -139,6 +141,8 @@ export function AccountingDashboard() {
   const [compare, setCompare] = useState(false);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [tab, setTab] = useState("overview");
+  const [recentMembershipsFilter, setRecentMembershipsFilter] =
+    useState<RecentMembershipsPreset>("all");
 
   const jobBranch = useMemo(
     () => new Map(jobCards.map((j) => [j.id, j.branchId])),
@@ -241,7 +245,9 @@ export function AccountingDashboard() {
       }),
     [branchInvoices, periodAdvances, branchJobs, memberships, packages, dateFilter]
   );
-  const totalIncome = incomeReceipts.total;
+  // Avoid double counting: membership-origin billing is represented under invoice revenue.
+  const totalIncome =
+    Math.round((incomeReceipts.invoiceRevenue + incomeReceipts.advances) * 100) / 100;
   const totalExpensesAmt = useMemo(
     () => totalExpenseCashOutInPeriod(branchExpenses, branchPurchases, dateFilter),
     [branchExpenses, branchPurchases, dateFilter]
@@ -268,14 +274,16 @@ export function AccountingDashboard() {
   const compareMetrics = useMemo(() => {
     if (!compareFilter) return null;
     const prevAdvances = filterJobCardsByAdvanceDate(branchJobs, compareFilter);
-    const prevIncome = totalIncomeReceipts({
+    const prevReceipts = totalIncomeReceipts({
       invoices: branchInvoices,
       advances: prevAdvances,
       jobCards: branchJobs,
       memberships,
       packages,
       filter: compareFilter,
-    }).total;
+    });
+    const prevIncome =
+      Math.round((prevReceipts.invoiceRevenue + prevReceipts.advances) * 100) / 100;
     return {
       income: prevIncome,
       expenses: totalExpenseCashOutInPeriod(branchExpenses, branchPurchases, compareFilter),
@@ -295,9 +303,9 @@ export function AccountingDashboard() {
       branchExpenses,
       dateFilter,
       branchPurchases,
-      { advances: incomeReceipts.advances, memberships: incomeReceipts.memberships }
+      { advances: incomeReceipts.advances, memberships: 0 }
     ),
-    [branchInvoices, branchExpenses, dateFilter, branchPurchases, incomeReceipts.advances, incomeReceipts.memberships]
+    [branchInvoices, branchExpenses, dateFilter, branchPurchases, incomeReceipts.advances]
   );
 
   const trend = useMemo(
@@ -317,9 +325,9 @@ export function AccountingDashboard() {
       incomeSourceBreakdownFromReceipts({
         invoiceRevenue: incomeReceipts.invoiceRevenue,
         advances: incomeReceipts.advances,
-        memberships: incomeReceipts.memberships,
+        memberships: 0,
       }),
-    [incomeReceipts]
+    [incomeReceipts.invoiceRevenue, incomeReceipts.advances]
   );
 
   const recentInvoices = useMemo(() => {
@@ -337,6 +345,9 @@ export function AccountingDashboard() {
     const custName = new Map(customers.map((c) => [c.id, c.name]));
     const pkgPrice = new Map(packages.map((p) => [p.id, p.price]));
     return [...memberships]
+      .filter((m) =>
+        matchesExpenseDate(m.startDate, { kind: "preset", preset: recentMembershipsFilter })
+      )
       .sort((a, b) => b.startDate.localeCompare(a.startDate))
       .slice(0, 6)
       .map((m) => ({
@@ -345,7 +356,7 @@ export function AccountingDashboard() {
         customerName: custName.get(m.customerId) ?? "Customer",
         amount: pkgPrice.get(m.packageId) ?? 0,
       }));
-  }, [memberships, packages, customers]);
+  }, [memberships, packages, customers, recentMembershipsFilter]);
 
   const scopeLabel = useMemo(
     () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, branchFilter, branches),
@@ -557,7 +568,7 @@ export function AccountingDashboard() {
               headerBg="bg-emerald-50/90 dark:bg-emerald-950/30"
               delta={incomeDelta}
               breakdownTitle="Calculation Breakdown"
-              breakdownNote="Total Income = Non-draft invoice totals created during this period, plus unbilled advances and memberships. Paid, partially paid, and unpaid bills are all counted once created."
+              breakdownNote="Total Income = Non-draft invoice totals created during this period, plus unbilled advances. Paid, partially paid, and unpaid bills are all counted once created."
               breakdown={[
                 {
                   label: `Invoice Revenue (${incomeReceipts.invoiceCount})`,
@@ -570,15 +581,6 @@ export function AccountingDashboard() {
                         label: "Unbilled Advances",
                         amount: incomeReceipts.advances,
                         dot: "bg-blue-500",
-                      },
-                    ]
-                  : []),
-                ...(incomeReceipts.memberships > 0
-                  ? [
-                      {
-                        label: `Memberships (${incomeReceipts.membershipCount})`,
-                        amount: incomeReceipts.memberships,
-                        dot: "bg-violet-500",
                       },
                     ]
                   : []),
@@ -707,7 +709,7 @@ export function AccountingDashboard() {
                 <PastelStat
                   label="Other Income"
                   value={payments.otherIncome}
-                  subtitle="Advances & memberships"
+                  subtitle="Unbilled advances"
                   icon={Activity}
                   tone="amber"
                 />
@@ -879,6 +881,8 @@ export function AccountingDashboard() {
             />
             <RecentMembershipsTable
               rows={recentMemberships}
+              filter={recentMembershipsFilter}
+              onFilterChange={setRecentMembershipsFilter}
               onViewAll={() => router.push("/membership")}
             />
           </div>
@@ -1429,6 +1433,8 @@ function RecentExpensesTable({
 
 function RecentMembershipsTable({
   rows,
+  filter,
+  onFilterChange,
   onViewAll,
 }: {
   rows: {
@@ -1439,6 +1445,8 @@ function RecentMembershipsTable({
     amount: number;
     status: string;
   }[];
+  filter: RecentMembershipsPreset;
+  onFilterChange: (next: RecentMembershipsPreset) => void;
   onViewAll: () => void;
 }) {
   return (
@@ -1453,6 +1461,25 @@ function RecentMembershipsTable({
           View All
         </button>
       </CardHeader>
+      <div className="border-b border-border/60 px-4 py-2.5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Filter by date
+          </p>
+          <Select value={filter} onValueChange={(value) => onFilterChange(value as RecentMembershipsPreset)}>
+            <SelectTrigger className="h-8 w-full text-xs sm:w-[150px]">
+              <SelectValue placeholder="Select range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
+              <SelectItem value="this_week">This week</SelectItem>
+              <SelectItem value="this_month">This month</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

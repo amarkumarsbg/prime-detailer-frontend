@@ -63,6 +63,7 @@ import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import type { Customer } from "@/types";
 import { NewCustomerReferralCodeField } from "@/components/customers/new-customer-referral-code-field";
 import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
+import { matchesExpenseDate, type ExpenseDateFilter } from "@/components/expenses/expense-date-range-picker";
 
 const TIER_OPTIONS: { value: MembershipTier; label: string }[] = [
   { value: "MONTHLY", label: "Monthly (~30 days)" },
@@ -218,6 +219,7 @@ function MembershipPackageMobileCard({
 }
 
 type TabValue = "packages" | "assign";
+type RecentSubscriptionsPreset = "today" | "yesterday" | "this_week" | "this_month" | "all";
 
 export function MembershipPageClient() {
   const router = useRouter();
@@ -225,6 +227,8 @@ export function MembershipPageClient() {
   const tabParam = searchParams.get("tab");
 
   const [mainTab, setMainTab] = useState<TabValue>("packages");
+  const [recentSubscriptionsFilter, setRecentSubscriptionsFilter] =
+    useState<RecentSubscriptionsPreset>("all");
 
   useEffect(() => {
     if (tabParam === "assign") queueMicrotask(() => setMainTab("assign"));
@@ -610,6 +614,11 @@ export function MembershipPageClient() {
       };
     });
   }, [subscriptions, customers, packages, subscriptionEffectiveStatus, vehicles]);
+
+  const filteredSubsWithLabels = useMemo(() => {
+    const dateFilter: ExpenseDateFilter = { kind: "preset", preset: recentSubscriptionsFilter };
+    return subsWithLabels.filter(({ sub }) => matchesExpenseDate(sub.startDate, dateFilter));
+  }, [subsWithLabels, recentSubscriptionsFilter]);
 
   const setTab = (v: string) => {
     const t = v as TabValue;
@@ -1030,11 +1039,26 @@ export function MembershipPageClient() {
       </Dialog>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle className="text-lg">Recent subscriptions</CardTitle>
+              <Select
+                value={recentSubscriptionsFilter}
+                onValueChange={(value) => setRecentSubscriptionsFilter(value as RecentSubscriptionsPreset)}
+              >
+                <SelectTrigger className="h-9 w-[150px]">
+                  <SelectValue placeholder="Filter by date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
+                  <SelectItem value="this_week">This week</SelectItem>
+                  <SelectItem value="this_month">This month</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              {subsWithLabels.length === 0 ? (
+              {filteredSubsWithLabels.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
               ) : (
                 <table className="w-full min-w-[520px] border-collapse text-sm">
@@ -1049,7 +1073,7 @@ export function MembershipPageClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {subsWithLabels.map(({ sub, custName, pkgName, eff, vehicleLabel }) => (
+                    {filteredSubsWithLabels.map(({ sub, custName, pkgName, eff, vehicleLabel }) => (
                       <tr key={sub.id} className="border-b border-border/80">
                         <td className="px-2 py-2">{custName}</td>
                         <td className="px-2 py-2 text-xs text-muted-foreground max-w-[200px]">{vehicleLabel}</td>
