@@ -89,7 +89,7 @@ import {
   type InvoicePdfOpts,
 } from "@/lib/invoice-pdf";
 import { buildInvoiceEmailHtml, buildTaxInvoicePrintHtml, formatInvoiceVehicleDetailsLine, taxRateAsFraction, taxRateAsPercentLabel } from "@/lib/tax-invoice-format";
-import { invoiceSourceTitle } from "@/lib/invoice-source";
+import { invoiceCustomerDocumentLabel } from "@/lib/invoice-source";
 import {
   canApplyReferralOnInvoice,
   invoiceCarriesReferral,
@@ -1282,7 +1282,10 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const handleInvoiceWhatsApp = async () => {
     if (!invoice) return;
-    const invoiceLabel = isGstRegistered(gstRegistrationStatus) ? "tax invoice" : "invoice";
+    const invoiceLabel = invoiceCustomerDocumentLabel(
+      invoice,
+      isGstRegistered(gstRegistrationStatus)
+    ).sentenceCase;
     const message = buildInvoiceWhatsAppMessage(invoice, {
       businessName,
       remainingBalance,
@@ -1345,8 +1348,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       customerEmail: toEmail,
     };
     const attachmentFilename = invoicePdfFilename(invoice.invoiceNumber, gstRegistrationStatus);
-    const titleCaseLabel = isGstRegistered(gstRegistrationStatus) ? "Tax Invoice" : "Invoice";
-    const sentenceCaseLabel = isGstRegistered(gstRegistrationStatus) ? "tax invoice" : "invoice";
+    const { titleCase: titleCaseLabel, sentenceCase: sentenceCaseLabel } =
+      invoiceCustomerDocumentLabel(latestInvoice, isGstRegistered(gstRegistrationStatus));
     const emailHtml = buildInvoiceEmailHtml({
       customerName: invoice.customerName,
       invoiceNumber: invoice.invoiceNumber,
@@ -1442,13 +1445,18 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       .format(new Date(iso))
       .replace(/ /g, "-");
 
+  const customerDocLabel = invoiceCustomerDocumentLabel(
+    invoice,
+    isGstRegistered(gstRegistrationStatus)
+  );
+
   return (
     <div className="space-y-4 print:hidden">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <DetailBackButton fallbackHref="/billing" />
           <h1 className="text-lg font-semibold">
-            {invoiceSourceTitle(invoice)} #{invoice.invoiceNumber}
+            {customerDocLabel.titleCase} #{invoice.invoiceNumber}
           </h1>
           <InvoiceStatusBadge status={invoice.status} />
         </div>
@@ -1541,7 +1549,7 @@ ${businessNameVal}`;
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
           {previewHtml ? (
             <iframe
-              title={isGstRegistered(gstRegistrationStatus) ? "Tax invoice preview" : "Invoice preview"}
+              title={`${customerDocLabel.titleCase} preview`}
               className="h-[min(85vh,920px)] w-full border-0"
               srcDoc={previewHtml}
             />
