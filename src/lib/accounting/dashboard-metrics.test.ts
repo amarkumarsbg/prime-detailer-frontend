@@ -347,6 +347,27 @@ describe("invoice recognition in total income", () => {
     expect(invoiceRevenueInPeriod(invoices, filter)).toEqual({ amount: 12000, count: 3 });
   });
 
+  it("excludes invoices tied to cancelled job cards", () => {
+    const invoices = [
+      {
+        ...invoiceWithPayment("i1", 5000, 0, "CASH"),
+        jobCardId: "job-cancelled",
+        status: "ISSUED" as const,
+      },
+      {
+        ...invoiceWithPayment("i2", 4000, 4000, "UPI"),
+        jobCardId: "job-active",
+        status: "PAID" as const,
+      },
+    ];
+    const jobs = [
+      jobCardAdvance("job-cancelled", "CANCELLED", 0),
+      jobCardAdvance("job-active", "READY", 0),
+    ];
+
+    expect(invoiceRevenueInPeriod(invoices, filter, jobs)).toEqual({ amount: 4000, count: 1 });
+  });
+
   it("counts billed invoices once and excludes the same job advance from income", () => {
     const packages = [membershipPackage()];
     const memberships = [membershipSubscription()];
@@ -363,6 +384,7 @@ describe("invoice recognition in total income", () => {
       totalIncomeReceipts({
         invoices,
         advances,
+        jobCards: advances,
         memberships,
         packages,
         filter,

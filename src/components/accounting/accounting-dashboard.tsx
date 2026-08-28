@@ -234,11 +234,12 @@ export function AccountingDashboard() {
       totalIncomeReceipts({
         invoices: branchInvoices,
         advances: periodAdvances,
+        jobCards: branchJobs,
         memberships,
         packages,
         filter: dateFilter,
       }),
-    [branchInvoices, periodAdvances, memberships, packages, dateFilter]
+    [branchInvoices, periodAdvances, branchJobs, memberships, packages, dateFilter]
   );
   const totalIncome = incomeReceipts.total;
   const totalExpensesAmt = useMemo(
@@ -270,6 +271,7 @@ export function AccountingDashboard() {
     const prevIncome = totalIncomeReceipts({
       invoices: branchInvoices,
       advances: prevAdvances,
+      jobCards: branchJobs,
       memberships,
       packages,
       filter: compareFilter,

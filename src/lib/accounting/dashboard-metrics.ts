@@ -369,12 +369,17 @@ export function membershipRevenueInPeriod(
 
 export function invoiceRevenueInPeriod(
   invoices: Invoice[],
-  filter: ExpenseDateFilter
+  filter: ExpenseDateFilter,
+  jobCards: JobCard[] = []
 ): { amount: number; count: number } {
+  const cancelledJobIds = new Set(
+    jobCards.filter((j) => j.status === "CANCELLED").map((j) => j.id)
+  );
   let amount = 0;
   let count = 0;
   for (const inv of invoices) {
     if (inv.status === "DRAFT") continue;
+    if (inv.jobCardId && cancelledJobIds.has(inv.jobCardId)) continue;
     if (!matchesExpenseDate(inv.createdAt, filter)) continue;
     amount += inv.grandTotal;
     count += 1;
@@ -402,6 +407,7 @@ function totalUnbilledAdvanceReceipts(jobCards: JobCard[], invoices: Invoice[]):
 export function totalIncomeReceipts(args: {
   invoices: Invoice[];
   advances: JobCard[];
+  jobCards?: JobCard[];
   memberships: CustomerMembership[];
   packages: MembershipPackage[];
   filter: ExpenseDateFilter;
@@ -413,7 +419,11 @@ export function totalIncomeReceipts(args: {
   memberships: number;
   membershipCount: number;
 } {
-  const invoiceRevenue = invoiceRevenueInPeriod(args.invoices, args.filter);
+  const invoiceRevenue = invoiceRevenueInPeriod(
+    args.invoices,
+    args.filter,
+    args.jobCards ?? []
+  );
   const advances = totalUnbilledAdvanceReceipts(args.advances, args.invoices);
   const mem = membershipRevenueInPeriod(args.memberships, args.packages, args.filter);
   const total = Math.round((invoiceRevenue.amount + advances + mem.amount) * 100) / 100;
