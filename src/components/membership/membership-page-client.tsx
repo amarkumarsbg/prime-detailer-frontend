@@ -219,7 +219,17 @@ function MembershipPackageMobileCard({
 }
 
 type TabValue = "packages" | "assign";
-type RecentSubscriptionsPreset = "today" | "yesterday" | "this_week" | "this_month" | "all";
+type RecentSubscriptionsPreset =
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "this_month"
+  | "all"
+  | "custom";
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function MembershipPageClient() {
   const router = useRouter();
@@ -229,6 +239,10 @@ export function MembershipPageClient() {
   const [mainTab, setMainTab] = useState<TabValue>("packages");
   const [recentSubscriptionsFilter, setRecentSubscriptionsFilter] =
     useState<RecentSubscriptionsPreset>("all");
+  const [recentSubscriptionsCustomStart, setRecentSubscriptionsCustomStart] =
+    useState<string>(todayIsoDate());
+  const [recentSubscriptionsCustomEnd, setRecentSubscriptionsCustomEnd] =
+    useState<string>(todayIsoDate());
 
   useEffect(() => {
     if (tabParam === "assign") queueMicrotask(() => setMainTab("assign"));
@@ -609,6 +623,7 @@ export function MembershipPageClient() {
         sub,
         custName: cust?.name ?? sub.customerId,
         pkgName: pkg?.name ?? sub.packageId,
+        pkgAmount: pkg?.price ?? 0,
         eff,
         vehicleLabel,
       };
@@ -616,9 +631,21 @@ export function MembershipPageClient() {
   }, [subscriptions, customers, packages, subscriptionEffectiveStatus, vehicles]);
 
   const filteredSubsWithLabels = useMemo(() => {
-    const dateFilter: ExpenseDateFilter = { kind: "preset", preset: recentSubscriptionsFilter };
+    const dateFilter: ExpenseDateFilter =
+      recentSubscriptionsFilter === "custom"
+        ? {
+            kind: "custom",
+            start: recentSubscriptionsCustomStart,
+            end: recentSubscriptionsCustomEnd,
+          }
+        : { kind: "preset", preset: recentSubscriptionsFilter };
     return subsWithLabels.filter(({ sub }) => matchesExpenseDate(sub.startDate, dateFilter));
-  }, [subsWithLabels, recentSubscriptionsFilter]);
+  }, [
+    subsWithLabels,
+    recentSubscriptionsFilter,
+    recentSubscriptionsCustomStart,
+    recentSubscriptionsCustomEnd,
+  ]);
 
   const setTab = (v: string) => {
     const t = v as TabValue;
@@ -1053,11 +1080,40 @@ export function MembershipPageClient() {
                   <SelectItem value="yesterday">Yesterday</SelectItem>
                   <SelectItem value="this_week">This week</SelectItem>
                   <SelectItem value="this_month">This month</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
                   <SelectItem value="all">All time</SelectItem>
                 </SelectContent>
               </Select>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent className="space-y-3 overflow-x-auto">
+              {recentSubscriptionsFilter === "custom" && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="recent-subscriptions-start" className="text-xs text-muted-foreground">
+                      Start date
+                    </Label>
+                    <Input
+                      id="recent-subscriptions-start"
+                      type="date"
+                      className="date-input-icon-end h-9 pr-9"
+                      value={recentSubscriptionsCustomStart}
+                      onChange={(e) => setRecentSubscriptionsCustomStart(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="recent-subscriptions-end" className="text-xs text-muted-foreground">
+                      End date
+                    </Label>
+                    <Input
+                      id="recent-subscriptions-end"
+                      type="date"
+                      className="date-input-icon-end h-9 pr-9"
+                      value={recentSubscriptionsCustomEnd}
+                      onChange={(e) => setRecentSubscriptionsCustomEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
               {filteredSubsWithLabels.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
               ) : (
@@ -1073,11 +1129,16 @@ export function MembershipPageClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSubsWithLabels.map(({ sub, custName, pkgName, eff, vehicleLabel }) => (
+                    {filteredSubsWithLabels.map(({ sub, custName, pkgName, pkgAmount, eff, vehicleLabel }) => (
                       <tr key={sub.id} className="border-b border-border/80">
                         <td className="px-2 py-2">{custName}</td>
                         <td className="px-2 py-2 text-xs text-muted-foreground max-w-[200px]">{vehicleLabel}</td>
-                        <td className="px-2 py-2">{pkgName}</td>
+                        <td className="px-2 py-2">
+                          <div>{pkgName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {pkgAmount > 0 ? formatInrFull(pkgAmount) : "—"}
+                          </div>
+                        </td>
                         <td className="px-2 py-2 tabular-nums">{formatDate(sub.endDate)}</td>
                         <td className="px-2 py-2">
                           <Badge
