@@ -228,7 +228,7 @@ export function KPICard({
                 isCompact ? "text-xs" : "text-sm",
                 isFilterChip && active && tone && toneFilterActiveTitleClass[tone],
                 isFilterChip && !active && tone && toneFilterIdleTitleClass[tone],
-                !isFilterChip && "text-muted-foreground",
+                !isFilterChip && "text-foreground/80 dark:text-foreground/85",
                 titleClassName
               )}
             >
@@ -237,7 +237,7 @@ export function KPICard({
             <p
               className={cn(
                 "font-bold tracking-tight",
-                isEmpty && "text-sm font-medium text-muted-foreground",
+                isEmpty && "text-sm font-medium text-foreground/75 dark:text-foreground/80",
                 !isEmpty && (isFeatured ? "text-3xl" : isCompact ? "text-lg sm:text-xl" : "text-2xl"),
                 isCompact && "min-h-[1.375rem] flex items-center",
                 valueClassName
@@ -266,17 +266,17 @@ export function KPICard({
                   </span>
                 )}
                 {isEmpty && emptyHint && !showTrend && (
-                  <span className="text-[11px] text-muted-foreground/80">{emptyHint}</span>
+                  <span className="text-[11px] text-foreground/65 dark:text-foreground/70">{emptyHint}</span>
                 )}
                 {subtitle && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-foreground/75 dark:text-foreground/80">
                     {subtitle}
                   </span>
                 )}
               </div>
             )}
             {footerNote && (
-              <p className="text-xs text-muted-foreground pt-0.5">{footerNote}</p>
+              <p className="text-xs text-foreground/75 dark:text-foreground/80 pt-0.5">{footerNote}</p>
             )}
           </div>
           <div
