@@ -113,7 +113,10 @@ import {
 import { apiGet, ApiError } from "@/lib/api-client";
 import { ensureDomainResources, invalidateDomainResources } from "@/lib/domain-data-loader";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
-import { uploadJobInspectionPhoto } from "@/lib/job-card-inspection-photo-upload";
+import {
+  refreshJobCardFromServer,
+  uploadJobInspectionPhoto,
+} from "@/lib/job-card-inspection-photo-upload";
 import {
   hasAfterInspectionPhoto,
   hasBeforeInspectionPhoto,
@@ -414,6 +417,7 @@ export default function JobCardDetailPage() {
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showQuickAssignDialog, setShowQuickAssignDialog] = useState(false);
   const [beforePhotoRequiredOpen, setBeforePhotoRequiredOpen] = useState(false);
+  const checkInPromptHandledRef = useRef(false);
   const beforePhotoModalInputRef = useRef<HTMLInputElement>(null);
   const [afterPhotoRequiredOpen, setAfterPhotoRequiredOpen] = useState(false);
   const afterPhotoModalInputRef = useRef<HTMLInputElement>(null);
@@ -444,13 +448,57 @@ export default function JobCardDetailPage() {
   // Auto-open before photo check-in from ?checkIn=1 (set when creating a job
   // card from the bookings page). Clear param immediately.
   useEffect(() => {
+    checkInPromptHandledRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
     if (searchParams.get("checkIn") !== "1") return;
-    router.replace(`/job-cards/${id}`, { scroll: false });
-    if (currentStatus === "RECEIVED" || currentStatus === "INSPECTION") {
-      setBeforePhotoRequiredOpen(true);
+    if (checkInPromptHandledRef.current) return;
+
+    const isMobileViewport =
+      typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
+    if (!isMobileViewport) {
+      checkInPromptHandledRef.current = true;
+      router.replace(`/job-cards/${id}`, { scroll: false });
+      if (currentStatus === "RECEIVED" || currentStatus === "INSPECTION") {
+        setBeforePhotoRequiredOpen(true);
+      }
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    // Mobile fix: wait until at least one data pass is done, then resolve
+    // latest photos before deciding whether check-in is still required.
+    if (!jobCard && !singleFetchDone) return;
+    checkInPromptHandledRef.current = true;
+    router.replace(`/job-cards/${id}`, { scroll: false });
+
+    void (async () => {
+      let resolved = useJobCardStore.getState().jobCards.find((j) => j.id === id) ?? jobCard;
+
+      const hasBeforeLocal =
+        hasBeforeInspectionPhoto(resolved?.inspectionPhotos) ||
+        Boolean(resolved?.checkInCompletedAt);
+
+      if (!hasBeforeLocal) {
+        try {
+          const refreshed = await refreshJobCardFromServer(id);
+          if (refreshed) resolved = refreshed;
+        } catch {
+          // Non-blocking: fallback to currently available store state.
+        }
+      }
+
+      const hasBeforeResolved =
+        hasBeforeInspectionPhoto(resolved?.inspectionPhotos) ||
+        Boolean(resolved?.checkInCompletedAt);
+      const resolvedStatus = normalizeJobCardStatus(resolved?.status);
+
+      if (!hasBeforeResolved && (resolvedStatus === "RECEIVED" || resolvedStatus === "INSPECTION")) {
+        setBeforePhotoRequiredOpen(true);
+      }
+    })();
+  }, [searchParams, router, id, currentStatus, jobCard, singleFetchDone]);
   const [deliverVehicleSubmitting, setDeliverVehicleSubmitting] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [serviceChecklistRequiredOpen, setServiceChecklistRequiredOpen] = useState(false);
