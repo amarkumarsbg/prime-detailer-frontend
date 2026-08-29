@@ -63,7 +63,22 @@ export function InvoiceStatusBadge({
   );
 }
 
-export function QuotationStatusBadge({ status }: { status: QuotationStatus }) {
-  const config = QUOTATION_STATUS_CONFIG[status];
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+export function QuotationStatusBadge({
+  status,
+  className,
+}: {
+  status: QuotationStatus | string | undefined | null;
+  className?: string;
+}) {
+  const normalized = (status ?? "").toString().trim().toUpperCase();
+  const config =
+    normalized && Object.prototype.hasOwnProperty.call(QUOTATION_STATUS_CONFIG, normalized)
+      ? QUOTATION_STATUS_CONFIG[normalized as QuotationStatus]
+      : { label: (status ?? "Unknown").toString() || "Unknown", variant: "secondary" as const };
+
+  return (
+    <Badge variant={config.variant} className={className}>
+      {config.label}
+    </Badge>
+  );
 }

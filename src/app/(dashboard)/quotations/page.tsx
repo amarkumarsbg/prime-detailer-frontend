@@ -480,9 +480,9 @@ export default function QuotationsPage() {
         : ""
     );
     setFormPartLines(q.parts ?? []);
-    setFormServiceIds(new Set(q.services.map((s) => s.serviceCatalogId)));
+    setFormServiceIds(new Set((q.services ?? []).map((s) => s.serviceCatalogId)));
     const customs: Record<string, number> = {};
-    for (const s of q.services) {
+    for (const s of q.services ?? []) {
       if (s.isCustomPrice || s.priceSource === "CUSTOM") {
         customs[s.serviceCatalogId] = s.price;
       }
@@ -868,7 +868,7 @@ export default function QuotationsPage() {
       return;
     }
     if (!quotationCanConvertToJob(q.status)) return;
-    if (q.services.length === 0) {
+    if ((q.services ?? []).length === 0) {
       toast.error("Add at least one service", {
         description: "This quotation has no line items to carry over to a job card.",
       });
@@ -881,7 +881,7 @@ export default function QuotationsPage() {
     const jobNumber = getNextJobNumber();
     const now = new Date().toISOString();
 
-    const serviceItems: ServiceItem[] = q.services.map((s, idx) => {
+    const serviceItems: ServiceItem[] = (q.services ?? []).map((s, idx) => {
       const cat = catalog.find((c) => c.id === s.serviceCatalogId);
       const catalogPrice =
         s.catalogPrice ??
@@ -1059,7 +1059,7 @@ export default function QuotationsPage() {
       render: (item: Quotation) => (
         <span className="text-muted-foreground line-clamp-2 max-w-[180px]">
           {[
-            ...item.services.map((s) => s.name),
+            ...(item.services ?? []).map((s) => s.name),
             ...(item.parts ?? []).map((p) => p.name),
           ].join(", ")}
         </span>
@@ -1956,11 +1956,11 @@ export default function QuotationsPage() {
                     </div>
                   )}
                 </div>
-                {selectedQuotation.services.length > 0 && (
+                {(selectedQuotation.services ?? []).length > 0 && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Services</p>
                     <ul className="space-y-1">
-                      {selectedQuotation.services.map((s) => (
+                      {(selectedQuotation.services ?? []).map((s) => (
                         <li key={s.serviceCatalogId} className="flex justify-between gap-3 text-sm">
                           <span className="min-w-0 truncate">{s.name}</span>
                           <span className="shrink-0 tabular-nums">{formatCurrency(s.price)}</span>
