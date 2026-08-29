@@ -31,9 +31,10 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
+import { useServiceCategoryStore } from "@/store/service-category-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { isGstRegistered } from "@/lib/gst-tax";
-import type { SegmentPricing, ServiceCatalogItem } from "@/types";
+import type { SegmentPricing, ServiceCatalogItem, ServiceCategoryRecord } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -137,6 +138,8 @@ export function AddServicePackageDialog({
 }: AddServicePackageDialogProps) {
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
+  const categoryRecords = useServiceCategoryStore((s) => s.categories);
+  const upsertCategory = useServiceCategoryStore((s) => s.upsert);
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const gstRegistrationStatus = useSettingsStore((s) => s.gstRegistrationStatus);
   const gstOn = isGstRegistered(gstRegistrationStatus);
@@ -179,23 +182,48 @@ export function AddServicePackageDialog({
 
   const categories = useMemo(
     () =>
-      Array.from(new Set([...catalog.map((s) => s.category), ...extraCategories])).sort((a, b) =>
-        a.localeCompare(b)
-      ),
-    [catalog, extraCategories]
+      Array.from(
+        new Set([
+          ...categoryRecords.map((c) => c.name),
+          ...catalog.map((s) => s.category),
+          ...extraCategories,
+        ])
+      ).sort((a, b) => a.localeCompare(b)),
+    [categoryRecords, catalog, extraCategories]
   );
 
   const handleCreateCategory = (e: React.FormEvent) => {
     e.preventDefault();
     const name = catName.trim();
+    const slug = catSlug.trim() || slugifyCategoryName(name);
+    const order = Math.max(0, parseInt(catOrder, 10) || 0);
     if (!name) {
       toast.error("Category name is required");
       return;
     }
-    if (extraCategories.includes(name) || catalog.some((s) => s.category === name)) {
+    if (!slug) {
+      toast.error("Category slug is required");
+      return;
+    }
+
+    const nameLower = name.toLowerCase();
+    const slugLower = slug.toLowerCase();
+    const hasDuplicateName = categoryRecords.some((c) => c.name.trim().toLowerCase() === nameLower);
+    const hasDuplicateSlug = categoryRecords.some((c) => c.slug.trim().toLowerCase() === slugLower);
+    if (hasDuplicateName || hasDuplicateSlug) {
       toast.error("A category with this name already exists");
       return;
     }
+
+    const row: ServiceCategoryRecord = {
+      id: `cat-${Date.now()}`,
+      name,
+      slug,
+      order,
+      bikeOnly: catBikeOnly,
+    };
+    upsertCategory(row);
+
     setExtraCategories((prev) => [...prev, name]);
     setAddForm((f) => ({ ...f, category: name }));
     setCategoryDialogOpen(false);

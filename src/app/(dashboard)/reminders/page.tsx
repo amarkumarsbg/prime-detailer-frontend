@@ -261,7 +261,7 @@ export default function RemindersPage() {
   const storesReady = useDashboardStoresReady();
   useAutoReminderWhatsApp();
   useEffect(() => {
-    void ensureDomainResources(["serviceReminders", "jobCards", "invoices"]);
+    void ensureDomainResources(["serviceReminders", "jobCards", "invoices", "appSettings"]);
   }, []);
   const reminders = useScopedReminders();
   const { viewingLabel } = useBranchScope();

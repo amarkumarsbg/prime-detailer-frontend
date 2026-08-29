@@ -45,6 +45,28 @@ export function isCategoryReminderType(type: ReminderType): boolean {
   return (CATEGORY_REMINDER_TYPES as readonly ReminderType[]).includes(type);
 }
 
+function resolveCategoryRef(
+  categoryRef: string | undefined,
+  categoryLabelById: Map<string, { name: string; slug: string }>
+): { id: string; name: string; slug: string } | null {
+  const raw = categoryRef?.trim();
+  if (!raw) return null;
+
+  const byId = categoryLabelById.get(raw);
+  if (byId) {
+    return { id: raw, name: byId.name, slug: byId.slug };
+  }
+
+  const needle = raw.toLowerCase();
+  for (const [id, meta] of categoryLabelById.entries()) {
+    if (meta.name.trim().toLowerCase() === needle || meta.slug.trim().toLowerCase() === needle) {
+      return { id, name: meta.name, slug: meta.slug };
+    }
+  }
+
+  return { id: raw, name: raw, slug: raw };
+}
+
 /** Collect unique category ReminderTypes from completed job services. */
 export function reminderTypesFromJobServices(
   services: ServiceItem[],
@@ -54,13 +76,12 @@ export function reminderTypesFromJobServices(
   const out = new Set<ReminderType>();
   for (const line of services) {
     const catalog = catalogById.get(line.serviceCatalogId);
-    const catId = catalog?.category;
-    const catMeta = catId ? categoryLabelById.get(catId) : undefined;
+    const cat = resolveCategoryRef(catalog?.category, categoryLabelById);
     const mapped = mapServiceToReminderType({
       name: line.name ?? catalog?.name,
       category: catalog?.category,
-      categoryName: catMeta?.name,
-      categorySlug: catMeta?.slug,
+      categoryName: cat?.name,
+      categorySlug: cat?.slug,
       isHighEnd: catalog?.isHighEnd === true,
     });
     if (mapped && isCategoryReminderType(mapped)) out.add(mapped);
@@ -95,13 +116,14 @@ export function serviceCategoriesFromJobServices(
   for (const line of services) {
     const catalog = catalogById.get(line.serviceCatalogId);
     if (!catalog || catalog.isHighEnd === true) continue;
-    const catId = catalog.category?.trim();
-    if (!catId) continue;
-    const meta = categoryLabelById.get(catId);
-    const name = meta?.name?.trim() || catId;
-    const slug = meta?.slug?.trim() || catId;
-    if (!out.has(catId)) {
-      out.set(catId, { categoryId: catId, name, slug });
+    const cat = resolveCategoryRef(catalog.category, categoryLabelById);
+    if (!cat) continue;
+    const categoryId = cat.id.trim();
+    if (!categoryId) continue;
+    const name = cat.name.trim() || categoryId;
+    const slug = cat.slug.trim() || categoryId;
+    if (!out.has(categoryId)) {
+      out.set(categoryId, { categoryId, name, slug });
     }
   }
   return [...out.values()];

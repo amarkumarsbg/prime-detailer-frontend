@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ServiceCatalogItem } from "@/types";
+import { useEffect, useMemo, useState } from "react";
+import type { ServiceCatalogItem, ServiceCategoryRecord } from "@/types";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import { AddAddonDialog } from "@/components/services/add-addon-dialog";
@@ -51,6 +51,7 @@ export default function ServicesPage() {
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
   const removeFromCatalog = useServiceCatalogStore((s) => s.removeFromCatalog);
   const categoryRecords = useServiceCategoryStore((s) => s.categories);
+  const setCategories = useServiceCategoryStore((s) => s.setCategories);
 
   const [search, setSearch] = useState("");
   const [mainTab, setMainTab] = useState("packages");
@@ -67,6 +68,78 @@ export default function ServicesPage() {
   const [addonEdit, setAddonEdit] = useState<ServiceCatalogItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ServiceCatalogItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const existingKeys = new Set<string>();
+    for (const row of categoryRecords) {
+      existingKeys.add(row.name.trim().toLowerCase());
+      existingKeys.add(row.slug.trim().toLowerCase());
+    }
+
+    const missingNames = Array.from(
+      new Set(
+        catalog
+          .map((s) => s.category?.trim())
+          .filter((v): v is string => Boolean(v && v.length > 0))
+      )
+    ).filter((name) => {
+      const key = name.toLowerCase();
+      return !existingKeys.has(key);
+    });
+
+    if (missingNames.length === 0) return;
+
+    const slugify = (name: string): string => {
+      const s = name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      return s || "category";
+    };
+
+    setCategories((prev) => {
+      const next = [...prev];
+      const takenIds = new Set(next.map((r) => r.id));
+      const takenNameOrSlug = new Set<string>();
+      for (const row of next) {
+        takenNameOrSlug.add(row.name.trim().toLowerCase());
+        takenNameOrSlug.add(row.slug.trim().toLowerCase());
+      }
+
+      let maxOrder = next.reduce((m, r) => Math.max(m, r.order || 0), 0);
+
+      for (const rawName of missingNames) {
+        const name = rawName.trim();
+        const slug = slugify(name);
+        const nameKey = name.toLowerCase();
+        const slugKey = slug.toLowerCase();
+        if (takenNameOrSlug.has(nameKey) || takenNameOrSlug.has(slugKey)) continue;
+
+        const baseId = `cat-${slug}`;
+        let id = baseId;
+        let seq = 2;
+        while (takenIds.has(id)) {
+          id = `${baseId}-${seq}`;
+          seq += 1;
+        }
+
+        const row: ServiceCategoryRecord = {
+          id,
+          name,
+          slug,
+          order: ++maxOrder,
+          bikeOnly: false,
+        };
+        next.push(row);
+        takenIds.add(id);
+        takenNameOrSlug.add(nameKey);
+        takenNameOrSlug.add(slugKey);
+      }
+
+      return next.sort((a, b) => a.order - b.order);
+    });
+  }, [catalog, categoryRecords, setCategories]);
 
   const extraForDialog = useMemo(
     () => [...categoryRecords.map((c) => c.name), ...inlineNewCategories],

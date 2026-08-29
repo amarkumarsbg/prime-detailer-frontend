@@ -26,6 +26,8 @@ import {
   buildNotificationBranchContext,
   filterNotificationsByBranch,
 } from "@/lib/notification-branch-scope";
+import { normalizeServiceReminder } from "@/lib/reminder-schedule";
+import { useSettingsStore } from "@/store/settings-store";
 
 /** Job cards scoped to the header branch (or all when org-wide). */
 export function useScopedJobCards() {
@@ -77,10 +79,19 @@ export function useScopedPickupRequests() {
 export function useScopedReminders() {
   const reminders = useReminderStore((s) => s.reminders);
   const jobCards = useJobCardStore((s) => s.jobCards);
+  const leadDays = useSettingsStore((s) => s.reminderLeadDays);
   const { selectedBranchId } = useBranchScope();
   return useMemo(
-    () => filterRemindersByBranch(reminders, jobCards, selectedBranchId),
-    [reminders, jobCards, selectedBranchId]
+    () => {
+      const scoped = filterRemindersByBranch(reminders, jobCards, selectedBranchId);
+      // Recompute status live from current leadDays so UI reflects settings immediately.
+      return scoped.map((r) =>
+        r.status === "COMPLETED" || r.status === "DISMISSED"
+          ? r
+          : normalizeServiceReminder(r, leadDays)
+      );
+    },
+    [reminders, jobCards, selectedBranchId, leadDays]
   );
 }
 

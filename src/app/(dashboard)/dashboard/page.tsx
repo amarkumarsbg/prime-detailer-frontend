@@ -29,6 +29,7 @@ import {
   appointmentsScheduledToday,
   upcomingReservations,
 } from "@/lib/appointment-reminders";
+import { normalizeReminderKind } from "@/lib/reminder-schedule";
 import { useReservationReminders } from "@/hooks/use-reservation-reminders";
 import { useReminderStore } from "@/store/reminder-store";
 import {
@@ -416,7 +417,9 @@ export default function DashboardPage() {
     }
 
     const overdueReminders = scopedReminders.filter(
-      (r) => r.status === "OVERDUE" || r.status === "DUE"
+      (r) =>
+        normalizeReminderKind(r.kind) === "SERVICE" &&
+        (r.status === "OVERDUE" || r.status === "DUE")
     );
     if (overdueReminders.length > 0) {
       items.push({

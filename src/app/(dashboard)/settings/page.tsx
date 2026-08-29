@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn, formatDate } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
+import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import { useStaffRewardStore } from "@/store/staff-reward-store";
 import {
@@ -185,9 +186,41 @@ export default function SettingsPage() {
   const setReminderLeadDays = useSettingsStore((s) => s.setReminderLeadDays);
   const setReminderPaymentFrequency = useSettingsStore((s) => s.setReminderPaymentFrequency);
   const setReminderCategoryFrequency = useSettingsStore((s) => s.setReminderCategoryFrequency);
+  const serviceCatalog = useServiceCatalogStore((s) => s.catalog);
   const serviceCategories = useServiceCategoryStore((s) => s.categories);
-  /** All Service → Categories rows (including PPF / Ceramic). */
-  const reminderServiceCategories = [...serviceCategories].sort((a, b) => a.order - b.order);
+  /** Reminder categories: prefer category records; fallback to categories present in service catalog rows. */
+  const reminderServiceCategories = useMemo(() => {
+    if (serviceCategories.length > 0) {
+      return [...serviceCategories].sort((a, b) => a.order - b.order);
+    }
+
+    const names = Array.from(
+      new Set(
+        serviceCatalog
+          .map((s) => s.category?.trim())
+          .filter((v): v is string => Boolean(v && v.length > 0))
+      )
+    );
+
+    const slugify = (name: string): string => {
+      const s = name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      return s || "category";
+    };
+
+    return names
+      .sort((a, b) => a.localeCompare(b))
+      .map((name, idx) => ({
+        id: name,
+        name,
+        slug: slugify(name),
+        order: idx + 1,
+        bikeOnly: false,
+      }));
+  }, [serviceCategories, serviceCatalog]);
 
   const staffRewardSettings = useStaffRewardStore((s) => s.settings);
   const updateStaffRewardSettings = useStaffRewardStore((s) => s.updateSettings);

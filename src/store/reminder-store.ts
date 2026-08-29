@@ -60,13 +60,15 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
   reminders: [],
 
   addReminder: async (reminder) => {
-    const normalized = normalizeServiceReminder(reminder);
+    const leadDays = useSettingsStore.getState().reminderLeadDays;
+    const normalized = normalizeServiceReminder(reminder, leadDays);
     await putCollectionDocument("serviceReminders", normalized.id, normalized);
     set((state) => ({ reminders: [...state.reminders, normalized] }));
   },
 
   addReminders: async (newReminders) => {
-    const normalized = normalizeServiceReminders(newReminders);
+    const leadDays = useSettingsStore.getState().reminderLeadDays;
+    const normalized = normalizeServiceReminders(newReminders, leadDays);
     for (const r of normalized) {
       await putCollectionDocument("serviceReminders", r.id, r);
     }
@@ -79,7 +81,8 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
     if (updates.status === "COMPLETED" && prev.status === "COMPLETED") return;
     if (updates.status === "DISMISSED" && prev.status === "DISMISSED") return;
 
-    const next = normalizeServiceReminder({ ...prev, ...updates });
+    const leadDays = useSettingsStore.getState().reminderLeadDays;
+    const next = normalizeServiceReminder({ ...prev, ...updates }, leadDays);
     set((state) => ({
       reminders: state.reminders.map((r) => (r.id === id ? next : r)),
     }));

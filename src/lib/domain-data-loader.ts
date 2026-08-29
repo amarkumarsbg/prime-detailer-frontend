@@ -253,8 +253,9 @@ async function loadOne(resource: DomainResource): Promise<void> {
     }
     case "serviceReminders": {
       const items = await getCollectionItems<ServiceReminder>("serviceReminders");
+      const leadDays = useSettingsStore.getState().reminderLeadDays;
       useReminderStore.setState({
-        reminders: normalizeServiceReminders(items),
+        reminders: normalizeServiceReminders(items, leadDays),
       });
       return;
     }

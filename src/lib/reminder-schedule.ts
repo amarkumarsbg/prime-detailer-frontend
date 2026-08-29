@@ -216,15 +216,26 @@ export function normalizeReminderKind(kind: string | undefined | null): Reminder
   return kind === "PAYMENT" ? "PAYMENT" : "SERVICE";
 }
 
-export function normalizeServiceReminder(raw: ServiceReminder): ServiceReminder {
+export function normalizeServiceReminder(
+  raw: ServiceReminder,
+  leadDays?: number
+): ServiceReminder {
   const kind = normalizeReminderKind(raw.kind);
   const frequency =
     raw.frequency === "CUSTOM"
       ? "CUSTOM"
       : parseReminderFrequency(raw.frequency, "MONTHLY");
+
+  // Recompute status from dueDate + leadDays unless already closed.
+  let status = raw.status;
+  if (status !== "COMPLETED" && status !== "DISMISSED") {
+    status = computeReminderStatus(raw.dueDate, leadDays ?? 7);
+  }
+
   return {
     ...raw,
     kind,
+    status,
     frequency: raw.frequency === "CUSTOM" ? "CUSTOM" : frequency,
     periodKey:
       raw.periodKey ??
@@ -234,6 +245,6 @@ export function normalizeServiceReminder(raw: ServiceReminder): ServiceReminder 
   };
 }
 
-export function normalizeServiceReminders(list: ServiceReminder[]): ServiceReminder[] {
-  return list.map(normalizeServiceReminder);
+export function normalizeServiceReminders(list: ServiceReminder[], leadDays?: number): ServiceReminder[] {
+  return list.map((r) => normalizeServiceReminder(r, leadDays));
 }
