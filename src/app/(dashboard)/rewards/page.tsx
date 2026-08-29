@@ -145,6 +145,7 @@ export default function RewardsPage() {
 
     return {
       ...rawSettings,
+      companyTargetRevenueType: "INVOICES",
       companyTargetFrequencyTiers: migratedFrequencyTiers,
     };
   };
@@ -386,7 +387,7 @@ export default function RewardsPage() {
       supervisorSharePercent: settingsDraft.supervisorSharePercent,
       applicatorSharePercent: settingsDraft.applicatorSharePercent,
       companyTargetEnabled: settingsDraft.companyTargetEnabled,
-      companyTargetRevenueType: settingsDraft.companyTargetRevenueType,
+      companyTargetRevenueType: "INVOICES",
       companyTargetPeriod: settingsDraft.companyTargetPeriod,
       companyTargetTiers: currentTiers,
       companyTargetFrequencyTiers: settingsDraft.companyTargetFrequencyTiers,
@@ -914,23 +915,8 @@ export default function RewardsPage() {
             <CardContent className="grid gap-4 sm:grid-cols-2">
 
               <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                <Label>Target Type</Label>
-                <Select
-                  value={settingsDraft.companyTargetRevenueType || "SERVICES"}
-                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                  onValueChange={(v) =>
-                    patchSettingsDraft("companyTargetRevenueType", v as any)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SERVICES">Services</SelectItem>
-                    <SelectItem value="COUNTER_SALE">Counter Sale (Parts)</SelectItem>
-                    <SelectItem value="BOTH">Services + Counter Sale</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Revenue Basis</Label>
+                <Input value="Invoices (valid billed totals)" disabled className="bg-muted" />
               </div>
 
               <div className="space-y-1.5 col-span-2 sm:col-span-1">

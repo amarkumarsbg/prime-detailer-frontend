@@ -245,6 +245,8 @@ export function AccountingDashboard() {
       }),
     [branchInvoices, periodAdvances, branchJobs, memberships, packages, dateFilter]
   );
+  const companyRevenue = incomeReceipts.invoiceRevenue;
+  const companyRevenueCount = incomeReceipts.invoiceCount;
   // Avoid double counting: membership-origin billing is represented under invoice revenue.
   const totalIncome =
     Math.round((incomeReceipts.invoiceRevenue + incomeReceipts.advances) * 100) / 100;
@@ -285,11 +287,15 @@ export function AccountingDashboard() {
     const prevIncome =
       Math.round((prevReceipts.invoiceRevenue + prevReceipts.advances) * 100) / 100;
     return {
+      companyRevenue: prevReceipts.invoiceRevenue,
       income: prevIncome,
       expenses: totalExpenseCashOutInPeriod(branchExpenses, branchPurchases, compareFilter),
     };
   }, [compareFilter, branchInvoices, branchJobs, branchExpenses, branchPurchases, memberships, packages]);
 
+  const companyRevenueDelta = compareMetrics
+    ? percentChange(companyRevenue, compareMetrics.companyRevenue)
+    : null;
   const incomeDelta = compareMetrics
     ? percentChange(totalIncome, compareMetrics.income)
     : null;
@@ -559,31 +565,22 @@ export function AccountingDashboard() {
           {/* KPI row */}
           <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <MetricCard
-              title="Total Income"
-              value={totalIncome}
+              title="Company Revenue"
+              value={companyRevenue}
               valueClass="text-emerald-600 dark:text-emerald-400"
-              subtitle="All revenue streams"
+              subtitle="Total bill value (paid + unpaid)"
               icon={TrendingUp}
               iconWrap="bg-emerald-500 text-white"
               headerBg="bg-emerald-50/90 dark:bg-emerald-950/30"
-              delta={incomeDelta}
+              delta={companyRevenueDelta}
               breakdownTitle="Calculation Breakdown"
-              breakdownNote="Total Income = Non-draft invoice totals created during this period, plus unbilled advances. Paid, partially paid, and unpaid bills are all counted once created."
+              breakdownNote="Company Revenue = Non-draft invoice totals created in the selected period, regardless of payment status (paid, partially paid, or unpaid)."
               breakdown={[
                 {
-                  label: `Invoice Revenue (${incomeReceipts.invoiceCount})`,
-                  amount: incomeReceipts.invoiceRevenue,
+                  label: `Invoice Revenue (${companyRevenueCount})`,
+                  amount: companyRevenue,
                   dot: "bg-emerald-500",
                 },
-                ...(incomeReceipts.advances > 0
-                  ? [
-                      {
-                        label: "Unbilled Advances",
-                        amount: incomeReceipts.advances,
-                        dot: "bg-blue-500",
-                      },
-                    ]
-                  : []),
               ]}
             />
             <MetricCard

@@ -45,6 +45,13 @@ function nextTargetId(existing: StaffTarget[]): string {
   return `st-${Date.now()}-${existing.length}`;
 }
 
+function isJoiningDayEligible(joiningDate?: string): boolean {
+  if (!joiningDate) return false;
+  const d = new Date(joiningDate);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getUTCDate() <= 5;
+}
+
 export type StaffRewardMutationResult =
   | { ok: true; entry?: StaffRewardLedgerEntry; target?: StaffTarget }
   | { ok: false; error: string };
@@ -261,12 +268,18 @@ export const useStaffRewardStore = create<StaffRewardStoreState>((set, get) => (
     let skipped = 0;
 
     const staffStoreStaff = useStaffStore.getState().staff;
+    const staffById = new Map(staffStoreStaff.map((s) => [s.id, s] as const));
     const superAdminIds = new Set(
       staffStoreStaff.filter((s) => s.role === "SUPER_ADMIN").map((s) => s.id)
     );
 
     for (const draft of drafts) {
       if (superAdminIds.has(draft.staffId)) {
+        skipped += 1;
+        continue;
+      }
+      const member = staffById.get(draft.staffId);
+      if (!member || !isJoiningDayEligible(member.joiningDate)) {
         skipped += 1;
         continue;
       }

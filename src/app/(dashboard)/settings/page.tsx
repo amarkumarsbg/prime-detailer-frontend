@@ -211,7 +211,7 @@ export default function SettingsPage() {
   const hasInitializedRef = useRef(false);
 
   const [companyTargetEnabled, setCompanyTargetEnabled] = useState(false);
-  const [companyTargetRevenueType, setCompanyTargetRevenueType] = useState<"SERVICES" | "COUNTER_SALE" | "BOTH">("SERVICES");
+  const [companyTargetRevenueType, setCompanyTargetRevenueType] = useState<"INVOICES">("INVOICES");
   const [companyTargetPeriod, setCompanyTargetPeriod] = useState<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY">("MONTHLY");
   const [companyTargetFrequencyTiers, setCompanyTargetFrequencyTiers] = useState<
     Record<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY", { targetAmount: number; rewardPercent: number }[]>
@@ -225,7 +225,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (dataReady && staffRewardSettings && !hasInitializedRef.current) {
       setCompanyTargetEnabled(!!staffRewardSettings.companyTargetEnabled);
-      setCompanyTargetRevenueType(staffRewardSettings.companyTargetRevenueType || "SERVICES");
+      setCompanyTargetRevenueType("INVOICES");
       
       const currentPeriod = staffRewardSettings.companyTargetPeriod || "MONTHLY";
       setCompanyTargetPeriod(currentPeriod);
@@ -1051,21 +1051,8 @@ export default function SettingsPage() {
                 <div className="space-y-3.5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label>Target Type</Label>
-                      <Select
-                        value={companyTargetRevenueType}
-                        disabled={!companyTargetEnabled}
-                        onValueChange={(v) => setCompanyTargetRevenueType(v as any)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="SERVICES">Services</SelectItem>
-                          <SelectItem value="COUNTER_SALE">Counter Sale (Parts)</SelectItem>
-                          <SelectItem value="BOTH">Services + Counter Sale</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label>Revenue Basis</Label>
+                      <Input value="Invoices (valid billed totals)" disabled className="bg-muted" />
                     </div>
 
                     <div className="space-y-1.5">

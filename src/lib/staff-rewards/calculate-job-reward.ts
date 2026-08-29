@@ -95,7 +95,7 @@ export function defaultStaffRewardSettings(
     supervisorSharePercent: 30,
     applicatorSharePercent: 70,
     companyTargetEnabled: false,
-    companyTargetRevenueType: "SERVICES",
+    companyTargetRevenueType: "INVOICES",
     companyTargetPeriod: "MONTHLY",
     companyTargetTiers: [
       { targetAmount: 0, rewardPercent: 0 },
@@ -359,13 +359,128 @@ export function calculateJobReward(opts: {
 
 export interface CompanyTargetPeriodResult {
   periodLabel: string;
+  periodType: "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY";
+  periodMonth: number;
+  periodYear: number;
   revenue: number;
   achievedTierIndex: number;
   targetAmount: number;
   rewardPercent: number;
   totalReward: number;
   sharePerStaff: number;
+  eligibleStaffCount: number;
   notEligible?: boolean;
+}
+
+type CompanyTargetInvoice = {
+  grandTotal?: number;
+  createdAt?: string;
+  status?: string;
+};
+
+type CompanyTargetStaffMember = {
+  role?: string;
+  joiningDate?: string;
+};
+
+function monthLabel(month: number): string {
+  const monthsFull = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  return monthsFull[Math.min(11, Math.max(0, month - 1))] ?? "";
+}
+
+function parsedTimeOrNull(iso?: string): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : t;
+}
+
+function isJoiningDayEligible(joiningDate?: string): boolean {
+  if (!joiningDate) return false;
+  const d = new Date(joiningDate);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getUTCDate() <= 5;
+}
+
+function isValidInvoiceForCompanyRevenue(inv: CompanyTargetInvoice): boolean {
+  const status = String(inv.status ?? "").trim().toUpperCase();
+  if (status === "DRAFT" || status === "CANCELLED" || status === "VOID" || status === "DELETED") {
+    return false;
+  }
+  return Number.isFinite(inv.grandTotal ?? NaN);
+}
+
+function sumValidInvoiceRevenueInRange(
+  invoices: CompanyTargetInvoice[],
+  startTimeMs: number,
+  endTimeMs: number
+): number {
+  let revenue = 0;
+  for (const inv of invoices) {
+    if (!isValidInvoiceForCompanyRevenue(inv)) continue;
+    const createdAt = parsedTimeOrNull(inv.createdAt);
+    if (createdAt == null) continue;
+    if (createdAt < startTimeMs || createdAt > endTimeMs) continue;
+    revenue += inv.grandTotal ?? 0;
+  }
+  return roundReward(revenue);
+}
+
+function eligibleStaffCountForPeriod(
+  staffMembers: CompanyTargetStaffMember[] | undefined,
+  periodEndTimeMs: number,
+  fallbackCount: number
+): number {
+  if (!staffMembers || staffMembers.length === 0) {
+    return Math.max(1, fallbackCount);
+  }
+  let count = 0;
+  for (const s of staffMembers) {
+    if (String(s.role ?? "").toUpperCase() === "SUPER_ADMIN") continue;
+    if (!isJoiningDayEligible(s.joiningDate)) continue;
+    const joinTime = parsedTimeOrNull(s.joiningDate);
+    if (joinTime != null && joinTime > periodEndTimeMs) continue;
+    count += 1;
+  }
+  return Math.max(1, count);
+}
+
+function achievedTier(
+  revenue: number,
+  tiers: Array<{ targetAmount: number; rewardPercent: number }>
+): { index: number; targetAmount: number; rewardPercent: number } {
+  let achievedTierIndex = -1;
+  let maxAchievedTarget = -1;
+  for (let i = 0; i < tiers.length; i++) {
+    const t = tiers[i];
+    if (t && t.targetAmount > 0 && revenue >= t.targetAmount) {
+      if (t.targetAmount > maxAchievedTarget) {
+        maxAchievedTarget = t.targetAmount;
+        achievedTierIndex = i;
+      }
+    }
+  }
+  if (achievedTierIndex === -1) {
+    return { index: -1, targetAmount: 0, rewardPercent: 0 };
+  }
+  const winner = tiers[achievedTierIndex]!;
+  return {
+    index: achievedTierIndex,
+    targetAmount: winner.targetAmount,
+    rewardPercent: winner.rewardPercent,
+  };
 }
 
 export function getCompanyTargetResults(args: {
@@ -377,11 +492,11 @@ export function getCompanyTargetResults(args: {
     createdAt?: string;
   }[];
   invoices: {
-    source?: string;
     grandTotal?: number;
     createdAt?: string;
     status?: string;
   }[];
+  staffMembers?: CompanyTargetStaffMember[];
   activeStaffCount: number;
   settings: StaffRewardSettings;
   year: number;
@@ -392,252 +507,100 @@ export function getCompanyTargetResults(args: {
     return [];
   }
 
-  const revenueType = args.settings.companyTargetRevenueType || "SERVICES";
   const freqTiersMap = (args.settings.companyTargetFrequencyTiers || {}) as Record<string, any>;
-  const staffCount = args.activeStaffCount > 0 ? args.activeStaffCount : 1;
+  void args.jobCards;
 
-  const getRevenueInTimeRange = (startTimeMs: number, endTimeMs: number) => {
-    let jobRev = 0;
-    if (revenueType === "SERVICES" || revenueType === "BOTH") {
-      jobRev = args.jobCards
-        .filter((jc) => {
-          if (jc.status !== "DELIVERED") return false;
-          const dateStr = jc.actualDelivery || jc.createdAt;
-          if (!dateStr) return false;
-          const time = Date.parse(dateStr);
-          if (Number.isNaN(time)) return false;
-          return time >= startTimeMs && time <= endTimeMs;
-        })
-        .reduce((sum, jc) => sum + (jc.estimatedAmount ?? 0), 0);
-    }
+  const refDate = args.evaluationDate ?? new Date();
+  const year = args.year;
+  const month = refDate.getUTCMonth() + 1;
 
-    let invRev = 0;
-    if (revenueType === "COUNTER_SALE" || revenueType === "BOTH") {
-      invRev = args.invoices
-        .filter((inv) => {
-          if (inv.status === "CANCELLED") return false;
-          if (inv.source !== "COUNTER_SALE") return false;
-          const dateStr = inv.createdAt;
-          if (!dateStr) return false;
-          const time = Date.parse(dateStr);
-          if (Number.isNaN(time)) return false;
-          return time >= startTimeMs && time <= endTimeMs;
-        })
-        .reduce((sum, inv) => sum + (inv.grandTotal ?? 0), 0);
-    }
+  const monthStart = Date.UTC(year, month - 1, 1, 0, 0, 0, 0);
+  const monthEnd = Date.UTC(year, month, 0, 23, 59, 59, 999);
 
-    return jobRev + invRev;
-  };
+  const quarterStartMonth = Math.floor((month - 1) / 3) * 3 + 1;
+  const quarterStart = Date.UTC(year, quarterStartMonth - 1, 1, 0, 0, 0, 0);
+  const quarterEnd = Date.UTC(year, quarterStartMonth + 2, 0, 23, 59, 59, 999);
 
-  if (!args.joiningDate) {
-    const startYear = args.year;
-    const QUARTERS = [
-      {
-        label: "Monthly (January)",
-        start: new Date(Date.UTC(startYear, 0, 1, 0, 0, 0, 0)),
-        end: new Date(Date.UTC(startYear, 2, 31, 23, 59, 59, 999)),
-        configKey: "MONTHLY",
-      },
-      {
-        label: "Quarterly",
-        start: new Date(Date.UTC(startYear, 3, 1, 0, 0, 0, 0)),
-        end: new Date(Date.UTC(startYear, 5, 30, 23, 59, 59, 999)),
-        configKey: "QUARTERLY",
-      },
-      {
-        label: "Half Yearly",
-        start: new Date(Date.UTC(startYear, 6, 1, 0, 0, 0, 0)),
-        end: new Date(Date.UTC(startYear, 8, 30, 23, 59, 59, 999)),
-        configKey: "HALF_YEARLY",
-      },
-      {
-        label: "Yearly",
-        start: new Date(Date.UTC(startYear, 9, 1, 0, 0, 0, 0)),
-        end: new Date(Date.UTC(startYear, 11, 31, 23, 59, 59, 999)),
-        configKey: "YEARLY",
-      },
-    ];
+  const halfStartMonth = month <= 6 ? 1 : 7;
+  const halfStart = Date.UTC(year, halfStartMonth - 1, 1, 0, 0, 0, 0);
+  const halfEnd = Date.UTC(year, halfStartMonth + 5, 0, 23, 59, 59, 999);
 
-    const results: CompanyTargetPeriodResult[] = [];
+  const yearStart = Date.UTC(year, 0, 1, 0, 0, 0, 0);
+  const yearEnd = Date.UTC(year, 11, 31, 23, 59, 59, 999);
 
-    for (const q of QUARTERS) {
-      const startMs = q.start.getTime();
-      const endMs = q.end.getTime();
-      const revenue = getRevenueInTimeRange(startMs, endMs);
-
-      const configTiers = freqTiersMap[q.configKey] || [];
-      const tiers = configTiers.length > 0 ? configTiers : (args.settings.companyTargetTiers || []);
-
-      let achievedTierIndex = -1;
-      let maxAchievedTarget = -1;
-
-      for (let i = 0; i < tiers.length; i++) {
-        const t = tiers[i];
-        if (t && t.targetAmount > 0 && revenue >= t.targetAmount) {
-          if (t.targetAmount > maxAchievedTarget) {
-            maxAchievedTarget = t.targetAmount;
-            achievedTierIndex = i;
-          }
-        }
-      }
-
-      const t = achievedTierIndex !== -1 ? tiers[achievedTierIndex] : null;
-      const targetAmount = t ? t.targetAmount : 0;
-      const rewardPercent = t ? t.rewardPercent : 0;
-      const totalReward = roundReward(revenue * (rewardPercent / 100));
-      const sharePerStaff = roundReward(totalReward / staffCount);
-
-      results.push({
-        periodLabel: q.label,
-        revenue: roundReward(revenue),
-        achievedTierIndex,
-        targetAmount,
-        rewardPercent,
-        totalReward,
-        sharePerStaff,
-      });
-    }
-
-    return results;
-  }
-
-  // Joining date anchored cycle logic
-  const J = parseUTCDate(args.joiningDate);
-  let refDate: Date;
-  if (args.evaluationDate) {
-    refDate = args.evaluationDate;
-  } else {
-    const today = new Date();
-    if (today.getFullYear() === args.year) {
-      refDate = today;
-    } else {
-      refDate = new Date(Date.UTC(args.year, today.getMonth(), today.getDate(), today.getHours(), today.getMinutes(), today.getSeconds(), today.getMilliseconds()));
-    }
-  }
-
-  const isNotJoinedYet = refDate.getTime() < J.getTime();
-  const evaluationRef = isNotJoinedYet ? J : refDate;
-
-  const slots = [
-    { configKey: "MONTHLY", months: 1, labelPrefix: "Monthly" },
-    { configKey: "QUARTERLY", months: 3, labelPrefix: "Quarterly" },
-    { configKey: "HALF_YEARLY", months: 6, labelPrefix: "Half Yearly" },
-    { configKey: "YEARLY", months: 12, labelPrefix: "Yearly" },
+  const slots: Array<{
+    label: string;
+    configKey: "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY";
+    periodMonth: number;
+    periodYear: number;
+    startMs: number;
+    endMs: number;
+  }> = [
+    {
+      label: `Monthly (${monthLabel(month)})`,
+      configKey: "MONTHLY",
+      periodMonth: month,
+      periodYear: year,
+      startMs: monthStart,
+      endMs: monthEnd,
+    },
+    {
+      label: "Quarterly",
+      configKey: "QUARTERLY",
+      periodMonth: quarterStartMonth,
+      periodYear: year,
+      startMs: quarterStart,
+      endMs: quarterEnd,
+    },
+    {
+      label: "Half Yearly",
+      configKey: "HALF_YEARLY",
+      periodMonth: halfStartMonth,
+      periodYear: year,
+      startMs: halfStart,
+      endMs: halfEnd,
+    },
+    {
+      label: "Yearly",
+      configKey: "YEARLY",
+      periodMonth: 1,
+      periodYear: year,
+      startMs: yearStart,
+      endMs: yearEnd,
+    },
   ];
 
-  const results: CompanyTargetPeriodResult[] = [];
+  const joiningTime = parsedTimeOrNull(args.joiningDate);
+  const joiningDayEligible = isJoiningDayEligible(args.joiningDate);
 
-  for (const slot of slots) {
-    const F = slot.months;
-
-    let periodStart = J;
-    let periodEnd = addMonthsUTC(periodStart, F);
-
-    while (evaluationRef.getTime() >= periodEnd.getTime()) {
-      periodStart = periodEnd;
-      periodEnd = addMonthsUTC(periodStart, F);
-    }
-
-    // For MONTHLY slots, snap the boundaries to the calendar month that periodStart
-    // falls in (e.g. joiningDate Dec 31 → cycles start Jul 31, but revenue window
-    // should be Jul 1–Jul 31, not Jul 31–Aug 31).
-    let startMs: number;
-    let endMs: number;
-    if (slot.configKey === "MONTHLY") {
-      const calMonth = periodStart.getUTCMonth();
-      const calYear = periodStart.getUTCFullYear();
-      startMs = Date.UTC(calYear, calMonth, 1, 0, 0, 0, 0);
-      endMs = new Date(Date.UTC(calYear, calMonth + 1, 0, 23, 59, 59, 999)).getTime();
-    } else {
-      startMs = periodStart.getTime();
-      endMs = periodEnd.getTime() - 1;
-    }
-
-    let label = slot.labelPrefix;
-    if (slot.configKey === "MONTHLY") {
-      const monthsFull = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      label = `${slot.labelPrefix} (${monthsFull[periodStart.getUTCMonth()]})`;
-    }
-
-    let notEligible = isNotJoinedYet;
-    if (!notEligible && slot.configKey === "MONTHLY" && J.getUTCDate() > 5 && periodStart.getTime() === J.getTime()) {
-      notEligible = true;
-    }
-
-    if (notEligible) {
-      results.push({
-        periodLabel: label,
-        revenue: 0,
-        achievedTierIndex: -1,
-        targetAmount: 0,
-        rewardPercent: 0,
-        totalReward: 0,
-        sharePerStaff: 0,
-        notEligible: true,
-      });
-      continue;
-    }
-
-    const revenue = getRevenueInTimeRange(startMs, endMs);
-
+  return slots.map((slot) => {
+    const revenue = sumValidInvoiceRevenueInRange(args.invoices, slot.startMs, slot.endMs);
     const configTiers = freqTiersMap[slot.configKey] || [];
     const tiers = configTiers.length > 0 ? configTiers : (args.settings.companyTargetTiers || []);
+    const winner = achievedTier(revenue, tiers);
+    const totalReward = roundReward(revenue * (winner.rewardPercent / 100));
+    const eligibleStaffCount = eligibleStaffCountForPeriod(
+      args.staffMembers,
+      slot.endMs,
+      args.activeStaffCount
+    );
+    const joinedByPeriodEnd = joiningTime != null && joiningTime <= slot.endMs;
+    const notEligible = !(joiningDayEligible && joinedByPeriodEnd);
+    const sharePerStaff = notEligible ? 0 : roundReward(totalReward / eligibleStaffCount);
 
-    let achievedTierIndex = -1;
-    let maxAchievedTarget = -1;
-
-    for (let i = 0; i < tiers.length; i++) {
-      const t = tiers[i];
-      if (t && t.targetAmount > 0 && revenue >= t.targetAmount) {
-        if (t.targetAmount > maxAchievedTarget) {
-          maxAchievedTarget = t.targetAmount;
-          achievedTierIndex = i;
-        }
-      }
-    }
-
-    const t = achievedTierIndex !== -1 ? tiers[achievedTierIndex] : null;
-    const targetAmount = t ? t.targetAmount : 0;
-    const rewardPercent = t ? t.rewardPercent : 0;
-    const totalReward = roundReward(revenue * (rewardPercent / 100));
-    const sharePerStaff = roundReward(totalReward / staffCount);
-
-    results.push({
-      periodLabel: label,
-      revenue: roundReward(revenue),
-      achievedTierIndex,
-      targetAmount,
-      rewardPercent,
+    return {
+      periodLabel: slot.label,
+      periodType: slot.configKey,
+      periodMonth: slot.periodMonth,
+      periodYear: slot.periodYear,
+      revenue,
+      achievedTierIndex: winner.index,
+      targetAmount: winner.targetAmount,
+      rewardPercent: winner.rewardPercent,
       totalReward,
       sharePerStaff,
-    });
-  }
-
-  return results;
-}
-
-function parseUTCDate(dateStr: string): Date {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(year!, month! - 1, day!));
-}
-
-function addMonthsUTC(startDate: Date, months: number): Date {
-  const year = startDate.getUTCFullYear();
-  const month = startDate.getUTCMonth();
-  const day = startDate.getUTCDate();
-
-  const targetMonth = month + months;
-  const tempDate = new Date(Date.UTC(year, targetMonth, 1));
-  const targetYear = tempDate.getUTCFullYear();
-  const targetMonthActual = tempDate.getUTCMonth();
-
-  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonthActual + 1, 0)).getUTCDate();
-  const finalDay = Math.min(day, daysInTargetMonth);
-
-  return new Date(Date.UTC(targetYear, targetMonthActual, finalDay));
-}
-
-function getMonthName(date: Date): string {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return months[date.getUTCMonth()] || "";
+      eligibleStaffCount,
+      notEligible,
+    };
+  });
 }

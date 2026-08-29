@@ -69,6 +69,21 @@ import type { Branch, User, UserRole } from "@/types";
 
 type AuthSessionResponse = { accessToken: string; user: User; branch: Branch | null };
 
+const MONTH_LABELS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 const ALL_PERMISSIONS = PERMISSIONS_FOR_UI;
 
 function StaffAttendancePinCard({
@@ -159,6 +174,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const invoices = useInvoiceStore((s) => s.invoices);
 
   const settings = useStaffRewardStore((s) => s.settings);
+  const rewardLedger = useStaffRewardStore((s) => s.ledger);
   const staff = useStaffStore((s) => s.staff);
 
   const today = new Date();
@@ -180,17 +196,57 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     const allResults = getCompanyTargetResults({
       jobCards,
       invoices,
+      staffMembers: staff.filter((s) => s.isActive),
       activeStaffCount,
       settings,
       year: targetYear,
       joiningDate: member?.joiningDate || undefined,
     });
-    return allResults.filter((r) => r.periodLabel.startsWith("Monthly"));
-  }, [jobCards, invoices, activeStaffCount, settings, targetYear, member?.joiningDate]);
+    const selectedPeriod = settings.companyTargetPeriod || "MONTHLY";
+    return allResults.filter((r) => r.periodType === selectedPeriod);
+  }, [jobCards, invoices, staff, activeStaffCount, settings, targetYear, member?.joiningDate]);
 
   const totalCompanyTargetIncentive = useMemo(() => {
     return companyTargetResults.reduce((sum, r) => sum + r.sharePerStaff, 0);
   }, [companyTargetResults]);
+
+  const individualIncentiveRows = useMemo(() => {
+    const rows = MONTH_LABELS.map((label, index) => {
+      const month = index + 1;
+      const entries = rewardLedger.filter(
+        (entry) =>
+          entry.staffId === id &&
+          entry.periodYear === targetYear &&
+          entry.periodMonth === month &&
+          entry.status !== "CANCELLED"
+      );
+      const total = entries.reduce((sum, entry) => sum + entry.amount, 0);
+      const paidInPayroll = entries
+        .filter((entry) => entry.status === "PAID_IN_PAYROLL")
+        .reduce((sum, entry) => sum + entry.amount, 0);
+      const pending = entries
+        .filter((entry) => entry.status === "PENDING")
+        .reduce((sum, entry) => sum + entry.amount, 0);
+      return {
+        periodLabel: `Monthly (${label})`,
+        total,
+        paidInPayroll,
+        pending,
+        entries: entries.length,
+      };
+    });
+    return rows.filter((row) => row.entries > 0);
+  }, [rewardLedger, id, targetYear]);
+
+  const totalIndividualIncentive = useMemo(
+    () => individualIncentiveRows.reduce((sum, row) => sum + row.total, 0),
+    [individualIncentiveRows]
+  );
+
+  const combinedIncentiveTotal = useMemo(
+    () => totalIndividualIncentive + totalCompanyTargetIncentive,
+    [totalIndividualIncentive, totalCompanyTargetIncentive]
+  );
 
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -868,7 +924,24 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(totalCompanyTargetIncentive)}
                 </p>
-                <p className="text-sm text-muted-foreground">Company Target ({targetYear})</p>
+                <p className="text-sm text-muted-foreground">
+                  Company Share ({settings.companyTargetPeriod || "MONTHLY"}, {targetYear})
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {(totalIndividualIncentive !== 0 || totalCompanyTargetIncentive !== 0) && (
+          <Card>
+            <CardContent className="!flex !items-center gap-4 !px-5 !py-6 sm:!px-6 sm:!py-7">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                <IndianRupee className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(combinedIncentiveTotal)}
+                </p>
+                <p className="text-sm text-muted-foreground">Final Incentive = Individual Net + Company Share</p>
               </div>
             </CardContent>
           </Card>
@@ -884,7 +957,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                 Company Target Achieved Incentive
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Incentives earned when the company achieves its tier-wise targets. Shared equally among active staff.
+                Invoice-based company reward pool for the selected period, split equally among eligible active non-super-admin staff.
               </p>
             </div>
             <div className="w-32">
@@ -914,9 +987,11 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                     <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                       <th className="py-2.5 px-4 font-medium">Period</th>
                       <th className="py-2.5 px-4 font-medium text-right">Company Revenue</th>
-                      <th className="py-2.5 px-4 font-medium px-6 text-center">Target Achieved</th>
+                      <th className="py-2.5 px-6 font-medium text-center">Target Achieved</th>
+                      <th className="py-2.5 px-4 font-medium text-right">Tier Target</th>
                       <th className="py-2.5 px-4 font-medium text-right">Reward %</th>
-                      <th className="py-2.5 px-4 font-medium text-right">Total Incentive</th>
+                      <th className="py-2.5 px-4 font-medium text-right">Reward Pool</th>
+                      <th className="py-2.5 px-4 font-medium text-right">Eligible Staff</th>
                       <th className="py-2.5 px-4 font-medium text-right text-emerald-600 dark:text-emerald-400">Your Share</th>
                     </tr>
                   </thead>
@@ -939,10 +1014,16 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                             )}
                           </td>
                           <td className="py-2.5 px-4 text-right tabular-nums">
+                            {!isNotEligible && r.targetAmount > 0 ? formatCurrency(r.targetAmount) : "—"}
+                          </td>
+                          <td className="py-2.5 px-4 text-right tabular-nums">
                             {!isNotEligible && r.rewardPercent > 0 ? `${r.rewardPercent}%` : "—"}
                           </td>
                           <td className="py-2.5 px-4 text-right tabular-nums">
                             {!isNotEligible && r.totalReward > 0 ? formatCurrency(r.totalReward) : "—"}
+                          </td>
+                          <td className="py-2.5 px-4 text-right tabular-nums">
+                            {!isNotEligible ? r.eligibleStaffCount : "—"}
                           </td>
                           <td className={`py-2.5 px-4 text-right tabular-nums font-semibold ${!isNotEligible && r.sharePerStaff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                             {!isNotEligible && r.sharePerStaff > 0 ? formatCurrency(r.sharePerStaff) : "—"}
@@ -957,6 +1038,72 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
           </CardContent>
         </Card>
       )}
+
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <IndianRupee className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+              Individual Incentive
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Monthly incentive summary for this staff member based on reward ledger entries.
+            </p>
+          </div>
+          <div className="w-32">
+            <Select value={String(targetYear)} onValueChange={(v) => setTargetYear(Number(v))}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {individualIncentiveRows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No individual incentive entries available.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                    <th className="py-2.5 px-4 font-medium">Period</th>
+                    <th className="py-2.5 px-4 font-medium text-right">Entries</th>
+                    <th className="py-2.5 px-4 font-medium text-right">Total Incentive</th>
+                    <th className="py-2.5 px-4 font-medium text-right">Paid In Payroll</th>
+                    <th className="py-2.5 px-4 font-medium text-right">Pending</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {individualIncentiveRows.map((row) => (
+                    <tr key={row.periodLabel} className="border-b border-border/70 hover:bg-muted/10 transition-colors">
+                      <td className="py-2.5 px-4 font-medium">{row.periodLabel}</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums">{row.entries}</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums font-semibold">
+                        {formatCurrency(row.total)}
+                      </td>
+                      <td className="py-2.5 px-4 text-right tabular-nums text-blue-600 dark:text-blue-400">
+                        {row.paidInPayroll !== 0 ? formatCurrency(row.paidInPayroll) : "—"}
+                      </td>
+                      <td className="py-2.5 px-4 text-right tabular-nums text-amber-600 dark:text-amber-400">
+                        {row.pending !== 0 ? formatCurrency(row.pending) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {canEditAttendancePin && (
         <StaffAttendancePinCard

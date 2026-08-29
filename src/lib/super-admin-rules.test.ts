@@ -17,6 +17,7 @@ describe("SUPER_ADMIN exclusion rules", () => {
         name: "Mechanic Bob",
         role: "MECHANIC",
         branchId: "b-1",
+        joiningDate: "2026-08-01",
         isActive: true,
         email: "mech@example.com",
       } as User,
@@ -25,6 +26,7 @@ describe("SUPER_ADMIN exclusion rules", () => {
         name: "Super Admin",
         role: "SUPER_ADMIN",
         branchId: "b-1",
+        joiningDate: "2026-08-01",
         isActive: true,
         email: "super@example.com",
       } as User,
@@ -217,5 +219,44 @@ describe("SUPER_ADMIN exclusion rules", () => {
     const { added: added2 } = useStaffRewardStore.getState().recordJobDeliveryRewards(jobForMech);
     expect(added2.length).toBeGreaterThan(0);
     expect(added2[0].staffId).toBe("u-mech");
+  });
+
+  it("recordJobDeliveryRewards skips staff joined after 5th", () => {
+    useStaffStore.setState({
+      staff: [
+        {
+          id: "u-mech",
+          name: "Mechanic Bob",
+          role: "MECHANIC",
+          branchId: "b-1",
+          joiningDate: "2026-08-27",
+          isActive: true,
+          email: "mech@example.com",
+        } as User,
+      ],
+    });
+
+    useStaffRewardStore.setState({
+      settings: {
+        rewardMode: "FIXED_PER_JOB",
+        defaultFixedAmount: 100,
+        defaultPercent: 10,
+        supervisorSharePercent: 0,
+        applicatorSharePercent: 100,
+      } as any,
+    });
+
+    const job: JobRewardInput = {
+      id: "j-3",
+      jobNumber: "J-003",
+      mechanicId: "u-mech",
+      branchId: "b-1",
+      estimatedAmount: 500,
+      incentivePercent: 0,
+      incentiveAmount: 0,
+    };
+
+    const { added } = useStaffRewardStore.getState().recordJobDeliveryRewards(job);
+    expect(added.length).toBe(0);
   });
 });
