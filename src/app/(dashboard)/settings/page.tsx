@@ -63,7 +63,6 @@ import {
   MapPin,
   FileText,
   Scale,
-  Award,
   CalendarClock,
   ShieldCheck,
   Check,
@@ -189,13 +188,6 @@ export default function SettingsPage() {
   const serviceCategories = useServiceCategoryStore((s) => s.categories);
   /** All Service → Categories rows (including PPF / Ceramic). */
   const reminderServiceCategories = [...serviceCategories].sort((a, b) => a.order - b.order);
-
-  const defaultMechanicIncentivePercent = useSettingsStore((s) => s.defaultMechanicIncentivePercent);
-  const highEndIncentivePercent = useSettingsStore((s) => s.highEndIncentivePercent);
-  const incentiveCapPerJobStored = useSettingsStore((s) => s.incentiveCapPerJob);
-  const setDefaultMechanicIncentivePercent = useSettingsStore((s) => s.setDefaultMechanicIncentivePercent);
-  const setHighEndIncentivePercentStore = useSettingsStore((s) => s.setHighEndIncentivePercent);
-  const setIncentiveCapPerJobStore = useSettingsStore((s) => s.setIncentiveCapPerJob);
 
   const staffRewardSettings = useStaffRewardStore((s) => s.settings);
   const updateStaffRewardSettings = useStaffRewardStore((s) => s.updateSettings);
@@ -968,69 +960,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="incentives">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Award className="w-4 h-4" />
-                  Incentive Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />Default Mechanic Incentive (%)</Label>
-                      <Input
-                        type="number"
-                        value={String(defaultMechanicIncentivePercent)}
-                        onChange={(e) => setDefaultMechanicIncentivePercent(Number(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-1.5"><Percent className="w-3.5 h-3.5" />High-end Service Incentive (%)</Label>
-                      <Input
-                        type="number"
-                        value={String(highEndIncentivePercent)}
-                        onChange={(e) => setHighEndIncentivePercentStore(Number(e.target.value) || 0)}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5"><IndianRupee className="w-3.5 h-3.5" />Incentive Cap per Job (₹)</Label>
-                    <Input
-                      type="number"
-                      value={String(incentiveCapPerJobStored)}
-                      onChange={(e) => setIncentiveCapPerJobStore(Number(e.target.value) || 0)}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Per-category staff reward rates are configured under the{" "}
-                    <span className="font-medium text-foreground">Rewards</span> tab
-                    (Rewards by service category). Defaults above apply when a category has no rate.
-                  </p>
-                  <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 space-y-1">
-                    <Label className="flex items-center gap-1.5">
-                      <Gift className="w-3.5 h-3.5" />
-                      Referral wallet rewards
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Referrer and new-customer wallet amounts, % of job, minimum job total, and
-                      program on/off are configured on the{" "}
-                      <Link href="/referrals" className="font-medium text-primary underline-offset-2 hover:underline">
-                        Referrals
-                      </Link>{" "}
-                      page. Changes there apply immediately to pre-invoice and payment credits.
-                    </p>
-                  </div>
-                  <Separator />
-                  <Button onClick={() => handleSave("Incentive settings")}>
-                    <Save className="w-4 h-4 mr-2" />Save Changes
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
+          <div className="grid grid-cols-1 gap-4 items-start">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-0.5">

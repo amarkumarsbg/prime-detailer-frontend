@@ -43,7 +43,6 @@ import { useStaffRewardStore } from "@/store/staff-reward-store";
 import { useStaffStore } from "@/store/staff-store";
 import type {
   StaffRewardLedgerStatus,
-  StaffRewardMode,
   StaffTarget,
   StaffTargetMetric,
 } from "@/types";
@@ -749,155 +748,6 @@ export default function RewardsPage() {
         </TabsContent>
 
         <TabsContent value="settings" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">Reward calculation</CardTitle>
-              {canManage && (
-                <Button
-                  type="button"
-                  disabled={!settingsDirty}
-                  onClick={handleSaveSettings}
-                >
-                  Save settings
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Mode</Label>
-                <Select
-                  value={settingsDraft.rewardMode}
-                  disabled={!canManage}
-                  onValueChange={(v) =>
-                    patchSettingsDraft("rewardMode", v as StaffRewardMode)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PERCENT_OF_JOB">Percent of job</SelectItem>
-                    <SelectItem value="FIXED_PER_JOB">Fixed per job</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Default percent</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.1"
-                  disabled={!canManage}
-                  value={settingsDraft.defaultPercent}
-                  onChange={(e) =>
-                    patchSettingsDraft("defaultPercent", Number(e.target.value) || 0)
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Default fixed amount (₹)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  disabled={!canManage}
-                  value={settingsDraft.defaultFixedAmount}
-                  onChange={(e) =>
-                    patchSettingsDraft(
-                      "defaultFixedAmount",
-                      Number(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium">Tier bonuses</p>
-                  <p className="text-xs text-muted-foreground">
-                    Enable monthly job-threshold tiers
-                  </p>
-                </div>
-                <Switch
-                  checked={settingsDraft.tiersEnabled}
-                  disabled={!canManage}
-                  onCheckedChange={(v) => patchSettingsDraft("tiersEnabled", v)}
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium">Time bonus</p>
-                  <p className="text-xs text-muted-foreground">
-                    Bonus when delivered early
-                  </p>
-                </div>
-                <Switch
-                  checked={settingsDraft.timeBonusEnabled}
-                  disabled={!canManage}
-                  onCheckedChange={(v) => patchSettingsDraft("timeBonusEnabled", v)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Time bonus threshold (minutes early)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  disabled={!canManage || !settingsDraft.timeBonusEnabled}
-                  value={settingsDraft.timeBonusMinutesThreshold}
-                  onChange={(e) =>
-                    patchSettingsDraft(
-                      "timeBonusMinutesThreshold",
-                      Number(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Time bonus percent</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  disabled={!canManage || !settingsDraft.timeBonusEnabled}
-                  value={settingsDraft.timeBonusPercent}
-                  onChange={(e) =>
-                    patchSettingsDraft(
-                      "timeBonusPercent",
-                      Number(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium">Late deduction</p>
-                  <p className="text-xs text-muted-foreground">
-                    Deduct when delivered after promise
-                  </p>
-                </div>
-                <Switch
-                  checked={settingsDraft.lateDeductionEnabled}
-                  disabled={!canManage}
-                  onCheckedChange={(v) =>
-                    patchSettingsDraft("lateDeductionEnabled", v)
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Late deduction percent</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  disabled={!canManage || !settingsDraft.lateDeductionEnabled}
-                  value={settingsDraft.lateDeductionPercent}
-                  onChange={(e) =>
-                    patchSettingsDraft(
-                      "lateDeductionPercent",
-                      Number(e.target.value) || 0
-                    )
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
           <Card className="mt-4">
             <CardHeader className="flex flex-row items-center justify-between pb-3 gap-3">
               <div className="space-y-0.5">
@@ -906,11 +756,23 @@ export default function RewardsPage() {
                   Enable rewards based on company-wide target achievements
                 </p>
               </div>
-              <Switch
-                checked={!!settingsDraft.companyTargetEnabled}
-                disabled={!canManage}
-                onCheckedChange={(v) => patchSettingsDraft("companyTargetEnabled", v)}
-              />
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={!!settingsDraft.companyTargetEnabled}
+                  disabled={!canManage}
+                  onCheckedChange={(v) => patchSettingsDraft("companyTargetEnabled", v)}
+                />
+                {canManage && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!settingsDirty}
+                    onClick={handleSaveSettings}
+                  >
+                    Save settings
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
 
