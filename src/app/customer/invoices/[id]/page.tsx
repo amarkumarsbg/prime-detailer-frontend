@@ -5,7 +5,7 @@ import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
 
@@ -75,9 +75,17 @@ export default function InvoiceDetailPage() {
               {formatDate(invoice.createdAt)}
             </p>
           </div>
-          <Badge className={cn("shrink-0 mt-1", STATUS_COLORS[status] || "")}>
-            {status.replace(/_/g, " ")}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0 mt-1">
+            <Badge className={cn(STATUS_COLORS[status] || "")}>
+              {status.replace(/_/g, " ")}
+            </Badge>
+            <Link href={`/public-invoice/${invoice.id}`} target="_blank">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <ExternalLink className="h-3.5 w-3.5" />
+                View Invoice
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

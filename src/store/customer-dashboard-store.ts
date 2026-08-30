@@ -3,7 +3,8 @@
 import { create } from "zustand";
 import type { Customer, JobCard, Invoice, Vehicle, CustomerMembership, WalletTransaction } from "@/types";
 import type { ServiceItem } from "@/types/job-card";
-import { apiGet } from "@/lib/api-client";
+import { buildApiUrl } from "@/lib/api-base";
+import { useCustomerAuthStore } from "@/store/customer-auth-store";
 
 // Helper function to calculate total paid from payments array
 function getTotalPaid(invoice: Invoice): number {
@@ -86,24 +87,41 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>((set, ge
   bootstrap: async () => {
     set({ isLoading: true, error: null });
     try {
-      const data = await apiGet<{
-        customer: Customer;
-        jobCards: JobCard[];
-        invoices: Invoice[];
-        vehicles: Vehicle[];
-        memberships: CustomerMembership[];
-        walletTransactions: WalletTransaction[];
-        serviceHistory: Array<{
-          id: string;
-          jobCardNumber: string;
-          date: string;
-          vehicle: string;
-          services: string[];
-          amount: number;
-          status: string;
-        }>;
-        rewardConfig?: RewardConfig;
-      }>("/api/customer/bootstrap");
+      // Use the customer JWT token, NOT the staff apiGet (which uses the staff token)
+      const token = useCustomerAuthStore.getState().accessToken;
+      const res = await fetch(buildApiUrl("/api/customer/bootstrap"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: "no-store",
+      });
+      const body = await res.json() as {
+        data?: {
+          customer: Customer;
+          jobCards: JobCard[];
+          invoices: Invoice[];
+          vehicles: Vehicle[];
+          memberships: CustomerMembership[];
+          walletTransactions: WalletTransaction[];
+          serviceHistory: Array<{
+            id: string;
+            jobCardNumber: string;
+            date: string;
+            vehicle: string;
+            services: string[];
+            amount: number;
+            status: string;
+          }>;
+          rewardConfig?: RewardConfig;
+        } | null;
+        error?: { message?: string } | null;
+      };
+
+      if (!res.ok || body.error || !body.data) {
+        const errorMessage = body.error?.message ?? "Failed to load customer data";
+        set({ error: errorMessage, isLoading: false });
+        return;
+      }
+
+      const data = body.data;
 
       set({
         customer: data.customer,

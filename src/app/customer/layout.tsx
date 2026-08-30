@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useCustomerAuthStore } from "@/store/customer-auth-store";
 import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { Button } from "@/components/ui/button";
 import { LogOut, Home, FileText, Car, MoreHorizontal, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound } from "lucide-react";
 import Link from "next/link";
@@ -17,6 +19,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const { isAuthenticated, user, logout, ensureValidSession } = useCustomerAuthStore();
   const { bootstrap } = useCustomerDashboardStore();
   const sessionValidatedRef = useRef(false);
+  const businessName = useSettingsStore((s) => s.businessName) || "Prime Detailers";
+  const businessLogo = useSettingsStore((s) => s.businessLogo);
+  const logoUrl = resolveUploadsPublicUrl(businessLogo);
 
   // Initialize session - wait for Zustand persist to hydrate from localStorage
   useEffect(() => {
@@ -208,13 +213,18 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex-col z-40">
-        {/* User profile header */}
+        {/* Brand header — company name + logo like staff sidebar */}
         <div className="flex items-center gap-3 h-16 px-4 shrink-0 border-b border-sidebar-border">
-          <div className="h-9 w-9 rounded-full bg-sidebar-active flex items-center justify-center shrink-0 text-sidebar-active-foreground text-sm font-bold">
-            {user?.name?.charAt(0)?.toUpperCase() || "C"}
-          </div>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shrink-0 border border-sidebar-border" />
+          ) : (
+            <div className="h-9 w-9 rounded-lg bg-sidebar-active flex items-center justify-center shrink-0">
+              <Car className="h-5 w-5 text-sidebar-active-foreground" />
+            </div>
+          )}
           <div className="min-w-0">
-            <p className="text-sm font-bold text-sidebar-accent-foreground truncate leading-tight">{user?.name || "Customer"}</p>
+            <p className="text-sm font-bold text-sidebar-accent-foreground truncate leading-tight">{businessName}</p>
             <p className="text-[11px] text-sidebar-foreground opacity-80">Customer Portal</p>
           </div>
         </div>
