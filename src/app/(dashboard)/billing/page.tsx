@@ -88,7 +88,8 @@ function BillingFromJobCardEffect() {
       toast.success("Invoice created", { description: result.invoiceNumber });
       const inv = useInvoiceStore.getState().invoices.find((i) => i.id === result.invoiceId);
       const businessName = useSettingsStore.getState().businessName;
-      if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
+      // Invoice created WhatsApp disabled — only 3 automated messages: check-in, ready, delivered
+      // if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
     }
     router.replace(`/billing/invoices/${encodeURIComponent(result.invoiceId)}`);
   }, [jobCardId, router]);

@@ -7,7 +7,8 @@ import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, FileText, Car, MoreHorizontal, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound } from "lucide-react";
+import { LogOut, Home, FileText, Car, MoreHorizontal, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const businessName = useSettingsStore((s) => s.businessName) || "Prime Detailers";
   const businessLogo = useSettingsStore((s) => s.businessLogo);
   const logoUrl = resolveUploadsPublicUrl(businessLogo);
+  const { resolvedTheme, setTheme } = useTheme();
 
   // Initialize session - wait for Zustand persist to hydrate from localStorage
   useEffect(() => {
@@ -45,7 +47,6 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
   // Check if we're on the login page (no auth required)
   const isLoginPage = pathname === "/customer/login";
-  const isChangePasswordPage = pathname === "/customer/more/change-password";
 
   // Check session and bootstrap data
   useEffect(() => {
@@ -59,12 +60,6 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       return;
     }
 
-    // Force password change before accessing any other page
-    if (user?.mustChangePassword && !isChangePasswordPage) {
-      router.replace("/customer/more/change-password");
-      return;
-    }
-
     // Validate session only once per mount (not on every isAuthenticated change)
     if (!sessionValidatedRef.current) {
       sessionValidatedRef.current = true;
@@ -73,7 +68,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
     // Bootstrap dashboard data
     void bootstrap();
-  }, [ready, isAuthenticated, user, router, ensureValidSession, bootstrap, isLoginPage, isChangePasswordPage, sessionValidatedRef]);
+  }, [ready, isAuthenticated, user, router, ensureValidSession, bootstrap, isLoginPage, sessionValidatedRef]);
 
   if (!isLoginPage && (!ready || !isAuthenticated)) {
     return (
@@ -164,18 +159,28 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             </h1>
           </div>
 
-          {/* Right: user avatar + name + logout */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="hidden md:flex items-center gap-2 mr-1">
+          {/* Right: theme toggle + logout (avatar moved to sidebar on desktop) */}
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Mobile only: show avatar in header */}
+            <div className="flex md:hidden items-center gap-2 mr-1">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
                 {user?.name?.charAt(0)?.toUpperCase() || "C"}
               </div>
-              <div className="text-right hidden lg:block">
-                <p className="text-sm font-semibold leading-tight">{user?.name || "Customer"}</p>
-                <p className="text-[10px] text-muted-foreground">Customer</p>
-              </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="h-9 px-2" title="Logout">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+              className="h-9 px-2"
+              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="h-9 px-2 md:hidden" title="Logout">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -262,8 +267,19 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="p-2.5 border-t border-sidebar-border">
+        {/* Customer profile + Logout */}
+        <div className="p-2.5 border-t border-sidebar-border space-y-1">
+          {/* Customer name + avatar */}
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl">
+            <div className="h-8 w-8 rounded-full bg-sidebar-active flex items-center justify-center text-sidebar-active-foreground text-sm font-bold shrink-0">
+              {user?.name?.charAt(0)?.toUpperCase() || "C"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-sidebar-accent-foreground truncate leading-tight">{user?.name || "Customer"}</p>
+              <p className="text-[10px] text-sidebar-foreground opacity-70">Customer</p>
+            </div>
+          </div>
+          <div className="border-t border-sidebar-border my-0.5" />
           <button
             type="button"
             onClick={handleLogout}

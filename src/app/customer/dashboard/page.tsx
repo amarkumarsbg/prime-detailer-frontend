@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useCustomerAuthStore } from "@/store/customer-auth-store";
 import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ClipboardList,
@@ -21,6 +22,17 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/utils";
+
+const JOB_STATUS_COLORS: Record<string, string> = {
+  RECEIVED: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  INSPECTION: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+  AWAITING_SERVICE: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  QUALITY_CHECK: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+  READY: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  INVOICED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  DELIVERED: "bg-slate-100 text-slate-700 dark:bg-slate-800/30 dark:text-slate-300",
+  CANCELLED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+};
 
 function getTotalPaid(invoice: any): number {
   return (invoice.payments || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
@@ -104,16 +116,23 @@ export default function CustomerDashboardPage() {
                     href={`/customer/jobs/${currentJob.id}`}
                     className="block group"
                   >
-                    <div className="flex items-start justify-between gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm group-hover:text-primary">
                           Job Card {currentJob.jobNumber}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Status: <span className="font-medium">{currentJob.status}</span>
-                        </p>
+                        <div className="mt-1">
+                          <span className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                            JOB_STATUS_COLORS[currentJob.status] || "bg-muted text-muted-foreground"
+                          )}>
+                            {currentJob.status.replace(/_/g, " ")}
+                          </span>
+                        </div>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5" />
+                      <p className="text-xs text-primary font-medium shrink-0 group-hover:underline">
+                        View details →
+                      </p>
                     </div>
                   </Link>
                 </div>
@@ -132,6 +151,14 @@ export default function CustomerDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {currentJob.status === "CANCELLED" ? (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3">
+                  <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                  <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                    This job card has been cancelled
+                  </p>
+                </div>
+              ) : (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   <div className="flex-1">
@@ -159,6 +186,7 @@ export default function CustomerDashboardPage() {
                   </div>
                 </div>
               </div>
+              )}
             </CardContent>
           </Card>
         )}

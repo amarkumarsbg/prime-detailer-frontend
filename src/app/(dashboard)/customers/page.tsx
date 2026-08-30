@@ -344,12 +344,14 @@ export default function CustomersPage() {
       reset();
       setAddDialogOpen(false);
 
-      // If Twilio is not configured, backend returns temporaryPassword for manual delivery
+      // Show temporary password + WhatsApp delivery status
       const tempPass = (created as any)._temporaryPassword as string | undefined;
+      const credSent = (created as any)._credentialsSent as boolean | undefined;
       if (tempPass) {
-        toast.success("Customer added — share credentials manually", {
-          description: `Phone: ${data.phone}  |  Temporary password: ${tempPass}`,
-          duration: 20000,
+        navigator.clipboard.writeText(tempPass).catch(() => {});
+        toast.success(credSent ? "Customer added — WhatsApp sent ✓" : "Customer added — share credentials manually", {
+          description: `Phone: ${data.phone}  |  Password: ${tempPass}${credSent ? "" : "  (copied to clipboard)"}`,
+          duration: 25000,
         });
       } else {
         toast.success("Customer added", {

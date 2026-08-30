@@ -1304,7 +1304,7 @@ export default function CustomerDetailPage() {
               <div className="space-y-2">
                 <p className="text-sm font-medium">Reset Password</p>
                 <p className="text-xs text-muted-foreground">
-                  Set a new password for this customer. The new password will be shown here — share it with them manually or via WhatsApp.
+                  Minimum 6 characters — e.g. <span className="font-mono">AMAR7004</span>. The new password will be shown here for manual delivery if WhatsApp is not configured.
                 </p>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -1312,7 +1312,7 @@ export default function CustomerDetailPage() {
                       type={portalShowPassword ? "text" : "password"}
                       value={portalNewPassword}
                       onChange={(e) => setPortalNewPassword(e.target.value)}
-                      placeholder="New password (min 8 characters)"
+                      placeholder="e.g. AMAR7004  (min 6 chars)"
                       className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     <button
@@ -1325,14 +1325,35 @@ export default function CustomerDetailPage() {
                   </div>
                   <Button
                     size="sm"
-                    disabled={portalResetting || portalNewPassword.length < 8}
+                    disabled={portalResetting || portalNewPassword.length < 6}
                     onClick={async () => {
                       setPortalResetting(true);
                       try {
-                        const { apiPut } = await import("@/lib/api-client");
-                        await apiPut(`/api/customers/${customer.id}`, { password: portalNewPassword });
+                        const { buildApiUrl } = await import("@/lib/api-base");
+                        const { useAuthStore } = await import("@/store/auth-store");
+                        const token = useAuthStore.getState().accessToken;
+                        const res = await fetch(buildApiUrl(`/api/customers/${customer.id}`), {
+                          method: "PUT",
+                          headers: {
+                            "Content-Type": "application/json",
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                          },
+                          body: JSON.stringify({ password: portalNewPassword }),
+                        });
+                        const body = await res.json() as {
+                          data?: { customer: typeof customer; credentialsSent?: boolean } | null;
+                          error?: { message?: string } | null;
+                        };
+                        if (!res.ok || body.error || !body.data) {
+                          toast.error("Could not reset password", {
+                            description: body.error?.message ?? "Check API connection.",
+                          });
+                          return;
+                        }
+                        const sent = body.data.credentialsSent;
+                        const wasSent = sent === true;
                         toast.success(`Password set for ${customer.name}`, {
-                          description: `Phone: ${customer.phone}  |  Password: ${portalNewPassword}`,
+                          description: `Phone: ${customer.phone}  |  Password: ${portalNewPassword}  |  WhatsApp: ${wasSent ? "✓ Sent" : "⚠ Not sent (share manually)"}`,
                           duration: 20000,
                         });
                         setPortalNewPassword("");

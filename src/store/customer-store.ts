@@ -133,7 +133,10 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
       // attach the temporary password to the customer object so callers can
       // display it manually to staff.
       if (data.temporaryPassword && data.credentialsSent === false) {
-        return { ...data.customer, _temporaryPassword: data.temporaryPassword } as Customer & { _temporaryPassword: string };
+        return { ...data.customer, _temporaryPassword: data.temporaryPassword, _credentialsSent: false } as Customer & { _temporaryPassword: string; _credentialsSent: boolean };
+      }
+      if (data.temporaryPassword) {
+        return { ...data.customer, _temporaryPassword: data.temporaryPassword, _credentialsSent: data.credentialsSent ?? true } as Customer & { _temporaryPassword: string; _credentialsSent: boolean };
       }
 
       return data.customer;

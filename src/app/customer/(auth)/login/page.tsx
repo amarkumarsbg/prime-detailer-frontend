@@ -61,12 +61,7 @@ export default function CustomerLoginPage() {
 
     if (result.ok) {
       toast.success("Login successful");
-      const { user } = useCustomerAuthStore.getState();
-      if (user?.mustChangePassword) {
-        router.replace("/customer/more/change-password");
-      } else {
-        router.replace("/customer/dashboard");
-      }
+      router.replace("/customer/dashboard");
     } else {
       setError(result.message);
       toast.error(result.message);

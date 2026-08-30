@@ -1,6 +1,15 @@
 /**
- * WhatsApp message template for customer login credentials.
- * Used when a new customer account is created.
+ * WhatsApp message templates for customer communications.
+ *
+ * TRIGGER POINTS (backend must call these at the right moments):
+ *
+ * 1. JOB CARD CREATED (new customer):
+ *    → buildCustomerCredentialsWhatsAppMessage()
+ *    → Sends login credentials so customer can track the service
+ *
+ * 2. JOB CARD DELIVERED:
+ *    → buildJobDeliveredWhatsAppMessage()
+ *    → Notifies customer their vehicle is ready / has been delivered
  */
 
 export interface CustomerCredentialsMessageInput {
@@ -29,36 +38,27 @@ export function buildCustomerCredentialsWhatsAppMessage(
   } = input;
 
   const firstName = customerName.split(" ")[0];
+
+  const bookingLine = bookingReference
+    ? `Your booking ${bookingReference} has been confirmed. Here are your account credentials to track your service:`
+    : `Here are your account credentials to track your service:`;
+
+  const portalLine = customerPortalUrl
+    ? `Please log in at our portal to track your vehicle:\n${customerPortalUrl}`
+    : "";
+
   const lines = [
     `Hi ${firstName}! 🎉 Welcome to ${businessName}!`,
     ``,
-    ...(bookingReference
-      ? [
-          `Your booking ${bookingReference} has been confirmed.`,
-          ``,
-          `Here are your account credentials to track your service:`,
-        ]
-      : [`Here are your account credentials to track your service:`]),
+    bookingLine,
     ``,
     `📱 Phone: ${phone}`,
     `🔑 Password: ${password}`,
     ``,
-  ];
-
-  if (customerPortalUrl) {
-    lines.push(
-      `Please log in at our customer portal to track your vehicle:`,
-      `${customerPortalUrl}`,
-      ``
-    );
-  }
-
-  lines.push(
-    `Please change your password after first login for security.`,
-    ``,
+    ...(portalLine ? [portalLine, ``] : []),
+    `Change your password after first login.`,
     `Thank you for choosing ${businessName}! 🚗`,
-    `We look forward to serving you.`
-  );
+  ];
 
   return lines.join("\n");
 }
@@ -79,4 +79,56 @@ export function getCustomerPortalUrl(): string {
   }
 
   return "https://yourapp.com/customer/login";
+}
+
+// ---------------------------------------------------------------------------
+// Trigger 2: Job Card Delivered
+// ---------------------------------------------------------------------------
+
+export interface JobDeliveredMessageInput {
+  customerName: string;
+  jobCardNumber: string;
+  vehicleMakeModel: string;
+  registrationNumber: string;
+  businessName: string;
+  customerPortalUrl?: string;
+}
+
+/**
+ * Build WhatsApp message sent when a job card is marked as DELIVERED.
+ * Backend should call this when job card status transitions to DELIVERED.
+ */
+export function buildJobDeliveredWhatsAppMessage(
+  input: JobDeliveredMessageInput
+): string {
+  const {
+    customerName,
+    jobCardNumber,
+    vehicleMakeModel,
+    registrationNumber,
+    businessName,
+    customerPortalUrl,
+  } = input;
+
+  const firstName = customerName.split(" ")[0];
+
+  const lines = [
+    `Hi ${firstName}! ✅ Your vehicle is delivered!`,
+    ``,
+    `Your ${vehicleMakeModel} (${registrationNumber}) has been successfully serviced and delivered.`,
+    ``,
+    `📋 Job Card: ${jobCardNumber}`,
+    ``,
+    ...(customerPortalUrl
+      ? [
+          `View your invoice and service details on our portal:`,
+          `${customerPortalUrl}`,
+          ``,
+        ]
+      : []),
+    `Thank you for choosing ${businessName}! 🚗`,
+    `We hope to see you again soon.`,
+  ];
+
+  return lines.join("\n");
 }

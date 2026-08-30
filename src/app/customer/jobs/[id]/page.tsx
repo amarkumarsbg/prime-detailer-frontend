@@ -5,9 +5,10 @@ import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Car, CalendarDays, Gauge, ClipboardList, CheckCircle2, Circle, Wrench } from "lucide-react";
+import { ArrowLeft, Car, CalendarDays, Gauge, ClipboardList, CheckCircle2, Circle, Wrench, Camera } from "lucide-react";
 import Link from "next/link";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
+import { resolveUploadsPublicUrl } from "@/lib/api-base";
 
 const STATUS_COLORS: Record<string, string> = {
   RECEIVED: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
@@ -87,6 +88,14 @@ export default function JobDetailPage() {
           <CardTitle className="text-base">Service Progress</CardTitle>
         </CardHeader>
         <CardContent>
+          {job.status === "CANCELLED" ? (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3">
+              <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                This job card has been cancelled
+              </p>
+            </div>
+          ) : (
           <div className="flex items-start gap-0">
             {PROGRESS_STEPS.map((step, i) => {
               const done = step.statuses.includes(job.status);
@@ -121,6 +130,7 @@ export default function JobDetailPage() {
               );
             })}
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -207,6 +217,66 @@ export default function JobDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Before / After Photos */}
+      {(() => {
+        const photos = (job as any).inspectionPhotos as Array<{ id: string; type: string; url: string; caption?: string }> | undefined;
+        if (!photos || photos.length === 0) return null;
+        const before = photos.filter((p) => p.type?.toUpperCase() === "BEFORE");
+        const after = photos.filter((p) => p.type?.toUpperCase() === "AFTER");
+        if (before.length === 0 && after.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Camera className="h-4 w-4" /> Vehicle Photos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {before.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Before Service</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {before.map((photo) => {
+                      const src = resolveUploadsPublicUrl(photo.url) ?? photo.url;
+                      return (
+                        <a key={photo.id} href={src} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={src}
+                            alt={photo.caption || "Before"}
+                            className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
+                          />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {after.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">After Service</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {after.map((photo) => {
+                      const src = resolveUploadsPublicUrl(photo.url) ?? photo.url;
+                      return (
+                        <a key={photo.id} href={src} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={src}
+                            alt={photo.caption || "After"}
+                            className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
+                          />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Linked invoice */}
       {linkedInvoice && (
