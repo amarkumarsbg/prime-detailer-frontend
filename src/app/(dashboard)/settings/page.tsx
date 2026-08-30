@@ -48,7 +48,12 @@ import {
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { BrandingThemePanel } from "@/components/settings/branding-theme-panel";
 import { useDomainDataReady } from "@/components/layout/domain-data-sync";
-import type { VehicleSegment } from "@/types";
+import type {
+  CompanyTargetTierConfig,
+  CompanyTargetDistributionMode,
+  CompanyTargetRoleShareMap,
+  VehicleSegment,
+} from "@/types";
 import {
   Building2,
   Receipt,
@@ -116,6 +121,60 @@ const STAFF_PERMISSIONS_MATRIX = [
   { permission: "Manage Inventory", admin: true, staff: false },
   { permission: "Access Wallet/Referrals", admin: true, staff: false },
 ] as const;
+
+const COMPANY_TARGET_ROLE_OPTIONS: Array<{
+  role: keyof CompanyTargetRoleShareMap;
+  label: string;
+}> = [
+  { role: "ADMIN", label: "Admin" },
+  { role: "BRANCH_MANAGER", label: "Branch Manager" },
+  { role: "MANAGER", label: "Manager" },
+  { role: "SUPERVISOR", label: "Supervisor" },
+  { role: "RECEPTIONIST", label: "Receptionist" },
+  { role: "MECHANIC", label: "Mechanic" },
+];
+
+type RoleShareRowDraft = {
+  role: keyof CompanyTargetRoleShareMap;
+  percent: number;
+};
+
+function defaultRoleShares(): CompanyTargetRoleShareMap {
+  return {
+    ADMIN: 0,
+    BRANCH_MANAGER: 15,
+    MANAGER: 15,
+    SUPERVISOR: 20,
+    RECEPTIONIST: 10,
+    MECHANIC: 40,
+  };
+}
+
+function buildRoleShareRows(
+  shares?: CompanyTargetRoleShareMap
+): RoleShareRowDraft[] {
+  const merged = { ...defaultRoleShares(), ...(shares || {}) };
+  return COMPANY_TARGET_ROLE_OPTIONS.map((opt) => ({
+    role: opt.role,
+    percent: Number(merged[opt.role] ?? 0),
+  }));
+}
+
+function rowsToRoleShareMap(rows: RoleShareRowDraft[]): CompanyTargetRoleShareMap {
+  const next: CompanyTargetRoleShareMap = {};
+  for (const opt of COMPANY_TARGET_ROLE_OPTIONS) next[opt.role] = 0;
+  for (const row of rows) {
+    const v = Number(row.percent);
+    next[row.role] = Number.isFinite(v) ? Math.max(0, v) : 0;
+  }
+  return next;
+}
+
+function resolveTierRole(tier: CompanyTargetTierConfig | undefined): keyof CompanyTargetRoleShareMap {
+  if (tier?.role) return tier.role;
+  const rows = buildRoleShareRows(tier?.roleShares || defaultRoleShares());
+  return rows.find((row) => Number(row.percent) > 0)?.role || "MECHANIC";
+}
 
 function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
   return (
@@ -226,10 +285,10 @@ export default function SettingsPage() {
   const updateStaffRewardSettings = useStaffRewardStore((s) => s.updateSettings);
 
   const emptyTiers = () => [
-    { targetAmount: 0, rewardPercent: 0 },
-    { targetAmount: 0, rewardPercent: 0 },
-    { targetAmount: 0, rewardPercent: 0 },
-    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
+    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
+    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
+    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
   ];
 
   const dataReady = useDomainDataReady();
@@ -238,8 +297,10 @@ export default function SettingsPage() {
   const [companyTargetEnabled, setCompanyTargetEnabled] = useState(false);
   const [companyTargetRevenueType, setCompanyTargetRevenueType] = useState<"INVOICES">("INVOICES");
   const [companyTargetPeriod, setCompanyTargetPeriod] = useState<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY">("MONTHLY");
+  const companyTargetDistributionMode: CompanyTargetDistributionMode =
+    "DISTRIBUTE_ROLE_WISE";
   const [companyTargetFrequencyTiers, setCompanyTargetFrequencyTiers] = useState<
-    Record<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY", { targetAmount: number; rewardPercent: number }[]>
+    Record<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY", CompanyTargetTierConfig[]>
   >({
     MONTHLY: emptyTiers(),
     QUARTERLY: emptyTiers(),
@@ -257,12 +318,39 @@ export default function SettingsPage() {
       
       const loadedFreqTiers = staffRewardSettings.companyTargetFrequencyTiers || {} as any;
       const legacyTiers = staffRewardSettings.companyTargetTiers || [];
+      const fallbackRoleShares =
+        staffRewardSettings.companyTargetRoleShares || defaultRoleShares();
+      const normalizeTiers = (tiers: any[] | undefined): CompanyTargetTierConfig[] => {
+        const source = Array.isArray(tiers) && tiers.length > 0 ? tiers : emptyTiers();
+        return source.map((tier) => ({
+          targetAmount: Number(tier?.targetAmount || 0),
+          rewardPercent: Number(tier?.rewardPercent || 0),
+          role: resolveTierRole(tier as CompanyTargetTierConfig),
+          roleShares: rowsToRoleShareMap(
+            buildRoleShareRows(
+              (tier?.roleShares as CompanyTargetRoleShareMap | undefined) || fallbackRoleShares
+            )
+          ),
+        }));
+      };
       
       setCompanyTargetFrequencyTiers({
-        MONTHLY: loadedFreqTiers.MONTHLY || (currentPeriod === "MONTHLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
-        QUARTERLY: loadedFreqTiers.QUARTERLY || (currentPeriod === "QUARTERLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
-        HALF_YEARLY: loadedFreqTiers.HALF_YEARLY || (currentPeriod === "HALF_YEARLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
-        YEARLY: loadedFreqTiers.YEARLY || (currentPeriod === "YEARLY" && legacyTiers.length > 0 ? legacyTiers : null) || emptyTiers(),
+        MONTHLY: normalizeTiers(
+          loadedFreqTiers.MONTHLY ||
+            (currentPeriod === "MONTHLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
+        ),
+        QUARTERLY: normalizeTiers(
+          loadedFreqTiers.QUARTERLY ||
+            (currentPeriod === "QUARTERLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
+        ),
+        HALF_YEARLY: normalizeTiers(
+          loadedFreqTiers.HALF_YEARLY ||
+            (currentPeriod === "HALF_YEARLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
+        ),
+        YEARLY: normalizeTiers(
+          loadedFreqTiers.YEARLY ||
+            (currentPeriod === "YEARLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
+        ),
       });
       hasInitializedRef.current = true;
     }
@@ -278,7 +366,12 @@ export default function SettingsPage() {
       const currentPeriod = companyTargetPeriod;
       const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
       if (!copyTiers[index]) {
-        copyTiers[index] = { targetAmount: 0, rewardPercent: 0 };
+        copyTiers[index] = {
+          targetAmount: 0,
+          rewardPercent: 0,
+          role: "MECHANIC",
+          roleShares: { MECHANIC: 100 },
+        };
       }
       copyTiers[index] = {
         ...copyTiers[index]!,
@@ -290,14 +383,69 @@ export default function SettingsPage() {
   };
 
   const handleSaveCompanyTargets = () => {
+    const periodKeys: Array<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY"> = [
+      "MONTHLY",
+      "QUARTERLY",
+      "HALF_YEARLY",
+      "YEARLY",
+    ];
+    for (const periodKey of periodKeys) {
+      const tiers = companyTargetFrequencyTiers[periodKey] || [];
+      for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
+        const rows = buildRoleShareRows(tiers[tierIdx]?.roleShares || defaultRoleShares());
+        const totalRoleShare = rows.reduce(
+          (sum, row) => sum + Number(row.percent || 0),
+          0
+        );
+        if (Math.abs(totalRoleShare - 100) > 0.01) {
+          toast.error(`${periodKey} Tier ${tierIdx + 1}: role-wise reward % must total 100.`);
+          return;
+        }
+      }
+    }
+
+    const fallbackLegacyRoleShares =
+      companyTargetFrequencyTiers[companyTargetPeriod]?.[0]?.roleShares ||
+      defaultRoleShares();
+
     updateStaffRewardSettings({
       companyTargetEnabled,
       companyTargetRevenueType,
       companyTargetPeriod,
       companyTargetTiers: companyTargetFrequencyTiers[companyTargetPeriod],
       companyTargetFrequencyTiers,
+      companyTargetDistributionMode,
+      companyTargetRoleShares: fallbackLegacyRoleShares,
     });
     toast.success("Company target rewards settings saved.");
+  };
+
+  const setTierSingleRole = (
+    tierIndex: number,
+    role: keyof CompanyTargetRoleShareMap
+  ) => {
+    setCompanyTargetFrequencyTiers((prev) => {
+      const copyAll = { ...prev };
+      const period = companyTargetPeriod;
+      const copyTiers = [...(copyAll[period] || emptyTiers())];
+      const tier = copyTiers[tierIndex] || {
+        targetAmount: 0,
+        rewardPercent: 0,
+        role: "MECHANIC",
+        roleShares: { MECHANIC: 100 },
+      };
+      const next: CompanyTargetRoleShareMap = {};
+      for (const opt of COMPANY_TARGET_ROLE_OPTIONS) {
+        next[opt.role] = opt.role === role ? 100 : 0;
+      }
+      copyTiers[tierIndex] = {
+        ...tier,
+        role,
+        roleShares: next,
+      };
+      copyAll[period] = copyTiers;
+      return copyAll;
+    });
   };
 
   const [newHesName, setNewHesName] = useState("");
@@ -1012,15 +1160,10 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3.5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     <div className="space-y-1.5">
                       <Label>Revenue Basis</Label>
                       <Input value="Invoices (valid billed totals)" disabled className="bg-muted" />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label>Period Frequency</Label>
-                      <Input value="Monthly" disabled className="bg-muted" />
                     </div>
                   </div>
 
@@ -1030,7 +1173,16 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[0, 1, 2, 3].map((idx) => {
                         const currentFreqTiers = companyTargetFrequencyTiers[companyTargetPeriod] || [];
-                        const tier = currentFreqTiers[idx] || { targetAmount: 0, rewardPercent: 0 };
+                        const tier =
+                          currentFreqTiers[idx] || {
+                            targetAmount: 0,
+                            rewardPercent: 0,
+                            role: "MECHANIC" as const,
+                            roleShares: { MECHANIC: 100 },
+                          };
+                        const roleShareRows = buildRoleShareRows(
+                          tier.roleShares || defaultRoleShares()
+                        );
                         return (
                           <div key={idx} className="space-y-1.5 rounded-lg border p-2 px-3 bg-muted/20">
                             <p className="text-xs font-semibold text-muted-foreground uppercase">
@@ -1050,19 +1202,47 @@ export default function SettingsPage() {
                                   }
                                 />
                               </div>
-                              <div>
-                                <Label className="text-[11px] font-medium">Reward %</Label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.1"
-                                  disabled={!companyTargetEnabled}
-                                  value={tier.rewardPercent || ""}
-                                  placeholder="e.g. 2.5"
-                                  onChange={(e) =>
-                                    patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)
-                                  }
-                                />
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-[11px] font-medium">Role</Label>
+                                  <Select
+                                    value={resolveTierRole(tier)}
+                                    onValueChange={(value) =>
+                                      setTierSingleRole(
+                                        idx,
+                                        value as keyof CompanyTargetRoleShareMap
+                                      )
+                                    }
+                                    disabled={!companyTargetEnabled}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {COMPANY_TARGET_ROLE_OPTIONS.map((opt) => (
+                                        <SelectItem key={opt.role} value={opt.role}>
+                                          {opt.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div>
+                                  <Label className="text-[11px] font-medium">Reward %</Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.1"
+                                    disabled={!companyTargetEnabled}
+                                    value={tier.rewardPercent || ""}
+                                    placeholder="e.g. 2.5"
+                                    onChange={(e) =>
+                                      patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)
+                                    }
+                                  />
+                                </div>
                               </div>
                             </div>
                           </div>

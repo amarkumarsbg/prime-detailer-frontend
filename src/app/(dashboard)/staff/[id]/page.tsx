@@ -201,6 +201,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       settings,
       year: targetYear,
       joiningDate: member?.joiningDate || undefined,
+      staffRole: member?.role || undefined,
     });
     const selectedPeriod = settings.companyTargetPeriod || "MONTHLY";
     return allResults.filter((r) => r.periodType === selectedPeriod);
@@ -957,7 +958,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                 Company Target Achieved Incentive
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Invoice-based company reward pool for the selected period, split equally among eligible active non-super-admin staff.
+                Invoice-based company reward pool for the selected period, distributed to the role assigned to each achieved tier.
               </p>
             </div>
             <div className="w-32">

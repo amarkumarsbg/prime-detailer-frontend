@@ -177,6 +177,26 @@ export type StaffRewardLedgerStatus =
   | "PAID_IN_PAYROLL"
   | "CANCELLED";
 
+export type CompanyTargetDistributionMode =
+  | "DISTRIBUTE_EQUALLY"
+  | "DISTRIBUTE_ROLE_WISE";
+
+export type CompanyTargetRoleShareMap = Partial<
+  Record<
+    Exclude<UserRole, "CUSTOMER" | "SUPER_ADMIN" | "PLATFORM_OWNER">,
+    number
+  >
+>;
+
+export interface CompanyTargetTierConfig {
+  targetAmount: number;
+  rewardPercent: number;
+  /** Selected role for this tier (UI-friendly stable value). */
+  role?: keyof CompanyTargetRoleShareMap;
+  /** Optional per-tier role split used when distribution mode is role-wise. */
+  roleShares?: CompanyTargetRoleShareMap;
+}
+
 export type StaffTargetMetric = "JOBS_COMPLETED" | "REVENUE" | "INCENTIVE";
 
 export interface StaffRewardTierRule {
@@ -204,14 +224,13 @@ export interface StaffRewardSettings {
   companyTargetEnabled?: boolean;
   companyTargetRevenueType?: "INVOICES" | "SERVICES" | "COUNTER_SALE" | "BOTH";
   companyTargetPeriod?: "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY";
-  companyTargetTiers?: {
-    targetAmount: number;
-    rewardPercent: number;
-  }[];
+  companyTargetTiers?: CompanyTargetTierConfig[];
   companyTargetFrequencyTiers?: Record<
     "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY",
-    { targetAmount: number; rewardPercent: number }[]
+    CompanyTargetTierConfig[]
   >;
+  companyTargetDistributionMode?: CompanyTargetDistributionMode;
+  companyTargetRoleShares?: CompanyTargetRoleShareMap;
   updatedAt: string;
 }
 
