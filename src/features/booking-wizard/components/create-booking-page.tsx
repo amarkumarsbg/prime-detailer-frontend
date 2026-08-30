@@ -96,14 +96,12 @@ import { AddAddonDialog } from "@/components/services/add-addon-dialog";
 import { AddServicePackageDialog } from "@/components/services/add-service-package-dialog";
 import { ServiceSearchInput } from "@/components/services/searchable-service-select";
 import { ServiceCustomPriceControl } from "@/components/services/service-custom-price-control";
-import { PickupDriverSelect } from "@/components/pickup-drop/pickup-driver-select";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
-import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
@@ -124,7 +122,6 @@ import {
   normalizeRegistrationNumber,
   sanitizeVehicleRegistrationInput,
 } from "@/lib/vehicle-registration";
-import { reconcilePickupWithJobCards } from "@/lib/sync-pickup-from-job-card";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { AddVehicleInlineForm } from "@/components/vehicles/add-vehicle-inline-form";
 import type { AddVehicleFormData } from "@/components/vehicles/add-vehicle-form-types";
@@ -195,8 +192,6 @@ import {
 } from "@/features/booking-wizard/lib/pricing-format";
 import { mechanicAvailabilityLabel } from "@/features/booking-wizard/lib/mechanic-availability";
 import {
-  queueDropFromBooking,
-  queuePickupDropFromBooking,
 } from "@/features/booking-wizard/lib/queue-pickup-from-booking";
 
 export type { CreateBookingVariant } from "@/features/booking-wizard/types";
@@ -369,12 +364,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [membershipRedeemSearch, setMembershipRedeemSearch] = useState("");
   const [selectedPartLines, setSelectedPartLines] = useState<SelectedPartLine[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
-  const [pickupRequired, setPickupRequired] = useState(false);
-  const [pickupDriverId, setPickupDriverId] = useState("");
-  const [dropRequired, setDropRequired] = useState(false);
-  const [dropDriverId, setDropDriverId] = useState("");
-  const [dropAddress, setDropAddress] = useState("");
-  const [showPickup, setShowPickup] = useState(true);
   const [showAddons, setShowAddons] = useState(true);
   const [addonDialogOpen, setAddonDialogOpen] = useState(false);
   const [addServicePackageOpen, setAddServicePackageOpen] = useState(false);
@@ -386,51 +375,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[] | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [hasManuallySetExpectedDelivery, setHasManuallySetExpectedDelivery] = useState(false);
-  const [sourcePickupId, setSourcePickupId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const pId = params.get("pickupId");
       if (pId) {
-        setSourcePickupId(pId);
-        const reqs = usePickupDropStore.getState().requests;
-        const pickup = reqs.find((r) => r.id === pId);
-        if (pickup) {
-          if (pickup.branchId) {
-            setBranchId(pickup.branchId);
-          }
-          const existingCust = useCustomerStore.getState().customers.find(
-            (c) => c.phone?.trim() === pickup.customerPhone?.trim()
-          );
-          if (existingCust) {
-            setExistingCustomerId(existingCust.id);
-            setCustomerName(existingCust.name);
-            setCustomerPhone(existingCust.phone || "");
-            setCustomerEmail(existingCust.email || "");
-            setCustomerAddress(existingCust.address || "");
-            setReferralCode("");
-            setReferrerInfo(null);
-            setReferralError(false);
-          } else {
-            setExistingCustomerId(null);
-            setCustomerName(pickup.customerName);
-            setCustomerPhone(pickup.customerPhone || "");
-            setCustomerAddress(pickup.address);
-          }
-          if (pickup.vehicleRegNumber) {
-            setVehicleNumber(pickup.vehicleRegNumber);
-          }
-          if (pickup.vehicleMakeModel) {
-            const parts = pickup.vehicleMakeModel.trim().split(" ");
-            const make = parts[0] || "";
-            const model = parts.slice(1).join(" ") || "";
-            setVehicleBrand(make);
-            setVehicleModel(model);
-            const segment = getModelSegment(make, model) || "";
-            setVehicleSegment(segment);
-          }
-        }
+        void pId; // pickup/drop flow removed
       }
     }
   }, [getModelSegment]);
@@ -641,22 +592,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setCustomerAddress(found.address || "");
     const owned = vehicles.filter((v) => v.customerId === found.id);
     if (owned.length > 0) {
-      const pickupVehicleReg = sourcePickupId
-        ? normalizeRegistrationNumber(sanitizeVehicleRegistrationInput(vehicleNumber))
-        : "";
-      const pickupVehicleMatch = pickupVehicleReg
-        ? owned.find(
-            (v) => normalizeRegistrationNumber(v.registrationNumber) === pickupVehicleReg
-          )
-        : undefined;
-      if (sourcePickupId && pickupVehicleReg && !pickupVehicleMatch) {
-        setSelectedVehicleId(null);
-        setAddingNewVehicle(true);
-        openCreditDialogIfCustomerHasDues(found.id);
-        return;
-      }
       const v =
-        pickupVehicleMatch ??
         [...owned].sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber))[0];
       setSelectedVehicleId(v.id);
       setAddingNewVehicle(false);
@@ -680,7 +616,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     brandNames,
     vehicles,
     isJobCard,
-    sourcePickupId,
     vehicleNumber,
     openCreditDialogIfCustomerHasDues,
   ]);
@@ -1482,27 +1417,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       });
       return;
     }
-    if (pickupRequired) {
-      if (!pickupDriverId) {
-        toast.error("Assign a pickup driver when pickup is required.");
-        return;
-      }
-      if (!customerAddress.trim()) {
-        toast.error("Enter the pickup address when pickup is required.");
-        return;
-      }
-    }
-    if (dropRequired) {
-      if (!dropDriverId) {
-        toast.error("Assign a drop-off driver when drop-off is required.");
-        return;
-      }
-      if (!dropAddress.trim()) {
-        toast.error("Enter the drop-off address when drop-off is required.");
-        return;
-      }
-    }
-
     isSubmittingJobRef.current = true;
     setIsCreatingBooking(true);
     try {
@@ -1510,13 +1424,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     const jobNumber = getNextJobNumber();
     const id = `jc-local-${Date.now()}`;
     const mechanic = mechanics.find((m) => m.id === mechanicId);
-    const staffList = useStaffStore.getState().staff;
-    const pickupDriver = pickupDriverId
-      ? staffList.find((m) => m.id === pickupDriverId)
-      : undefined;
-    const dropDriver = dropDriverId
-      ? staffList.find((m) => m.id === dropDriverId)
-      : undefined;
 
     let custId = existingCustomerId ?? `cust-local-${Date.now()}`;
     let newCustomerTempPass: string | undefined;
@@ -1821,8 +1728,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       [
         customerNotes && `Customer: ${customerNotes}`,
         internalNotes && `Internal: ${internalNotes}`,
-        pickupRequired && "Pickup required: Yes",
-        !isJobCard && (dropRequired ? "Drop-off required: Yes" : "Drop-off required: No"),
         couponApplied && "Coupon: WELCOME10",
         directDiscountValue.trim() !== "" &&
           `Direct Discount: ${directDiscountType === "percentage" ? `${directDiscountValue}%` : `₹${directDiscountValue}`}`,
@@ -1996,27 +1901,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     };
     await addJobCard(newJobCard);
 
-    if (!isJobCard) {
-      if (pickupRequired) {
-        queuePickupDropFromBooking({
-          job: newJobCard,
-          customerAddress,
-          pickupDriverId: pickupDriver?.id,
-          pickupDriverName: pickupDriver?.name,
-          branches,
-        });
-      }
-      if (dropRequired) {
-        queueDropFromBooking({
-          job: newJobCard,
-          dropAddress,
-          dropDriverId: dropDriver?.id,
-          dropDriverName: dropDriver?.name,
-          branches,
-        });
-      }
-    }
-
     pushActivityLog({
       action: "CREATED",
       entityType: "JOB_CARD",
@@ -2044,16 +1928,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setCheckInPhotoError(false);
     checkInJobIdRef.current = id;
     setCheckInOpen(true);
-    const pickupDropToast =
-      pickupRequired && dropRequired
-        ? "Complete check-in with before photos. Pickup and drop-off are queued — advance them on Pickup & Drop / the job card."
-        : pickupRequired
-          ? "Complete check-in with before photos. Mark pickup complete on the job card when the driver collects the vehicle."
-          : dropRequired
-            ? "Complete check-in with before photos. Drop-off is queued — assign/complete it when the job is ready."
-            : "Complete vehicle check-in with before photos to open the job.";
     toast.message("Job card created", {
-      description: pickupDropToast,
+      description: "Complete vehicle check-in with before photos to open the job.",
     });
     } finally {
       isSubmittingJobRef.current = false;
@@ -2071,18 +1947,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     setCheckInOpen(false);
     setCheckInJob(null);
     if (jid) {
-      if (sourcePickupId) {
-        const createdJob = useJobCardStore.getState().jobCards.find((j) => j.id === jid);
-        if (createdJob) {
-          usePickupDropStore.getState().linkJobCard(sourcePickupId, jid, createdJob.jobNumber, {
-            vehicleRegNumber: createdJob.vehicleRegNumber,
-            vehicleMakeModel: createdJob.vehicleMakeModel,
-            customerName: createdJob.customerName,
-            customerPhone: createdJob.customerPhone,
-          });
-          reconcilePickupWithJobCards();
-        }
-      }
       navigateToCreatedJobCard(jid);
     }
   };
@@ -2264,9 +2128,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (isJobCard) s.push("partsSelection");
     if (highEndServices.length > 0) s.push("highEndServices");
     s.push("addons");
-    if (!isJobCard) {
-      s.push("pickupDrop");
-    }
     if (isJobCard) {
       s.push("mechanic");
       s.push("notesAndJobDetails", "jobSummary");
@@ -2472,26 +2333,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       }
     }
     if (jobWizardStepId === "pickupDrop") {
-      if (pickupRequired) {
-        if (!pickupDriverId) {
-          toast.error("Assign a pickup driver to continue.");
-          return;
-        }
-        if (!customerAddress.trim()) {
-          toast.error("Enter the pickup address to continue.");
-          return;
-        }
-      }
-      if (dropRequired) {
-        if (!dropDriverId) {
-          toast.error("Assign a drop-off driver to continue.");
-          return;
-        }
-        if (!dropAddress.trim()) {
-          toast.error("Enter the drop-off address to continue.");
-          return;
-        }
-      }
+      // pickup/drop step removed — no validation needed
     }
     setJobCreateStep((i) => {
       let n = i + 1;
@@ -2632,42 +2474,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
               </Button>
             </div>
             <p>{selectedMechanicName}</p>
-          </div>
-        )}
-
-        {!isJobCard && (
-          <div className="rounded-lg border border-border/80 bg-card p-3">
-            <div className="mb-1.5 flex items-start justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pickup &amp; Drop</p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => goToJobWizardStep("pickupDrop")}
-              >
-                <Pencil className="mr-1 h-3 w-3" />
-                Edit
-              </Button>
-            </div>
-            <p>
-              {[
-                pickupRequired ? "Pickup requested" : null,
-                dropRequired ? "Drop-off requested" : null,
-              ]
-                .filter(Boolean)
-                .join(" · ") || "Not required"}
-            </p>
-            {pickupRequired && customerAddress.trim() && (
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                Pickup: {customerAddress.trim()}
-              </p>
-            )}
-            {dropRequired && dropAddress.trim() && (
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                Drop-off: {dropAddress.trim()}
-              </p>
-            )}
           </div>
         )}
 
@@ -4654,166 +4460,6 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   );
                 })
                 )}
-              </CardContent>
-            )}
-          </Card>
-          )}
-
-          {showJobWizardStep("pickupDrop") && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between py-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-lg">Pickup &amp; Drop</CardTitle>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto p-0 text-primary"
-                  onClick={() => setShowPickup(!showPickup)}
-                >
-                  {showPickup ? "Hide" : "Show"}
-                </Button>
-                <Badge variant="secondary" className="font-normal">
-                  {[
-                    pickupRequired ? "Pickup" : null,
-                    dropRequired ? "Drop-off" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" + ") || "Not Required"}
-                </Badge>
-              </div>
-            </CardHeader>
-            {showPickup && (
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Is pickup required?</p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant={pickupRequired ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setPickupRequired(true)}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={!pickupRequired ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setPickupRequired(false);
-                          setPickupDriverId("");
-                        }}
-                      >
-                        No
-                      </Button>
-                    </div>
-                  </div>
-                  {pickupRequired && (
-                    <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-border/60">
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="pickup-address">Pickup address</Label>
-                        <Textarea
-                          id="pickup-address"
-                          value={customerAddress}
-                          onChange={(e) => {
-                            const next = e.target.value;
-                            setCustomerAddress(next);
-                            if (dropRequired && (!dropAddress.trim() || dropAddress === customerAddress)) {
-                              setDropAddress(next);
-                            }
-                          }}
-                          placeholder="Where should the driver collect the vehicle?"
-                          rows={2}
-                          className="resize-none"
-                        />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="pickup-driver">Pickup driver</Label>
-                        <PickupDriverSelect
-                          branchId={branchId}
-                          value={pickupDriverId || "unassigned"}
-                          onValueChange={(id) => setPickupDriverId(id === "unassigned" ? "" : id)}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Service mechanic is assigned separately in the next step. Pickup driver collects the vehicle
-                          from the customer.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4 border-t border-border/60 pt-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Is drop-off required?</p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant={dropRequired ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDropRequired(true);
-                          if (!dropAddress.trim()) {
-                            setDropAddress(customerAddress);
-                          }
-                        }}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={!dropRequired ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDropRequired(false);
-                          setDropDriverId("");
-                          setDropAddress("");
-                        }}
-                      >
-                        No
-                      </Button>
-                    </div>
-                  </div>
-                  {dropRequired && (
-                    <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-border/60">
-                      <div className="space-y-2 sm:col-span-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <Label htmlFor="drop-address">Drop-off address</Label>
-                          {pickupRequired && customerAddress.trim() && dropAddress.trim() !== customerAddress.trim() && (
-                            <Button
-                              type="button"
-                              variant="link"
-                              className="h-auto p-0 text-xs"
-                              onClick={() => setDropAddress(customerAddress)}
-                            >
-                              Same as pickup
-                            </Button>
-                          )}
-                        </div>
-                        <Textarea
-                          id="drop-address"
-                          value={dropAddress}
-                          onChange={(e) => setDropAddress(e.target.value)}
-                          placeholder="Where should the driver return the vehicle?"
-                          rows={2}
-                          className="resize-none"
-                        />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="drop-driver">Drop-off driver</Label>
-                        <PickupDriverSelect
-                          branchId={branchId}
-                          value={dropDriverId || "unassigned"}
-                          onValueChange={(id) => setDropDriverId(id === "unassigned" ? "" : id)}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Drop-off is queued at booking. Complete it on Pickup &amp; Drop when the job is ready.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </CardContent>
             )}
           </Card>

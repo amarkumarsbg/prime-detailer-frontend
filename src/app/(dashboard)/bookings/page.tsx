@@ -62,8 +62,6 @@ import {
   Calendar,
   Wrench,
   User,
-  Truck,
-  MapPin,
 } from "lucide-react";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
@@ -149,7 +147,6 @@ export default function BookingsPage() {
   const [creatingFromAppointmentId, setCreatingFromAppointmentId] = useState<string | null>(
     null
   );
-  const [markingPickupId, setMarkingPickupId] = useState<string | null>(null);
   const [editingReservation, setEditingReservation] = useState<Appointment | null>(null);
   const [editReservationOpen, setEditReservationOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<JobCardStatus | "ALL">("ALL");
@@ -252,20 +249,6 @@ export default function BookingsPage() {
           !isAppointmentSlotElapsed(a.date, a.time)
       );
   }, [bookingReservations]);
-
-  const markVehicleAtWorkshop = async (apt: Appointment) => {
-    setMarkingPickupId(apt.id);
-    try {
-      await updateAppointment(apt.id, { vehiclePickupStatus: "AT_WORKSHOP" });
-      toast.success("Vehicle marked as at workshop", {
-        description: `${getAppointmentDisplayId(apt)} — you can now create the job card.`,
-      });
-    } catch {
-      toast.error("Could not update pickup status.");
-    } finally {
-      setMarkingPickupId(null);
-    }
-  };
 
   const createJobFromAppointment = async (apt: Appointment) => {
     if (apt.jobCardId) return;
@@ -593,12 +576,7 @@ export default function BookingsPage() {
                           {apt.vehicleRegNumber}
                         </span>
                       )}
-                      {apt.vehiclePickupRequired && !isConverted && (
-                        <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${apt.vehiclePickupStatus === "AT_WORKSHOP" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"}`}>
-                          <Truck className="h-3 w-3 shrink-0" />
-                          {apt.vehiclePickupStatus === "AT_WORKSHOP" ? "At workshop" : "Pickup pending"}
-                        </span>
-                      )}
+
                     </div>
                   </div>
 
@@ -625,32 +603,8 @@ export default function BookingsPage() {
                         <Eye className="h-3.5 w-3.5" />
                         View job card
                       </Link>
-                    ) : apt.vehiclePickupRequired && apt.vehiclePickupStatus !== "AT_WORKSHOP" ? (
-                      <button
-                        type="button"
-                        disabled={markingPickupId === apt.id}
-                        className="flex flex-1 h-8 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-60 disabled:pointer-events-none whitespace-nowrap"
-                        onClick={() => void markVehicleAtWorkshop(apt)}
-                      >
-                        {markingPickupId === apt.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <MapPin className="h-3.5 w-3.5" />
-                        )}
-                        Mark at Workshop
-                      </button>
                     ) : (
                       <>
-                        {!apt.vehiclePickupRequired && (
-                          <button
-                            type="button"
-                            title="Enable pickup workflow"
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600 transition-colors dark:hover:bg-amber-950/30"
-                            onClick={() => void updateAppointment(apt.id, { vehiclePickupRequired: true, vehiclePickupStatus: "PENDING" })}
-                          >
-                            <Truck className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                         <button
                           type="button"
                           disabled={creatingFromAppointmentId === apt.id}
