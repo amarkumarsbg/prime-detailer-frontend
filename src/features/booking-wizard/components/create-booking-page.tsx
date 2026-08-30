@@ -496,6 +496,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const checkInFileRef = useRef<HTMLInputElement>(null);
   const [checkInMultiCamOpen, setCheckInMultiCamOpen] = useState(false);
+  // Guards the check-in dialog against spurious Radix onOpenChange(false) events that
+  // can fire when the camera dialog opens or closes on mobile (nested Dialog interaction).
+  const checkInCamBlocksDismissRef = useRef(false);
   const [checkInMultiCamStreamPromise, setCheckInMultiCamStreamPromise] =
     useState<Promise<MediaStream> | null>(null);
   const checkInJobIdRef = useRef<string | null>(null);
@@ -5079,12 +5082,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       <Button
                         type="submit"
                         className="min-w-[5rem] font-semibold shadow-sm"
-                        disabled={bookingWizardIncomplete}
+                        disabled={bookingWizardIncomplete || isCreatingBooking}
                         title={
                           bookingWizardIncomplete ? "Complete all wizard steps first" : undefined
                         }
                       >
-                        {isJobCard ? "Create Job Card" : "Create Booking"}
+                        {isCreatingBooking ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            {isJobCard ? "Creating..." : "Creating..."}
+                          </>
+                        ) : (
+                          isJobCard ? "Create Job Card" : "Create Booking"
+                        )}
                       </Button>
                     </>
                   )}
@@ -5217,6 +5227,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           open={checkInOpen}
           onOpenChange={(open) => {
             if (!open) {
+              // Suppress spurious close events while the camera dialog is open or
+              // has just closed — on mobile, Radix can fire this for the underlying
+              // dialog when the overlaid camera dialog interacts with the overlay.
+              if (checkInCamBlocksDismissRef.current) return;
               guardBookingShellFromNestedClose();
               dismissCheckIn();
             }
@@ -5311,6 +5325,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                     type="button"
                     size="sm"
                     onClick={() => {
+                      // Block check-in dialog from closing while camera is open.
+                      // Set synchronously (before state update) so the guard is in
+                      // place before Radix processes the new dialog mount.
+                      checkInCamBlocksDismissRef.current = true;
                       if (canUseLiveCameraPreview()) {
                         const promise = requestCameraStream();
                         void promise.catch(() => undefined);
@@ -5375,7 +5393,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         open={checkInMultiCamOpen}
         onOpenChange={(open) => {
           setCheckInMultiCamOpen(open);
-          if (!open) setCheckInMultiCamStreamPromise(null);
+          if (!open) {
+            setCheckInMultiCamStreamPromise(null);
+            // Keep the block for one animation frame after the camera dialog closes.
+            // This absorbs any lingering Radix pointer/focus events that could
+            // otherwise trigger the check-in dialog's onOpenChange(false) on mobile.
+            requestAnimationFrame(() => {
+              checkInCamBlocksDismissRef.current = false;
+            });
+          }
         }}
         streamPromise={checkInMultiCamStreamPromise}
         title="Take Before Photos"
