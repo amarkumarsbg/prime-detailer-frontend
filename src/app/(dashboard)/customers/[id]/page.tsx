@@ -1329,7 +1329,8 @@ export default function CustomerDetailPage() {
                     onClick={async () => {
                       setPortalResetting(true);
                       try {
-                        await updateCustomer(customer.id, { password: portalNewPassword } as any);
+                        const { apiPut } = await import("@/lib/api-client");
+                        await apiPut(`/api/customers/${customer.id}`, { password: portalNewPassword });
                         toast.success(`Password set for ${customer.name}`, {
                           description: `Phone: ${customer.phone}  |  Password: ${portalNewPassword}`,
                           duration: 20000,
