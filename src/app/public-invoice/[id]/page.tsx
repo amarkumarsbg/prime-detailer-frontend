@@ -230,20 +230,20 @@ export default function PublicInvoicePage() {
           <Button
             variant="outline"
             size="sm"
-            className="h-9 text-xs gap-2 text-slate-600 border-slate-200 bg-white hover:bg-white hover:text-slate-600 shadow-sm rounded-lg"
+            className="h-9 text-xs gap-2 text-slate-700 border-slate-200 bg-white hover:bg-white hover:text-slate-800 shadow-sm rounded-lg"
             onClick={handlePrint}
           >
             <Printer className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Print Invoice</span>
+            <span className="inline">Print Invoice</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="h-9 text-xs gap-2 text-slate-600 border-slate-200 bg-white hover:bg-white hover:text-slate-600 shadow-sm rounded-lg"
+            className="h-9 text-xs gap-2 text-slate-700 border-slate-200 bg-white hover:bg-white hover:text-slate-800 shadow-sm rounded-lg"
             onClick={handlePrint}
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Download</span>
+            <span className="inline">Download</span>
           </Button>
         </div>
       </header>
