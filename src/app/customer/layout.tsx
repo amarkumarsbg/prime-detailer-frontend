@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useCustomerAuthStore } from "@/store/customer-auth-store";
 import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
@@ -16,6 +16,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
   const { isAuthenticated, user, logout, ensureValidSession } = useCustomerAuthStore();
   const { bootstrap } = useCustomerDashboardStore();
+  const sessionValidatedRef = useRef(false);
 
   // Initialize session - wait for Zustand persist to hydrate from localStorage
   useEffect(() => {
@@ -59,12 +60,15 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       return;
     }
 
-    // Validate session
-    void ensureValidSession();
+    // Validate session only once per mount (not on every isAuthenticated change)
+    if (!sessionValidatedRef.current) {
+      sessionValidatedRef.current = true;
+      void ensureValidSession();
+    }
 
     // Bootstrap dashboard data
     void bootstrap();
-  }, [ready, isAuthenticated, user, router, ensureValidSession, bootstrap, isLoginPage, isChangePasswordPage]);
+  }, [ready, isAuthenticated, user, router, ensureValidSession, bootstrap, isLoginPage, isChangePasswordPage, sessionValidatedRef]);
 
   if (!isLoginPage && (!ready || !isAuthenticated)) {
     return (

@@ -108,7 +108,10 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
           };
 
           if (!res.ok || body.error || !body.data) {
-            get().logout();
+            // Only logout on 401 Unauthorized — not on 404/500 (endpoint may not be implemented yet)
+            if (res.status === 401) {
+              get().logout();
+            }
             return;
           }
 
@@ -123,7 +126,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
             isAuthenticated: true,
           });
         } catch {
-          get().logout();
+          // Network error — don't logout, user may just be offline
         }
       },
 
