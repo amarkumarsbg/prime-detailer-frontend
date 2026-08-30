@@ -10,6 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import type { Part, ServiceConsumption, VehicleSegment } from "@/types";
@@ -18,6 +25,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatLitresFromMl, isMlTrackedPart } from "@/lib/inventory-units";
 import { partUsedInServices } from "@/lib/inventory/part-used-in";
+import { hasDualUnitPart, getSelectableUnits, formatAvailableStock } from "@/lib/inventory/multi-unit";
 
 const VEHICLE_QTY_SEGMENTS: { value: VehicleSegment; label: string }[] = [
   { value: "HATCHBACK", label: "Hatchback" },
@@ -40,6 +48,12 @@ function resolvePartUnit(part: Part): string {
   return isMlTrackedPart(part) ? "L" : part.primaryUnit;
 }
 
+/** All units that are valid for a consumption line on this part. */
+function validUnitsForPart(part: Part): string[] {
+  if (isMlTrackedPart(part)) return ["L", "ML"];
+  return getSelectableUnits(part);
+}
+
 /** Isolated row so local input state doesn't re-render the whole page on each keystroke. */
 function SelectedPartRow({
   line,
@@ -48,6 +62,7 @@ function SelectedPartRow({
   onUpdateQty,
   onUpdateSegmentQty,
   onUpdateRequired,
+  onUpdateUnit,
 }: {
   line: ServiceConsumption;
   part: Part | undefined;
@@ -55,8 +70,11 @@ function SelectedPartRow({
   onUpdateQty: (qty: number) => void;
   onUpdateSegmentQty: (seg: VehicleSegment, value: number | null) => void;
   onUpdateRequired: (required: boolean) => void;
+  onUpdateUnit: (unit: string) => void;
 }) {
-  const displayUnit = part ? resolvePartUnit(part) : line.unit;
+  // line.unit is the authoritative selected unit stored in the consumption profile
+  const units = part ? getSelectableUnits(part) : [line.unit];
+  const isDualUnit = part ? hasDualUnitPart(part) : false;
 
   const [defaultQty, setDefaultQty] = useState(String(line.quantityPerCar));
   const [segQtys, setSegQtys] = useState<Record<string, string>>(() => {
@@ -88,13 +106,33 @@ function SelectedPartRow({
         </p>
         {part && (
           <p className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">
-            Stock: {stockLabel(part)}
+            Stock: {isMlTrackedPart(part) ? stockLabel(part) : formatAvailableStock(part, line.unit)}
           </p>
         )}
       </div>
       <div className="space-y-2">
+        {isDualUnit && (
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Unit</Label>
+            <Select value={line.unit} onValueChange={onUpdateUnit}>
+              <SelectTrigger className="h-10 sm:h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {units.map((u) => (
+                  <SelectItem key={u} value={u}>{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {part && (
+              <p className="text-[11px] text-muted-foreground">
+                1 {part.primaryUnit} = {part.conversionFactor} {part.secondaryUnit}
+              </p>
+            )}
+          </div>
+        )}
         <div className="space-y-1">
-          <Label className="text-xs font-medium">Default Quantity ({displayUnit})</Label>
+          <Label className="text-xs font-medium">Default Quantity ({line.unit})</Label>
           <Input
             type="number"
             min={0}
@@ -185,10 +223,12 @@ export default function ConfigureServicePartsPage() {
     const normalized = current.map((line) => {
       const part = parts.find((p) => p.id === line.partId);
       if (!part) return line;
-      const expectedUnit = resolvePartUnit(part);
-      if (line.unit === expectedUnit) return line;
+      // Keep the unit if it is valid for this part (covers both primary and secondary units).
+      // Only reset to the default when the stored unit is completely unrecognised.
+      const valid = validUnitsForPart(part);
+      if (valid.includes(line.unit)) return line;
       hasChanges = true;
-      return { ...line, unit: expectedUnit };
+      return { ...line, unit: resolvePartUnit(part) };
     });
     if (!hasChanges) return;
     setCatalog((prev) =>
@@ -289,6 +329,20 @@ export default function ConfigureServicePartsPage() {
     );
   }, [id, setCatalog]);
 
+  const updateUnit = useCallback((partId: string, unit: string) => {
+    setCatalog((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        return {
+          ...s,
+          consumptionProfile: (s.consumptionProfile ?? []).map((l) =>
+            l.partId === partId ? { ...l, unit } : l
+          ),
+        };
+      })
+    );
+  }, [id, setCatalog]);
+
   if (!service) {
     return (
       <div className="text-center py-16 text-muted-foreground">
@@ -381,6 +435,7 @@ export default function ConfigureServicePartsPage() {
                     onUpdateQty={(qty) => updateQty(line.partId, qty)}
                     onUpdateSegmentQty={(seg, val) => updateSegmentQty(line.partId, seg, val)}
                     onUpdateRequired={(req) => updateRequiredPart(line.partId, req)}
+                    onUpdateUnit={(unit) => updateUnit(line.partId, unit)}
                   />
                 );
               })}

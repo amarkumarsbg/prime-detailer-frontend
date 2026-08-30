@@ -162,7 +162,7 @@ export function CatalogItemFormDialog({
     setBarcode(part.barcode ?? "");
     setSupplier(part.supplier === "—" ? "" : part.supplier);
     setPrice(String(part.unitPrice ?? ""));
-    setSecondaryPrice(part.unitPriceSecondary != null ? String(part.unitPriceSecondary) : "");
+    setSecondaryPrice(part.unitPriceSecondary != null ? String(Math.round(part.unitPriceSecondary * 100) / 100) : "");
     setDescription(part.description ?? "");
     setCost(part.costPrice != null ? String(part.costPrice) : "");
     setGstRate(part.gstRate != null ? String(part.gstRate) : "18");
