@@ -13,7 +13,11 @@ export function hasDualUnitPart(part: Part): boolean {
   const sec = part.secondaryUnit?.trim();
   const pri = part.primaryUnit?.trim();
   if (!sec || !pri) return false;
-  return !unitsMatch(sec, pri);
+  if (unitsMatch(sec, pri)) return false;
+  // Treat all count-equivalent unit names as the same unit so that
+  // "Piece + PCS" or "Piece + Pieces" doesn't show a spurious conversion.
+  if (COUNT_UNIT_RE.test(sec) && COUNT_UNIT_RE.test(pri)) return false;
+  return true;
 }
 
 const PACK_UNIT_RE = /^(box|pack|carton|case)$/i;
