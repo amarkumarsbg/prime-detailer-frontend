@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail, Trash2, Camera, X } from "lucide-react";
+import { ArrowLeft, BookMarked, Car, ChevronRight, Crown, Pencil, Plus, Star, MessageSquare, Wallet, Copy, Share2, AlertTriangle, Mail, Trash2, Camera, X, Eye, EyeOff, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -96,6 +96,11 @@ export default function CustomerDetailPage() {
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustLoading, setAdjustLoading] = useState(false);
   const [walletFilter, setWalletFilter] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
+
+  // Customer Portal — password reset
+  const [portalNewPassword, setPortalNewPassword] = useState("");
+  const [portalShowPassword, setPortalShowPassword] = useState(false);
+  const [portalResetting, setPortalResetting] = useState(false);
 
   const { customers: allCustomers, updateCustomer, findByPhone, deleteCustomer } = useCustomerStore();
   const customer = useMemo(() => {
@@ -627,6 +632,7 @@ export default function CustomerDetailPage() {
           <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="feedback">Feedback</TabsTrigger>
           <TabsTrigger value="communications">Messages</TabsTrigger>
+          <TabsTrigger value="portal">Portal</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-4">
@@ -1276,6 +1282,94 @@ export default function CustomerDetailPage() {
         </TabsContent>
         <TabsContent value="communications" className="space-y-4">
           <CustomerCommunications customerId={id} />
+        </TabsContent>
+
+        {/* Customer Portal */}
+        <TabsContent value="portal" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Smartphone className="h-4 w-4" /> Customer Portal Access
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="rounded-lg bg-muted/40 p-4 space-y-1 text-sm">
+                <p className="text-xs text-muted-foreground">Login phone number</p>
+                <p className="font-mono font-semibold text-base">{customer.phone}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Customer signs in at <span className="font-mono">/customer/login</span> using this number + their password.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Reset Password</p>
+                <p className="text-xs text-muted-foreground">
+                  Minimum 6 characters — e.g. <span className="font-mono">AMAR7004</span>. The new password will be shown here for manual delivery if WhatsApp is not configured.
+                </p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={portalShowPassword ? "text" : "password"}
+                      value={portalNewPassword}
+                      onChange={(e) => setPortalNewPassword(e.target.value)}
+                      placeholder="e.g. AMAR7004  (min 6 chars)"
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPortalShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {portalShowPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={portalResetting || portalNewPassword.length < 6}
+                    onClick={async () => {
+                      setPortalResetting(true);
+                      try {
+                        const { buildApiUrl } = await import("@/lib/api-base");
+                        const { useAuthStore } = await import("@/store/auth-store");
+                        const token = useAuthStore.getState().accessToken;
+                        const res = await fetch(buildApiUrl(`/api/customers/${customer.id}`), {
+                          method: "PUT",
+                          headers: {
+                            "Content-Type": "application/json",
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                          },
+                          body: JSON.stringify({ password: portalNewPassword }),
+                        });
+                        const body = await res.json() as {
+                          data?: { customer: typeof customer; credentialsSent?: boolean } | null;
+                          error?: { message?: string } | null;
+                        };
+                        if (!res.ok || body.error || !body.data) {
+                          toast.error("Could not reset password", {
+                            description: body.error?.message ?? "Check API connection.",
+                          });
+                          return;
+                        }
+                        const sent = body.data.credentialsSent;
+                        const wasSent = sent === true;
+                        toast.success(`Password set for ${customer.name}`, {
+                          description: `Phone: ${customer.phone}  |  Password: ${portalNewPassword}  |  WhatsApp: ${wasSent ? "✓ Sent" : "⚠ Not sent (share manually)"}`,
+                          duration: 20000,
+                        });
+                        setPortalNewPassword("");
+                      } catch {
+                        toast.error("Could not reset password. Check API connection.");
+                      } finally {
+                        setPortalResetting(false);
+                      }
+                    }}
+                  >
+                    {portalResetting ? "Saving..." : "Set Password"}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

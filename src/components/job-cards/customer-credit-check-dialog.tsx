@@ -207,15 +207,7 @@ export function CustomerCreditCheckDialog({
       entityLabel: targetInvoice.invoiceNumber,
       details: `${formatCurrency(amount)} received on ${targetInvoice.invoiceNumber} (job card credit check)`,
     });
-    void notifyCustomerPaymentRecordedWhatsApp({
-      invoice: targetInvoice,
-      amount,
-      method: paymentMethod,
-      referenceNumber: referenceNumber.trim() || undefined,
-      paidAt,
-      remainingBalanceAfter: remainingAfter,
-      businessName,
-    });
+    // Payment recorded WhatsApp disabled — payment details are included in the Delivered message
     setRecordOpen(false);
     setTargetInvoice(null);
   };

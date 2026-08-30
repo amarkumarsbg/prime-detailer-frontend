@@ -1268,13 +1268,7 @@ export default function JobCardDetailPage() {
         highEndAdvanceMethod: highEndAdvMethod,
         highEndAdvanceReference: highEndAdvRef.trim() || undefined,
       };
-      notifyHighEndAdvanceRecordedWhatsApp(
-        mergedJob,
-        businessName,
-        num,
-        highEndAdvMethod,
-        highEndAdvRef.trim() || undefined
-      );
+      // Advance recorded — no automated WhatsApp (only 3 messages: check-in, ready, delivered)
     }
     toast.success("Advance saved");
   };
@@ -1521,8 +1515,11 @@ export default function JobCardDetailPage() {
         const latestPhotos =
           useJobCardStore.getState().jobCards.find((j) => j.id === jobCard.id)?.inspectionPhotos ??
           mergedJob.inspectionPhotos;
-        if (hasBeforeInspectionPhoto(latestPhotos) && !beforePhotosWhatsAppSentRef.current) {
+        const lsKey = `checkin-whatsapp-sent:${mergedJob.id}`;
+        const alreadySent = typeof localStorage !== "undefined" && localStorage.getItem(lsKey) === "1";
+        if (hasBeforeInspectionPhoto(latestPhotos) && !beforePhotosWhatsAppSentRef.current && !alreadySent) {
           beforePhotosWhatsAppSentRef.current = true;
+          if (typeof localStorage !== "undefined") localStorage.setItem(lsKey, "1");
           notifyBeforePhotosReadyWhatsApp(mergedJob, businessName);
         }
       }
@@ -1596,7 +1593,7 @@ export default function JobCardDetailPage() {
     if (result.created) {
       toast.success("Invoice created", { description: result.invoiceNumber });
       const inv = useInvoiceStore.getState().invoices.find((i) => i.id === result.invoiceId);
-      if (inv) notifyInvoiceCreatedWhatsApp(inv, businessName);
+      // Invoice created — no automated WhatsApp (only 3 messages: check-in, ready, delivered)
     }
     router.push(`/billing/${result.invoiceId}`);
   };

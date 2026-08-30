@@ -11,6 +11,7 @@ import type { BookingConfirmationBusiness } from "@/lib/booking-confirmation-mes
 import { buildReservationConfirmedMessage } from "@/lib/appointment-messages";
 import { getAppointmentDisplayId } from "@/lib/appointment-ids";
 import { reminderMessageFor } from "@/lib/appointment-reminders";
+import { useSettingsStore } from "@/store/settings-store";
 import {
   buildBeforePhotosReadyWhatsAppMessage,
   buildInvoiceWhatsAppMessage,
@@ -30,16 +31,21 @@ function branchIdForJobCardId(jobCardId: string | undefined): string | undefined
   return useJobCardStore.getState().jobCards.find((j) => j.id === jobCardId)?.branchId;
 }
 
-export function notifyBeforePhotosReadyWhatsApp(job: JobCard, businessName: string): void {
+export function notifyBeforePhotosReadyWhatsApp(
+  job: JobCard,
+  businessName: string,
+  opts?: { temporaryPassword?: string }
+): void {
   const phone = job.customerPhone?.trim();
   if (!phone) return;
-  // Always read from store so we get the latest secureToken (server-signed)
-  const storedJob = useJobCardStore.getState().jobCards.find((j) => j.id === job.id);
-  const secureToken = (storedJob ?? job).secureToken;
-  if (!secureToken) return; // Skip if token not yet available
   const appUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "");
-  const customerPhotosLink = `${appUrl}/customer/job-card/${secureToken}/photos`;
-  const message = buildBeforePhotosReadyWhatsAppMessage(job, { businessName, customerPhotosLink });
+  const portalUrl = `${appUrl}/customer/login`;
+  const message = buildBeforePhotosReadyWhatsAppMessage(job, {
+    businessName,
+    portalUrl,
+    temporaryPassword: opts?.temporaryPassword,
+    customerPhone: phone,
+  });
   void executeCustomerWhatsAppAutomation({
     phone,
     message,
@@ -62,7 +68,21 @@ export function notifyBeforePhotosReadyWhatsApp(job: JobCard, businessName: stri
 export function notifyJobReadyWhatsApp(job: JobCard, businessName: string): void {
   const phone = job.customerPhone?.trim();
   if (!phone) return;
-  const message = buildJobReadyForPickupWhatsAppMessage(job, { businessName });
+  // Retrieve temp password stored during new customer creation (same browser session only)
+  const sessionKey = `customer-temp-pass:${job.customerId}`;
+  const temporaryPassword = typeof sessionStorage !== "undefined"
+    ? sessionStorage.getItem(sessionKey) ?? undefined
+    : undefined;
+  const appUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "");
+  const message = buildJobReadyForPickupWhatsAppMessage(job, {
+    businessName,
+    portalUrl: `${appUrl}/customer/login`,
+    temporaryPassword,
+  });
+  // Clear after use
+  if (temporaryPassword && typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(sessionKey);
+  }
   void executeCustomerWhatsAppAutomation({
     phone,
     message,
@@ -86,8 +106,23 @@ export function notifyJobDeliveredWhatsApp(job: JobCard, businessName: string): 
   const phone = job.customerPhone?.trim();
   if (!phone) return;
   const appUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "");
-  const customerPhotosLink = job.secureToken ? `${appUrl}/customer/job-card/${job.secureToken}/photos` : null;
-  const message = buildJobDeliveredWhatsAppMessage(job, { businessName, customerPhotosLink });
+  const portalUrl = `${appUrl}/customer/login`;
+  // Retrieve stored temp password if still in session (cleared after use)
+  const sessionKey = `customer-temp-pass:${job.customerId}`;
+  const temporaryPassword = typeof sessionStorage !== "undefined"
+    ? sessionStorage.getItem(sessionKey) ?? undefined
+    : undefined;
+  if (temporaryPassword && typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(sessionKey);
+  }
+  // Optional review URL can be wired from settings once a dedicated field exists.
+  const googleReviewUrl: string | undefined = undefined;
+  const message = buildJobDeliveredWhatsAppMessage(job, {
+    businessName,
+    portalUrl,
+    temporaryPassword,
+    googleReviewUrl,
+  });
   void executeCustomerWhatsAppAutomation({
     phone,
     message,

@@ -119,6 +119,11 @@ const ROLE_BADGE_MAP: Record<
     className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
     icon: WrenchIcon,
   },
+  CUSTOMER: {
+    label: "Customer",
+    className: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
+    icon: Users,
+  },
 };
 
 const FALLBACK_ROLE_BADGE = {

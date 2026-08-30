@@ -13,6 +13,24 @@ import type {
 } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 
+/** Resolve the customer portal URL dynamically — uses current origin in browser, env var on server. */
+function resolvePortalUrl(override?: string): string {
+  if (override) return override;
+  if (typeof window !== "undefined") return `${window.location.origin}/customer/login`;
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  return base ? `${base}/customer/login` : "/customer/login";
+}
+/**
+ * Formula matches backend generate-password.ts: FIRSTNAME (uppercase) + first 4 phone digits.
+ * Example: "Amar Kumar" + "7004509790" → "AMAR7004"
+ * Note: only correct if the customer has NOT changed their password.
+ */
+export function inferDefaultCustomerPassword(customerName: string, phone: string): string {
+  const firstName = customerName.trim().split(/\s+/)[0] ?? customerName;
+  const digits = phone.replace(/\D/g, "").slice(0, 4);
+  return `${firstName.toUpperCase()}${digits}`;
+}
+
 const REMINDER_TYPE_LABEL: Record<ReminderType, string> = {
   GENERAL_SERVICE: "General Service",
   OIL_CHANGE: "Oil Change",
@@ -36,7 +54,15 @@ const JOB_STATUS_CUSTOMER_LABEL: Record<JobCardStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
-export function buildJobCardCustomerWhatsAppMessage(job: JobCard): string {
+export function buildJobCardCustomerWhatsAppMessage(
+  job: JobCard,
+  options?: {
+    /** Include portal credentials block (for new customers only) */
+    temporaryPassword?: string;
+    /** Portal URL — defaults to /customer/login on current origin */
+    portalUrl?: string;
+  }
+): string {
   const firstName = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
   const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
   const serviceNames = job.services
@@ -49,19 +75,37 @@ export function buildJobCardCustomerWhatsAppMessage(job: JobCard): string {
   const statusLabel =
     JOB_STATUS_CUSTOMER_LABEL[job.status] ?? JOB_STATUS_CUSTOMER_LABEL.RECEIVED;
 
+  const portalUrl = resolvePortalUrl(options?.portalUrl);
+
+  const credentialsBlock = options?.temporaryPassword
+    ? [
+        ``,
+        `*Track your service online:*`,
+        `📱 Phone: ${job.customerPhone}`,
+        `🔑 Password: ${options.temporaryPassword}`,
+        `🔗 Login: ${portalUrl}`,
+      ]
+    : [
+        ``,
+        `*Track your service online:*`,
+        `🔗 ${portalUrl}`,
+        `Login with your registered phone number.`,
+      ];
+
   return [
     `Hi *${firstName}*,`,
     ``,
-    `Update on your job *${job.jobNumber}* at *Prime Detailers*.`,
+    `Your job card has been created at *Prime Detailers*.`,
+    `Job: *${job.jobNumber}*`,
     `Status: *${statusLabel}*`,
     `Vehicle: ${vehicle}`,
     serviceNames ? `Services: ${serviceNames}${more}` : "",
+    ...credentialsBlock,
     ``,
     `Reply here if you have any questions.`,
-    ``,
     `— Team Prime Detailers`,
   ]
-    .filter(Boolean)
+    .filter((l) => l !== null && l !== undefined && (l !== "" || true))
     .join("\n");
 }
 
@@ -589,6 +633,11 @@ export function buildInvoicePaymentReceivedWhatsAppMessage(
     ``,
     `*Balance due:* *${formatCurrency(Math.max(0, remainingBalanceAfter))}*`,
     ``,
+    Math.max(0, remainingBalanceAfter) === 0
+      ? `✅ Payment complete. View your invoice on the portal:`
+      : `View your invoice and balance on the portal:`,
+    `🔗 ${resolvePortalUrl()}`,
+    ``,
     `Thank you for your payment.`,
     ``,
     `— ${opts.businessName}`,
@@ -618,25 +667,44 @@ export function appendAdvanceAckToJobMessage(base: string, job: JobCard): string
 
 export function buildJobReadyForPickupWhatsAppMessage(
   job: JobCard,
-  opts: { businessName: string }
+  opts: { businessName: string; portalUrl?: string; temporaryPassword?: string }
 ): string {
   const firstName = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
   const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
-  const deliveryHint = job.expectedDelivery
-    ? format(parseISO(job.expectedDelivery), "EEE, dd-MMM-yyyy")
-    : null;
+  const serviceNames = job.services.map((s) => s.name).filter(Boolean).slice(0, 6).join(", ");
+  const portalUrl = resolvePortalUrl(opts.portalUrl);
+  const phone = job.customerPhone?.trim() ?? "";
+  const password = opts.temporaryPassword ?? inferDefaultCustomerPassword(job.customerName, phone);
+
+  const credentialsBlock = [
+    `Your Customer login id and password is 👇🏻`,
+    ``,
+    `📱 Phone: ${phone}`,
+    `🔑 Password: ${password}`,
+    ``,
+    `🔗 Login: ${portalUrl}`,
+  ];
 
   return [
     `Hi *${firstName}*,`,
     ``,
-    `Good news — your vehicle is *ready for pickup* from *${opts.businessName}*.`,
+    `Good News- your vehicle is *ready for pickup* from *${opts.businessName}*.`,
+    ``,
     `Job: *${job.jobNumber}*`,
+    `Status: *Ready For Pickup*`,
     `Vehicle: ${vehicle}`,
-    deliveryHint ? `Expected originally: ${deliveryHint}` : "",
+    serviceNames ? `Services: ${serviceNames}` : "",
     ``,
-    `Please collect at your convenience. Reply here if you need deferral or billing help.`,
+    `*Track your service status online & View your invoice:*`,
     ``,
-    `— ${opts.businessName}`,
+    ...credentialsBlock,
+    ``,
+    `*View Before photos and Job Status by clicking on the link above*`,
+    ``,
+    `Please Collect your vehicle at your convenience.`,
+    ``,
+    `Reply here if you have any questions.`,
+    `— Team ${opts.businessName}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -644,51 +712,130 @@ export function buildJobReadyForPickupWhatsAppMessage(
 
 export function buildBeforePhotosReadyWhatsAppMessage(
   job: JobCard,
-  opts: { businessName: string; customerPhotosLink: string }
+  opts: {
+    businessName: string;
+    portalUrl?: string;
+    /** Temporary password for new customers */
+    temporaryPassword?: string;
+    /** Customer phone (for credentials block) */
+    customerPhone?: string;
+  }
 ): string {
   const firstName = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
   const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
+  const serviceNames = job.services.map((s) => s.name).filter(Boolean).slice(0, 6).join(", ");
+  const portalUrl = resolvePortalUrl(opts.portalUrl);
+  const phone = opts.customerPhone ?? job.customerPhone ?? "";
+  // Use provided temp password or reconstruct the default (FIRSTNAME + first4digits)
+  const password = opts.temporaryPassword ?? inferDefaultCustomerPassword(job.customerName, phone);
+
+  const credentialsBlock = phone
+    ? [
+        ``,
+        `Your Customer login id and password is 👇🏻`,
+        ``,
+        `📱 Phone: ${phone}`,
+        `🔑 Password: ${password}`,
+        ``,
+        `🔗 Login: ${portalUrl}`,
+        ``,
+        `View Before photos and Job Status by clicking on the link above`,
+      ]
+    : [
+        ``,
+        `*Track your service online:*`,
+        `🔗 ${portalUrl}`,
+      ];
 
   return [
     `Hi *${firstName}*,`,
     ``,
-    `Your *${vehicle}* has been received at *${opts.businessName}*.`,
+    `Your job card has been created at *${opts.businessName}*.`,
     `Job: *${job.jobNumber}*`,
+    `Status: *Received*`,
+    `Vehicle: ${vehicle}`,
+    serviceNames ? `Services: ${serviceNames}` : "",
+    ...credentialsBlock,
     ``,
-    `📸 *Before photos* have been taken and are ready for your review.`,
-    `View Check-In Photos:`,
-    opts.customerPhotosLink,
+    `Your vehicle is now with our team, we will notify you once it is ready for pickup.`,
     ``,
-    `Your vehicle is now with our team. We’ll notify you once it’s ready for pickup.`,
-    ``,
-    `— ${opts.businessName}`,
-  ].join("\n");
+    `Reply here if you have any questions.`,
+    `— Team ${opts.businessName}`,
+  ]
+    .filter((l) => l !== undefined && l !== null)
+    .join("\n");
 }
+
 
 export function buildJobDeliveredWhatsAppMessage(
   job: JobCard,
-  opts: { businessName: string; customerPhotosLink?: string | null }
+  opts: {
+    businessName: string;
+    portalUrl?: string;
+    temporaryPassword?: string;
+    /** Payment details to include in the final message */
+    payment?: {
+      invoiceNumber: string;
+      amountPaid: number;
+      method: PaymentMethod;
+      balanceDue: number;
+      paidAt: string;
+    };
+    /** Google review link */
+    googleReviewUrl?: string;
+  }
 ): string {
   const firstName = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
-  const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
+  const vehicle = job.vehicleRegNumber?.trim() ?? job.vehicleMakeModel?.trim() ?? "";
+  const phone = job.customerPhone?.trim() ?? "";
+  const portalUrl = resolvePortalUrl(opts.portalUrl);
+
+  const paymentBlock = opts.payment
+    ? [
+        ``,
+        `We've recorded your payment for invoice *${opts.payment.invoiceNumber}* at *${opts.businessName}*.`,
+        `Job: *${job.jobNumber}*`,
+        `Vehicle: ${vehicle}`,
+        `*Amount paid:* *${formatCurrency(opts.payment.amountPaid)}*`,
+        `Method: *${PAYMENT_METHOD_CUSTOMER_LABEL[opts.payment.method] ?? opts.payment.method}*`,
+        `Date: ${format(parseISO(opts.payment.paidAt), "EEE, dd-MMM-yyyy 'at' h:mm a")}`,
+        `*Balance due:* *${formatCurrency(Math.max(0, opts.payment.balanceDue))}*`,
+        `Thank you for your payment.`,
+      ]
+    : [];
+  const password = opts.temporaryPassword ?? inferDefaultCustomerPassword(firstName, phone);
+  const reviewLine = opts.googleReviewUrl
+    ? `If yes please review us on Google: ${opts.googleReviewUrl}`
+    : `If yes please review us on Google: https://maps.app.goo.gl/example-review-link`;
 
   return [
     `Hi *${firstName}*,`,
     ``,
-    `Thank you for choosing *${opts.businessName}*.`,
-    `Your job *${job.jobNumber}* is marked *delivered* for ${vehicle}.`,
+    `Thank you for choosing ${opts.businessName}. Your vehicle has been marked Delivered `,
     ``,
-    opts.customerPhotosLink ? `📸 *Your Before & After Transformation is ready!*` : null,
-    opts.customerPhotosLink ? `(View Before photos, After photos & Before vs After comparison)` : null,
-    opts.customerPhotosLink || null,
-    opts.customerPhotosLink ? `` : null,
-    `We hope you’re happy with the work. For invoice / warranty questions, reply here or visit the workshop.`,
+    ...paymentBlock,
     ``,
-    `— ${opts.businessName}`,
+    `Your Customer login id and password is 👇🏻`,
+    `📱 Phone: ${phone}`,
+    `🔑 Password: ${password}`,
+    ``,
+    `*View your reward points in your profile.*`,
+    ``,
+    ``,
+    `Customer login link`,
+    ``,
+    `${portalUrl}`,
+    ``,
+    `We hope you are happy with our work. `,
+    ``,
+    `${reviewLine}`,
+    ``,
+    `— Team ${opts.businessName}`,
   ]
     .filter(Boolean)
     .join("\n");
 }
+
 
 export function buildQuotationConvertedWhatsAppMessage(
   q: Quotation,
