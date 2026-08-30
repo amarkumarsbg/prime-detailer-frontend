@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, Fragment } from "react";
-import { ChevronDown, ChevronUp, CreditCard, Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -37,10 +37,12 @@ export function PurchaseExpandableTable({
   purchases,
   onPay,
   onEdit,
+  onDelete,
 }: {
   purchases: ProductPurchase[];
   onPay?: (purchase: ProductPurchase) => void;
   onEdit?: (purchase: ProductPurchase) => void;
+  onDelete?: (purchase: ProductPurchase) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -141,7 +143,22 @@ export function PurchaseExpandableTable({
                           <CreditCard className="h-4 w-4" />
                         </Button>
                       ) : null}
-                      {!onEdit && !(due > 0.01 && onPay) && (
+                      {onDelete && (p.amountPaid ?? 0) <= 0.01 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label={`Delete purchase ${p.purchaseNumber ?? p.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(p);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {!onEdit && !(due > 0.01 && onPay) && !(onDelete && (p.amountPaid ?? 0) <= 0.01) && (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </div>

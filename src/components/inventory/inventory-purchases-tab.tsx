@@ -65,6 +65,7 @@ export function InventoryPurchasesTab({
   const parts = useInventoryStore((s) => s.parts);
   const addInventoryPurchase = useInventoryStore((s) => s.addInventoryPurchase);
   const updateInventoryPurchase = useInventoryStore((s) => s.updateInventoryPurchase);
+  const deleteInventoryPurchase = useInventoryStore((s) => s.deleteInventoryPurchase);
   const updatePart = useInventoryStore((s) => s.updatePart);
   const branches = useBranchStore((s) => s.branches);
   const vendors = useExpenseStore((s) => s.vendorDirectory);
@@ -76,6 +77,7 @@ export function InventoryPurchasesTab({
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ProductPurchase | null>(null);
   const isEditing = editTarget !== null;
+  const [deleteTarget, setDeleteTarget] = useState<ProductPurchase | null>(null);
   const [quickPartOpen, setQuickPartOpen] = useState(false);
   const [quickPartEditingPart, setQuickPartEditingPart] = useState<Part | null>(null);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
@@ -432,7 +434,50 @@ export function InventoryPurchasesTab({
         purchases={rows}
         onPay={(p) => setPayTarget(p)}
         onEdit={openEdit}
+        onDelete={(p) => setDeleteTarget(p)}
       />
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className={cn(dialogMobileSheetContentClasses, "max-w-sm")}>
+          <DialogHeader className={dialogMobileSheetHeaderClasses}>
+            <DialogTitle>Delete purchase?</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 py-4">
+            <p className="text-sm text-muted-foreground">
+              This will permanently remove{" "}
+              <span className="font-semibold text-foreground">
+                {deleteTarget?.purchaseNumber ?? deleteTarget?.id}
+              </span>{" "}
+              and reverse its stock movements. This cannot be undone.
+            </p>
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              Only unpaid purchases can be deleted. Purchases with recorded payments are locked.
+            </p>
+          </div>
+          <DialogFooter className="px-6 pb-4 gap-2 flex-col-reverse sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (!deleteTarget) return;
+                const result = deleteInventoryPurchase(deleteTarget.id);
+                if (!result.ok) {
+                  toast.error(result.error);
+                } else {
+                  toast.success(`Purchase ${deleteTarget.purchaseNumber ?? deleteTarget.id} deleted and stock reversed.`);
+                }
+                setDeleteTarget(null);
+              }}
+            >
+              Delete &amp; reverse stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={open}

@@ -81,6 +81,7 @@ interface InventoryStore {
     roundOff?: number;
     recordedBy: string;
   }) => { ok: true; purchase: ProductPurchase } | { ok: false; error: string };
+  deleteInventoryPurchase: (purchaseId: string) => { ok: true } | { ok: false; error: string };
   renamePurchaseVendor: (fromName: string, toName: string) => void;
   recordStockAdjustment: (input: {
     partId: string;
@@ -689,6 +690,48 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     });
     persistInventorySnapshot(get);
     return { ok: true, purchase: updated };
+  },
+
+  deleteInventoryPurchase: (purchaseId) => {
+    const purchase = get().productPurchases.find((p) => p.id === purchaseId);
+    if (!purchase) return { ok: false, error: "Purchase not found." };
+    // Block deletion if any payment has been recorded
+    const paid = purchase.amountPaid ?? 0;
+    if (paid > 0.01) {
+      return {
+        ok: false,
+        error: "Cannot delete a purchase that has payments recorded. Reverse the payments first.",
+      };
+    }
+    // Reverse stock: deduct everything this purchase added
+    const oldMovements = get().stockMovements.filter((m) => m.purchaseId === purchaseId);
+    let nextParts = get().parts;
+    let nextStocks = get().branchStocks;
+    const branchId = purchase.branchId ?? "";
+    for (const mv of oldMovements) {
+      const part = nextParts.find((p) => p.id === mv.partId);
+      if (!part) continue;
+      const canonical = quantityToCanonicalSecondary(part, mv.quantity, mv.unit);
+      nextParts = nextParts.map((p) =>
+        p.id === mv.partId ? deductCanonicalSecondary(p, canonical) : p
+      );
+      const applied = applyBranchCanonicalDelta(
+        nextStocks,
+        part,
+        branchId,
+        -canonical,
+        new Date().toISOString()
+      );
+      if (applied.ok) nextStocks = applied.stocks;
+    }
+    set({
+      parts: nextParts,
+      branchStocks: nextStocks,
+      productPurchases: get().productPurchases.filter((p) => p.id !== purchaseId),
+      stockMovements: get().stockMovements.filter((m) => m.purchaseId !== purchaseId),
+    });
+    persistInventorySnapshot(get);
+    return { ok: true };
   },
 
   renamePurchaseVendor: (fromName, toName) => {
