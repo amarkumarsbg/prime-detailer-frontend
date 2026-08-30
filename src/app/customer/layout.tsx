@@ -6,8 +6,10 @@ import { useCustomerAuthStore } from "@/store/customer-auth-store";
 import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
+import { getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, FileText, Car, MoreHorizontal, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound, Moon, Sun } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LogOut, Home, FileText, Car, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound, Moon, Sun, Menu, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -16,13 +18,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { isAuthenticated, user, logout, ensureValidSession } = useCustomerAuthStore();
-  const { bootstrap } = useCustomerDashboardStore();
+  const { bootstrap, customer } = useCustomerDashboardStore();
   const sessionValidatedRef = useRef(false);
   const businessName = useSettingsStore((s) => s.businessName) || "Prime Detailers";
   const businessLogo = useSettingsStore((s) => s.businessLogo);
   const logoUrl = resolveUploadsPublicUrl(businessLogo);
+  const customerAvatarSrc = resolveUploadsPublicUrl(customer?.avatar ?? user?.avatar ?? undefined);
+  const customerDisplayName = customer?.name || user?.name || "Customer";
   const { resolvedTheme, setTheme } = useTheme();
 
   // Initialize session - wait for Zustand persist to hydrate from localStorage
@@ -86,13 +91,12 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     router.replace("/customer/login");
   };
 
-  // Mobile bottom nav (5 items only)
+  // Mobile bottom nav
   const mobileNavItems = [
     { label: "Home", icon: Home, href: "/customer/dashboard", testId: "nav-home" },
     { label: "Jobs", icon: ClipboardList, href: "/customer/jobs", testId: "nav-jobs" },
     { label: "Invoices", icon: FileText, href: "/customer/invoices", testId: "nav-invoices" },
     { label: "Vehicles", icon: Car, href: "/customer/vehicles", testId: "nav-vehicles" },
-    { label: "More", icon: MoreHorizontal, href: "/customer/more", testId: "nav-more" },
   ];
 
   // Desktop sidebar — grouped sections
@@ -136,9 +140,13 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         <div className="flex flex-1 items-center justify-between min-w-0">
           {/* Left: current page title */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center md:hidden shrink-0">
+            <Link
+              href="/customer/dashboard"
+              className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center md:hidden shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              aria-label="Go to customer home"
+            >
               <Car className="h-5 w-5 text-primary-foreground" />
-            </div>
+            </Link>
             <h1 className="text-xl font-bold tracking-tight text-foreground truncate">
               {(() => {
                 if (pathname === "/customer/dashboard") return "Dashboard";
@@ -163,9 +171,14 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <div className="flex items-center gap-1 shrink-0">
             {/* Mobile only: show avatar in header */}
             <div className="flex md:hidden items-center gap-2 mr-1">
-              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
-                {user?.name?.charAt(0)?.toUpperCase() || "C"}
-              </div>
+              <Avatar className="h-8 w-8 shrink-0 border border-border/70">
+                {customerAvatarSrc ? (
+                  <AvatarImage src={customerAvatarSrc} alt={customerDisplayName} className="object-cover" key={customerAvatarSrc} />
+                ) : null}
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                  {getInitials(customerDisplayName)}
+                </AvatarFallback>
+              </Avatar>
             </div>
             <Button
               variant="ghost"
@@ -213,13 +226,138 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            data-testid="nav-menu"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+            <span>Menu</span>
+          </button>
         </div>
       </nav>
+
+      {/* Mobile side drawer menu (workshop-style) */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 h-dvh max-h-screen min-h-0 w-[288px] flex flex-col transition-transform duration-300 md:hidden bg-sidebar text-sidebar-foreground border border-sidebar-border shadow-sm",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border shrink-0 box-border">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              href="/customer/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              aria-label="Go to customer home"
+            >
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shrink-0 border border-sidebar-border" />
+              ) : (
+                <div className="h-9 w-9 rounded-lg bg-sidebar-active flex items-center justify-center shrink-0">
+                  <Car className="h-5 w-5 text-sidebar-active-foreground" />
+                </div>
+              )}
+            </Link>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-sidebar-accent-foreground truncate leading-tight">{businessName}</p>
+              <p className="text-[11px] text-sidebar-foreground opacity-80">Customer Portal</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
+            aria-label="Close menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-2.5">
+          {sidebarSections.map((section, si) => (
+            <div key={section.title} className={cn("space-y-0.5", si > 0 ? "mt-4" : "") }>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground opacity-60 px-3 pb-1.5">
+                {section.title}
+              </p>
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium origin-left",
+                      "translate-x-0 scale-100 transform-gpu transition-[color,background-color,transform,box-shadow] duration-200 ease-out",
+                      isActive
+                        ? "bg-sidebar-active text-sidebar-active-foreground shadow-sm"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm motion-safe:hover:scale-[1.03] motion-safe:hover:translate-x-0.5"
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "h-4 w-4 shrink-0 transition-transform duration-200 ease-out",
+                        isActive ? "opacity-100" : "opacity-90 motion-safe:group-hover:scale-125"
+                      )}
+                    />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <div className="p-2.5 border-t border-sidebar-border space-y-1 shrink-0">
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl">
+            <Avatar className="h-8 w-8 shrink-0 border border-sidebar-border">
+              {customerAvatarSrc ? (
+                <AvatarImage src={customerAvatarSrc} alt={customerDisplayName} className="object-cover" key={customerAvatarSrc} />
+              ) : null}
+              <AvatarFallback className="bg-sidebar-active text-sidebar-active-foreground text-sm font-bold">
+                {getInitials(customerDisplayName)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-sidebar-accent-foreground truncate leading-tight">{customerDisplayName}</p>
+              <p className="text-[10px] text-sidebar-foreground opacity-70">Customer</p>
+            </div>
+          </div>
+          <div className="border-t border-sidebar-border my-0.5" />
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              handleLogout();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors dark:text-rose-400 dark:hover:bg-rose-500/15"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>Log out</span>
+          </button>
+        </div>
+      </aside>
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex-col z-40">
         {/* Brand header — company name + logo like staff sidebar */}
-        <div className="flex items-center gap-3 h-16 px-4 shrink-0 border-b border-sidebar-border">
+        <Link
+          href="/customer/dashboard"
+          className="flex items-center gap-3 h-16 px-4 shrink-0 border-b border-sidebar-border rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        >
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoUrl} alt={businessName} className="h-9 w-9 rounded-lg object-cover shrink-0 border border-sidebar-border" />
@@ -232,7 +370,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             <p className="text-sm font-bold text-sidebar-accent-foreground truncate leading-tight">{businessName}</p>
             <p className="text-[11px] text-sidebar-foreground opacity-80">Customer Portal</p>
           </div>
-        </div>
+        </Link>
 
         <nav className="flex flex-col gap-0.5 p-2.5 flex-1 overflow-y-auto">
           {sidebarSections.map((section, si) => (
@@ -271,11 +409,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         <div className="p-2.5 border-t border-sidebar-border space-y-1">
           {/* Customer name + avatar */}
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl">
-            <div className="h-8 w-8 rounded-full bg-sidebar-active flex items-center justify-center text-sidebar-active-foreground text-sm font-bold shrink-0">
-              {user?.name?.charAt(0)?.toUpperCase() || "C"}
-            </div>
+            <Avatar className="h-8 w-8 shrink-0 border border-sidebar-border">
+              {customerAvatarSrc ? (
+                <AvatarImage src={customerAvatarSrc} alt={customerDisplayName} className="object-cover" key={customerAvatarSrc} />
+              ) : null}
+              <AvatarFallback className="bg-sidebar-active text-sidebar-active-foreground text-sm font-bold">
+                {getInitials(customerDisplayName)}
+              </AvatarFallback>
+            </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-semibold text-sidebar-accent-foreground truncate leading-tight">{user?.name || "Customer"}</p>
+              <p className="text-[13px] font-semibold text-sidebar-accent-foreground truncate leading-tight">{customerDisplayName}</p>
               <p className="text-[10px] text-sidebar-foreground opacity-70">Customer</p>
             </div>
           </div>

@@ -62,11 +62,11 @@ export default function CustomerInvoicesPage() {
       <div className="space-y-4">
         {/* Billing Summary */}
         {invoices.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 min-[520px]:grid-cols-3 gap-3">
             <Card>
               <CardContent className="pt-4">
                 <p className="text-xs font-medium text-muted-foreground">Total Billed</p>
-                <p className="text-xl font-bold mt-1">
+                <p className="text-lg min-[520px]:text-xl font-bold mt-1 leading-tight tabular-nums wrap-break-word">
                   {formatCurrency(totalBilled)}
                 </p>
               </CardContent>
@@ -75,7 +75,7 @@ export default function CustomerInvoicesPage() {
             <Card>
               <CardContent className="pt-4">
                 <p className="text-xs font-medium text-muted-foreground">Paid</p>
-                <p className="text-xl font-bold mt-1 text-green-600">
+                <p className="text-lg min-[520px]:text-xl font-bold mt-1 leading-tight tabular-nums wrap-break-word text-green-600">
                   {formatCurrency(totalPaid)}
                 </p>
               </CardContent>
@@ -85,7 +85,7 @@ export default function CustomerInvoicesPage() {
               <CardContent className="pt-4">
                 <p className="text-xs font-medium text-muted-foreground">Due</p>
                 <p className={cn(
-                  "text-xl font-bold mt-1",
+                  "text-lg min-[520px]:text-xl font-bold mt-1 leading-tight tabular-nums wrap-break-word",
                   totalDue > 0 ? "text-red-600" : "text-green-600"
                 )}>
                   {formatCurrency(totalDue)}
