@@ -158,6 +158,24 @@ export default function CustomersPage() {
     return counts;
   }, [vehicles]);
 
+  const vehicleSearchByCustomerId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of vehicles) {
+      const customerId = String(v.customerId ?? "");
+      if (!customerId) continue;
+      const merged = [
+        map.get(customerId) ?? "",
+        String(v.registrationNumber ?? ""),
+        String(v.make ?? ""),
+        String(v.model ?? ""),
+      ]
+        .join(" ")
+        .trim();
+      map.set(customerId, merged);
+    }
+    return map;
+  }, [vehicles]);
+
   const customerVehicleCount = (item: Record<string, unknown>): number => {
     const fromRow = safeNumber(item.vehiclesCount, Number.NaN);
     if (Number.isFinite(fromRow)) return fromRow;
@@ -192,12 +210,34 @@ export default function CustomersPage() {
   }, [searchQuery, filters, fetchPaginatedCustomers, isInitialLoaded]);
 
   const visibleCustomers = useMemo(() => {
-    if (activeFilter !== DASHBOARD_FILTER.INACTIVE) return filteredData;
-    return filteredData.filter((customer) => {
+    const base = activeFilter !== DASHBOARD_FILTER.INACTIVE
+      ? filteredData
+      : filteredData.filter((customer) => {
+          const customerId = String(customer.id ?? "");
+          return jobCustomerIds.has(customerId) && isInactiveCustomer(customer as any);
+        });
+
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return base;
+    const qNorm = normalizeVehicleToken(q);
+
+    return base.filter((customer) => {
       const customerId = String(customer.id ?? "");
-      return jobCustomerIds.has(customerId) && isInactiveCustomer(customer as any);
+      const name = String(customer.name ?? "").toLowerCase();
+      const phone = String(customer.phone ?? "").toLowerCase();
+      const email = String(customer.email ?? "").toLowerCase();
+      const vehicleBlob = (vehicleSearchByCustomerId.get(customerId) ?? "").toLowerCase();
+      const vehicleNorm = normalizeVehicleToken(vehicleBlob);
+
+      return (
+        name.includes(q) ||
+        phone.includes(q) ||
+        email.includes(q) ||
+        vehicleBlob.includes(q) ||
+        vehicleNorm.includes(qNorm)
+      );
     });
-  }, [activeFilter, filteredData, jobCustomerIds]);
+  }, [activeFilter, filteredData, jobCustomerIds, searchQuery, vehicleSearchByCustomerId]);
 
   const loadMore = () => {
     if (!isLoading && hasMore) {
