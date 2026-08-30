@@ -109,7 +109,11 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
 
   addCustomer: async (customer) => {
     try {
-      const data = await apiPost<{ customer: Customer }>("/api/customers", {
+      const data = await apiPost<{
+        customer: Customer;
+        temporaryPassword?: string;
+        credentialsSent?: boolean;
+      }>("/api/customers", {
         name: customer.name,
         phone: customer.phone,
         email: customer.email,
@@ -124,6 +128,17 @@ export const useCustomerStore = create<CustomerStore>((set, get) => ({
         emailVerified: customer.emailVerified,
       });
       set((state) => ({ customers: [data.customer, ...state.customers] }));
+
+      // If credentials were not sent via WhatsApp (Twilio not configured),
+      // attach the temporary password to the customer object so callers can
+      // display it manually to staff.
+      if (data.temporaryPassword && data.credentialsSent === false) {
+        return { ...data.customer, _temporaryPassword: data.temporaryPassword, _credentialsSent: false } as Customer & { _temporaryPassword: string; _credentialsSent: boolean };
+      }
+      if (data.temporaryPassword) {
+        return { ...data.customer, _temporaryPassword: data.temporaryPassword, _credentialsSent: data.credentialsSent ?? true } as Customer & { _temporaryPassword: string; _credentialsSent: boolean };
+      }
+
       return data.customer;
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) return null;

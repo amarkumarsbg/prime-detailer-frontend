@@ -149,6 +149,8 @@ export default function LoginPage() {
           window.location.assign("/change-password");
         } else if (authUser?.role === "PLATFORM_OWNER") {
           window.location.assign("/saas-admin/organizations");
+        } else if (authUser?.role === "CUSTOMER") {
+          window.location.assign("/customer/dashboard");
         } else {
           window.location.assign("/dashboard");
         }

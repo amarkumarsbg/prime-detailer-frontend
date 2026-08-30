@@ -100,6 +100,7 @@ export function roleDisplayLabel(role: UserRole): string {
     SUPERVISOR: "Supervisor",
     RECEPTIONIST: "Receptionist",
     MECHANIC: "Mechanic",
+    CUSTOMER: "Customer",
   };
   return labels[role];
 }

@@ -502,6 +502,8 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [checkInMultiCamStreamPromise, setCheckInMultiCamStreamPromise] =
     useState<Promise<MediaStream> | null>(null);
   const checkInJobIdRef = useRef<string | null>(null);
+  /** Stores temporary password for new customers so it can be included in the check-in WhatsApp */
+  const newCustomerTempPassRef = useRef<string | undefined>(undefined);
   const inlineVehicleFormRef = useRef<{
     validate: () => Promise<boolean>;
     getValues: () => AddVehicleFormData & { registrationNumber: string; isVin: boolean };
@@ -1517,6 +1519,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       : undefined;
 
     let custId = existingCustomerId ?? `cust-local-${Date.now()}`;
+    let newCustomerTempPass: string | undefined;
     const inlineVals =
       showInlineVehicleDetailsForm && inlineVehicleFormRef.current
         ? inlineVehicleFormRef.current.getValues()
@@ -1590,7 +1593,21 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         return;
       }
       custId = createdWalkIn.id;
-      if (isJobCard && referrerInfo) {
+      newCustomerTempPass = (createdWalkIn as any)._temporaryPassword as string | undefined;
+      newCustomerTempPassRef.current = newCustomerTempPass;
+      // Store in sessionStorage so Ready-for-Pickup message can include it later in the same session
+      if (newCustomerTempPass && typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem(`customer-temp-pass:${custId}`, newCustomerTempPass);
+      }
+
+      // Show temporary password to staff if WhatsApp delivery was skipped
+      const tempPass = (createdWalkIn as any)._temporaryPassword as string | undefined;
+      if (tempPass) {
+        toast.info("Share login credentials manually", {
+          description: `Phone: ${customerPhone}  |  Password: ${tempPass}`,
+          duration: 20000,
+        });
+      }      if (isJobCard && referrerInfo) {
         toast.success("Referral code saved", {
           description:
             "Wallet rewards for both customers apply on the first qualifying invoice (Referrals rules).",
@@ -2008,13 +2025,9 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       details: `Job ${jobNumber} created for ${customerName.trim()} — ${vehicleNumber}`,
     });
 
-    void sendJobCardCreatedWhatsApp(
-      newJobCard,
-      appendAdvanceAckToJobMessage(
-        buildJobCardCustomerWhatsAppMessage(newJobCard),
-        newJobCard
-      )
-    );
+    // NOTE: WhatsApp with credentials is sent on check-in completion (after before photos)
+    // so the customer gets one complete message with job details + login link.
+    // void sendJobCardCreatedWhatsApp(...)  ← moved to handleCheckInSubmit
 
     setCheckInJob({
       id,
@@ -2209,6 +2222,22 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
       details: `Vehicle check-in — ${uploaded.length} before photo(s)`,
     });
     toast.success("Vehicle checked in", { description: `${checkInJob.jobNumber} is ready for the workshop.` });
+
+    // Send WhatsApp with job details + credentials (for new customers) now that check-in is complete
+    const completedJob = useJobCardStore.getState().jobCards.find((j) => j.id === checkInJob.id);
+    if (completedJob) {
+      const lsKey = `checkin-whatsapp-sent:${completedJob.id}`;
+      const alreadySent = typeof localStorage !== "undefined" && localStorage.getItem(lsKey) === "1";
+      if (!alreadySent) {
+        if (typeof localStorage !== "undefined") localStorage.setItem(lsKey, "1");
+        const { notifyBeforePhotosReadyWhatsApp } = await import("@/lib/whatsapp-automation-triggers");
+        notifyBeforePhotosReadyWhatsApp(completedJob, businessName, {
+          temporaryPassword: newCustomerTempPassRef.current,
+        });
+        newCustomerTempPassRef.current = undefined;
+      }
+    }
+
     const jid = checkInJob.id;
     checkInJobIdRef.current = null;
     setCheckInOpen(false);

@@ -343,7 +343,21 @@ export default function CustomersPage() {
       }
       reset();
       setAddDialogOpen(false);
-      toast.success("Customer added", { description: `${data.name} has been added successfully.` });
+
+      // Show temporary password + WhatsApp delivery status
+      const tempPass = (created as any)._temporaryPassword as string | undefined;
+      const credSent = (created as any)._credentialsSent as boolean | undefined;
+      if (tempPass) {
+        navigator.clipboard.writeText(tempPass).catch(() => {});
+        toast.success(credSent ? "Customer added — WhatsApp sent ✓" : "Customer added — share credentials manually", {
+          description: `Phone: ${data.phone}  |  Password: ${tempPass}${credSent ? "" : "  (copied to clipboard)"}`,
+          duration: 25000,
+        });
+      } else {
+        toast.success("Customer added", {
+          description: `${data.name} — login credentials sent via WhatsApp.`,
+        });
+      }
     } catch {
       toast.error("Could not add customer", {
         description: "Check that the API server is running (npm run dev in /backend).",
