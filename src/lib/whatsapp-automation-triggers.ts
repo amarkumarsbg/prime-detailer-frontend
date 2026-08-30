@@ -115,8 +115,8 @@ export function notifyJobDeliveredWhatsApp(job: JobCard, businessName: string): 
   if (temporaryPassword && typeof sessionStorage !== "undefined") {
     sessionStorage.removeItem(sessionKey);
   }
-  // Google review URL from settings if available
-  const googleReviewUrl = useSettingsStore.getState().googleReviewUrl ?? undefined;
+  // Optional review URL can be wired from settings once a dedicated field exists.
+  const googleReviewUrl: string | undefined = undefined;
   const message = buildJobDeliveredWhatsAppMessage(job, {
     businessName,
     portalUrl,
