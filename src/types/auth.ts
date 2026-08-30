@@ -7,7 +7,8 @@ export type UserRole =
   | "MANAGER"
   | "SUPERVISOR"
   | "RECEPTIONIST"
-  | "MECHANIC";
+  | "MECHANIC"
+  | "CUSTOMER";
 
 export interface Branch {
   id: string;
@@ -65,4 +66,33 @@ export interface User {
   isAttendanceTracked?: boolean;
   /** Individual fixed monthly basic salary (overrides role-based salary structure). */
   baseSalary?: number;
+}
+
+/**
+ * Customer user account (for customer portal login).
+ * Separate from Staff/Admin User type.
+ */
+/** Shape returned by POST /api/auth/customer/login and GET /api/auth/customer/me */
+export interface CustomerUser {
+  /** Customer record ID (same as customerId) */
+  id: string;
+  /** Alias kept for internal use — equals id */
+  customerId: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: "CUSTOMER"; // synthesised client-side; not in API response
+  avatar?: string | null;
+  address?: string;
+  referralCode: string;
+  referredBy?: string;
+  rewardPoints: number;
+  walletBalance: number;
+  totalVisits?: number;
+  lastVisitDate?: string;
+  isInactive?: boolean;
+  emailVerified?: boolean;
+  createdAt?: string;
+  /** True when auto-generated password is set — customer must change it on first login */
+  mustChangePassword?: boolean;
 }

@@ -1590,6 +1590,15 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
         return;
       }
       custId = createdWalkIn.id;
+
+      // Show temporary password to staff if WhatsApp delivery was skipped
+      const tempPass = (createdWalkIn as any)._temporaryPassword as string | undefined;
+      if (tempPass) {
+        toast.info("Share login credentials manually", {
+          description: `Phone: ${customerPhone}  |  Password: ${tempPass}`,
+          duration: 20000,
+        });
+      }
       if (isJobCard && referrerInfo) {
         toast.success("Referral code saved", {
           description:

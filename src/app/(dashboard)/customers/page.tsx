@@ -343,7 +343,19 @@ export default function CustomersPage() {
       }
       reset();
       setAddDialogOpen(false);
-      toast.success("Customer added", { description: `${data.name} has been added successfully.` });
+
+      // If Twilio is not configured, backend returns temporaryPassword for manual delivery
+      const tempPass = (created as any)._temporaryPassword as string | undefined;
+      if (tempPass) {
+        toast.success("Customer added — share credentials manually", {
+          description: `Phone: ${data.phone}  |  Temporary password: ${tempPass}`,
+          duration: 20000,
+        });
+      } else {
+        toast.success("Customer added", {
+          description: `${data.name} — login credentials sent via WhatsApp.`,
+        });
+      }
     } catch {
       toast.error("Could not add customer", {
         description: "Check that the API server is running (npm run dev in /backend).",

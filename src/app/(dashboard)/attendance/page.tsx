@@ -51,6 +51,7 @@ import {
 import { getShiftStatusDisplay } from "@/lib/attendance-display";
 import { canViewStaffAttendanceDashboard } from "@/lib/attendance-access";
 import { useBranchScope } from "@/lib/branch-scope";
+import { UserRole } from "@/types";
 import {
   attendanceSummaryToCsv,
   buildStaffAttendanceSummary,
@@ -81,7 +82,7 @@ const ATTENDANCE_STATUS_OPTIONS = ["PRESENT", "ABSENT", "LATE", "HALF_DAY"] as c
 type DirectoryUser = {
   id: string;
   name: string;
-  role: "PLATFORM_OWNER" | "SUPER_ADMIN" | "ADMIN" | "BRANCH_MANAGER" | "MANAGER" | "SUPERVISOR" | "RECEPTIONIST" | "MECHANIC";
+  role: Exclude<UserRole, "CUSTOMER">;
   branchId: string;
   isActive: boolean;
 };
@@ -156,10 +157,12 @@ export default function AttendancePage() {
       return users;
     } catch {
       // Fallback to current staff store data if directory endpoint fails.
-      const fallback = staff.map((s) => ({
+      const fallback = staff
+        .filter((s) => s.role !== "CUSTOMER")
+        .map((s) => ({
           id: s.id,
           name: s.name,
-          role: s.role,
+          role: s.role as Exclude<UserRole, "CUSTOMER">,
           branchId: s.branchId,
           isActive: s.isActive,
         }));
