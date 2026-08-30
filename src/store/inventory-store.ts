@@ -29,7 +29,12 @@ import { isMlTrackedPart, litresToMl } from "@/lib/inventory-units";
 import { deleteCollectionDocument, postCollectionSnapshot } from "@/lib/collection-sync";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { calcPurchaseTotals } from "@/lib/inventory/purchase-math";
-import { applyBranchCanonicalDelta, getBranchCanonicalQty, upsertBranchStockQty } from "@/lib/inventory/branch-stock";
+import {
+  applyBranchCanonicalDelta,
+  getBranchCanonicalQty,
+  partHasBranchAllocation,
+  upsertBranchStockQty,
+} from "@/lib/inventory/branch-stock";
 import { mergePartCategoryNames, normalizePartCategoryName } from "@/lib/inventory/part-categories";
 
 interface InventoryStore {
@@ -41,7 +46,11 @@ interface InventoryStore {
   partCategories: PartCategoryRecord[];
   addPart: (part: Part) => Part;
   addPartCategory: (name: string) => { ok: true; name: string } | { ok: false; error: string };
-  updatePart: (partId: string, patch: Partial<Part>) => void;
+  updatePart: (
+    partId: string,
+    patch: Partial<Part>,
+    options?: { branchId?: string }
+  ) => void;
   removePart: (partId: string) => Promise<void>;
   addPurchase: (input: Omit<ProductPurchase, "id">) => void;
   addInventoryPurchase: (input: {
@@ -329,21 +338,49 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     return normalized;
   },
 
-  updatePart: (partId, patch) => {
+  updatePart: (partId, patch, options) => {
     const existing = get().parts.find((p) => p.id === partId);
+    if (!existing) return;
     set((state) => {
       const nextPart = normalizePartUnits(
         initializeDualUnitStock({ ...existing, ...patch, id: partId } as Part)
       );
       const newCanonical = getCanonicalStockSecondary(nextPart);
+      const now = new Date().toISOString();
       // When the unit type changes (e.g. Litre → Pack), reset branchStocks
       // so they reflect the new canonical quantity instead of stale ML values.
-      const unitChanged = existing && existing.primaryUnit !== nextPart.primaryUnit;
-      const nextBranchStocks = unitChanged
+      const unitChanged = existing.primaryUnit !== nextPart.primaryUnit;
+      const stockEdited =
+        patch.quantity !== undefined ||
+        patch.stockQuantityMl !== undefined ||
+        patch.stockQuantitySecondary !== undefined ||
+        patch.conversionFactor !== undefined ||
+        patch.primaryUnit !== undefined ||
+        patch.secondaryUnit !== undefined;
+
+      let nextBranchStocks = unitChanged
         ? state.branchStocks.map((bs) =>
-            bs.partId === partId ? { ...bs, quantity: newCanonical, updatedAt: new Date().toISOString() } : bs
+            bs.partId === partId ? { ...bs, quantity: newCanonical, updatedAt: now } : bs
           )
         : state.branchStocks;
+
+      // Editing on-hand stock in a selected branch should update that branch ledger row
+      // so Inventory + Purchase views show the same quantity immediately.
+      if (!unitChanged && stockEdited && options?.branchId) {
+        nextBranchStocks = upsertBranchStockQty(
+          nextBranchStocks,
+          partId,
+          options.branchId,
+          newCanonical,
+          now
+        );
+      }
+
+      // If this part has no branch allocation rows, keep catalog-level quantity authoritative.
+      if (!unitChanged && stockEdited && !options?.branchId && !partHasBranchAllocation(nextBranchStocks, partId)) {
+        nextBranchStocks = nextBranchStocks.filter((bs) => bs.partId !== partId);
+      }
+
       return {
         parts: state.parts.map((p) => (p.id !== partId ? p : nextPart)),
         branchStocks: nextBranchStocks,

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { isMlTrackedPart, litresToMl, mlToLitres } from "@/lib/inventory-units";
+import { getCanonicalStockSecondary } from "@/lib/inventory/multi-unit";
 import { PartCategorySelect } from "@/components/inventory/part-category-select";
 import { PartUsedInFields } from "@/components/inventory/part-used-in-fields";
 import {
@@ -34,6 +35,7 @@ import {
 } from "@/lib/inventory/part-used-in";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
+import { useBranchScope } from "@/lib/branch-scope";
 import type { Part, PartCategory } from "@/types";
 
 const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
@@ -99,6 +101,7 @@ export function CatalogItemFormDialog({
   const addPart = useInventoryStore((s) => s.addPart);
   const updatePart = useInventoryStore((s) => s.updatePart);
   const branches = useBranchStore((s) => s.branches);
+  const { selectedBranchId } = useBranchScope();
 
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
@@ -121,6 +124,7 @@ export function CatalogItemFormDialog({
   const [gstApplicable, setGstApplicable] = useState(true);
   const [active, setActive] = useState(true);
   const [branchScope, setBranchScope] = useState("GLOBAL");
+  const [editingCanonicalSecondary, setEditingCanonicalSecondary] = useState<number | null>(null);
 
   const reset = () => {
     setName("");
@@ -144,6 +148,7 @@ export function CatalogItemFormDialog({
     setGstApplicable(true);
     setActive(true);
     setBranchScope("GLOBAL");
+    setEditingCanonicalSecondary(null);
   };
 
   useEffect(() => {
@@ -153,6 +158,19 @@ export function CatalogItemFormDialog({
       return;
     }
     const part = editingPart;
+    // Use the quantity shown in the editor context (already branch-scoped in inventory page)
+    // so changing conversion recalculates on-hand immediately and consistently.
+    const primaryQty = Number(part.quantity ?? 0);
+    const conv = Number(part.conversionFactor ?? 1);
+    const sec = part.secondaryUnit?.trim() ?? "";
+    const pri = part.primaryUnit?.trim() ?? "";
+    const dual = !!sec && !!pri && sec.toLowerCase() !== pri.toLowerCase() && Number.isFinite(conv) && conv > 1;
+    const canonicalFromEditor = isMlTrackedPart(part)
+      ? (part.stockQuantityMl ?? 0)
+      : dual
+        ? primaryQty * conv
+        : Math.round(primaryQty);
+    setEditingCanonicalSecondary(canonicalFromEditor);
     setName(part.name);
     setBrand(part.brand ?? "");
     setSku(part.sku);
@@ -189,6 +207,31 @@ export function CatalogItemFormDialog({
     }
   }, [open, editingPart]);
 
+  // In edit mode, keep the same canonical stock and derive displayed primary qty as conversion changes.
+  useEffect(() => {
+    if (!open || !editingPart || editingCanonicalSecondary == null) return;
+    if (unit === "Litre") {
+      setQty(String(mlToLitres(editingCanonicalSecondary)));
+      return;
+    }
+
+    const sec = secondaryUnit.trim();
+    const conversionRaw = Number(conversionRate);
+    const conversion = Number.isFinite(conversionRaw) && conversionRaw > 0 ? conversionRaw : 1;
+    const dual = !!sec && sec.toLowerCase() !== unit.trim().toLowerCase() && conversion > 1;
+
+    if (dual) {
+      const primaryQty = editingCanonicalSecondary / conversion;
+      const pretty = Number.isInteger(primaryQty)
+        ? String(primaryQty)
+        : String(Math.round(primaryQty * 1000) / 1000);
+      setQty(pretty);
+      return;
+    }
+
+    setQty(String(Math.round(editingCanonicalSecondary)));
+  }, [open, editingPart, editingCanonicalSecondary, unit, secondaryUnit, conversionRate]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -220,7 +263,7 @@ export function CatalogItemFormDialog({
     const existing = editingPart ? parts.find((p) => p.id === editingPart.id) : null;
     const id = existing?.id ?? `prt-${Date.now().toString(36)}`;
     const isLitre = unit === "Litre";
-    const qtyValue = isLitre ? qtyInput : Math.round(qtyInput);
+    let qtyValue = isLitre ? qtyInput : Math.round(qtyInput);
     const reorderValue =
       Number.isNaN(reorderInput) || reorderInput < 0
         ? 0
@@ -255,6 +298,20 @@ export function CatalogItemFormDialog({
           : undefined;
     const mlTracked =
       isLitre && nextSecondaryUnit.trim().toUpperCase() === "ML" && conversionFactor === 1000;
+
+    // Editing conversion for dual-unit parts should preserve canonical stock.
+    const preserveCanonicalOnEdit =
+      !!existing &&
+      !mlTracked &&
+      !!nextSecondaryUnit.trim() &&
+      nextSecondaryUnit.trim().toLowerCase() !== unit.trim().toLowerCase() &&
+      conversionFactor > 1;
+    let stockQuantitySecondaryOverride: number | undefined;
+    if (preserveCanonicalOnEdit) {
+      const canonical = editingCanonicalSecondary ?? getCanonicalStockSecondary(existing);
+      stockQuantitySecondaryOverride = canonical;
+      qtyValue = Math.floor(canonical / conversionFactor);
+    }
 
     const next: Part = mlTracked
       ? {
@@ -297,7 +354,9 @@ export function CatalogItemFormDialog({
           conversionFactor,
           unitPrice: sellingPrice,
           unitPriceSecondary,
-          stockQuantitySecondary: conversionFactor > 1 ? qtyValue * conversionFactor : undefined,
+          stockQuantitySecondary:
+            stockQuantitySecondaryOverride ??
+            (conversionFactor > 1 ? qtyValue * conversionFactor : undefined),
           reorderLevel: reorderValue,
           supplier: supplierVal,
           lastRestocked: existing?.lastRestocked ?? now,
@@ -317,7 +376,7 @@ export function CatalogItemFormDialog({
       const patch = unit !== "Litre" && existing.primaryUnit === "Litre"
         ? { ...next, stockQuantityMl: undefined }
         : next;
-      updatePart(existing.id, patch);
+      updatePart(existing.id, patch, { branchId: selectedBranchId ?? undefined });
       toast.success("Catalog item updated");
     } else {
       const created = addPart(next);
@@ -339,7 +398,7 @@ export function CatalogItemFormDialog({
       <DialogContent
         className={cn(
           dialogMobileSheetContentClasses,
-          "z-[80] max-h-[min(92dvh,880px)] sm:max-w-4xl"
+          "z-80 max-h-[min(92dvh,880px)] sm:max-w-4xl"
         )}
         overlayClassName="z-[80]"
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -484,6 +543,9 @@ export function CatalogItemFormDialog({
                   onChange={(e) => setConversionRate(e.target.value)}
                   onFocus={focusMobileFormField}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Stock is tracked in secondary units. Example: 1 Box = 12 PCS means on-hand sync uses PCS internally.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-qty">
@@ -510,6 +572,9 @@ export function CatalogItemFormDialog({
                     required
                   />
                 )}
+                <p className="text-[11px] text-muted-foreground">
+                  Displayed in {unit}; converted stock remains consistent across inventory, purchases, and branch stock.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-reorder">Reorder level ({unit})</Label>
