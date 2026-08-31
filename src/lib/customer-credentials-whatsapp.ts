@@ -56,7 +56,6 @@ export function buildCustomerCredentialsWhatsAppMessage(
     `🔑 Password: ${password}`,
     ``,
     ...(portalLine ? [portalLine, ``] : []),
-    `Change your password after first login.`,
     `Thank you for choosing ${businessName}! 🚗`,
   ];
 
