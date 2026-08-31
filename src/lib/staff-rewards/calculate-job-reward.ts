@@ -384,6 +384,10 @@ export interface CompanyTargetPeriodResult {
   shareForRole?: number;
   eligibleStaffCount: number;
   eligibleRoleCount?: number;
+  /** Role-specific reward % (only set in DISTRIBUTE_ROLE_WISE mode) */
+  roleRewardPercent?: number;
+  /** Role-specific reward pool amount (only set in DISTRIBUTE_ROLE_WISE mode) */
+  rolePool?: number;
   notEligible?: boolean;
 }
 
@@ -662,6 +666,8 @@ export function getCompanyTargetResults(args: {
 
     let shareForRole: number;
     let eligibleRoleCount = 0;
+    let roleRewardPercent: number | undefined;
+    let rolePool: number | undefined;
 
     if (distributionMode === "DISTRIBUTE_ROLE_WISE") {
       const winnerTier = winner.index >= 0 ? (tiers[winner.index] as any) : null;
@@ -675,7 +681,8 @@ export function getCompanyTargetResults(args: {
           (r) => r.role && String(r.role).toUpperCase() === currentRole && r.rewardPercent > 0
         );
         if (roleEntry) {
-          const rolePool = roundReward(revenue * (roleEntry.rewardPercent / 100));
+          roleRewardPercent = roleEntry.rewardPercent;
+          rolePool = roundReward(revenue * (roleEntry.rewardPercent / 100));
           const roleCount = roleCounts[currentRole] ?? 0;
           shareForThisStaff = roleCount > 0 ? roundReward(rolePool / roleCount) : 0;
         }
@@ -711,6 +718,8 @@ export function getCompanyTargetResults(args: {
       shareForRole,
       eligibleStaffCount,
       eligibleRoleCount: distributionMode === "DISTRIBUTE_ROLE_WISE" ? eligibleRoleCount : undefined,
+      roleRewardPercent,
+      rolePool,
       notEligible,
     };
   });

@@ -1022,10 +1022,18 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                             {!isNotEligible && r.targetAmount > 0 ? formatCurrency(r.targetAmount) : "—"}
                           </td>
                           <td className="py-2.5 px-4 text-right tabular-nums">
-                            {!isNotEligible && r.rewardPercent > 0 ? `${r.rewardPercent}%` : "—"}
+                            {(() => {
+                              const isRoleWise = settings.companyTargetDistributionMode === "DISTRIBUTE_ROLE_WISE";
+                              const pct = isRoleWise ? r.roleRewardPercent : r.rewardPercent;
+                              return !isNotEligible && pct != null && pct > 0 ? `${pct}%` : "—";
+                            })()}
                           </td>
                           <td className="py-2.5 px-4 text-right tabular-nums">
-                            {!isNotEligible && r.totalReward > 0 ? formatCurrency(r.totalReward) : "—"}
+                            {(() => {
+                              const isRoleWise = settings.companyTargetDistributionMode === "DISTRIBUTE_ROLE_WISE";
+                              const pool = isRoleWise ? r.rolePool : r.totalReward;
+                              return !isNotEligible && pool != null && pool > 0 ? formatCurrency(pool) : "—";
+                            })()}
                           </td>
                           <td className="py-2.5 px-4 text-right tabular-nums">
                             {!isNotEligible
