@@ -833,11 +833,11 @@ export default function SettingsPage() {
                         <div className="flex items-baseline gap-1">
                           <span className="text-2xl font-bold">{entitlement.usage.usersUsed ?? 0}</span>
                           <span className="text-sm text-muted-foreground">
-                            / {entitlement.subscription.limits.maxStaff == null ? "unlimited" : entitlement.subscription.limits.maxStaff}
+                            / {entitlement.subscription.effectiveMaxUsers == null ? "unlimited" : entitlement.subscription.effectiveMaxUsers}
                           </span>
                         </div>
                         {(() => {
-                          const max = entitlement.subscription.limits.maxStaff;
+                          const max = entitlement.subscription.effectiveMaxUsers;
                           const used = entitlement.usage.usersUsed ?? 0;
                           if (max !== null && max !== undefined && used >= max) {
                             return (
