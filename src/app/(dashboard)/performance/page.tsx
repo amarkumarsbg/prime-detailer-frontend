@@ -643,15 +643,11 @@ export default function PerformancePage() {
   }, [jobDetailDemo]);
 
   return (
-    <div className="space-y-6 pb-10">
-      <PageHeader title="Performance" />
-
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between border-b border-border pb-6">
-        <div className="min-w-0 space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Performance Dashboard
-          </h2>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+    <div className="space-y-4 pb-10">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight text-foreground">Performance Dashboard</h2>
             <Badge variant="success" className="font-semibold uppercase tracking-wide text-[10px]">
               {performanceDashboardBadge(user?.role)}
             </Badge>
@@ -660,17 +656,11 @@ export default function PerformancePage() {
                 Sample data
               </Badge>
             )}
-            <span className="text-muted-foreground/80">•</span>
-            <span>Performance &amp; Efficiency Metrics</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Performance &amp; Efficiency Metrics</p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-          {scopeNote && (
-            <p className="text-xs text-muted-foreground sm:order-last sm:w-full lg:max-w-xs lg:text-right">
-              {scopeNote}
-            </p>
-          )}
-          <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col gap-0.5">
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Calendar className="size-3" />
               Period
@@ -681,7 +671,7 @@ export default function PerformancePage() {
               options={PERFORMANCE_PERIOD_OPTIONS}
             />
           </div>
-          <Button type="button" className="h-9" onClick={handleRewardCalc}>
+          <Button type="button" className="h-9 self-end" onClick={handleRewardCalc}>
             <Calculator className="size-4 mr-2" />
             Reward Calc
           </Button>
@@ -716,14 +706,6 @@ export default function PerformancePage() {
             <Building2 className="size-3.5 sm:size-4 opacity-90" />
             Branches
           </TabsTrigger>
-          <TabsTrigger value="floor-managers" className={tabTriggerClass}>
-            <UserRound className="size-3.5 sm:size-4 opacity-90" />
-            Floor Managers
-          </TabsTrigger>
-          <TabsTrigger value="supervisors" className={tabTriggerClass}>
-            <Users className="size-3.5 sm:size-4 opacity-90" />
-            Supervisor Teams
-          </TabsTrigger>
           <TabsTrigger value="leaderboard" className={tabTriggerClass}>
             <Medal className="size-3.5 sm:size-4 opacity-90" />
             Leaderboard
@@ -731,10 +713,6 @@ export default function PerformancePage() {
           <TabsTrigger value="job-details" className={tabTriggerClass}>
             <FileText className="size-3.5 sm:size-4 opacity-90" />
             Job Details
-          </TabsTrigger>
-          <TabsTrigger value="rewards" className={tabTriggerClass}>
-            <Gift className="size-3.5 sm:size-4 opacity-90" />
-            Rewards
           </TabsTrigger>
           <TabsTrigger value="analytics" className={tabTriggerClass}>
             <LineChartIcon className="size-3.5 sm:size-4 opacity-90" />
@@ -1010,7 +988,7 @@ export default function PerformancePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="floor-managers" className="mt-4 space-y-4">
+        <TabsContent value="floor-managers-removed" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Floor manager rankings</CardTitle>
@@ -1113,7 +1091,7 @@ export default function PerformancePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="supervisors" className="mt-4 space-y-4">
+        <TabsContent value="supervisors-removed" className="mt-4 space-y-4">
           {!hasScopedJobData && selectedBranchId ? (
             <p className="text-sm text-muted-foreground py-6 text-center rounded-lg border border-dashed">
               No supervisor team data for this branch in the selected period.
@@ -1158,324 +1136,109 @@ export default function PerformancePage() {
         </TabsContent>
 
         <TabsContent value="leaderboard" className="mt-4 space-y-4">
-          <Card className="overflow-hidden">
-            <CardContent className="p-4 sm:p-5 space-y-4">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-orange-500 shadow-sm">
-                    <Trophy className="size-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold tracking-tight">Leaderboard</h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      Rankings for <span className="font-medium text-foreground">{leaderboardPeriodWord}</span>{" "}
-                      period •{" "}
-                      {leaderboardView === "floor-managers"
-                        ? `${floorManagersDemo.length} floor manager${floorManagersDemo.length !== 1 ? "s" : ""}`
-                        : `${supervisorLeaderboardRows.length} supervisor team${supervisorLeaderboardRows.length !== 1 ? "s" : ""}`}
-                    </p>
-                  </div>
+          <Card>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500 shadow-sm">
+                  <Trophy className="size-5 text-white" />
                 </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                  <div className="inline-flex rounded-lg border border-border bg-muted/60 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setLeaderboardView("supervisor-teams")}
-                      className={cn(
-                        "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                        leaderboardView === "supervisor-teams"
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <Users className="size-3.5" />
-                        Supervisor teams
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLeaderboardView("floor-managers")}
-                      className={cn(
-                        "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                        leaderboardView === "floor-managers"
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <UserRound className="size-3.5" />
-                        Floor managers
-                      </span>
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      className={metricChipClass(leaderboardMetric === "paid")}
-                      onClick={() => setLeaderboardMetric("paid")}
-                    >
-                      <DollarSign className="size-3.5" />
-                      Paid revenue
-                    </button>
-                    <button
-                      type="button"
-                      className={metricChipClass(leaderboardMetric === "jobs")}
-                      onClick={() => setLeaderboardMetric("jobs")}
-                    >
-                      <CheckCircle2 className="size-3.5" />
-                      Jobs
-                    </button>
-                    <button
-                      type="button"
-                      className={metricChipClass(leaderboardMetric === "rewards")}
-                      onClick={() => setLeaderboardMetric("rewards")}
-                    >
-                      <Gift className="size-3.5" />
-                      Rewards
-                    </button>
-                    <button
-                      type="button"
-                      className={metricChipClass(leaderboardMetric === "efficiency")}
-                      onClick={() => setLeaderboardMetric("efficiency")}
-                    >
-                      <Zap className="size-3.5" />
-                      Efficiency
-                    </button>
-                    <button
-                      type="button"
-                      className={metricChipClass(leaderboardMetric === "onTime")}
-                      onClick={() => setLeaderboardMetric("onTime")}
-                    >
-                      <Clock className="size-3.5" />
-                      On-time %
-                    </button>
-                  </div>
+                <div>
+                  <CardTitle className="text-base">Staff leaderboard</CardTitle>
+                  <CardDescription>
+                    Rankings for <span className="font-medium text-foreground">{leaderboardPeriodWord}</span> period · {staffPerformanceRows.length} staff
+                  </CardDescription>
                 </div>
               </div>
-              <div className="flex gap-2 rounded-lg border border-blue-200/80 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-900/50 px-3 py-2.5 text-xs text-blue-900 dark:text-blue-100">
-                <Info className="size-4 shrink-0 mt-0.5 opacity-80" />
-                <p className="leading-relaxed text-blue-900/90 dark:text-blue-100/90">
-                  <strong className="font-semibold">Paid revenue</strong> = confirmed revenue from paid invoices. <strong className="font-semibold">Total revenue</strong> = job value in period.{" "}
-                  <strong className="font-semibold">Efficiency</strong> = delivered ÷ jobs.{" "}
-                  <strong className="font-semibold">On-time %</strong> = share of delivered jobs by promised time.
+            </CardHeader>
+            <CardContent className="p-0">
+              {staffPerformanceRows.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  No staff activity for this period.
                 </p>
-              </div>
+              ) : (
+                <>
+                  <MobileCardList className="p-3">
+                    {[...staffPerformanceRows]
+                      .sort((a, b) => b.jobsCompleted - a.jobsCompleted)
+                      .map((row, idx) => (
+                      <MobileRowCard key={row.staffId}>
+                        <div className="flex items-start gap-3">
+                          {idx === 0 ? (
+                            <Medal className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                          ) : (
+                            <span className="w-5 text-center text-sm font-medium tabular-nums">#{idx + 1}</span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium leading-snug">{row.staffName}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Jobs</span>
+                            <p className="font-semibold tabular-nums">{row.jobsCompleted}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Job incentive</span>
+                            <p className="font-semibold tabular-nums">{formatCurrency(row.incentiveFromJobs)}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Ledger rewards</span>
+                            <p className="font-semibold tabular-nums">{formatCurrency(row.rewardsFromLedger)}</p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Present days</span>
+                            <p className="font-semibold tabular-nums">{row.presentDays ?? "—"}</p>
+                          </div>
+                        </div>
+                      </MobileRowCard>
+                    ))}
+                  </MobileCardList>
+                  <DesktopTableWrap>
+                    <table className="w-full text-sm min-w-[700px]">
+                      <thead>
+                        <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="py-3 px-4 font-medium">Rank</th>
+                          <th className="py-3 px-4 font-medium">Staff</th>
+                          <th className="py-3 px-4 font-medium text-right">Jobs</th>
+                          <th className="py-3 px-4 font-medium text-right">Job incentive</th>
+                          <th className="py-3 px-4 font-medium text-right">Ledger rewards</th>
+                          <th className="py-3 px-4 font-medium text-right">Present days</th>
+                          <th className="py-3 px-4 font-medium text-right">Achievement</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...staffPerformanceRows]
+                          .sort((a, b) => b.jobsCompleted - a.jobsCompleted)
+                          .map((row, idx) => (
+                          <tr key={row.staffId} className="border-b border-border/70">
+                            <td className="py-3 px-4 align-middle">
+                              {idx === 0 ? (
+                                <Medal className="size-5 text-amber-500" />
+                              ) : (
+                                <span className="font-medium tabular-nums">#{idx + 1}</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 align-middle font-medium">{row.staffName}</td>
+                            <td className="py-3 px-4 align-middle text-right tabular-nums">{row.jobsCompleted}</td>
+                            <td className="py-3 px-4 align-middle text-right tabular-nums">{formatCurrency(row.incentiveFromJobs)}</td>
+                            <td className="py-3 px-4 align-middle text-right tabular-nums">{formatCurrency(row.rewardsFromLedger)}</td>
+                            <td className="py-3 px-4 align-middle text-right tabular-nums">{row.presentDays ?? "—"}</td>
+                            <td className="py-3 px-4 align-middle text-right">
+                              {row.targetAchievementPct != null ? (
+                                <Badge variant="success" className="font-normal">
+                                  {row.targetAchievementPct.toFixed(1)}%
+                                </Badge>
+                              ) : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </DesktopTableWrap>
+                </>
+              )}
             </CardContent>
           </Card>
-
-          {leaderboardView === "floor-managers" ? (
-            <Card>
-              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
-                <CardTitle className="text-base">Floor manager rankings</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Sorted by:{" "}
-                  <span className="font-medium text-foreground">
-                    {leaderboardSortLabel[leaderboardMetric]}
-                  </span>
-                </p>
-              </CardHeader>
-              <CardContent className="p-0">
-                <MobileCardList className="p-3">
-                  {sortedFloorLeaderboard.map((row, idx) => (
-                    <MobileRowCard key={row.key}>
-                      <div className="flex items-start gap-3">
-                        {idx === 0 ? (
-                          <Medal className="size-5 text-amber-500 shrink-0" />
-                        ) : (
-                          <span className="w-5 text-center text-sm font-medium tabular-nums">#{idx + 1}</span>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium leading-snug">{row.name}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">{row.branch}</p>
-                        </div>
-                        <Badge variant="success" className="shrink-0 font-normal tabular-nums">
-                          {row.efficiency.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-muted-foreground">Jobs</span>
-                          <p className="font-semibold tabular-nums">{row.jobs}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Paid revenue</span>
-                          <p className="font-semibold tabular-nums">{formatCurrency(row.paidRevenue)}</p>
-                        </div>
-                      </div>
-                    </MobileRowCard>
-                  ))}
-                </MobileCardList>
-                <DesktopTableWrap>
-                <table className="w-full text-sm min-w-[980px]">
-                  <thead>
-                    <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="py-3 px-4 font-medium">Rank</th>
-                      <th className="py-3 px-4 font-medium">Floor manager</th>
-                      <th className="py-3 px-4 font-medium">Branch</th>
-                      <th className="py-3 px-4 font-medium">Supervisor teams</th>
-                      <th className="py-3 px-4 font-medium text-right">Jobs</th>
-                      <th className="py-3 px-4 font-medium text-right">Paid revenue</th>
-                      <th className="py-3 px-4 font-medium text-right">Total revenue</th>
-                      <th className="py-3 px-4 font-medium text-right">Rewards</th>
-                      <th className="py-3 px-4 font-medium text-right">Efficiency</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedFloorLeaderboard.map((row, idx) => (
-                      <tr
-                        key={row.key}
-                        className="border-b border-border/70 bg-amber-50/40 dark:bg-amber-950/15"
-                      >
-                        <td className="py-3 px-4 align-middle">
-                          {idx === 0 ? (
-                            <Medal className="size-6 text-amber-500" />
-                          ) : (
-                            <span className="font-medium tabular-nums">#{idx + 1}</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 align-middle">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="size-9 border border-border">
-                              <AvatarFallback className="bg-muted text-xs font-semibold">
-                                {getInitials(row.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="font-medium leading-tight">{row.name}</div>
-                              <div className="text-xs text-muted-foreground truncate">{row.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 align-middle text-muted-foreground">{row.branch}</td>
-                        <td className="py-3 px-4 align-middle">
-                          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                            <Users className="size-3.5" />
-                            {row.supervisorTeams} team{row.supervisorTeams !== 1 ? "s" : ""}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 align-middle text-right tabular-nums">{row.jobs}</td>
-                        <td className="py-3 px-4 align-middle text-right">
-                          <div className="tabular-nums font-medium">{formatCurrency(row.paidRevenue)}</div>
-                          {row.showUnpaidBadge && (
-                            <Badge
-                              variant="warning"
-                              className="mt-1 font-normal text-[10px] uppercase tracking-wide"
-                            >
-                              Unpaid
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 align-middle text-right tabular-nums font-medium">
-                          {formatCurrency(row.totalRevenue)}
-                        </td>
-                        <td className="py-3 px-4 align-middle text-right tabular-nums">
-                          {formatCurrency(row.rewards)}
-                        </td>
-                        <td className="py-3 px-4 align-middle text-right">
-                          <Badge variant="success" className="font-normal tabular-nums">
-                            {row.efficiency.toFixed(1)}%
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </DesktopTableWrap>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-4">
-                <CardTitle className="text-base">Supervisor team rankings</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Sorted by:{" "}
-                  <span className="font-medium text-foreground">
-                    {leaderboardSortLabel[leaderboardMetric]}
-                  </span>
-                </p>
-              </CardHeader>
-              <CardContent className="p-0">
-                <MobileCardList className="p-3">
-                  {sortedSupervisorLeaderboard.map((row, idx) => (
-                    <MobileRowCard key={row.key}>
-                      <div className="flex items-start gap-3">
-                        {idx === 0 ? (
-                          <Medal className="size-5 text-amber-500 shrink-0" />
-                        ) : (
-                          <span className="w-5 text-center text-sm font-medium tabular-nums">#{idx + 1}</span>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium leading-snug">{row.supervisor}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">{row.branch}</p>
-                        </div>
-                        <Badge variant="success" className="shrink-0 font-normal tabular-nums">
-                          {row.efficiency.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-muted-foreground">Jobs</span>
-                          <p className="font-semibold tabular-nums">{row.jobs}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Paid revenue</span>
-                          <p className="font-semibold tabular-nums">{formatCurrency(row.paid)}</p>
-                        </div>
-                      </div>
-                    </MobileRowCard>
-                  ))}
-                </MobileCardList>
-                <DesktopTableWrap>
-                <table className="w-full text-sm min-w-[900px]">
-                  <thead>
-                    <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="py-3 px-4 font-medium">Rank</th>
-                      <th className="py-3 px-4 font-medium">Supervisor</th>
-                      <th className="py-3 px-4 font-medium">Floor manager</th>
-                      <th className="py-3 px-4 font-medium">Branch</th>
-                      <th className="py-3 px-4 font-medium text-right">Jobs</th>
-                      <th className="py-3 px-4 font-medium text-right">Paid revenue</th>
-                      <th className="py-3 px-4 font-medium text-right">Rewards</th>
-                      <th className="py-3 px-4 font-medium text-right">Efficiency</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedSupervisorLeaderboard.map((row, idx) => (
-                      <tr
-                        key={row.key}
-                        className="border-b border-border/70 bg-amber-50/40 dark:bg-amber-950/15"
-                      >
-                        <td className="py-3 px-4">
-                          {idx === 0 ? (
-                            <Medal className="size-6 text-amber-500" />
-                          ) : (
-                            <span className="font-medium tabular-nums">#{idx + 1}</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 font-medium">{row.supervisor}</td>
-                        <td className="py-3 px-4 text-muted-foreground">{row.floor}</td>
-                        <td className="py-3 px-4 text-muted-foreground">{row.branch}</td>
-                        <td className="py-3 px-4 text-right tabular-nums">{row.jobs}</td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="font-medium tabular-nums">{formatCurrency(row.paid)}</span>
-                        </td>
-                        <td className="py-3 px-4 text-right tabular-nums">
-                          {formatCurrency(row.rewards)}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <Badge variant="success" className="font-normal">
-                            {row.efficiency.toFixed(1)}%
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </DesktopTableWrap>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         <TabsContent value="job-details" className="mt-4 space-y-4">
@@ -1859,7 +1622,7 @@ export default function PerformancePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="rewards" className="mt-4 space-y-4">
+        <TabsContent value="rewards-removed" className="mt-4 space-y-4">
           <div className="rounded-lg border border-blue-200/80 bg-blue-500/5 dark:bg-blue-950/25 px-4 py-3 text-sm">
             <span className="font-semibold text-blue-900 dark:text-blue-200">Monthly reward projections</span>
           </div>
