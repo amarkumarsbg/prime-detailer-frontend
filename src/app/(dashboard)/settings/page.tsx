@@ -304,7 +304,7 @@ export default function SettingsPage() {
   const [companyTargetRoleShareRows, setCompanyTargetRoleShareRows] =
     useState<RoleShareRowDraft[]>(buildRoleShareRows(defaultRoleShares()));
   const [companyTargetFrequencyTiers, setCompanyTargetFrequencyTiers] = useState<
-    Record<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY", { targetAmount: number; rewardPercent: number }[]>
+    Record<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY", CompanyTargetTierConfig[]>
   >({
     MONTHLY: emptyTiers(),
     QUARTERLY: emptyTiers(),
@@ -341,6 +341,9 @@ export default function SettingsPage() {
               (tier?.roleShares as CompanyTargetRoleShareMap | undefined) || fallbackRoleShares
             )
           ),
+          roleRewards: Array.isArray(tier?.roleRewards) && tier.roleRewards.length > 0
+            ? tier.roleRewards
+            : emptyRoleRewards(),
         }));
       };
 
