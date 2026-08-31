@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ const PART_STOCK_UNIT_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const SECONDARY_UNIT_OPTIONS: { value: string; label: string }[] = [
+  { value: "NONE", label: "None" },
   { value: "PCS", label: "PCS" },
   { value: "GM", label: "Grm" },
   { value: "ML", label: "ML" },
@@ -68,13 +69,19 @@ const DEFAULT_SECONDARY_BY_PRIMARY: Record<string, { unit: string; conversion: s
 
 function normalizeSecondarySelectValue(raw: string): string {
   const t = raw.trim();
-  if (!t) return "";
+  if (!t || t === "NONE") return "";
   if (/^(gm|grm|gram|grams)$/i.test(t)) return "GM";
   if (/^ml$/i.test(t)) return "ML";
   if (/^(pcs|pc|piece|pieces)$/i.test(t)) return "PCS";
   if (/^sq\.?\s*ft$/i.test(t)) return "Sq.ft";
   const match = SECONDARY_UNIT_OPTIONS.find((o) => o.value.toLowerCase() === t.toLowerCase());
   return match?.value ?? t;
+}
+
+function reverseNormalizeSecondarySelectValue(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "NONE";
+  return t;
 }
 
 function focusMobileFormField(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -125,6 +132,10 @@ export function CatalogItemFormDialog({
   const [active, setActive] = useState(true);
   const [branchScope, setBranchScope] = useState("GLOBAL");
   const [editingCanonicalSecondary, setEditingCanonicalSecondary] = useState<number | null>(null);
+  
+  // Flags to prevent infinite loops between qty-capture and conversion-recalc effects
+  const skipQtyCapture = useRef(false);  // Set by second effect to skip first effect
+  const skipConversionRecalc = useRef(false);  // Set by first effect to skip second effect
 
   const reset = () => {
     setName("");
@@ -207,9 +218,54 @@ export function CatalogItemFormDialog({
     }
   }, [open, editingPart]);
 
-  // In edit mode, keep the same canonical stock and derive displayed primary qty as conversion changes.
+  // When user manually edits quantity, capture it as the new canonical stock
+  // Note: conversionRate is NOT in dependencies - we capture qty changes independently
+  useEffect(() => {
+    if (!open || !editingPart) return;
+    
+    // If the second effect just updated qty due to conversion change, skip this
+    if (skipQtyCapture.current) {
+      skipQtyCapture.current = false;
+      return;
+    }
+    
+    const qtyNum = Number(qty);
+    if (!Number.isFinite(qtyNum)) return;
+    
+    // Set flag so the second effect knows canonical was just updated by user
+    skipConversionRecalc.current = true;
+    
+    if (unit === "Litre") {
+      setEditingCanonicalSecondary(litresToMl(qtyNum));
+      return;
+    }
+
+    const sec = secondaryUnit.trim();
+    const conversionRaw = Number(conversionRate);
+    const conversion = Number.isFinite(conversionRaw) && conversionRaw > 0 ? conversionRaw : 1;
+    const dual = !!sec && sec.toLowerCase() !== unit.trim().toLowerCase() && conversion > 1;
+
+    if (dual) {
+      // User entered primary qty, convert to canonical secondary
+      setEditingCanonicalSecondary(Math.round(qtyNum * conversion * 1000) / 1000);
+    } else {
+      setEditingCanonicalSecondary(qtyNum);
+    }
+  }, [qty, unit, secondaryUnit, open, editingPart]);
+
+  // When conversion rate changes, recalculate qty to preserve canonical stock
   useEffect(() => {
     if (!open || !editingPart || editingCanonicalSecondary == null) return;
+    
+    // If the first effect just updated canonical due to user input, skip recalc
+    if (skipConversionRecalc.current) {
+      skipConversionRecalc.current = false;
+      return;
+    }
+    
+    // Set flag so the first effect knows qty is being updated automatically
+    skipQtyCapture.current = true;
+    
     if (unit === "Litre") {
       setQty(String(mlToLitres(editingCanonicalSecondary)));
       return;
@@ -226,10 +282,9 @@ export function CatalogItemFormDialog({
         ? String(primaryQty)
         : String(Math.round(primaryQty * 1000) / 1000);
       setQty(pretty);
-      return;
+    } else {
+      setQty(String(Math.round(editingCanonicalSecondary)));
     }
-
-    setQty(String(Math.round(editingCanonicalSecondary)));
   }, [open, editingPart, editingCanonicalSecondary, unit, secondaryUnit, conversionRate]);
 
   const submit = (e: React.FormEvent) => {
@@ -273,12 +328,16 @@ export function CatalogItemFormDialog({
     const isKg = unit === "Kg";
     const isRoll = unit === "Roll";
     const isBox = unit === "Box" || unit === "Pack" || unit === "Carton";
+    // Normalize "NONE" (Select placeholder) to empty string for storage
+    const rawSecondaryUnit = secondaryUnit.trim() === "NONE" ? "" : secondaryUnit.trim();
     const nextSecondaryUnit =
-      secondaryUnit.trim() ||
+      rawSecondaryUnit ||
       (isLitre ? "ML" : isKg ? "GM" : isRoll ? "Sq.ft" : isBox ? "PCS" : unit);
     const conversionRaw = Number(conversionRate);
-    const conversionFactor =
-      Number.isFinite(conversionRaw) && conversionRaw > 0
+    // If no secondary unit selected, conversion is always 1
+    const conversionFactor = !rawSecondaryUnit
+      ? 1
+      : Number.isFinite(conversionRaw) && conversionRaw > 0
         ? conversionRaw
         : isLitre
           ? 1000
@@ -300,17 +359,23 @@ export function CatalogItemFormDialog({
       isLitre && nextSecondaryUnit.trim().toUpperCase() === "ML" && conversionFactor === 1000;
 
     // Editing conversion for dual-unit parts should preserve canonical stock.
+    // Only when user changed conversion rate, NOT when they manually edited on-hand qty.
     const preserveCanonicalOnEdit =
       !!existing &&
       !mlTracked &&
-      !!nextSecondaryUnit.trim() &&
-      nextSecondaryUnit.trim().toLowerCase() !== unit.trim().toLowerCase() &&
-      conversionFactor > 1;
+      !!rawSecondaryUnit &&
+      rawSecondaryUnit.toLowerCase() !== unit.trim().toLowerCase() &&
+      conversionFactor > 1 &&
+      editingCanonicalSecondary == null; // null means user didn't touch qty — preserve old canonical
     let stockQuantitySecondaryOverride: number | undefined;
     if (preserveCanonicalOnEdit) {
-      const canonical = editingCanonicalSecondary ?? getCanonicalStockSecondary(existing);
+      const canonical = getCanonicalStockSecondary(existing);
       stockQuantitySecondaryOverride = canonical;
       qtyValue = Math.floor(canonical / conversionFactor);
+    } else if (!!rawSecondaryUnit && conversionFactor > 1 && editingCanonicalSecondary != null) {
+      // User manually edited qty — editingCanonicalSecondary was set by the qty-capture effect
+      stockQuantitySecondaryOverride = editingCanonicalSecondary;
+      qtyValue = Math.round(editingCanonicalSecondary / conversionFactor);
     }
 
     const next: Part = mlTracked
@@ -516,8 +581,8 @@ export function CatalogItemFormDialog({
               <div className="space-y-2">
                 <Label htmlFor="catalog-part-secondary-unit">Secondary unit (optional)</Label>
                 <Select
-                  value={normalizeSecondarySelectValue(secondaryUnit) || undefined}
-                  onValueChange={setSecondaryUnit}
+                  value={reverseNormalizeSecondarySelectValue(secondaryUnit)}
+                  onValueChange={(val) => setSecondaryUnit(normalizeSecondarySelectValue(val))}
                 >
                   <SelectTrigger id="catalog-part-secondary-unit">
                     <SelectValue placeholder="Select" />
@@ -542,6 +607,7 @@ export function CatalogItemFormDialog({
                   value={conversionRate}
                   onChange={(e) => setConversionRate(e.target.value)}
                   onFocus={focusMobileFormField}
+                  disabled={secondaryUnit === "NONE" || secondaryUnit === ""}
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Stock is tracked in secondary units. Example: 1 Box = 12 PCS means on-hand sync uses PCS internally.
@@ -555,23 +621,16 @@ export function CatalogItemFormDialog({
                       ? "Opening stock (litres)"
                       : "Opening stock"}
                 </Label>
-                {editingPart ? (
-                  <div className="flex h-9 items-center rounded-md border border-border bg-muted/50 px-3 text-sm tabular-nums text-muted-foreground select-none">
-                    {qty} {unit}
-                    <span className="ml-2 text-xs">(use purchases / adjustments to change stock)</span>
-                  </div>
-                ) : (
-                  <Input
-                    id="catalog-part-qty"
-                    type="number"
-                    min="0"
-                    step={unit === "Litre" ? "0.01" : "1"}
-                    placeholder="0"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                    required
-                  />
-                )}
+                <Input
+                  id="catalog-part-qty"
+                  type="number"
+                  min="0"
+                  step={unit === "Litre" ? "0.01" : "1"}
+                  placeholder="0"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                  required
+                />
                 <p className="text-[11px] text-muted-foreground">
                   Displayed in {unit}; converted stock remains consistent across inventory, purchases, and branch stock.
                 </p>
