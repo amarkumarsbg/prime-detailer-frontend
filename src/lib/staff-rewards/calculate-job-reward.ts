@@ -640,7 +640,6 @@ export function getCompanyTargetResults(args: {
   const distributionMode = normalizeDistributionMode(
     args.settings.companyTargetDistributionMode
   );
-  const roleShares = normalizeRoleShares(args.settings.companyTargetRoleShares);
   const currentRole = String(args.staffRole ?? "").toUpperCase();
 
   return slots.map((slot) => {
@@ -683,12 +682,10 @@ export function getCompanyTargetResults(args: {
         if (tierRole && currentRole === tierRole) {
           const roleCount = roleCounts[tierRole] ?? 0;
           shareForThisStaff = roleCount > 0 ? roundReward(totalReward / roleCount) : 0;
-        } else if (!tierRole) {
-          const roleSharePercent = roleShares[currentRole] ?? 0;
-          const rolePoolAmount = roundReward(totalReward * (roleSharePercent / 100));
-          const roleCount = roleCounts[currentRole] ?? 0;
-          shareForThisStaff = roleCount > 0 ? roundReward(rolePoolAmount / roleCount) : 0;
         }
+        // No roleRewards and no role set — no reward for this staff member.
+        // (companyTargetRoleShares fallback removed: it used a single shared pool
+        // model inconsistent with the per-role independent pool model the backend uses.)
       }
       shareForRole = shareForThisStaff;
     } else {
