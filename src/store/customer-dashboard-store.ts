@@ -151,16 +151,35 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>((set, ge
     const jobs = get().jobCards;
     if (jobs.length === 0) return null;
 
-    // Sort by created date, most recent first
-    const sorted = [...jobs].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    const statusPriority: Record<string, number> = {
+      RECEIVED: 0,
+      INSPECTION: 1,
+      AWAITING_SERVICE: 2,
+      QUALITY_CHECK: 3,
+      READY: 4,
+      INVOICED: 5,
+      DELIVERED: 6,
+      CANCELLED: 7,
+    };
 
-    // Return first active/recent job (not completed or delivered)
-    const active = sorted.find(
-      (j) => !["DELIVERED", "CANCELLED"].includes(j.status)
-    );
-    return active || sorted[0];
+    const active = jobs.filter((j) => !["DELIVERED", "CANCELLED"].includes(j.status));
+    const pool = active.length > 0 ? active : jobs;
+
+    const toMs = (iso?: string) => {
+      if (!iso) return 0;
+      const ms = new Date(iso).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    return [...pool].sort((a, b) => {
+      const timeDiff = toMs(b.updatedAt) - toMs(a.updatedAt);
+      if (timeDiff !== 0) return timeDiff;
+
+      const createdDiff = toMs(b.createdAt) - toMs(a.createdAt);
+      if (createdDiff !== 0) return createdDiff;
+
+      return (statusPriority[a.status] ?? 999) - (statusPriority[b.status] ?? 999);
+    })[0] ?? null;
   },
 
   getRecentInvoice: () => {

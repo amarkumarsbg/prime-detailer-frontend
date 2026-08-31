@@ -75,14 +75,14 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     void bootstrap();
   }, [ready, isAuthenticated, user, router, ensureValidSession, bootstrap, isLoginPage, sessionValidatedRef]);
 
-  // Real-time refresh: poll every 30 s + re-fetch on tab focus
+  // Real-time refresh: poll frequently + re-fetch on tab focus/visibility
   const refreshRef = useRef(bootstrap);
   refreshRef.current = bootstrap;
 
   useEffect(() => {
     if (isLoginPage || !isAuthenticated) return;
 
-    const POLL_INTERVAL_MS = 30_000;
+    const POLL_INTERVAL_MS = 10_000;
 
     const interval = setInterval(() => {
       void refreshRef.current();
@@ -93,11 +93,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         void refreshRef.current();
       }
     };
+    const onFocus = () => {
+      void refreshRef.current();
+    };
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
 
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
     };
   }, [isLoginPage, isAuthenticated]);
 

@@ -22,7 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function CustomerJobsPage() {
-  const { jobCards, isLoading, error } = useCustomerDashboardStore();
+  const { jobCards, invoices, isLoading, error } = useCustomerDashboardStore();
 
   if (isLoading) {
     return (
@@ -71,6 +71,15 @@ export default function CustomerJobsPage() {
             {[...jobCards]
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .map((job) => (
+                (() => {
+                  const hasInvoice = invoices.some((inv) => inv.jobCardId === job.id);
+                  const displayStatus =
+                    job.status === "DELIVERED" || job.status === "CANCELLED"
+                      ? job.status
+                      : hasInvoice
+                        ? "INVOICED"
+                        : job.status;
+                  return (
                 <Link key={job.id} href={`/customer/jobs/${job.id}`}>
                   <Card className="cursor-pointer hover:border-primary/50 transition-colors group">
                     <CardContent className="pt-4">
@@ -80,8 +89,8 @@ export default function CustomerJobsPage() {
                             <p className="font-semibold truncate">
                               Job Card {job.jobNumber}
                             </p>
-                            <Badge className={cn(STATUS_COLORS[job.status] || "")}>
-                              {job.status}
+                            <Badge className={cn(STATUS_COLORS[displayStatus] || "")}>
+                              {displayStatus}
                             </Badge>
                           </div>
 
@@ -121,6 +130,8 @@ export default function CustomerJobsPage() {
                     </CardContent>
                   </Card>
                 </Link>
+                  );
+                })()
               ))}
           </div>
         )}

@@ -57,6 +57,10 @@ export default function JobDetailPage() {
   }
 
   const linkedInvoice = invoices.find((inv) => inv.jobCardId === job.id);
+  const displayStatus = (() => {
+    if (job.status === "DELIVERED" || job.status === "CANCELLED") return job.status;
+    return linkedInvoice ? "INVOICED" : job.status;
+  })();
   const completedServices = (job.services || []).filter((s: any) => s.isCompleted).length;
   const totalServices = (job.services || []).length;
 
@@ -78,8 +82,8 @@ export default function JobDetailPage() {
               Created {formatDate(job.createdAt)}
             </p>
           </div>
-          <Badge className={cn("shrink-0 mt-1", STATUS_COLORS[job.status] || "")}>
-            {job.status.replace(/_/g, " ")}
+          <Badge className={cn("shrink-0 mt-1", STATUS_COLORS[displayStatus] || "")}>
+            {displayStatus.replace(/_/g, " ")}
           </Badge>
         </div>
       </div>
@@ -90,7 +94,7 @@ export default function JobDetailPage() {
           <CardTitle className="text-base">Service Progress</CardTitle>
         </CardHeader>
         <CardContent>
-          {job.status === "CANCELLED" ? (
+          {displayStatus === "CANCELLED" ? (
             <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3">
               <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
               <p className="text-sm font-medium text-red-700 dark:text-red-300">
@@ -100,7 +104,7 @@ export default function JobDetailPage() {
           ) : (
           <div className="flex items-start gap-0">
             {PROGRESS_STEPS.map((step, i) => {
-              const done = step.statuses.includes(job.status);
+              const done = step.statuses.includes(displayStatus);
               const isLast = i === PROGRESS_STEPS.length - 1;
               return (
                 <div key={step.label} className="flex flex-1 flex-col items-center">
@@ -119,7 +123,7 @@ export default function JobDetailPage() {
                     </div>
                     <div className={cn(
                       "h-2 flex-1",
-                      isLast ? "invisible" : done && PROGRESS_STEPS[i + 1]?.statuses.includes(job.status) ? "bg-primary" : "bg-muted"
+                      isLast ? "invisible" : done && PROGRESS_STEPS[i + 1]?.statuses.includes(displayStatus) ? "bg-primary" : "bg-muted"
                     )} />
                   </div>
                   <p className={cn(

@@ -42,8 +42,11 @@ export default function CustomerDashboardPage() {
   const { user } = useCustomerAuthStore();
   const {
     customer,
+    vehicles,
+    invoices,
     isLoading,
     error,
+    refresh,
     getCurrentJobCard,
     getRecentInvoice,
     getTotalOutstanding,
@@ -56,6 +59,26 @@ export default function CustomerDashboardPage() {
   const totalOutstanding = getTotalOutstanding();
   const primaryVehicle = getPrimaryVehicle();
   const activeMemberships = getActiveMemberships();
+
+  const derivePortalJobStatus = (status: string, hasInvoice: boolean) => {
+    if (status === "DELIVERED" || status === "CANCELLED") return status;
+    return hasInvoice ? "INVOICED" : status;
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const currentVehicle = currentJob
+    ? vehicles.find((v) => v.id === currentJob.vehicleId)
+    : null;
+  const vehicleForCard = currentVehicle ?? primaryVehicle;
+  const currentJobInvoice = currentJob
+    ? invoices.find((inv) => inv.jobCardId === currentJob.id)
+    : null;
+  const currentJobStatus = currentJob
+    ? derivePortalJobStatus(currentJob.status, !!currentJobInvoice)
+    : null;
 
   if (isLoading) {
     return (
@@ -90,7 +113,7 @@ export default function CustomerDashboardPage() {
     <div className="p-4 sm:p-6 space-y-6 max-w-4xl">
       <div className="space-y-4">
         {/* Current Vehicle & Job */}
-        {primaryVehicle && (
+        {vehicleForCard && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -101,10 +124,10 @@ export default function CustomerDashboardPage() {
             <CardContent className="space-y-2">
               <div>
                 <p className="text-sm font-medium">
-                  {primaryVehicle.make} {primaryVehicle.model}
+                  {vehicleForCard.make} {vehicleForCard.model}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {primaryVehicle.registrationNumber}
+                  {vehicleForCard.registrationNumber}
                 </p>
               </div>
               {currentJob && (
@@ -124,9 +147,9 @@ export default function CustomerDashboardPage() {
                         <div className="mt-1">
                           <span className={cn(
                             "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                            JOB_STATUS_COLORS[currentJob.status] || "bg-muted text-muted-foreground"
+                            JOB_STATUS_COLORS[currentJobStatus ?? currentJob.status] || "bg-muted text-muted-foreground"
                           )}>
-                            {currentJob.status.replace(/_/g, " ")}
+                            {(currentJobStatus ?? currentJob.status).replace(/_/g, " ")}
                           </span>
                         </div>
                       </div>
@@ -151,7 +174,7 @@ export default function CustomerDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {currentJob.status === "CANCELLED" ? (
+              {currentJobStatus === "CANCELLED" ? (
                 <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3">
                   <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                   <p className="text-sm font-medium text-red-700 dark:text-red-300">
@@ -169,7 +192,7 @@ export default function CustomerDashboardPage() {
                   { label: "Invoiced",  statuses: ["INVOICED", "DELIVERED"] },
                   { label: "Delivered", statuses: ["DELIVERED"] },
                 ].map((step, i, arr) => {
-                  const done = step.statuses.includes(currentJob.status);
+                  const done = step.statuses.includes(currentJobStatus ?? currentJob.status);
                   const isLast = i === arr.length - 1;
                   return (
                     <div key={step.label} className="flex flex-1 flex-col items-center">
@@ -188,7 +211,7 @@ export default function CustomerDashboardPage() {
                         </div>
                         <div className={cn(
                           "h-2 flex-1",
-                          isLast ? "invisible" : done && arr[i + 1]?.statuses.includes(currentJob.status) ? "bg-primary" : "bg-muted"
+                          isLast ? "invisible" : done && arr[i + 1]?.statuses.includes(currentJobStatus ?? currentJob.status) ? "bg-primary" : "bg-muted"
                         )} />
                       </div>
                       <p className={cn(
