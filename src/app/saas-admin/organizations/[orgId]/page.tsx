@@ -50,6 +50,7 @@ export default function SaasAdminOrganizationDetailPage() {
   const orgId = typeof params.orgId === "string" ? params.orgId : "";
   const [row, setRow] = useState<PlatformOrgDetail | null>(null);
   const [overrideInput, setOverrideInput] = useState("");
+  const [userOverrideInput, setUserOverrideInput] = useState("");
   const [planCode, setPlanCode] = useState<PlanCode>("STARTER");
   const [termMonths, setTermMonths] = useState<number>(12);
   const [expiresAt, setExpiresAt] = useState("");
@@ -74,6 +75,11 @@ export default function SaasAdminOrganizationDetailPage() {
       data.subscription.maxBranchesOverride === null
         ? ""
         : String(data.subscription.maxBranchesOverride)
+    );
+    setUserOverrideInput(
+      data.subscription.maxUsersOverride === null
+        ? ""
+        : String(data.subscription.maxUsersOverride)
     );
   };
 
@@ -111,11 +117,19 @@ export default function SaasAdminOrganizationDetailPage() {
         toast.error("Override must be a non-negative integer or empty");
         return;
       }
+      const userTrimmed = userOverrideInput.trim();
+      const maxUsersOverride =
+        userTrimmed === "" ? null : Number.parseInt(userTrimmed, 10);
+      if (userTrimmed !== "" && (!Number.isFinite(maxUsersOverride) || maxUsersOverride! < 0)) {
+        toast.error("User override must be a non-negative integer or empty");
+        return;
+      }
       const data = await apiPatch<OrganizationEntitlement>(
         `/api/platform/organizations/${encodeURIComponent(orgId)}/subscription`,
         {
           planCode,
           maxBranchesOverride,
+          maxUsersOverride,
           termMonths,
           status: subStatus,
           paymentStatus,
@@ -304,6 +318,16 @@ export default function SaasAdminOrganizationDetailPage() {
                 placeholder="Empty = use plan default"
                 value={overrideInput}
                 onChange={(e) => setOverrideInput(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="maxUsersOverride">maxUsersOverride</Label>
+              <Input
+                id="maxUsersOverride"
+                inputMode="numeric"
+                placeholder="Empty = use plan default"
+                value={userOverrideInput}
+                onChange={(e) => setUserOverrideInput(e.target.value)}
               />
             </div>
           </div>

@@ -21,6 +21,8 @@ export type OrganizationEntitlement = {
     limits: PlanLimits;
     maxBranchesOverride: number | null;
     effectiveMaxBranches: number | null;
+    maxUsersOverride: number | null;
+    effectiveMaxUsers: number | null;
     contactUsUrl: string | null;
     contactPhone: string | null;
     upgradeUrl: string | null;
