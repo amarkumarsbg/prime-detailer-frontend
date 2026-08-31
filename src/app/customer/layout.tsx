@@ -9,7 +9,7 @@ import { resolveUploadsPublicUrl } from "@/lib/api-base";
 import { getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, Home, FileText, Car, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound, Moon, Sun, Menu, X } from "lucide-react";
+import { LogOut, Home, FileText, Car, ClipboardList, User, Trophy, Wallet, Share2, CreditCard, KeyRound, Moon, Sun, Menu, X, RefreshCw } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { isAuthenticated, user, logout, ensureValidSession } = useCustomerAuthStore();
-  const { bootstrap, customer } = useCustomerDashboardStore();
+  const { bootstrap, customer, isLoading, refresh } = useCustomerDashboardStore();
   const sessionValidatedRef = useRef(false);
   const businessName = useSettingsStore((s) => s.businessName) || "Prime Detailers";
   const businessLogo = useSettingsStore((s) => s.businessLogo);
@@ -74,6 +74,32 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     // Bootstrap dashboard data
     void bootstrap();
   }, [ready, isAuthenticated, user, router, ensureValidSession, bootstrap, isLoginPage, sessionValidatedRef]);
+
+  // Real-time refresh: poll every 30 s + re-fetch on tab focus
+  const refreshRef = useRef(bootstrap);
+  refreshRef.current = bootstrap;
+
+  useEffect(() => {
+    if (isLoginPage || !isAuthenticated) return;
+
+    const POLL_INTERVAL_MS = 30_000;
+
+    const interval = setInterval(() => {
+      void refreshRef.current();
+    }, POLL_INTERVAL_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isLoginPage, isAuthenticated]);
 
   if (!isLoginPage && (!ready || !isAuthenticated)) {
     return (
@@ -180,6 +206,17 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
                 </AvatarFallback>
               </Avatar>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void refresh()}
+              disabled={isLoading}
+              className="h-9 px-2"
+              aria-label="Refresh data"
+              title="Refresh"
+            >
+              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -333,10 +370,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             </Avatar>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-sidebar-accent-foreground truncate leading-tight">{customerDisplayName}</p>
-              <p className="text-[10px] text-sidebar-foreground opacity-70">Customer</p>
             </div>
           </div>
-          <div className="border-t border-sidebar-border my-0.5" />
+          <div className="-mx-2.5 border-t border-sidebar-border my-0.5" />
           <button
             type="button"
             onClick={() => {
@@ -419,10 +455,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             </Avatar>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-sidebar-accent-foreground truncate leading-tight">{customerDisplayName}</p>
-              <p className="text-[10px] text-sidebar-foreground opacity-70">Customer</p>
             </div>
           </div>
-          <div className="border-t border-sidebar-border my-0.5" />
+          <div className="-mx-2.5 border-t border-sidebar-border my-0.5" />
           <button
             type="button"
             onClick={handleLogout}

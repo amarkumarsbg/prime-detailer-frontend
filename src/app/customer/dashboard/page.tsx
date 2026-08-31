@@ -159,32 +159,47 @@ export default function CustomerDashboardPage() {
                   </p>
                 </div>
               ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="flex-1">
-                    <div className="grid grid-cols-5 gap-1">
-                      {[
-                        { label: "Received", completed: true },
-                        { label: "Inspection", completed: ["INSPECTION", "IN_PROGRESS", "QC", "READY", "INVOICED", "DELIVERED"].includes(currentJob.status) },
-                        { label: "Service", completed: ["IN_PROGRESS", "QC", "READY", "INVOICED", "DELIVERED"].includes(currentJob.status) },
-                        { label: "QC", completed: ["QC", "READY", "INVOICED", "DELIVERED"].includes(currentJob.status) },
-                        { label: "Ready", completed: ["READY", "INVOICED", "DELIVERED"].includes(currentJob.status) },
-                      ].map((step, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            "p-2 rounded text-center text-xs font-medium transition-colors",
-                            step.completed
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                              : "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {step.label}
+              <div className="flex items-start gap-0">
+                {[
+                  { label: "Received",  statuses: ["RECEIVED", "INSPECTION", "AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+                  { label: "Inspection", statuses: ["INSPECTION", "AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+                  { label: "Service",   statuses: ["AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+                  { label: "QC",        statuses: ["QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+                  { label: "Ready",     statuses: ["READY", "INVOICED", "DELIVERED"] },
+                  { label: "Invoiced",  statuses: ["INVOICED", "DELIVERED"] },
+                  { label: "Delivered", statuses: ["DELIVERED"] },
+                ].map((step, i, arr) => {
+                  const done = step.statuses.includes(currentJob.status);
+                  const isLast = i === arr.length - 1;
+                  return (
+                    <div key={step.label} className="flex flex-1 flex-col items-center">
+                      <div className="flex items-center w-full">
+                        <div className={cn(
+                          "h-2 flex-1",
+                          i === 0 ? "invisible" : done ? "bg-primary" : "bg-muted"
+                        )} />
+                        <div className={cn(
+                          "h-5 w-5 rounded-full border-2 shrink-0 flex items-center justify-center",
+                          done
+                            ? "bg-primary border-primary"
+                            : "border-muted-foreground/30 bg-background"
+                        )}>
+                          {done && <div className="h-2 w-2 rounded-full bg-white" />}
                         </div>
-                      ))}
+                        <div className={cn(
+                          "h-2 flex-1",
+                          isLast ? "invisible" : done && arr[i + 1]?.statuses.includes(currentJob.status) ? "bg-primary" : "bg-muted"
+                        )} />
+                      </div>
+                      <p className={cn(
+                        "text-[10px] mt-1 text-center leading-tight",
+                        done ? "text-primary font-medium" : "text-muted-foreground"
+                      )}>
+                        {step.label}
+                      </p>
                     </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
               )}
             </CardContent>

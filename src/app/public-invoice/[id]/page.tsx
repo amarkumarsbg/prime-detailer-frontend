@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { apiGet } from "@/lib/api-client";
 import { buildTaxInvoicePrintHtml, formatInvoiceVehicleDetailsLine } from "@/lib/tax-invoice-format";
 import { resolveMembershipInvoiceDetails } from "@/lib/membership-invoice";
@@ -40,7 +40,9 @@ interface PublicInvoiceData {
 export default function PublicInvoicePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const customerRefCode = searchParams.get("ref") || undefined;
 
   const [data, setData] = useState<PublicInvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +124,7 @@ export default function PublicInvoicePage() {
         payments: invoice.payments || [],
         totalPaid,
         remainingBalance,
-        referralCode: invoice.referralCodeUsed,
+        referralCode: customerRefCode || invoice.referralCodeUsed,
         referralRewardAmount: invoice.rewardDiscount || 0,
         newCustomerDiscount: invoice.discountAmount || 0,
         membershipId: invoice.membershipId,

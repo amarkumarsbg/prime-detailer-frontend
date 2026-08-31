@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function InvoiceDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { invoices, jobCards } = useCustomerDashboardStore();
+  const { invoices, jobCards, customer } = useCustomerDashboardStore();
 
   const invoice = invoices.find((inv) => inv.id === id);
 
@@ -79,7 +79,7 @@ export default function InvoiceDetailPage() {
             <Badge className={cn(STATUS_COLORS[status] || "")}>
               {status.replace(/_/g, " ")}
             </Badge>
-            <Link href={`/public-invoice/${invoice.id}`} target="_blank">
+            <Link href={`/public-invoice/${invoice.id}${customer?.referralCode ? `?ref=${encodeURIComponent(customer.referralCode)}` : ""}`} target="_blank">
               <Button variant="outline" size="sm" className="gap-1.5">
                 <ExternalLink className="h-3.5 w-3.5" />
                 View Invoice

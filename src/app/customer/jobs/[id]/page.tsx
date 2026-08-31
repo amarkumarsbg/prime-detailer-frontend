@@ -22,11 +22,13 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PROGRESS_STEPS = [
-  { label: "Received", statuses: ["RECEIVED", "INSPECTION", "AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+  { label: "Received",  statuses: ["RECEIVED", "INSPECTION", "AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
   { label: "Inspection", statuses: ["INSPECTION", "AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
-  { label: "Service", statuses: ["AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
-  { label: "Quality Check", statuses: ["QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
-  { label: "Ready", statuses: ["READY", "INVOICED", "DELIVERED"] },
+  { label: "Service",   statuses: ["AWAITING_SERVICE", "QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+  { label: "QC",        statuses: ["QUALITY_CHECK", "READY", "INVOICED", "DELIVERED"] },
+  { label: "Ready",     statuses: ["READY", "INVOICED", "DELIVERED"] },
+  { label: "Invoiced",  statuses: ["INVOICED", "DELIVERED"] },
+  { label: "Delivered", statuses: ["DELIVERED"] },
 ];
 
 export default function JobDetailPage() {
