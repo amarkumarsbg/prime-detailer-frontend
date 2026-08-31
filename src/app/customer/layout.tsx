@@ -82,7 +82,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   useEffect(() => {
     if (isLoginPage || !isAuthenticated) return;
 
-    const POLL_INTERVAL_MS = 10_000;
+    const POLL_INTERVAL_MS = 60_000;
 
     const interval = setInterval(() => {
       void refreshRef.current();
