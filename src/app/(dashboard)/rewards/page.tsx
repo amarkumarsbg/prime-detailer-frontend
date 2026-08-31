@@ -181,11 +181,13 @@ export default function RewardsPage() {
   const [manualAmount, setManualAmount] = useState("");
   const [manualReason, setManualReason] = useState("");
 
+  const emptyRoleRewards = () => Array.from({ length: 4 }, () => ({ role: "", rewardPercent: 0 }));
+
   const emptyTiers = () => [
-    { targetAmount: 0, rewardPercent: 0 },
-    { targetAmount: 0, rewardPercent: 0 },
-    { targetAmount: 0, rewardPercent: 0 },
-    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0, roleRewards: emptyRoleRewards() },
+    { targetAmount: 0, rewardPercent: 0, roleRewards: emptyRoleRewards() },
+    { targetAmount: 0, rewardPercent: 0, roleRewards: emptyRoleRewards() },
+    { targetAmount: 0, rewardPercent: 0, roleRewards: emptyRoleRewards() },
   ];
 
   const getMigratedSettings = (rawSettings: typeof settings) => {
@@ -205,6 +207,9 @@ export default function RewardsPage() {
             (tier?.roleShares as CompanyTargetRoleShareMap | undefined) || fallbackRoleShares
           )
         ),
+        roleRewards: Array.isArray(tier?.roleRewards) && tier.roleRewards.length > 0
+          ? tier.roleRewards
+          : emptyRoleRewards(),
       }));
     };
 
@@ -349,6 +354,23 @@ export default function RewardsPage() {
     const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
     if (!copyTiers[index]) copyTiers[index] = { targetAmount: 0, rewardPercent: 0 };
     copyTiers[index] = { ...copyTiers[index], [field]: value };
+    copyAll[currentPeriod] = copyTiers;
+    patchSettingsDraft("companyTargetFrequencyTiers", copyAll);
+  };
+
+  const patchTierRoleRewardRow = (
+    tierIdx: number,
+    rowIdx: number,
+    field: "role" | "rewardPercent",
+    value: string | number
+  ) => {
+    const currentPeriod = settingsDraft.companyTargetPeriod || "MONTHLY";
+    const copyAll = { ...(settingsDraft.companyTargetFrequencyTiers || {}) as any };
+    const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
+    const tier = copyTiers[tierIdx] || { targetAmount: 0, rewardPercent: 0 };
+    const roleRewards = [...((tier as any).roleRewards || emptyRoleRewards())];
+    roleRewards[rowIdx] = { ...roleRewards[rowIdx], [field]: value };
+    copyTiers[tierIdx] = { ...tier, roleRewards };
     copyAll[currentPeriod] = copyTiers;
     patchSettingsDraft("companyTargetFrequencyTiers", copyAll);
   };
@@ -820,31 +842,37 @@ export default function RewardsPage() {
                             />
                           </div>
                           {(settingsDraft.companyTargetDistributionMode || "DISTRIBUTE_EQUALLY") === "DISTRIBUTE_ROLE_WISE" ? (
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <Label className="text-xs">Role</Label>
-                                <Select
-                                  value={tier.role || "MECHANIC"}
-                                  onValueChange={(v) => patchCompanyTargetTier(idx, "role" as any, v)}
-                                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                                >
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {COMPANY_TARGET_ROLE_OPTIONS.map((opt) => (
-                                      <SelectItem key={opt.role} value={opt.role}>{opt.label}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                            <div className="space-y-1.5">
+                              <div className="grid grid-cols-2 gap-1.5 mb-1">
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Role</p>
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Reward %</p>
                               </div>
-                              <div>
-                                <Label className="text-xs">Reward %</Label>
-                                <Input
-                                  type="number" min={0} step="0.1"
-                                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                                  value={tier.rewardPercent || ""} placeholder="e.g. 2.5"
-                                  onChange={(e) => patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)}
-                                />
-                              </div>
+                              {Array.from({ length: 4 }).map((_, rowIdx) => {
+                                const roleRewards = (tier as any).roleRewards || [];
+                                const rr = roleRewards[rowIdx] || { role: "", rewardPercent: 0 };
+                                return (
+                                  <div key={rowIdx} className="grid grid-cols-2 gap-1.5">
+                                    <Select
+                                      value={rr.role || ""}
+                                      onValueChange={(v) => patchTierRoleRewardRow(idx, rowIdx, "role", v)}
+                                      disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select role" /></SelectTrigger>
+                                      <SelectContent>
+                                        {COMPANY_TARGET_ROLE_OPTIONS.map((opt) => (
+                                          <SelectItem key={opt.role} value={opt.role}>{opt.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Input
+                                      type="number" min={0} step="0.1" className="h-8 text-xs"
+                                      disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                                      value={rr.rewardPercent || ""} placeholder="e.g. 2.5"
+                                      onChange={(e) => patchTierRoleRewardRow(idx, rowIdx, "rewardPercent", Number(e.target.value) || 0)}
+                                    />
+                                  </div>
+                                );
+                              })}
                             </div>
                           ) : (
                             <div>

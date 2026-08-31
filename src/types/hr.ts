@@ -188,6 +188,11 @@ export type CompanyTargetRoleShareMap = Partial<
   >
 >;
 
+export interface CompanyTargetTierRoleReward {
+  role: string;
+  rewardPercent: number;
+}
+
 export interface CompanyTargetTierConfig {
   targetAmount: number;
   rewardPercent: number;
@@ -195,6 +200,8 @@ export interface CompanyTargetTierConfig {
   role?: keyof CompanyTargetRoleShareMap;
   /** Optional per-tier role split used when distribution mode is role-wise. */
   roleShares?: CompanyTargetRoleShareMap;
+  /** Per-role reward percentages for DISTRIBUTE_ROLE_WISE mode (4 rows). */
+  roleRewards?: CompanyTargetTierRoleReward[];
 }
 
 export type StaffTargetMetric = "JOBS_COMPLETED" | "REVENUE" | "INCENTIVE";

@@ -663,23 +663,32 @@ export function getCompanyTargetResults(args: {
     let shareForRole: number;
 
     if (distributionMode === "DISTRIBUTE_ROLE_WISE") {
-      // Use the tier's own role field; the reward pool goes only to that role's staff.
-      const tierRole = winner.index >= 0
-        ? String((tiers[winner.index] as any)?.role ?? "").toUpperCase()
-        : "";
+      const winnerTier = winner.index >= 0 ? (tiers[winner.index] as any) : null;
       const roleCounts = eligibleRoleCountsForPeriod(args.staffMembers, slot.endMs);
-      let shareForThisStaff: number;
-      if (tierRole && currentRole === tierRole) {
-        const roleCount = roleCounts[tierRole] ?? 0;
-        shareForThisStaff = roleCount > 0 ? roundReward(totalReward / roleCount) : 0;
-      } else if (!tierRole) {
-        // No role on tier — fall back to global role shares
-        const roleSharePercent = roleShares[currentRole] ?? 0;
-        const rolePoolAmount = roundReward(totalReward * (roleSharePercent / 100));
-        const roleCount = roleCounts[currentRole] ?? 0;
-        shareForThisStaff = roleCount > 0 ? roundReward(rolePoolAmount / roleCount) : 0;
+      let shareForThisStaff: number = 0;
+
+      if (winnerTier?.roleRewards && (winnerTier.roleRewards as any[]).length > 0) {
+        // New: each role has its own independent reward % from the tier
+        const roleEntry = (winnerTier.roleRewards as Array<{ role: string; rewardPercent: number }>).find(
+          (r) => r.role && String(r.role).toUpperCase() === currentRole && r.rewardPercent > 0
+        );
+        if (roleEntry) {
+          const rolePool = roundReward(revenue * (roleEntry.rewardPercent / 100));
+          const roleCount = roleCounts[currentRole] ?? 0;
+          shareForThisStaff = roleCount > 0 ? roundReward(rolePool / roleCount) : 0;
+        }
       } else {
-        shareForThisStaff = 0; // different role — not eligible for this tier
+        // Legacy: single role on tier
+        const tierRole = winnerTier ? String(winnerTier?.role ?? "").toUpperCase() : "";
+        if (tierRole && currentRole === tierRole) {
+          const roleCount = roleCounts[tierRole] ?? 0;
+          shareForThisStaff = roleCount > 0 ? roundReward(totalReward / roleCount) : 0;
+        } else if (!tierRole) {
+          const roleSharePercent = roleShares[currentRole] ?? 0;
+          const rolePoolAmount = roundReward(totalReward * (roleSharePercent / 100));
+          const roleCount = roleCounts[currentRole] ?? 0;
+          shareForThisStaff = roleCount > 0 ? roundReward(rolePoolAmount / roleCount) : 0;
+        }
       }
       shareForRole = shareForThisStaff;
     } else {
