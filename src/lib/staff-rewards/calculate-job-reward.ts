@@ -383,6 +383,7 @@ export interface CompanyTargetPeriodResult {
   sharePerStaff: number;
   shareForRole?: number;
   eligibleStaffCount: number;
+  eligibleRoleCount?: number;
   notEligible?: boolean;
 }
 
@@ -660,10 +661,12 @@ export function getCompanyTargetResults(args: {
     const notEligible = !(joiningDayEligible && joinedByPeriodEnd);
 
     let shareForRole: number;
+    let eligibleRoleCount = 0;
 
     if (distributionMode === "DISTRIBUTE_ROLE_WISE") {
       const winnerTier = winner.index >= 0 ? (tiers[winner.index] as any) : null;
       const roleCounts = eligibleRoleCountsForPeriod(args.staffMembers, slot.endMs);
+      eligibleRoleCount = roleCounts[currentRole] ?? 0;
       let shareForThisStaff: number = 0;
 
       if (winnerTier?.roleRewards && (winnerTier.roleRewards as any[]).length > 0) {
@@ -707,6 +710,7 @@ export function getCompanyTargetResults(args: {
       sharePerStaff,
       shareForRole,
       eligibleStaffCount,
+      eligibleRoleCount: distributionMode === "DISTRIBUTE_ROLE_WISE" ? eligibleRoleCount : undefined,
       notEligible,
     };
   });
