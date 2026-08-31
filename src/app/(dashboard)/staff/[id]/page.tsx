@@ -208,8 +208,12 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   }, [jobCards, invoices, staff, activeStaffCount, settings, targetYear, member?.joiningDate]);
 
   const totalCompanyTargetIncentive = useMemo(() => {
-    return companyTargetResults.reduce((sum, r) => sum + r.sharePerStaff, 0);
-  }, [companyTargetResults]);
+    const isRoleWise = settings.companyTargetDistributionMode === "DISTRIBUTE_ROLE_WISE";
+    return companyTargetResults.reduce((sum, r) => {
+      const share = isRoleWise ? (r.shareForRole ?? 0) : r.sharePerStaff;
+      return sum + share;
+    }, 0);
+  }, [companyTargetResults, settings.companyTargetDistributionMode]);
 
   const individualIncentiveRows = useMemo(() => {
     const rows = MONTH_LABELS.map((label, index) => {
@@ -1026,9 +1030,15 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                           <td className="py-2.5 px-4 text-right tabular-nums">
                             {!isNotEligible ? r.eligibleStaffCount : "—"}
                           </td>
-                          <td className={`py-2.5 px-4 text-right tabular-nums font-semibold ${!isNotEligible && r.sharePerStaff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                            {!isNotEligible && r.sharePerStaff > 0 ? formatCurrency(r.sharePerStaff) : "—"}
-                          </td>
+                          {(() => {
+                            const isRoleWise = settings.companyTargetDistributionMode === "DISTRIBUTE_ROLE_WISE";
+                            const shareAmount = isRoleWise ? (r.shareForRole ?? 0) : r.sharePerStaff;
+                            return (
+                              <td className={`py-2.5 px-4 text-right tabular-nums font-semibold ${!isNotEligible && shareAmount > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                                {!isNotEligible && shareAmount > 0 ? formatCurrency(shareAmount) : "—"}
+                              </td>
+                            );
+                          })()}
                         </tr>
                       );
                     })}

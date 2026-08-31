@@ -182,10 +182,10 @@ export default function RewardsPage() {
   const [manualReason, setManualReason] = useState("");
 
   const emptyTiers = () => [
-    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
-    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
-    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
-    { targetAmount: 0, rewardPercent: 0, role: "MECHANIC" as const, roleShares: { MECHANIC: 100 } },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
+    { targetAmount: 0, rewardPercent: 0 },
   ];
 
   const getMigratedSettings = (rawSettings: typeof settings) => {
@@ -196,7 +196,7 @@ export default function RewardsPage() {
     const fallbackRoleShares = rawSettings.companyTargetRoleShares || defaultRoleShares();
     const normalizeTiers = (tiers: any[] | undefined): CompanyTargetTierConfig[] => {
       const source = Array.isArray(tiers) && tiers.length > 0 ? tiers : emptyTiers();
-      return source.map((tier) => ({
+      return source.map((tier: any) => ({
         targetAmount: Number(tier?.targetAmount || 0),
         rewardPercent: Number(tier?.rewardPercent || 0),
         role: resolveTierRole(tier as CompanyTargetTierConfig),
@@ -209,43 +209,32 @@ export default function RewardsPage() {
     };
 
     const migratedFrequencyTiers = {
-      MONTHLY: normalizeTiers(
-        loadedFreqTiers.MONTHLY ||
-          (currentPeriod === "MONTHLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
-      ),
-      QUARTERLY: normalizeTiers(
-        loadedFreqTiers.QUARTERLY ||
-          (currentPeriod === "QUARTERLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
-      ),
-      HALF_YEARLY: normalizeTiers(
-        loadedFreqTiers.HALF_YEARLY ||
-          (currentPeriod === "HALF_YEARLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
-      ),
-      YEARLY: normalizeTiers(
-        loadedFreqTiers.YEARLY ||
-          (currentPeriod === "YEARLY" && legacyTiers.length > 0 ? legacyTiers : undefined)
-      ),
+      MONTHLY: normalizeTiers(loadedFreqTiers.MONTHLY || (currentPeriod === "MONTHLY" && legacyTiers.length > 0 ? legacyTiers : undefined)),
+      QUARTERLY: normalizeTiers(loadedFreqTiers.QUARTERLY || (currentPeriod === "QUARTERLY" && legacyTiers.length > 0 ? legacyTiers : undefined)),
+      HALF_YEARLY: normalizeTiers(loadedFreqTiers.HALF_YEARLY || (currentPeriod === "HALF_YEARLY" && legacyTiers.length > 0 ? legacyTiers : undefined)),
+      YEARLY: normalizeTiers(loadedFreqTiers.YEARLY || (currentPeriod === "YEARLY" && legacyTiers.length > 0 ? legacyTiers : undefined)),
     };
 
     return {
       ...rawSettings,
       companyTargetRevenueType: "INVOICES",
       companyTargetFrequencyTiers: migratedFrequencyTiers,
-      companyTargetDistributionMode: "DISTRIBUTE_ROLE_WISE",
-      companyTargetRoleShares: {
-        ...defaultRoleShares(),
-        ...(rawSettings.companyTargetRoleShares || {}),
-      },
+      companyTargetDistributionMode: rawSettings.companyTargetDistributionMode || "DISTRIBUTE_EQUALLY",
+      companyTargetRoleShares: { ...defaultRoleShares(), ...(rawSettings.companyTargetRoleShares || {}) },
     };
   };
 
   const [settingsDraft, setSettingsDraft] = useState(() => getMigratedSettings(settings));
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [roleShareRows, setRoleShareRows] = useState<RoleShareRowDraft[]>(() =>
+    buildRoleShareRows(getMigratedSettings(settings).companyTargetRoleShares)
+  );
 
   useEffect(() => {
     if (!settingsDirty) {
       const migrated = getMigratedSettings(settings);
       setSettingsDraft(migrated);
+      setRoleShareRows(buildRoleShareRows(migrated.companyTargetRoleShares));
     }
   }, [settings, settingsDirty]);
 
@@ -260,83 +249,34 @@ export default function RewardsPage() {
   const [targetNotes, setTargetNotes] = useState("");
 
   const branchScopeLabel = useMemo(
-    () =>
-      resolveBranchScopeLabel(
-        showBranchPicker,
-        viewingLabel,
-        pageBranchFilter,
-        branches
-      ),
+    () => resolveBranchScopeLabel(showBranchPicker, viewingLabel, pageBranchFilter, branches),
     [showBranchPicker, viewingLabel, pageBranchFilter, branches]
   );
 
   const scopedStaff = useMemo(
     () =>
-      applyBranchFilters(
-        staff,
-        (u) => u.branchId,
-        selectedBranchId,
-        showBranchPicker,
-        pageBranchFilter
-      ).filter((s) => s.isActive),
+      applyBranchFilters(staff, (u) => u.branchId, selectedBranchId, showBranchPicker, pageBranchFilter)
+        .filter((s) => s.isActive),
     [staff, selectedBranchId, showBranchPicker, pageBranchFilter]
   );
 
   const scopedLedger = useMemo(() => {
-    let list = applyBranchFilters(
-      ledger,
-      (e) => e.branchId,
-      selectedBranchId,
-      showBranchPicker,
-      pageBranchFilter
-    );
-    list = list.filter(
-      (e) => e.periodMonth === filterMonth && e.periodYear === filterYear
-    );
-    if (staffFilter !== "all") {
-      list = list.filter((e) => e.staffId === staffFilter);
-    }
-    if (statusFilter !== "ALL") {
-      list = list.filter((e) => e.status === statusFilter);
-    }
+    let list = applyBranchFilters(ledger, (e) => e.branchId, selectedBranchId, showBranchPicker, pageBranchFilter);
+    list = list.filter((e) => e.periodMonth === filterMonth && e.periodYear === filterYear);
+    if (staffFilter !== "all") list = list.filter((e) => e.staffId === staffFilter);
+    if (statusFilter !== "ALL") list = list.filter((e) => e.status === statusFilter);
     return list;
-  }, [
-    ledger,
-    selectedBranchId,
-    showBranchPicker,
-    pageBranchFilter,
-    filterMonth,
-    filterYear,
-    staffFilter,
-    statusFilter,
-  ]);
+  }, [ledger, selectedBranchId, showBranchPicker, pageBranchFilter, filterMonth, filterYear, staffFilter, statusFilter]);
 
   const scopedTargets = useMemo(() => {
-    let list = applyBranchFilters(
-      targets,
-      (t) => t.branchId,
-      selectedBranchId,
-      showBranchPicker,
-      pageBranchFilter
-    );
-    return list.filter(
-      (t) => t.periodMonth === filterMonth && t.periodYear === filterYear
-    );
-  }, [
-    targets,
-    selectedBranchId,
-    showBranchPicker,
-    pageBranchFilter,
-    filterMonth,
-    filterYear,
-  ]);
+    let list = applyBranchFilters(targets, (t) => t.branchId, selectedBranchId, showBranchPicker, pageBranchFilter);
+    return list.filter((t) => t.periodMonth === filterMonth && t.periodYear === filterYear);
+  }, [targets, selectedBranchId, showBranchPicker, pageBranchFilter, filterMonth, filterYear]);
 
   const kpis = useMemo(() => {
     const pending = scopedLedger.filter((e) => e.status === "PENDING").length;
     const approved = scopedLedger.filter((e) => e.status === "APPROVED").length;
-    const total = scopedLedger
-      .filter((e) => e.status !== "CANCELLED")
-      .reduce((s, e) => s + e.amount, 0);
+    const total = scopedLedger.filter((e) => e.status !== "CANCELLED").reduce((s, e) => s + e.amount, 0);
     return { pending, approved, total, count: scopedLedger.length };
   }, [scopedLedger]);
 
@@ -363,154 +303,95 @@ export default function RewardsPage() {
 
   const handleManual = () => {
     const member = staff.find((s) => s.id === manualStaffId);
-    if (!member) {
-      toast.error("Select a staff member.");
-      return;
-    }
+    if (!member) { toast.error("Select a staff member."); return; }
     const amount = Number(manualAmount);
     const result = addManualEntry({
-      staffId: member.id,
-      staffName: member.name,
-      branchId: member.branchId,
-      amount,
-      kind: manualKind,
-      reason: manualReason,
-      periodMonth: filterMonth,
-      periodYear: filterYear,
-      createdById: authUser?.id,
-      createdByName: authUser?.name,
+      staffId: member.id, staffName: member.name, branchId: member.branchId,
+      amount, kind: manualKind, reason: manualReason,
+      periodMonth: filterMonth, periodYear: filterYear,
+      createdById: authUser?.id, createdByName: authUser?.name,
     });
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    pushActivityLog({
-      action: manualKind === "CREDIT" ? "WALLET_CREDITED" : "WALLET_DEBITED",
-      entityType: "STAFF_REWARD",
-      entityId: result.entry?.id ?? member.id,
-      entityLabel: `${member.name} reward`,
-      details: `Manual ${manualKind.toLowerCase()} ${formatCurrency(Math.abs(amount))}: ${manualReason.trim()}`,
-    });
+    if (!result.ok) { toast.error(result.error); return; }
+    pushActivityLog({ action: manualKind === "CREDIT" ? "WALLET_CREDITED" : "WALLET_DEBITED", entityType: "STAFF_REWARD", entityId: result.entry?.id ?? member.id, entityLabel: `${member.name} reward`, details: `Manual ${manualKind.toLowerCase()} ${formatCurrency(Math.abs(amount))}: ${manualReason.trim()}` });
     toast.success("Ledger entry added.");
     setManualOpen(false);
   };
 
   const handleApprove = (entryId: string) => {
     const result = approveEntry(entryId);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    pushActivityLog({
-      action: "UPDATED",
-      entityType: "STAFF_REWARD",
-      entityId: entryId,
-      entityLabel: result.entry?.staffName ?? "Reward",
-      details: `Approved ${formatCurrency(result.entry?.amount ?? 0)} (${result.entry?.rewardType})`,
-    });
+    if (!result.ok) { toast.error(result.error); return; }
+    pushActivityLog({ action: "UPDATED", entityType: "STAFF_REWARD", entityId: entryId, entityLabel: result.entry?.staffName ?? "Reward", details: `Approved ${formatCurrency(result.entry?.amount ?? 0)} (${result.entry?.rewardType})` });
     toast.success("Reward approved.");
   };
 
   const handleCancel = (entryId: string) => {
     const result = cancelEntry(entryId);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    pushActivityLog({
-      action: "CANCELLED",
-      entityType: "STAFF_REWARD",
-      entityId: entryId,
-      entityLabel: result.entry?.staffName ?? "Reward",
-      details: `Cancelled reward entry ${formatCurrency(result.entry?.amount ?? 0)}`,
-    });
+    if (!result.ok) { toast.error(result.error); return; }
+    pushActivityLog({ action: "CANCELLED", entityType: "STAFF_REWARD", entityId: entryId, entityLabel: result.entry?.staffName ?? "Reward", details: `Cancelled reward entry ${formatCurrency(result.entry?.amount ?? 0)}` });
     toast.success("Entry cancelled.");
   };
 
-
-
   const syncSettingsDraft = () => {
-    setSettingsDraft(getMigratedSettings(settings));
+    const migrated = getMigratedSettings(settings);
+    setSettingsDraft(migrated);
+    setRoleShareRows(buildRoleShareRows(migrated.companyTargetRoleShares));
     setSettingsDirty(false);
   };
 
-  const patchSettingsDraft = <K extends keyof typeof settings>(
-    key: K,
-    value: (typeof settings)[K]
-  ) => {
+  const patchSettingsDraft = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => {
     setSettingsDraft((prev) => ({ ...prev, [key]: value }));
     setSettingsDirty(true);
   };
 
-  const patchCompanyTargetTier = (
-    index: number,
-    field: "targetAmount" | "rewardPercent",
-    value: number
-  ) => {
+  const patchCompanyTargetTier = (index: number, field: "targetAmount" | "rewardPercent" | string, value: number | string) => {
     const currentPeriod = settingsDraft.companyTargetPeriod || "MONTHLY";
     const copyAll = { ...(settingsDraft.companyTargetFrequencyTiers || {}) as any };
     const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
-    if (!copyTiers[index]) {
-      copyTiers[index] = {
-        targetAmount: 0,
-        rewardPercent: 0,
-        role: "MECHANIC",
-        roleShares: { MECHANIC: 100 },
-      };
-    }
-    copyTiers[index] = {
-      ...copyTiers[index],
-      [field]: value,
-    };
+    if (!copyTiers[index]) copyTiers[index] = { targetAmount: 0, rewardPercent: 0 };
+    copyTiers[index] = { ...copyTiers[index], [field]: value };
     copyAll[currentPeriod] = copyTiers;
     patchSettingsDraft("companyTargetFrequencyTiers", copyAll);
   };
 
-  const setTierSingleRole = (
-    tierIndex: number,
-    role: keyof CompanyTargetRoleShareMap
-  ) => {
-    const currentPeriod = settingsDraft.companyTargetPeriod || "MONTHLY";
-    const copyAll = { ...(settingsDraft.companyTargetFrequencyTiers || {}) as any };
-    const copyTiers = [...(copyAll[currentPeriod] || emptyTiers())];
-    const tier = copyTiers[tierIndex] || {
-      targetAmount: 0,
-      rewardPercent: 0,
-      role: "MECHANIC",
-      roleShares: { MECHANIC: 100 },
-    };
-    const next: CompanyTargetRoleShareMap = {};
-    for (const opt of COMPANY_TARGET_ROLE_OPTIONS) {
-      next[opt.role] = opt.role === role ? 100 : 0;
-    }
-    copyTiers[tierIndex] = {
-      ...tier,
-      role,
-      roleShares: next,
-    };
-    copyAll[currentPeriod] = copyTiers;
-    patchSettingsDraft("companyTargetFrequencyTiers", copyAll);
+  const syncRoleRowsToDraft = (rows: RoleShareRowDraft[]) => {
+    patchSettingsDraft("companyTargetRoleShares", rowsToRoleShareMap(rows));
+  };
+
+  const updateRoleRow = (index: number, patch: Partial<RoleShareRowDraft>) => {
+    setRoleShareRows((prev) => {
+      const nextRows = prev.map((row, i) => (i === index ? { ...row, ...patch } : row));
+      syncRoleRowsToDraft(nextRows);
+      return nextRows;
+    });
+  };
+
+  const removeRoleRow = (index: number) => {
+    setRoleShareRows((prev) => {
+      if (prev.length <= 1) return prev;
+      const nextRows = prev.filter((_, i) => i !== index);
+      syncRoleRowsToDraft(nextRows);
+      return nextRows;
+    });
+  };
+
+  const addRoleRow = () => {
+    setRoleShareRows((prev) => {
+      const used = new Set(prev.map((r) => r.role));
+      const nextRole = COMPANY_TARGET_ROLE_OPTIONS.find((o) => !used.has(o.role));
+      if (!nextRole) return prev;
+      const nextRows = [...prev, { role: nextRole.role, percent: 0 }];
+      syncRoleRowsToDraft(nextRows);
+      return nextRows;
+    });
   };
 
   const handleSaveSettings = () => {
-    const periodKeys: Array<"MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY"> = [
-      "MONTHLY",
-      "QUARTERLY",
-      "HALF_YEARLY",
-      "YEARLY",
-    ];
-    for (const periodKey of periodKeys) {
-      const tiers = (settingsDraft.companyTargetFrequencyTiers || {} as any)[periodKey] || [];
-      for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
-        const rows = buildRoleShareRows(tiers[tierIdx]?.roleShares || defaultRoleShares());
-        const totalRoleShare = rows.reduce(
-          (sum, row) => sum + Number(row.percent || 0),
-          0
-        );
-        if (Math.abs(totalRoleShare - 100) > 0.01) {
-          toast.error(`${periodKey} Tier ${tierIdx + 1}: role-wise reward % must total 100.`);
-          return;
-        }
+    const distMode = (settingsDraft.companyTargetDistributionMode || "DISTRIBUTE_EQUALLY") as CompanyTargetDistributionMode;
+    if (distMode === "DISTRIBUTE_ROLE_WISE") {
+      const total = roleShareRows.reduce((s, r) => s + Number(r.percent || 0), 0);
+      if (Math.abs(total - 100) > 0.01) {
+        toast.error("Role-wise reward % must total 100.");
+        return;
       }
     }
 
@@ -533,9 +414,8 @@ export default function RewardsPage() {
       companyTargetPeriod: settingsDraft.companyTargetPeriod,
       companyTargetTiers: currentTiers,
       companyTargetFrequencyTiers: settingsDraft.companyTargetFrequencyTiers,
-      companyTargetDistributionMode: "DISTRIBUTE_ROLE_WISE",
-      companyTargetRoleShares:
-        currentTiers[0]?.roleShares || settingsDraft.companyTargetRoleShares,
+      companyTargetDistributionMode: distMode,
+      companyTargetRoleShares: settingsDraft.companyTargetRoleShares,
     });
     setSettingsDirty(false);
     toast.success("Reward settings saved.");
@@ -564,42 +444,22 @@ export default function RewardsPage() {
 
   const handleSaveTarget = () => {
     const member = staff.find((s) => s.id === targetStaffId);
-    if (!member) {
-      toast.error("Select a staff member.");
-      return;
-    }
+    if (!member) { toast.error("Select a staff member."); return; }
     const result = upsertTarget({
       id: editingTarget?.id,
-      staffId: member.id,
-      staffName: member.name,
-      branchId: member.branchId,
-      periodMonth: targetMonth,
-      periodYear: targetYear,
-      metric: targetMetric,
-      targetValue: Number(targetValue),
-      notes: targetNotes,
+      staffId: member.id, staffName: member.name, branchId: member.branchId,
+      periodMonth: targetMonth, periodYear: targetYear,
+      metric: targetMetric, targetValue: Number(targetValue), notes: targetNotes,
     });
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    pushActivityLog({
-      action: editingTarget ? "UPDATED" : "CREATED",
-      entityType: "STAFF_REWARD",
-      entityId: result.target?.id ?? member.id,
-      entityLabel: `${member.name} target`,
-      details: `${targetMetric} target ${targetValue} for ${targetMonth}/${targetYear}`,
-    });
+    if (!result.ok) { toast.error(result.error); return; }
+    pushActivityLog({ action: editingTarget ? "UPDATED" : "CREATED", entityType: "STAFF_REWARD", entityId: result.target?.id ?? member.id, entityLabel: `${member.name} target`, details: `${targetMetric} target ${targetValue} for ${targetMonth}/${targetYear}` });
     toast.success(editingTarget ? "Target updated." : "Target created.");
     setTargetOpen(false);
   };
 
   const handleRemoveTarget = (id: string) => {
     const result = removeTarget(id);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
+    if (!result.ok) { toast.error(result.error); return; }
     toast.success("Target removed.");
   };
 
@@ -898,9 +758,7 @@ export default function RewardsPage() {
             <CardHeader className="flex flex-row items-center justify-between pb-3 gap-3">
               <div className="space-y-0.5">
                 <CardTitle className="text-base">Company Target-Based Rewards</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Enable rewards based on company-wide target achievements
-                </p>
+                <p className="text-xs text-muted-foreground">Enable rewards based on company-wide target achievements</p>
               </div>
               <div className="flex items-center gap-3">
                 <Switch
@@ -909,99 +767,96 @@ export default function RewardsPage() {
                   onCheckedChange={(v) => patchSettingsDraft("companyTargetEnabled", v)}
                 />
                 {canManage && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!settingsDirty}
-                    onClick={handleSaveSettings}
-                  >
+                  <Button type="button" size="sm" disabled={!settingsDirty} onClick={handleSaveSettings}>
                     Save settings
                   </Button>
                 )}
               </div>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+            <CardContent className="space-y-4">
 
-              <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                <Label>Revenue Basis</Label>
-                <Input value="Invoices (valid billed totals)" disabled className="bg-muted" />
+              {/* Distribution model + Revenue Basis */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Revenue Basis</Label>
+                  <Input value="Invoices (valid billed totals)" disabled className="bg-muted" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Distribution Model</Label>
+                  <Select
+                    value={(settingsDraft.companyTargetDistributionMode || "DISTRIBUTE_EQUALLY") as string}
+                    onValueChange={(v) => patchSettingsDraft("companyTargetDistributionMode", v as CompanyTargetDistributionMode)}
+                    disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DISTRIBUTE_EQUALLY">Distribute equally</SelectItem>
+                      <SelectItem value="DISTRIBUTE_ROLE_WISE">Distribute role wise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="col-span-2 space-y-4">
+              {/* Target Tiers */}
+              <div className="space-y-3">
                 <hr className="border-t border-border" />
                 <h4 className="text-sm font-semibold text-foreground">Target Tiers Configuration</h4>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {[0, 1, 2, 3].map((idx) => {
                     const currentFreq = settingsDraft.companyTargetPeriod || "MONTHLY";
                     const currentFreqTiers = (settingsDraft.companyTargetFrequencyTiers as any)?.[currentFreq] || [];
-                    const tier = currentFreqTiers[idx] || {
-                      targetAmount: 0,
-                      rewardPercent: 0,
-                      role: "MECHANIC" as const,
-                      roleShares: { MECHANIC: 100 },
-                    };
-                    const roleShareRows = buildRoleShareRows(
-                      tier.roleShares || defaultRoleShares()
-                    );
+                    const tier = currentFreqTiers[idx] || { targetAmount: 0, rewardPercent: 0 };
                     return (
                       <div key={idx} className="space-y-2 rounded-lg border p-3 bg-muted/20">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase">
-                          Tier {idx + 1}
-                        </p>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">Tier {idx + 1}</p>
                         <div className="space-y-2">
                           <div>
                             <Label className="text-xs">Target Amount (₹)</Label>
                             <Input
-                              type="number"
-                              min={0}
+                              type="number" min={0}
                               disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                              value={tier.targetAmount || ""}
-                              placeholder="e.g. 500000"
-                              onChange={(e) =>
-                                patchCompanyTargetTier(idx, "targetAmount", Number(e.target.value) || 0)
-                              }
+                              value={tier.targetAmount || ""} placeholder="e.g. 500000"
+                              onChange={(e) => patchCompanyTargetTier(idx, "targetAmount", Number(e.target.value) || 0)}
                             />
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs">Role</Label>
-                              <Select
-                                value={resolveTierRole(tier)}
-                                onValueChange={(value) =>
-                                  setTierSingleRole(
-                                    idx,
-                                    value as keyof CompanyTargetRoleShareMap
-                                  )
-                                }
-                                disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {COMPANY_TARGET_ROLE_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.role} value={opt.role}>
-                                      {opt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                          {(settingsDraft.companyTargetDistributionMode || "DISTRIBUTE_EQUALLY") === "DISTRIBUTE_ROLE_WISE" ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Role</Label>
+                                <Select
+                                  value={tier.role || "MECHANIC"}
+                                  onValueChange={(v) => patchCompanyTargetTier(idx, "role" as any, v)}
+                                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                                >
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {COMPANY_TARGET_ROLE_OPTIONS.map((opt) => (
+                                      <SelectItem key={opt.role} value={opt.role}>{opt.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">Reward %</Label>
+                                <Input
+                                  type="number" min={0} step="0.1"
+                                  disabled={!canManage || !settingsDraft.companyTargetEnabled}
+                                  value={tier.rewardPercent || ""} placeholder="e.g. 2.5"
+                                  onChange={(e) => patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)}
+                                />
+                              </div>
                             </div>
+                          ) : (
                             <div>
                               <Label className="text-xs">Reward %</Label>
                               <Input
-                                type="number"
-                                min={0}
-                                step="0.1"
+                                type="number" min={0} step="0.1"
                                 disabled={!canManage || !settingsDraft.companyTargetEnabled}
-                                value={tier.rewardPercent || ""}
-                                placeholder="e.g. 2.5"
-                                onChange={(e) =>
-                                  patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)
-                                }
+                                value={tier.rewardPercent || ""} placeholder="e.g. 2.5"
+                                onChange={(e) => patchCompanyTargetTier(idx, "rewardPercent", Number(e.target.value) || 0)}
                               />
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     );

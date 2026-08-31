@@ -637,6 +637,10 @@ export function getCompanyTargetResults(args: {
 
   const joiningTime = parsedTimeOrNull(args.joiningDate);
   const joiningDayEligible = isJoiningDayEligible(args.joiningDate);
+  const distributionMode = normalizeDistributionMode(
+    args.settings.companyTargetDistributionMode
+  );
+  const roleShares = normalizeRoleShares(args.settings.companyTargetRoleShares);
   const currentRole = String(args.staffRole ?? "").toUpperCase();
 
   return slots.map((slot) => {
@@ -644,8 +648,9 @@ export function getCompanyTargetResults(args: {
     const configTiers = freqTiersMap[slot.configKey] || [];
     const tiers = (configTiers.length > 0 ? configTiers : (args.settings.companyTargetTiers || [])) as CompanyTargetTierConfig[];
 
-    // Highest achieved tier overall (for display reference).
+    // Highest single achieved tier.
     const winner = achievedTier(revenue, tiers);
+    const totalReward = roundReward(revenue * (winner.rewardPercent / 100));
 
     const eligibleStaffCount = eligibleStaffCountForPeriod(
       args.staffMembers,
@@ -655,57 +660,33 @@ export function getCompanyTargetResults(args: {
     const joinedByPeriodEnd = joiningTime != null && joiningTime <= slot.endMs;
     const notEligible = !(joiningDayEligible && joinedByPeriodEnd);
 
-    // Find the tier whose explicit role (or inferred from roleShares) matches
-    // this staff member's role, AND whose target is reached.
-    // If multiple match, pick the highest target.
-    let roleTierIndex = -1;
-    let roleTierMaxTarget = -1;
-    for (let i = 0; i < tiers.length; i++) {
-      const t = tiers[i];
-      if (!t) continue;
-      // Resolve tier role: prefer explicit `role` field, fall back to the role
-      // with 100% (or highest) share in roleShares for backward compatibility.
-      let tierRole = t.role ? String(t.role).toUpperCase() : null;
-      if (!tierRole && t.roleShares) {
-        const rows = normalizeRoleShares(t.roleShares);
-        let maxShare = 0;
-        let maxRole: string | null = null;
-        for (const [r, pct] of Object.entries(rows)) {
-          if (pct > maxShare) { maxShare = pct; maxRole = r; }
-        }
-        tierRole = maxRole;
+    let shareForRole: number;
+
+    if (distributionMode === "DISTRIBUTE_ROLE_WISE") {
+      // Use the tier's own role field; the reward pool goes only to that role's staff.
+      const tierRole = winner.index >= 0
+        ? String((tiers[winner.index] as any)?.role ?? "").toUpperCase()
+        : "";
+      const roleCounts = eligibleRoleCountsForPeriod(args.staffMembers, slot.endMs);
+      let shareForThisStaff: number;
+      if (tierRole && currentRole === tierRole) {
+        const roleCount = roleCounts[tierRole] ?? 0;
+        shareForThisStaff = roleCount > 0 ? roundReward(totalReward / roleCount) : 0;
+      } else if (!tierRole) {
+        // No role on tier — fall back to global role shares
+        const roleSharePercent = roleShares[currentRole] ?? 0;
+        const rolePoolAmount = roundReward(totalReward * (roleSharePercent / 100));
+        const roleCount = roleCounts[currentRole] ?? 0;
+        shareForThisStaff = roleCount > 0 ? roundReward(rolePoolAmount / roleCount) : 0;
+      } else {
+        shareForThisStaff = 0; // different role — not eligible for this tier
       }
-      if (!tierRole) continue;
-      if (
-        tierRole === currentRole &&
-        t.targetAmount > 0 &&
-        revenue >= t.targetAmount &&
-        t.targetAmount > roleTierMaxTarget
-      ) {
-        roleTierMaxTarget = t.targetAmount;
-        roleTierIndex = i;
-      }
+      shareForRole = shareForThisStaff;
+    } else {
+      shareForRole = eligibleStaffCount > 0 ? roundReward(totalReward / eligibleStaffCount) : 0;
     }
 
-    const roleTier = roleTierIndex >= 0 ? tiers[roleTierIndex]! : null;
-    const roleTierReward = roleTier
-      ? roundReward(revenue * (roleTier.rewardPercent / 100))
-      : 0;
-
-    const roleCounts = eligibleRoleCountsForPeriod(args.staffMembers, slot.endMs);
-    const roleEligibleCount = roleCounts[currentRole] ?? 0;
-
-    const shareForRole =
-      roleTier && roleEligibleCount > 0
-        ? roundReward(roleTierReward / roleEligibleCount)
-        : 0;
-
     const sharePerStaff = notEligible ? 0 : shareForRole;
-
-    // For table display: show the staff's own role-tier info when matched,
-    // otherwise fall back to the global winner tier for reference.
-    const displayTierIndex = roleTier ? roleTierIndex : winner.index;
-    const displayTier = roleTier ?? (winner.index >= 0 ? tiers[winner.index] : null);
 
     return {
       periodLabel: slot.label,
@@ -713,10 +694,10 @@ export function getCompanyTargetResults(args: {
       periodMonth: slot.periodMonth,
       periodYear: slot.periodYear,
       revenue,
-      achievedTierIndex: displayTierIndex,
-      targetAmount: displayTier?.targetAmount ?? winner.targetAmount,
-      rewardPercent: displayTier?.rewardPercent ?? winner.rewardPercent,
-      totalReward: roleTier ? roleTierReward : roundReward(revenue * (winner.rewardPercent / 100)),
+      achievedTierIndex: winner.index,
+      targetAmount: winner.targetAmount,
+      rewardPercent: winner.rewardPercent,
+      totalReward,
       sharePerStaff,
       shareForRole,
       eligibleStaffCount,
