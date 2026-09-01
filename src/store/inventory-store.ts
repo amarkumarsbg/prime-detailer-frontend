@@ -149,7 +149,11 @@ function persistInventorySnapshot(get: () => InventoryStore): void {
     postCollectionSnapshot("branchStocks", branchStocks),
     postCollectionSnapshot("stockTransfers", stockTransfers),
     postCollectionSnapshot("partCategories", partCategories),
-  ]);
+  ]).catch((err) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Failed to persist inventory snapshot", err);
+    }
+  });
 }
 
 function nextSerial(prefix: string, existing: string[], year: number): string {

@@ -15,13 +15,17 @@ export const useServiceCatalogStore = create<ServiceCatalogState>((set, get) => 
 
   setCatalog: async (updater) => {
     const catalog = updater(get().catalog);
-    await postCollectionSnapshot("serviceCatalog", catalog);
+    await postCollectionSnapshot("serviceCatalog", catalog).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.warn("Failed to persist service catalog", err);
+    });
     set({ catalog });
   },
 
   removeFromCatalog: async (id) => {
     const catalog = get().catalog.filter((s) => s.id !== id);
-    await postCollectionSnapshot("serviceCatalog", catalog);
+    await postCollectionSnapshot("serviceCatalog", catalog).catch((err) => {
+      if (process.env.NODE_ENV !== "production") console.warn("Failed to persist service catalog", err);
+    });
     set({ catalog });
   },
 }));

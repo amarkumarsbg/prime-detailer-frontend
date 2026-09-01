@@ -208,7 +208,11 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
       });
     });
     const next = [...get().reminders, ...newReminders];
-    await postCollectionSnapshot("serviceReminders", next);
+    await postCollectionSnapshot("serviceReminders", next).catch((err) => {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("Failed to persist high end reminders", err);
+      }
+    });
     set({ reminders: next });
   },
 }));

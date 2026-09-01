@@ -63,7 +63,11 @@ async function persistExpenseState(get: () => ExpenseStore): Promise<void> {
       vendorSuggestions: s.vendorSuggestions,
       vendorDirectory: s.vendorDirectory,
     }),
-  ]);
+  ]).catch((err) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Failed to persist expense snapshot", err);
+    }
+  });
 }
 
 export const useExpenseStore = create<ExpenseStore>((set, get) => ({
