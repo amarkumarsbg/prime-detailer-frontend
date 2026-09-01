@@ -10,8 +10,16 @@ import type { CustomerMessage } from "@/types";
 /** wa.me `text=` query is length-limited; use clipboard above this threshold. */
 const WA_ME_PREFILL_SAFE_MAX = 1500;
 
-export async function sendCustomerWhatsApp(phone: string, message: string): Promise<CustomerMessage | null> {
-  const res = await apiPost<{ ok: true; message?: CustomerMessage }>("/api/messaging/whatsapp", { phone, message });
+export async function sendCustomerWhatsApp(
+  phone: string, 
+  message: string,
+  template?: { contentSid?: string; contentVariables?: Record<string, string> }
+): Promise<CustomerMessage | null> {
+  const payload = template?.contentSid
+    ? { phone, contentSid: template.contentSid, contentVariables: template.contentVariables }
+    : { phone, message };
+
+  const res = await apiPost<{ ok: true; message?: CustomerMessage }>("/api/messaging/whatsapp", payload);
   if (res.message) {
     useCommunicationStore.getState().addMessage(res.message);
     return res.message;

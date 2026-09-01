@@ -301,7 +301,7 @@ function scheduleAppSettingsSync(get: () => SettingsState): void {
     settingsSyncTimer = null;
     const s = get();
     void putSingletonDocument("appSettings", sliceSerializable(s)).catch((err) => {
-      if (process.env.NODE_ENV !== "production") console.error(err);
+      if (process.env.NODE_ENV !== "production") console.warn(err);
     });
   }, 450);
 }
