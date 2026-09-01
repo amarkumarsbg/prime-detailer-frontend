@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useCommunicationStore } from "@/store/communication-store";
 import { PageHeader } from "@/components/shared/page-header";
@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { formatDate, formatDateTime, cn } from "@/lib/utils";
 import type { CustomerMessage } from "@/types";
@@ -33,6 +34,9 @@ export default function MessagesLogPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [displayedCount, setDisplayedCount] = useState(10);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -59,11 +63,44 @@ export default function MessagesLogPage() {
     });
   }, [messages, search, typeFilter, statusFilter]);
 
+  const paginatedMessages = useMemo(() => {
+    return filteredMessages.slice(0, displayedCount);
+  }, [filteredMessages, displayedCount]);
+
   const handleResetFilters = () => {
     setSearch("");
     setTypeFilter("all");
     setStatusFilter("all");
+    setDisplayedCount(10);
   };
+
+  // Reset to first page when search or filters change
+  useEffect(() => {
+    setDisplayedCount(10);
+  }, [search, typeFilter, statusFilter]);
+
+  const handleObserver = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      const target = entries[0];
+      if (target.isIntersecting && displayedCount < filteredMessages.length && !isLoadingMore) {
+        setIsLoadingMore(true);
+        // Simulate a small delay for the spinner as requested
+        setTimeout(() => {
+          setDisplayedCount((prev) => Math.min(prev + 10, filteredMessages.length));
+          setIsLoadingMore(false);
+        }, 500);
+      }
+    },
+    [displayedCount, filteredMessages.length, isLoadingMore]
+  );
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(handleObserver, { threshold: 1.0 });
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+    return () => observer.disconnect();
+  }, [handleObserver]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -141,7 +178,7 @@ export default function MessagesLogPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredMessages.map((msg) => {
+          {paginatedMessages.map((msg) => {
             const isEmail = msg.type === "email";
             const isWhatsApp = msg.type === "whatsapp";
             const isExpanded = expandedIds[msg.id];
@@ -230,7 +267,7 @@ export default function MessagesLogPage() {
                       <div
                         className={cn(
                           "text-xs text-muted-foreground border border-border/50 rounded-lg p-3 bg-muted/20 overflow-x-auto max-h-[160px] overflow-y-auto transition-all",
-                          isExpanded && "max-h-[800px]"
+                          isExpanded && "max-h-none"
                         )}
                         dangerouslySetInnerHTML={{ __html: displayBody }}
                       />
@@ -286,6 +323,12 @@ export default function MessagesLogPage() {
               </div>
             );
           })}
+          
+          {displayedCount < filteredMessages.length && (
+            <div ref={observerTarget} className="flex justify-center py-6">
+              {isLoadingMore && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -84,7 +84,9 @@ export function canAccessNavItem(
 
   // 2. Custom permission check
   if (permissionKey) {
-    return userPermissions ? userPermissions.includes(permissionKey) : false;
+    if (!userPermissions) return false;
+    if (userPermissions.includes(permissionKey)) return true;
+    return userPermissions.some((p) => p.startsWith(`${permissionKey}_`));
   }
 
   return true;

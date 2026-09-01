@@ -138,7 +138,9 @@ export default function CustomerInvoicesPage() {
                               <div>
                                 <p className="text-xs text-muted-foreground">Vehicle</p>
                                 <p className="font-medium text-sm">
-                                  {invoice.vehicleMakeModel || "—"}
+                                  {invoice.vehicleMakeModel?.trim() && invoice.vehicleRegNumber?.trim() 
+                                    ? `${invoice.vehicleMakeModel.trim()} (${invoice.vehicleRegNumber.trim()})`
+                                    : invoice.vehicleMakeModel?.trim() || invoice.vehicleRegNumber?.trim() || "—"}
                                 </p>
                               </div>
                               <div>

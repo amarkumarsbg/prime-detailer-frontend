@@ -246,8 +246,9 @@ async function loadOne(resource: DomainResource): Promise<void> {
       return;
     }
     case "communications": {
+      const data = await apiGet<{ items: CustomerMessage[] }>("/api/collections/communications?page=1&pageSize=500");
       useCommunicationStore.setState({
-        messages: await getCollectionItems<CustomerMessage>("communications"),
+        messages: Array.isArray(data.items) ? data.items : [],
       });
       return;
     }

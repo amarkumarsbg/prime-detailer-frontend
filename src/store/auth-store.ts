@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { User, Branch } from "@/types";
 import { isAllBranchesScope } from "@/lib/all-branches";
 import {
@@ -234,6 +234,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "prime-detailers-auth",
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user,
         currentBranch: state.currentBranch,

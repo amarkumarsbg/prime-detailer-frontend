@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { CustomerUser } from "@/types";
 import { buildApiUrl } from "@/lib/api-base";
 
@@ -148,6 +148,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
     }),
     {
       name: "customer-auth",
+      storage: createJSONStorage(() => sessionStorage),
     }
   )
 );

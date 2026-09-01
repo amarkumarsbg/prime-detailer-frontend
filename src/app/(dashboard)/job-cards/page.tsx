@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
@@ -166,6 +167,7 @@ const STATUS_BADGE_STYLES: Record<JobCardStatus, string> = {
 };
 
 export default function JobCardsPage() {
+  const user = useAuthStore((s) => s.user);
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const jobCards = useJobCardStore((s) => s.jobCards);
@@ -1034,7 +1036,7 @@ export default function JobCardsPage() {
                               <Download className="w-3.5 h-3.5 text-muted-foreground" />
                               Download Invoice
                             </DropdownMenuItem>
-                            {jc.status !== "CANCELLED" && (
+                            {jc.status !== "CANCELLED" && (user?.role === "SUPER_ADMIN" || user?.role === "ADMIN") && (
                               <DropdownMenuItem
                                 className="text-destructive focus:bg-destructive/10 focus:text-destructive gap-2 text-xs"
                                 onClick={(e) => {
