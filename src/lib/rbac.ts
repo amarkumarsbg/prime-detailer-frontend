@@ -78,9 +78,15 @@ export function canAccessNavItem(
 ): boolean {
   if (!userRole) return false;
   if (userRole === "PLATFORM_OWNER") return false;
-  if (userRole === "SUPER_ADMIN") return true;
+  if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") return true;
 
-  // 1. Role-based check
+  // 1. Explicit Permission Check (Granular or Base)
+  if (permissionKey && userPermissions) {
+    if (userPermissions.includes(permissionKey)) return true;
+    if (userPermissions.some((p) => p.startsWith(`${permissionKey}_`))) return true;
+  }
+
+  // 2. Role-based fallback for items without a permissionKey
   let roleAllowed = false;
   if (!allowed || allowed.length === 0) {
     roleAllowed = true;
@@ -90,16 +96,10 @@ export function canAccessNavItem(
     roleAllowed = true;
   }
 
-  if (!roleAllowed) return false;
+  // If the module has a permission key and the user didn't have it, deny access
+  if (permissionKey) return false;
 
-  // 2. Custom permission check
-  if (permissionKey) {
-    if (!userPermissions) return false;
-    if (userPermissions.includes(permissionKey)) return true;
-    return userPermissions.some((p) => p.startsWith(`${permissionKey}_`));
-  }
-
-  return true;
+  return roleAllowed;
 }
 
 /**
