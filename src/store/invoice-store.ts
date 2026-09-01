@@ -147,11 +147,16 @@ export const useInvoiceStore = create<InvoiceStore>((set, get) => ({
     const status = computeInvoiceStatus(next, payments);
     next.status = status;
 
-    await putCollectionDocument("invoices", invoiceId, next);
-    set((state) => ({
-      invoices: state.invoices.map((i) => (i.id === invoiceId ? next : i)),
-    }));
-    queuePaymentReminderSync(next);
-    return { ok: true };
+    try {
+      await putCollectionDocument("invoices", invoiceId, next);
+      set((state) => ({
+        invoices: state.invoices.map((i) => (i.id === invoiceId ? next : i)),
+      }));
+      queuePaymentReminderSync(next);
+      return { ok: true };
+    } catch (error: any) {
+      console.error("Failed to record payment:", error);
+      return { ok: false, inventoryError: error.message || "Failed to save payment on the server" };
+    }
   },
 }));

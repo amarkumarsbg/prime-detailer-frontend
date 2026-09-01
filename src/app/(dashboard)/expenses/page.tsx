@@ -30,6 +30,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { recognizedExpenseAmount, previousExpenseDateFilter, percentChange } from "@/lib/accounting/dashboard-metrics";
 import { expensePaidAmount, expenseOutstanding } from "@/lib/party/ledger-math";
@@ -365,36 +367,43 @@ function ExpensesPageContent() {
         key: "actions",
         label: "ACTIONS",
         className: "w-[72px]",
-        render: (item: Expense) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Actions">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => {
-                  setEditingExpense(item);
-                  setDialogOpen(true);
-                }}
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => {
-                  void removeExpense(item.id);
-                  toast.success("Expense removed.");
-                }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+        render: (item: Expense) => {
+          const user = useAuthStore.getState().user;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {userCanEdit(user, "EXPENSES") && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditingExpense(item);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {userCanDelete(user, "EXPENSES") && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => {
+                      void removeExpense(item.id);
+                      toast.success("Expense removed.");
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
     [removeExpense]

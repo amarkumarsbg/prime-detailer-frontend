@@ -9,6 +9,9 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { InvoiceQuickPaymentDialog } from "@/components/billing/invoice-quick-payment-dialog";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { Badge } from "@/components/ui/badge";
 import { SharedLedgerClient } from "@/components/shared-ledger/shared-ledger-client";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
@@ -137,35 +140,40 @@ function InvoiceRowActions({
 }) {
   const mutable = invoiceRowIsMutable(item);
   const lockedHint = "Recorded payments lock this invoice from edit or delete";
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
       <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="View invoice" onClick={onView}>
         <Eye className="h-4 w-4" />
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8"
-        aria-label="Edit invoice"
-        disabled={!mutable}
-        title={mutable ? "Edit invoice" : lockedHint}
-        onClick={onEdit}
-      >
-        <Pencil className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-destructive hover:text-destructive"
-        aria-label="Delete invoice"
-        disabled={!mutable}
-        title={mutable ? "Delete invoice" : lockedHint}
-        onClick={onDelete}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {userCanEdit(user, "BILLING") && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label="Edit invoice"
+          disabled={!mutable}
+          title={mutable ? "Edit invoice" : lockedHint}
+          onClick={onEdit}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      )}
+      {userCanDelete(user, "BILLING") && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          aria-label="Delete invoice"
+          disabled={!mutable}
+          title={mutable ? "Delete invoice" : lockedHint}
+          onClick={onDelete}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }

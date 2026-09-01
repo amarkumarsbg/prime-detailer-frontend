@@ -7,7 +7,7 @@ import { CreditCard, CheckCircle2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 export default function MembershipsPage() {
-  const { getActiveMemberships, memberships, vehicles } = useCustomerDashboardStore();
+  const { getActiveMemberships, memberships, vehicles, invoices } = useCustomerDashboardStore();
 
   const active = getActiveMemberships();
   const expired = memberships.filter((m) => !active.find((a) => a.id === m.id));
@@ -32,6 +32,10 @@ export default function MembershipsPage() {
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Active</p>
               {active.map((mem) => {
                 const vehicle = vehicles.find((v) => v.id === mem.vehicleId);
+                const invoice = invoices.find((inv) => inv.id === mem.invoiceId);
+                const price = invoice?.grandTotal;
+                const usedCount = mem.usageHistory?.length || 0;
+
                 return (
                   <Card key={mem.id}>
                     <CardContent className="pt-4 pb-4">
@@ -43,16 +47,32 @@ export default function MembershipsPage() {
                               Vehicle: {vehicle.make} {vehicle.model} ({vehicle.registrationNumber})
                             </p>
                           )}
-                          {mem.startDate && (
+                          
+                          <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-2">
+                            {price !== undefined && (
+                              <p className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">Price: </span>
+                                ₹{price.toLocaleString('en-IN')}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground">
-                              Started: {formatDate(mem.startDate)}
+                              <span className="font-medium text-foreground">Services Used: </span>
+                              {usedCount}
                             </p>
-                          )}
-                          {mem.endDate && (
-                            <p className="text-xs text-muted-foreground">
-                              Expires: {formatDate(mem.endDate)}
-                            </p>
-                          )}
+                          </div>
+
+                          <div className="flex gap-4 mt-1">
+                            {mem.startDate && (
+                              <p className="text-xs text-muted-foreground">
+                                Started: {formatDate(mem.startDate)}
+                              </p>
+                            )}
+                            {mem.endDate && (
+                              <p className="text-xs text-muted-foreground">
+                                Expires: {formatDate(mem.endDate)}
+                              </p>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 text-green-600 shrink-0">
                           <CheckCircle2 className="h-4 w-4" />
@@ -71,6 +91,10 @@ export default function MembershipsPage() {
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Past</p>
               {expired.map((mem) => {
                 const vehicle = vehicles.find((v) => v.id === mem.vehicleId);
+                const invoice = invoices.find((inv) => inv.id === mem.invoiceId);
+                const price = invoice?.grandTotal;
+                const usedCount = mem.usageHistory?.length || 0;
+
                 return (
                   <Card key={mem.id} className="opacity-60">
                     <CardContent className="pt-4 pb-4">
@@ -80,6 +104,20 @@ export default function MembershipsPage() {
                           Vehicle: {vehicle.make} {vehicle.model} ({vehicle.registrationNumber})
                         </p>
                       )}
+                      
+                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-2">
+                        {price !== undefined && (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="font-medium">Price: </span>
+                            ₹{price.toLocaleString('en-IN')}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium">Services Used: </span>
+                          {usedCount}
+                        </p>
+                      </div>
+
                       {mem.endDate && (
                         <p className="text-xs text-muted-foreground mt-1">
                           Expired: {formatDate(mem.endDate)}

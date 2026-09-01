@@ -30,6 +30,7 @@ import { buildVendorSummaries, type VendorSummary } from "@/lib/vendors/vendor-m
 import { backfillPurchaseExpenses } from "@/lib/inventory/sync-purchase-expense";
 import { totalReceivables } from "@/lib/accounting/dashboard-metrics";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
@@ -451,27 +452,31 @@ export default function VendorsPage() {
                     >
                       {r.outstanding > 0.01 ? "View & Pay" : "View Statement"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={`Edit ${r.vendorName}`}
-                      onClick={() => openEdit(r)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={`Delete ${r.vendorName}`}
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => setDeleteTarget(r)}
-                      disabled={!r.profile}
-                      title={!r.profile ? "No vendor profile to delete" : "Delete vendor"}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {userCanEdit(user, "VENDORS") && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Edit ${r.vendorName}`}
+                        onClick={() => openEdit(r)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {userCanDelete(user, "VENDORS") && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Delete ${r.vendorName}`}
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(r)}
+                        disabled={!r.profile}
+                        title={!r.profile ? "No vendor profile to delete" : "Delete vendor"}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

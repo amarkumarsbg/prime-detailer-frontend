@@ -58,6 +58,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useMembershipStore } from "@/store/membership-store";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { userHasPermission } from "@/lib/rbac";
 import { resolveMembershipInvoiceDetails, vehicleMakeModelLabel } from "@/lib/membership-invoice";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
@@ -1537,7 +1538,8 @@ ${businessNameVal}`;
             </DropdownMenuContent>
           </DropdownMenu>
           {(invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID") &&
-            remainingBalance > 0.01 && (
+            remainingBalance > 0.01 &&
+            userHasPermission(useAuthStore.getState().user, "BILLING") && (
               <Button size="sm" onClick={openRecordDialog}>
                 Record Payment In
               </Button>

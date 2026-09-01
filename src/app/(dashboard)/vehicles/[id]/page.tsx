@@ -7,6 +7,8 @@ import { useVehicleStore } from "@/store/vehicle-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +63,8 @@ export default function VehicleDetailPage() {
   const params = useParams();
   const router = useRouter();
   const vehicleId = params.id as string;
+
+  const user = useAuthStore((s) => s.user);
   const vehicleList = useVehicleStore((s) => s.vehicles);
   const setVehicleList = useVehicleStore((s) => s.setVehicles);
   const storeJobCards = useJobCardStore((s) => s.jobCards);
@@ -151,19 +155,23 @@ export default function VehicleDetailPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                  <Edit className="mr-1.5 h-4 w-4" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="mr-1.5 h-4 w-4" />
-                  Delete
-                </Button>
+                {userCanEdit(user, "VEHICLES") && (
+                  <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                    <Edit className="mr-1.5 h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+                {userCanDelete(user, "VEHICLES") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="mr-1.5 h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
           </div>

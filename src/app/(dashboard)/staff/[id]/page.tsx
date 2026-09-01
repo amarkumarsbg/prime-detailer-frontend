@@ -14,6 +14,8 @@ import {
   canCreateStaffAccounts,
   getAssignableStaffRoles,
   roleDisplayLabel,
+  userCanEdit,
+  userCanDelete,
 } from "@/lib/rbac";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { Button } from "@/components/ui/button";
@@ -401,7 +403,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [member]);
 
-  const isEditingSuperAdmin = member?.role === "SUPER_ADMIN";
+  const isEditingAdmin = member?.role === "SUPER_ADMIN" || member?.role === "ADMIN";
 
   const handleTogglePermission = (key: string) => {
     setPermissions((prev) =>
@@ -415,13 +417,13 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
    * it is "exploded" into individual CVE keys first so the user's intent is
    * preserved precisely — removing the base key but keeping the other two actions.
    */
-  const toggleModuleAction = (moduleKey: string, action: "CREATE" | "VIEW" | "EDIT") => {
+  const toggleModuleAction = (moduleKey: string, action: "CREATE" | "VIEW" | "EDIT" | "DELETE") => {
     setPermissions((prev) => {
       const hasBase = prev.includes(moduleKey);
       if (hasBase) {
         // Explode base key → keep the two untouched actions ON, turn toggled action OFF
         const next = prev.filter((k) => k !== moduleKey);
-        const ALL_ACTIONS: Array<"CREATE" | "VIEW" | "EDIT"> = ["CREATE", "VIEW", "EDIT"];
+        const ALL_ACTIONS: Array<"CREATE" | "VIEW" | "EDIT" | "DELETE"> = ["CREATE", "VIEW", "EDIT", "DELETE"];
         ALL_ACTIONS.forEach((a) => {
           if (a !== action) next.push(`${moduleKey}_${a}`);
         });
@@ -478,8 +480,8 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const assignableRoles = useMemo(
-    () => getAssignableStaffRoles(user?.role),
-    [user?.role]
+    () => getAssignableStaffRoles(user?.role, user?.permissions),
+    [user?.role, user?.permissions]
   );
 
   const roleOptionsForSelect = useMemo(() => {
@@ -597,7 +599,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
       toast.error("Name, email, and phone are required.");
       return;
     }
-    const allowed = getAssignableStaffRoles(user?.role);
+    const allowed = getAssignableStaffRoles(user?.role, user?.permissions);
     if (editRole !== member.role && !allowed.includes(editRole)) {
       toast.error("You can't assign that role.");
       return;
@@ -956,9 +958,9 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                 <div className="space-y-2">
                   <Label>Role</Label>
                   <Select
+                    disabled={assignableRoles.length === 0}
                     value={editRole}
-                    onValueChange={(v) => setEditRole(v as UserRole)}
-                    disabled={user?.role !== "SUPER_ADMIN"}
+                    onValueChange={(val) => setEditRole(val as UserRole)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1279,7 +1281,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {canCreateStaffAccounts(user?.role) && !isEditingSuperAdmin && (
+      {canCreateStaffAccounts(user?.role) && !isEditingAdmin && (
         <StaffPasswordCard
           key={member.id}
           member={member}
@@ -1287,7 +1289,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {user?.role === "SUPER_ADMIN" && (
+      {(user?.role === "SUPER_ADMIN" || userCanEdit(user, "STAFF")) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -1295,7 +1297,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
               Staff Permissions
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Select which modules this staff member can access. Super Admins always have full access.
+              Select which modules this staff member can access. Admins and Super Admins always have full access.
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -1306,8 +1308,8 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {GRANULAR_PERMISSION_MODULES.map((mod) => {
-                  const hasBase = isEditingSuperAdmin || permissions.includes(mod.key);
-                  const isOn = (action: "CREATE" | "VIEW" | "EDIT") =>
+                  const hasBase = isEditingAdmin || permissions.includes(mod.key);
+                  const isOn = (action: "CREATE" | "VIEW" | "EDIT" | "DELETE") =>
                     hasBase || permissions.includes(`${mod.key}_${action}`);
                   return (
                     <div
@@ -1315,14 +1317,14 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
                       className="rounded-lg border border-border bg-muted/30 p-3 space-y-2"
                     >
                       <p className="text-sm font-semibold leading-none">{mod.label}</p>
-                      {(["CREATE", "VIEW", "EDIT"] as const).map((action) => (
+                      {(["CREATE", "VIEW", "EDIT", "DELETE"] as const).map((action) => (
                         <div key={action} className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">
                             {action.charAt(0) + action.slice(1).toLowerCase()}
                           </span>
                           <Switch
                             checked={isOn(action)}
-                            disabled={isEditingSuperAdmin || savingPermissions}
+                            disabled={isEditingAdmin || savingPermissions}
                             onCheckedChange={() => toggleModuleAction(mod.key, action)}
                             className="scale-90 origin-right"
                           />
@@ -1336,38 +1338,32 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Simple on/off checkboxes for the remaining modules */}
             <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Additional Access
-              </p>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {ALL_PERMISSIONS.map((perm) => {
-                  const isChecked = isEditingSuperAdmin || permissions.includes(perm.key);
+                  const isChecked = isEditingAdmin || permissions.includes(perm.key);
                   return (
                     <div key={perm.key} className="flex items-center space-x-2">
                       <Checkbox
                         id={`perm-${perm.key}`}
                         checked={isChecked}
-                        disabled={isEditingSuperAdmin || savingPermissions}
+                        disabled={isEditingAdmin || savingPermissions}
                         onCheckedChange={() => handleTogglePermission(perm.key)}
                       />
-                      <label
+                      <Label
                         htmlFor={`perm-${perm.key}`}
-                        className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        className="text-sm font-normal cursor-pointer leading-tight"
                       >
                         {perm.label}
-                      </label>
+                      </Label>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {!isEditingSuperAdmin && (
-              <div className="flex justify-end">
-                <Button
-                  disabled={savingPermissions || JSON.stringify(permissions.sort()) === JSON.stringify((member.permissions || []).sort())}
-                  onClick={() => void handleSavePermissions()}
-                >
+            {!isEditingAdmin && (
+              <div className="pt-4 border-t border-border flex justify-end">
+                <Button onClick={handleSavePermissions} disabled={savingPermissions || JSON.stringify(permissions.sort()) === JSON.stringify((member.permissions || []).sort())}>
                   {savingPermissions ? "Saving..." : "Save Permissions"}
                 </Button>
               </div>

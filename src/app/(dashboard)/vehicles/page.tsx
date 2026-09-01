@@ -34,6 +34,8 @@ import {
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { PageHeader } from "@/components/shared/page-header";
 import { CustomerSearchSelect } from "@/components/shared/customer-search-select";
 import { DataTable } from "@/components/shared/data-table";
@@ -248,28 +250,32 @@ export default function VehiclesPage() {
         const v = item as Vehicle;
         return (
           <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setEditingVehicle(v);
-              }}
-              title="Edit vehicle"
-            >
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => {
-                setDeletingVehicle(v);
-              }}
-              title="Delete vehicle"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {userCanEdit(useAuthStore.getState().user, "VEHICLES") && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setEditingVehicle(v);
+                }}
+                title="Edit vehicle"
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+            )}
+            {userCanDelete(useAuthStore.getState().user, "VEHICLES") && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => {
+                  setDeletingVehicle(v);
+                }}
+                title="Delete vehicle"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         );
       },
@@ -520,24 +526,28 @@ export default function VehiclesPage() {
                     className="flex items-center justify-end gap-1 border-t border-border/60 px-3 py-2"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      onClick={() => setEditingVehicle(v)}
-                      title="Edit vehicle"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeletingVehicle(v)}
-                      title="Delete vehicle"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {userCanEdit(useAuthStore.getState().user, "VEHICLES") && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => setEditingVehicle(v)}
+                        title="Edit vehicle"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {userCanDelete(useAuthStore.getState().user, "VEHICLES") && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeletingVehicle(v)}
+                        title="Delete vehicle"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               );

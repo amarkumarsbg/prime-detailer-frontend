@@ -40,10 +40,20 @@ export function canManageStaffUsers(role: UserRole | undefined): boolean {
 }
 
 /** Which staff roles an actor may assign when adding/editing team members. */
-export function getAssignableStaffRoles(actor: UserRole | undefined): UserRole[] {
-  if (actor === "SUPER_ADMIN") {
+export function getAssignableStaffRoles(actorRole: UserRole | undefined, userPermissions?: string[]): UserRole[] {
+  if (actorRole === "SUPER_ADMIN") {
     return [
       "SUPER_ADMIN",
+      "ADMIN",
+      "BRANCH_MANAGER",
+      "MANAGER",
+      "SUPERVISOR",
+      "RECEPTIONIST",
+      "MECHANIC",
+    ];
+  }
+  if (actorRole === "ADMIN" || userPermissions?.includes("STAFF_CREATE") || userPermissions?.includes("STAFF_EDIT")) {
+    return [
       "ADMIN",
       "BRANCH_MANAGER",
       "MANAGER",
@@ -102,7 +112,7 @@ export function canAccessNavItem(
 function granularCheck(
   user: Pick<User, "role" | "permissions"> | null | undefined,
   moduleKey: string,
-  action: "CREATE" | "VIEW" | "EDIT"
+  action: "CREATE" | "VIEW" | "EDIT" | "DELETE"
 ): boolean {
   if (!user?.role) return false;
   if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") return true;
@@ -130,6 +140,13 @@ export function userCanEdit(
   moduleKey: string
 ): boolean {
   return granularCheck(user, moduleKey, "EDIT");
+}
+
+export function userCanDelete(
+  user: Pick<User, "role" | "permissions"> | null | undefined,
+  moduleKey: string
+): boolean {
+  return granularCheck(user, moduleKey, "DELETE");
 }
 
 export function roleDisplayLabel(role: UserRole): string {

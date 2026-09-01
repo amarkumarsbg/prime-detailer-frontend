@@ -13,6 +13,8 @@ import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
+import { Badge } from "@/components/ui/badge";
+import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { PageHeader } from "@/components/shared/page-header";
 import { MobileFilterSheet } from "@/components/shared/mobile-filter-sheet";
 import { KPICard } from "@/components/shared/kpi-card";
@@ -157,6 +159,7 @@ export default function StaffPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const authRole = useAuthStore((s) => s.user?.role);
+  const authPermissions = useAuthStore((s) => s.user?.permissions);
   const authUser = useAuthStore((s) => s.user);
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
@@ -205,7 +208,7 @@ export default function StaffPage() {
   const [newIsAttendanceTracked, setNewIsAttendanceTracked] = useState(true);
   const [newBaseSalary, setNewBaseSalary] = useState("");
 
-  const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole), [authRole]);
+  const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole, authPermissions), [authRole, authPermissions]);
   const canManageUsers = canManageStaffUsers(authRole);
 
   useEffect(() => {
@@ -468,21 +471,25 @@ export default function StaffPage() {
                 <Eye className="w-4 h-4 text-blue-600" />
               </Link>
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-              <Link href={`/staff/${item.id}`} aria-label="Edit">
-                <Pencil className="w-4 h-4 text-violet-600" />
-              </Link>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive"
-              disabled={!canManageUsers || deletingUserBusy}
-              aria-label="Delete"
-              onClick={() => setDeletingUser(item)}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {userCanEdit(useAuthStore.getState().user, "STAFF") && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                <Link href={`/staff/${item.id}`} aria-label="Edit">
+                  <Pencil className="w-4 h-4 text-violet-600" />
+                </Link>
+              </Button>
+            )}
+            {userCanDelete(useAuthStore.getState().user, "STAFF") && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                disabled={deletingUserBusy}
+                aria-label="Delete"
+                onClick={() => setDeletingUser(item)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         ),
       },
@@ -808,7 +815,7 @@ export default function StaffPage() {
                           <Label htmlFor="role">Role</Label>
                           <Select
                             required
-                            disabled={authRole !== "SUPER_ADMIN"}
+                            disabled={assignableRoles.length === 0}
                             value={newRole}
                             onValueChange={(v) => setNewRole(v as UserRole)}
                           >

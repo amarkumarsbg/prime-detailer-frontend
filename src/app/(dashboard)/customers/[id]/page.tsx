@@ -54,6 +54,8 @@ import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-cus
 import { ApiError } from "@/lib/api-client";
 import { getTransferTagForCustomer } from "@/lib/ownership-transfers";
 import type { Vehicle, JobCard, Invoice, WalletTransaction } from "@/types";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanDelete } from "@/lib/rbac";
 
 function vehicleColorHex(colorName: string): string {
   const lower = colorName.toLowerCase();
@@ -103,6 +105,7 @@ export default function CustomerDetailPage() {
   const [portalResetting, setPortalResetting] = useState(false);
 
   const { customers: allCustomers, updateCustomer, findByPhone, deleteCustomer } = useCustomerStore();
+  const user = useAuthStore((s) => s.user);
   const customer = useMemo(() => {
     return allCustomers.find((c) => c.id === id) ?? null;
   }, [id, allCustomers]);
@@ -556,16 +559,18 @@ export default function CustomerDetailPage() {
                 <WhatsAppIcon className="mr-1.5 h-4 w-4" />
                 Share Ledger
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
-              </Button>
+              {userCanDelete(user, "CUSTOMERS") && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  Delete
+                </Button>
+              )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">

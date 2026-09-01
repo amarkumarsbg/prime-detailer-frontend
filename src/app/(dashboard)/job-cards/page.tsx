@@ -46,6 +46,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { userHasPermission, userCanDelete } from "@/lib/rbac";
 import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { buildJobCardTemplateMessage, defaultWhatsAppTemplateForStatus } from "@/lib/job-card-whatsapp-templates";
@@ -934,6 +935,8 @@ export default function JobCardsPage() {
                                 ? invoice.grandTotal - paid
                                 : jc.estimatedAmount - paid;
                               if (due <= 0.01) return null;
+                              if (!userHasPermission(useAuthStore.getState().user, "BILLING")) return null;
+                              
                               return (
                                 <DropdownMenuItem
                                   onClick={(e) => {
@@ -1036,7 +1039,7 @@ export default function JobCardsPage() {
                               <Download className="w-3.5 h-3.5 text-muted-foreground" />
                               Download Invoice
                             </DropdownMenuItem>
-                            {jc.status !== "CANCELLED" && (user?.role === "SUPER_ADMIN" || user?.role === "ADMIN") && (
+                            {jc.status !== "CANCELLED" && userCanDelete(user, "JOB_CARDS") && (
                               <DropdownMenuItem
                                 className="text-destructive focus:bg-destructive/10 focus:text-destructive gap-2 text-xs"
                                 onClick={(e) => {
