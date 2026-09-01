@@ -7,7 +7,7 @@ import { CreditCard, CheckCircle2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 export default function MembershipsPage() {
-  const { getActiveMemberships, memberships } = useCustomerDashboardStore();
+  const { getActiveMemberships, memberships, vehicles } = useCustomerDashboardStore();
 
   const active = getActiveMemberships();
   const expired = memberships.filter((m) => !active.find((a) => a.id === m.id));
@@ -30,49 +30,65 @@ export default function MembershipsPage() {
           {active.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Active</p>
-              {active.map((mem) => (
-                <Card key={mem.id}>
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <p className="font-semibold">{mem.packageName || "Service Plan"}</p>
-                        {mem.startDate && (
-                          <p className="text-xs text-muted-foreground">
-                            Started: {formatDate(mem.startDate)}
-                          </p>
-                        )}
-                        {mem.endDate && (
-                          <p className="text-xs text-muted-foreground">
-                            Expires: {formatDate(mem.endDate)}
-                          </p>
-                        )}
+              {active.map((mem) => {
+                const vehicle = vehicles.find((v) => v.id === mem.vehicleId);
+                return (
+                  <Card key={mem.id}>
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="font-semibold">{mem.packageName || "Service Plan"}</p>
+                          {vehicle && (
+                            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                              Vehicle: {vehicle.make} {vehicle.model} ({vehicle.registrationNumber})
+                            </p>
+                          )}
+                          {mem.startDate && (
+                            <p className="text-xs text-muted-foreground">
+                              Started: {formatDate(mem.startDate)}
+                            </p>
+                          )}
+                          {mem.endDate && (
+                            <p className="text-xs text-muted-foreground">
+                              Expires: {formatDate(mem.endDate)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-green-600 shrink-0">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-xs font-semibold">Active</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-green-600 shrink-0">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span className="text-xs font-semibold">Active</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
           {expired.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Past</p>
-              {expired.map((mem) => (
-                <Card key={mem.id} className="opacity-60">
-                  <CardContent className="pt-4 pb-4">
-                    <p className="font-medium">{mem.packageName || "Service Plan"}</p>
-                    {mem.endDate && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Expired: {formatDate(mem.endDate)}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+              {expired.map((mem) => {
+                const vehicle = vehicles.find((v) => v.id === mem.vehicleId);
+                return (
+                  <Card key={mem.id} className="opacity-60">
+                    <CardContent className="pt-4 pb-4">
+                      <p className="font-medium">{mem.packageName || "Service Plan"}</p>
+                      {vehicle && (
+                        <p className="text-xs font-medium text-muted-foreground mt-0.5">
+                          Vehicle: {vehicle.make} {vehicle.model} ({vehicle.registrationNumber})
+                        </p>
+                      )}
+                      {mem.endDate && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Expired: {formatDate(mem.endDate)}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </>
