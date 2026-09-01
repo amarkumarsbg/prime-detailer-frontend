@@ -317,5 +317,3 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
     return get().staff.find((s) => s.attendancePin === digits && s.isActive);
   },
 }));
-
-export { generateRandomAttendancePin };
