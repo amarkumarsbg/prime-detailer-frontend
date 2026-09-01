@@ -1367,6 +1367,7 @@ export default function PickupDropPage() {
                 </div>
 
                 <div className="space-y-4">
+                  {scopedBranches.length !== 1 && (
                   <div className="grid gap-2">
                     <Label htmlFor="pd-new-branch">Branch *</Label>
                     {scopedBranches.length === 0 ? (
@@ -1388,6 +1389,7 @@ export default function PickupDropPage() {
                       </Select>
                     )}
                   </div>
+                  )}
                   <div className="grid gap-2">
                     <Label htmlFor="pd-new-when">Scheduled date &amp; time *</Label>
                     <Input

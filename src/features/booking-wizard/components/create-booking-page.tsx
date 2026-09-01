@@ -100,6 +100,7 @@ import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
+import { usePickupDropStore } from "@/store/pickup-drop-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useStaffStore } from "@/store/staff-store";
@@ -375,16 +376,65 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
   const [lookupPanelCustomers, setLookupPanelCustomers] = useState<Customer[] | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [hasManuallySetExpectedDelivery, setHasManuallySetExpectedDelivery] = useState(false);
+  /** Prevents re-running the pickup/drop prefill when customers/vehicles arrays update. */
+  const pickupPrefillDoneRef = useRef(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const pId = params.get("pickupId");
-      if (pId) {
-        void pId; // pickup/drop flow removed
+    if (pickupPrefillDoneRef.current) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const pId = params.get("pickupId");
+    // Wait for stores to hydrate before attempting prefill
+    if (!pId || customers.length === 0) return;
+
+    pickupPrefillDoneRef.current = true;
+
+    const leg = usePickupDropStore.getState().requests.find((r) => r.id === pId);
+    if (!leg) return;
+
+    const normPhone = normalizePhoneDigits(leg.customerPhone ?? "");
+    const matchedCustomer =
+      normPhone.length === 10
+        ? customers.find((c) => normalizePhoneDigits(c.phone) === normPhone)
+        : undefined;
+
+    if (matchedCustomer) {
+      // Full prefill from matched customer record + vehicle
+      prevMatchRef.current = matchedCustomer.id;
+      setExistingCustomerId(matchedCustomer.id);
+      setCustomerName(matchedCustomer.name);
+      setCustomerPhone(normalizePhoneDigits(matchedCustomer.phone));
+      setCustomerEmail(matchedCustomer.email ?? "");
+      setCustomerAddress(matchedCustomer.address ?? "");
+      const owned = vehicles.filter((v) => v.customerId === matchedCustomer.id);
+      const matchedVehicle = leg.vehicleRegNumber
+        ? (owned.find(
+            (v) =>
+              normalizeRegistrationNumber(v.registrationNumber) ===
+              normalizeRegistrationNumber(leg.vehicleRegNumber!)
+          ) ?? owned[0])
+        : owned[0];
+      if (matchedVehicle) {
+        setSelectedVehicleId(matchedVehicle.id);
+        setVehicleNumber(matchedVehicle.registrationNumber);
+        setVehicleIdentifierType(matchedVehicle.vinNumber ? "VIN" : "REG");
+        const rb =
+          brandNames.find((b) => b.toLowerCase() === matchedVehicle.make.toLowerCase()) ??
+          matchedVehicle.make;
+        setVehicleBrand(rb);
+        setVehicleModel(matchedVehicle.model);
+        setVehicleSegment(matchedVehicle.segment);
       }
+    } else {
+      // No customer record yet — prefill the fields we have from the leg
+      setCustomerName(leg.customerName);
+      if (normPhone.length === 10) setCustomerPhone(normPhone);
+      if (leg.vehicleRegNumber) setVehicleNumber(leg.vehicleRegNumber);
     }
-  }, [getModelSegment]);
+
+    if (leg.odometerReading) setOdometerReading(String(leg.odometerReading));
+    if (leg.notes) setInternalNotes(leg.notes);
+  }, [customers, vehicles, brandNames]);
 
   const selectedCustomerRecord = useMemo(() => {
     if (!existingCustomerId) return null;
@@ -2175,6 +2225,10 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
 
   const appendQuickInternalNote = useCallback((text: string) => {
     setInternalNotes((prev) => (prev.trim() ? `${prev.trim()}\n${text}` : text));
+  }, []);
+
+  const appendQuickCustomerNote = useCallback((text: string) => {
+    setCustomerNotes((prev) => (prev.trim() ? `${prev.trim()}\n${text}` : text));
   }, []);
 
   const selectedMechanicName = useMemo(
@@ -4599,6 +4653,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
             onInternalNotesChange={setInternalNotes}
             onCustomerNotesChange={setCustomerNotes}
             onAppendQuickInternalNote={appendQuickInternalNote}
+            onAppendQuickCustomerNote={appendQuickCustomerNote}
           />
           )}
 

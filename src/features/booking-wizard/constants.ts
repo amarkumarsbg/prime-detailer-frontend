@@ -12,6 +12,13 @@ export const QUICK_INTERNAL_NOTES = [
   "Low fuel",
 ] as const;
 
+export const QUICK_CUSTOMER_NOTES = [
+  "Scratch on bumper",
+  "Customer waiting",
+  "Urgent delivery",
+  "Low fuel",
+] as const;
+
 /** Must match seeded `serviceCatalog` main rows (`srv-001` … `srv-005` in prisma/seed). */
 export const TRENDING_IDS = ["srv-001", "srv-002", "srv-003", "srv-004", "srv-005"];
 
