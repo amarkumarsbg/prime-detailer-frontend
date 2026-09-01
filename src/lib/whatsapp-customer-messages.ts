@@ -77,12 +77,15 @@ export function buildJobCardCustomerWhatsAppMessage(
 
   const portalUrl = resolvePortalUrl(options?.portalUrl);
 
-  const credentialsBlock = options?.temporaryPassword
+  const phone = job.customerPhone?.trim() ?? "";
+  const password = options?.temporaryPassword ?? inferDefaultCustomerPassword(job.customerName, phone);
+
+  const credentialsBlock = phone
     ? [
         ``,
         `*Track your service online:*`,
-        `📱 Phone: ${job.customerPhone}`,
-        `🔑 Password: ${options.temporaryPassword}`,
+        `📱 Phone: ${phone}`,
+        `🔑 Password: ${password}`,
         `🔗 Login: ${portalUrl}`,
         `🔐 Please change your password after first login.`,
       ]
@@ -90,13 +93,16 @@ export function buildJobCardCustomerWhatsAppMessage(
         ``,
         `*Track your service online:*`,
         `🔗 ${portalUrl}`,
-        `Login with your registered phone number.`,
       ];
+
+  const introLine = job.status === "RECEIVED" 
+    ? `Your job card has been created at *Prime Detailers*. 🚗`
+    : `Here is an update on your job card at *Prime Detailers*. 🚗`;
 
   return [
     `Hi *${firstName}*! 👋`,
     ``,
-    `Your job card has been created at *Prime Detailers*. 🚗`,
+    introLine,
     ``,
     `📋 Job: *${job.jobNumber}*`,
     `🟢 Status: *${statusLabel}*`,

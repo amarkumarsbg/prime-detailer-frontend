@@ -93,141 +93,104 @@ export function buildJobCardTemplateMessage(
   job: JobCard,
   opts: BuildJobCardTemplateMessageOpts
 ): string {
-  const name = job.customerName.trim() || "there";
-  const first = firstName(name);
-  const biz = opts.businessName.trim() || "Prime Detailers";
-  const vehicle = vehicleLine(job);
-  const services = serviceSummary(job);
-  const login = opts.customerLoginUrl?.trim();
-  const invoiceNo = opts.invoiceNumber?.trim();
+  const { buildBeforePhotosReadyWhatsAppMessage, buildJobReadyForPickupWhatsAppMessage, buildJobDeliveredWhatsAppMessage, buildJobCardCustomerWhatsAppMessage, buildInvoiceWhatsAppMessage } = require("@/lib/whatsapp-customer-messages");
+  const { buildBookingWhatsAppMessageCompact } = require("@/lib/booking-confirmation-message");
+  
+  const bizName = opts.businessName.trim() || "Prime Detailers";
 
   switch (templateId) {
     case "booking_confirmed":
-      return joinMessage([
-        `Hi *${name}*! 👋`,
-        ``,
-        `Your booking is *confirmed* at *${biz}*. ✅`,
-        ``,
-        `📋 Job: *${job.jobNumber}*`,
-        `🚗 Vehicle: ${vehicle}`,
-        services ? `🔧 Services: ${services}` : null,
-        ``,
-        `We'll keep you updated as work progresses.`,
-        login ? `\n🔗 *Track your service:*\n${login}` : null,
-        ``,
-        `— *${biz}*`,
-      ]);
+      // Re-use booking confirmation logic
+      return buildBookingWhatsAppMessageCompact(
+        {
+          id: job.id,
+          bookingId: job.jobNumber,
+          customerId: job.customerId,
+          customerName: job.customerName,
+          customerPhone: job.customerPhone,
+          whatsappPhone: job.customerPhone,
+          vehicleId: job.vehicleId,
+          vehicleRegNumber: job.vehicleRegNumber,
+          vehicleMakeModel: job.vehicleMakeModel,
+          serviceType: job.services.map((s: any) => s.name).filter(Boolean).join(" + ") || "Service",
+          date: job.createdAt,
+          time: "00:00",
+          status: "CONFIRMED",
+          whatsappSent: true,
+          createdAt: job.createdAt,
+          customerFirstName: job.customerName.trim().split(/\s+/)[0],
+        } as any,
+        {
+          branchName: bizName,
+          businessName: bizName,
+          address: "",
+          phone: "",
+          email: "",
+        }
+      );
 
     case "vehicle_arrived":
-      return joinMessage([
-        `Hi *${name}*! 👋`,
-        ``,
-        `We've received your vehicle at *${biz}*. 🚗`,
-        ``,
-        `📋 Job: *${job.jobNumber}*`,
-        `🚗 Vehicle: ${vehicle}`,
-        services ? `🔧 Services booked: ${services}` : null,
-        ``,
-        `Inspection / service will begin shortly.`,
-        `Reply here if you have any notes for our team.`,
-        opts.customerPhotosLink ? `\n📸 *View Before Photos:*\n${opts.customerPhotosLink}` : null,
-        login ? `\n🔗 *Track your service:*\n${login}` : null,
-        ``,
-        `— *${biz}*`,
-      ]);
+      return buildBeforePhotosReadyWhatsAppMessage(job, {
+        businessName: bizName,
+        portalUrl: opts.customerLoginUrl ?? undefined,
+        customerPhone: job.customerPhone,
+      });
 
     case "work_started":
-      return joinMessage([
-        `Hi *${first}*! 👋`,
-        ``,
-        `Work has *started* on your vehicle at *${biz}*. 🔧`,
-        ``,
-        `📋 Job: *${job.jobNumber}*`,
-        `🚗 Vehicle: ${vehicle}`,
-        services ? `⚙️ In progress: ${services}` : null,
-        ``,
-        `We'll notify you when quality check is done.`,
-        login ? `\n🔗 *Track your service:*\n${login}` : null,
-        ``,
-        `— *${biz}*`,
-      ]);
-
     case "qc_passed":
-      return joinMessage([
-        `Hi *${first}*! 👋`,
-        ``,
-        `Quality check has *passed* for your vehicle at *${biz}*. ✅`,
-        ``,
-        `📋 Job: *${job.jobNumber}*`,
-        `🚗 Vehicle: ${vehicle}`,
-        services ? `🔧 Services: ${services}` : null,
-        ``,
-        `We're finishing up — will notify you when it's ready for pickup.`,
-        login ? `\n🔗 *Track your service:*\n${login}` : null,
-        ``,
-        `— *${biz}*`,
-      ]);
+      return buildJobCardCustomerWhatsAppMessage(job, {
+        portalUrl: opts.customerLoginUrl ?? undefined,
+      });
 
     case "ready_for_pickup":
-      return joinMessage([
-        `Hi *${name}*! 🎉`,
-        ``,
-        `Great news — your vehicle is *ready for pickup* at *${biz}*! 🚗✨`,
-        ``,
-        `📋 Job: *${job.jobNumber}*`,
-        `🚗 Vehicle: ${vehicle}`,
-        services ? `✅ Completed: ${services}` : null,
-        login ? `\n🔗 *View invoice & before/after photos:*\n${login}` : null,
-        ``,
-        `Please collect at your convenience.`,
-        `Reply here if you have any questions about billing.`,
-        ``,
-        `— *${biz}*`,
-      ]);
+      return buildJobReadyForPickupWhatsAppMessage(job, {
+        businessName: bizName,
+        portalUrl: opts.customerLoginUrl ?? undefined,
+      });
 
     case "invoice_ready":
-      return joinMessage([
-        `Hi *${name}*! 👋`,
-        ``,
-        `Your invoice is ready from *${biz}*. 🧾`,
-        ``,
-        `📋 Job: *${job.jobNumber}*`,
-        invoiceNo ? `🧾 Invoice: *${invoiceNo}*` : null,
-        `🚗 Vehicle: ${vehicle}`,
-        services ? `🔧 Services: ${services}` : null,
-        login ? `\n🔗 *View invoice:*\n${login}` : null,
-        ``,
-        `Reply here if you have any questions about payment.`,
-        ``,
-        `— *${biz}*`,
-      ]);
+      return buildInvoiceWhatsAppMessage(
+        {
+          id: job.id,
+          jobCardId: job.id,
+          invoiceNumber: opts.invoiceNumber ?? "N/A",
+          jobNumber: job.jobNumber,
+          customerId: job.customerId,
+          customerName: job.customerName,
+          customerPhone: job.customerPhone,
+          vehicleId: job.vehicleId,
+          vehicleRegNumber: job.vehicleRegNumber,
+          lineItems: job.services.map((s: any) => ({ description: s.name, total: s.price })),
+          grandTotal: job.estimatedAmount ?? 0,
+          status: "ISSUED",
+          payments: [],
+          taxRate: 0,
+          createdAt: job.createdAt,
+        } as any,
+        {
+          businessName: bizName,
+          remainingBalance: job.estimatedAmount ?? 0,
+          invoiceLabel: "invoice",
+        }
+      );
 
     case "job_closed":
-      return joinMessage([
-        `Hi *${name}*! 👋`,
-        ``,
-        `Thank you for choosing *${biz}*! ❤️`,
-        ``,
-        `Your vehicle has been *delivered*. 🚗`,
-        `📋 Job: *${job.jobNumber}*`,
-        `🚗 Vehicle: ${job.vehicleMakeModel} (${job.vehicleRegNumber})`,
-        ``,
-        opts.customerPhotosLink ? `📸 *View Before & After:*\n${opts.customerPhotosLink}\n` : null,
-        `We hope you're happy with the work!`,
-        `For invoice or warranty queries, reply here or visit the workshop.`,
-        ``,
-        `— *${biz}*`,
-      ]);
+      return buildJobDeliveredWhatsAppMessage(job, {
+        businessName: bizName,
+        portalUrl: opts.customerLoginUrl ?? undefined,
+      });
 
     case "custom":
     default:
+      const name = job.customerName.trim() || "there";
+      const vehicle = `${job.vehicleMakeModel} ${job.vehicleRegNumber}`.replace(/\s+/g, " ").trim();
       return joinMessage([
         `Hi *${name}*! 👋`,
         ``,
-        `Regarding Job *${job.jobNumber}* — ${vehicle} at *${biz}*.`,
+        `Regarding Job *${job.jobNumber}* — ${vehicle} at *${bizName}*.`,
         ``,
         ``,
-        `— *${biz}*`,
+        `— *${bizName}*`,
       ]);
   }
 }
