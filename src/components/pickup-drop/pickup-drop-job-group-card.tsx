@@ -59,8 +59,12 @@ function LegRow({
     : null;
   const canAdvance = Boolean(nextStatus) && !advanceBlock;
   const legComplete = nextStatus === null;
+  // Show "Create Job Card" for standalone pickups (no job card yet) once the vehicle is
+  // picked up — replaces the "At workshop" advance step so the user has one fewer click.
+  const isStandalonePickup = leg.type === "PICKUP" && leg.jobNumber === "NEW";
   const showCreateJobCard =
-    leg.type === "PICKUP" && status === "IN_SERVICE" && leg.jobNumber === "NEW";
+    isStandalonePickup &&
+    (status === "IN_SERVICE" || (status === "PICKED_UP" && !advanceBlock));
   const legTitle = leg.type === "PICKUP" ? "1. Pickup" : "2. Drop-off";
   const legHint =
     leg.type === "PICKUP"
@@ -107,6 +111,10 @@ function LegRow({
               size="sm"
               className="h-8 text-xs bg-emerald-600 hover:bg-emerald-750 hover:bg-emerald-700 text-white font-semibold"
               onClick={() => {
+                // Advance to IN_SERVICE first if still at PICKED_UP
+                if (status === "PICKED_UP") {
+                  onAdvance({ ...leg, status });
+                }
                 router.push(`/job-cards/new?pickupId=${leg.id}`);
               }}
             >

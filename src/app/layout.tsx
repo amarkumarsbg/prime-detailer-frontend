@@ -17,12 +17,17 @@ export const metadata: Metadata = {
   description: "Admin CRM portal for car service business management",
 };
 
-/** Resize layout with the keyboard so fixed sheets/`dvh` stay above it on supporting browsers. */
+/**
+ * resizes-visual: only the visual viewport shrinks when the keyboard opens.
+ * The layout viewport stays constant → no page-wide reflow → no jump.
+ * Fixed-position sheets stay in place; their scroll container handles
+ * keyboard overlap via --vv-keyboard-inset padding.
+ */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  interactiveWidget: "resizes-content",
+  interactiveWidget: "resizes-visual",
 };
 
 export default function RootLayout({

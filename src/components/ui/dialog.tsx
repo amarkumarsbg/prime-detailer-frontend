@@ -23,12 +23,16 @@ export const dialogMobileSheetHeaderClasses =
 
 type DialogMobileVariant = "sheet" | "centered" | "fullscreen";
 
-/** Mobile bottom sheet chrome (keyboard bottom/max-h applied after consumer className). */
+/**
+ * Mobile bottom sheet chrome.
+ * --vv-keyboard-inset is applied as pb so the scroll area extends past the keyboard
+ * without ever moving the sheet's position (no jump).
+ */
 const dialogMobileSheetClasses =
-  "max-sm:fixed max-sm:inset-x-0 max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom))]";
+  "max-sm:fixed max-sm:inset-x-0 max-sm:top-auto max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom),var(--vv-keyboard-inset,0px))]";
 
 const dialogMobileFullscreenClasses =
-  "max-sm:fixed max-sm:inset-x-0 max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:pb-[env(safe-area-inset-bottom)]";
+  "max-sm:fixed max-sm:inset-x-0 max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:pb-[max(env(safe-area-inset-bottom),var(--vv-keyboard-inset,0px))]";
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -101,10 +105,15 @@ const DialogContent = React.forwardRef<
             "sm:rounded-lg",
             className,
             // After consumer className so keyboard-aware bottom/max-h win over plain max-h overrides on mobile
+            // Sheet: stays at bottom:0 always. Keyboard overlap is handled by
+            // pb-[--vv-keyboard-inset] on the scroll container so the sheet
+            // never jumps. max-h uses dvh which is stable under resizes-visual.
             isSheet &&
-              "max-sm:bottom-[var(--vv-keyboard-inset,0px)] max-sm:max-h-[min(92dvh,var(--vv-height,100dvh))]",
+              "max-sm:bottom-0 max-sm:max-h-[92dvh]",
+            // Fullscreen: covers the layout viewport. top/bottom fixed at 0;
+            // dvh is stable under resizes-visual so height doesn't change.
             mobileVariant === "fullscreen" &&
-              "max-sm:bottom-[var(--vv-keyboard-inset,0px)] max-sm:top-[var(--vv-offset-top,0px)] max-sm:h-[var(--vv-height,100dvh)] max-sm:max-h-[var(--vv-height,100dvh)]"
+              "max-sm:bottom-0 max-sm:top-0 max-sm:h-dvh max-sm:max-h-dvh"
           )}
           {...props}
         >
