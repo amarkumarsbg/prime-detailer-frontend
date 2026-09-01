@@ -290,6 +290,9 @@ interface SettingsState extends SerializableAppSettings {
   setHighEndIncentivePercent: (percent: number) => void;
   setIncentiveCapPerJob: (amount: number) => void;
   setBrandPrimary: (hex: string) => boolean;
+  /** Live preview while editing brand color in settings (not persisted). */
+  brandPrimaryPreview: string | null;
+  setBrandPrimaryPreview: (hex: string | null) => void;
   patchFromBootstrap: (patch: Partial<SerializableAppSettings>) => void;
 }
 
@@ -308,6 +311,7 @@ function scheduleAppSettingsSync(get: () => SettingsState): void {
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...DEFAULT_SERIALIZABLE_APP_SETTINGS,
+  brandPrimaryPreview: null,
 
   patchFromBootstrap: (patch) => set((state) => ({ ...state, ...patch })),
 
@@ -398,9 +402,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setBrandPrimary: (hex) => {
     const normalized = normalizeHex(hex);
     if (!normalized) return false;
-    set({ brandPrimary: normalized });
+    set({ brandPrimary: normalized, brandPrimaryPreview: null });
     scheduleAppSettingsSync(get);
     return true;
+  },
+
+  setBrandPrimaryPreview: (hex) => {
+    if (hex === null) {
+      set({ brandPrimaryPreview: null });
+      return;
+    }
+    const normalized = normalizeHex(hex);
+    if (!normalized) return;
+    set({ brandPrimaryPreview: normalized });
   },
 }));
 

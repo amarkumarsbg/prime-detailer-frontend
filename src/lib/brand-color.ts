@@ -116,3 +116,40 @@ export function matchingBrandPresetId(hex: string): string | null {
   if (!n) return null;
   return BRAND_COLOR_PRESETS.find((p) => p.hex === n)?.id ?? null;
 }
+
+/** SVG favicon: rounded-square brand fill + white car glyph (24×24 Lucide paths, scaled in 100×100 viewBox). */
+export function buildBrandFaviconSvg(hex: string): string {
+  const color = normalizeHex(hex) ?? DEFAULT_BRAND_PRIMARY;
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="18" ry="18" fill="${color}" />
+      <g transform="translate(4, 4) scale(3.83)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" />
+        <path d="M7 14h.01" />
+        <path d="M17 14h.01" />
+        <rect width="18" height="8" x="3" y="10" rx="2" />
+        <path d="M5 18v2" />
+        <path d="M19 18v2" />
+      </g>
+    </svg>
+  `
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Update the document favicon to match the active brand color. */
+export function applyBrandFavicon(hex: string): void {
+  if (typeof document === "undefined") return;
+  const svg = buildBrandFaviconSvg(hex);
+  const href = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+
+  let link = document.querySelector<HTMLLinkElement>("link[data-brand-favicon]");
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    link.setAttribute("data-brand-favicon", "true");
+    document.head.appendChild(link);
+  }
+  link.href = href;
+}

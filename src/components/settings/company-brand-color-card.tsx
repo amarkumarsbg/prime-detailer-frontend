@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  applyBrandCssVars,
   BRAND_COLOR_PRESETS,
   DEFAULT_BRAND_PRIMARY,
   isValidHex,
@@ -26,6 +25,7 @@ import { useSettingsStore } from "@/store/settings-store";
 export function CompanyBrandColorCard() {
   const savedBrand = useSettingsStore((s) => s.brandPrimary);
   const setBrandPrimary = useSettingsStore((s) => s.setBrandPrimary);
+  const setBrandPrimaryPreview = useSettingsStore((s) => s.setBrandPrimaryPreview);
 
   const [draftHex, setDraftHex] = useState(
     () => normalizeHex(savedBrand) ?? DEFAULT_BRAND_PRIMARY
@@ -39,14 +39,11 @@ export function CompanyBrandColorCard() {
   }, [savedBrand]);
 
   useEffect(() => {
-    applyBrandCssVars(draftHex);
+    setBrandPrimaryPreview(draftHex);
     return () => {
-      // Restore committed brand if user navigates away without saving
-      const committed =
-        normalizeHex(useSettingsStore.getState().brandPrimary) ?? DEFAULT_BRAND_PRIMARY;
-      applyBrandCssVars(committed);
+      setBrandPrimaryPreview(null);
     };
-  }, [draftHex]);
+  }, [draftHex, setBrandPrimaryPreview]);
 
   const selectedPresetId = matchingBrandPresetId(draftHex);
   const isDirty =
