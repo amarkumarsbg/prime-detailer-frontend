@@ -45,7 +45,7 @@ export function LoginHeroPanel({
 
   return (
     <div
-      className={`relative overflow-hidden bg-linear-to-br from-blue-600 via-indigo-600 to-violet-700 text-white ${className ?? ""}`}
+      className={`relative overflow-hidden bg-linear-to-br from-teal-500 via-teal-600 to-teal-700 text-white ${className ?? ""}`}
     >
       {backgroundUrl ? (
         <>
@@ -66,7 +66,7 @@ export function LoginHeroPanel({
         <>
           <div className="absolute inset-0">
             <div className="absolute top-1/4 -left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-1/4 right-0 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl" />
+            <div className="absolute bottom-1/4 right-0 w-80 h-80 bg-teal-300/20 rounded-full blur-3xl" />
           </div>
           <div className="absolute inset-0 opacity-[0.04] bg-grid-light" />
         </>

@@ -77,6 +77,17 @@ function SidebarContent({
     ).length;
   })();
 
+  const bookingTodayTomorrowCount = (() => {
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    const tomorrowKey = format(addDays(new Date(), 1), "yyyy-MM-dd");
+    return allAppointments.filter(
+      (a) =>
+        resolveAppointmentKind(a) === "BOOKING" &&
+        (a.status === "SCHEDULED" || a.status === "CONFIRMED") &&
+        (a.date === todayKey || a.date === tomorrowKey)
+    ).length;
+  })();
+
   const filteredGroups = NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions)),
@@ -193,6 +204,18 @@ function SidebarContent({
                       {item.href === "/appointments" && tomorrowScheduledCount > 0 && (
                         <span className="ml-auto inline-flex items-center justify-center rounded-full bg-violet-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
                           {tomorrowScheduledCount}
+                        </span>
+                      )}
+                      {item.href === "/bookings" && bookingTodayTomorrowCount > 0 && (
+                        <span
+                          className={cn(
+                            "ml-auto inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums",
+                            isActive
+                              ? "bg-white/90 text-[var(--sidebar-active)]"
+                              : "bg-[var(--sidebar-active)] text-[var(--sidebar-active-foreground)]"
+                          )}
+                        >
+                          {bookingTodayTomorrowCount}
                         </span>
                       )}
                     </Link>

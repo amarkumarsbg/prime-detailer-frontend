@@ -72,7 +72,7 @@ export default function CustomerLoginPage() {
   const logoUrl = branding?.businessLogo ? resolveUploadsPublicUrl(branding.businessLogo) : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-cyan-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
           {/* Brand */}
@@ -85,7 +85,7 @@ export default function CustomerLoginPage() {
                 className="h-12 w-12 rounded-xl object-cover"
               />
             ) : (
-              <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-xl bg-teal-600 flex items-center justify-center">
                 <Smartphone className="h-6 w-6 text-white" />
               </div>
             )}
