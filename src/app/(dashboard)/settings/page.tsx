@@ -70,7 +70,6 @@ import {
   FileText,
   Scale,
   CalendarClock,
-  ShieldCheck,
   Check,
   X,
   MessageCircle,
@@ -108,19 +107,6 @@ const DEFAULT_TERMS = `1. Vehicle will be kept in secure parking during service.
 3. Warranty: 30 days on parts replaced, 7 days on labor.
 4. Payment due upon delivery.
 5. Estimated delivery time is subject to parts availability.`;
-
-const STAFF_PERMISSIONS_MATRIX = [
-  { permission: "Create Job Card", admin: true, staff: true },
-  { permission: "Convert to Bill", admin: true, staff: true },
-  { permission: "Create Estimate", admin: true, staff: true },
-  { permission: "Add Expenses", admin: true, staff: true },
-  { permission: "Modify Finalized Bill", admin: true, staff: false },
-  { permission: "Delete Customers/Jobs", admin: true, staff: false },
-  { permission: "Manage Services", admin: true, staff: false },
-  { permission: "View Reports", admin: true, staff: true },
-  { permission: "Manage Inventory", admin: true, staff: false },
-  { permission: "Access Wallet/Referrals", admin: true, staff: false },
-] as const;
 
 const COMPANY_TARGET_ROLE_OPTIONS: Array<{
   role: keyof CompanyTargetRoleShareMap;
@@ -663,7 +649,6 @@ export default function SettingsPage() {
           <TabsTrigger value="vehicles" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Vehicle Catalog</TabsTrigger>
           <TabsTrigger value="high-end" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">High-End Services</TabsTrigger>
           <TabsTrigger value="reminders" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Reminders</TabsTrigger>
-          <TabsTrigger value="staff-permissions" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Staff Permissions</TabsTrigger>
           <TabsTrigger value="notifications" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Notifications</TabsTrigger>
           <TabsTrigger value="plan" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">Plan & billing</TabsTrigger>
           <TabsTrigger value="general" className="rounded-lg text-xs font-medium px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground data-[state=active]:font-semibold">General</TabsTrigger>
@@ -1438,52 +1423,6 @@ export default function SettingsPage() {
                   <Save className="w-4 h-4 mr-2" />
                   Save Changes
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="staff-permissions">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4" />
-                Staff Permissions
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Read-only view of role-based permissions</p>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[500px] border-collapse">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 font-medium">Permission</th>
-                      <th className="text-center py-3 px-4 font-medium">Admin</th>
-                      <th className="text-center py-3 px-4 font-medium">Staff / Mechanic</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {STAFF_PERMISSIONS_MATRIX.map((row) => (
-                      <tr key={row.permission} className="border-b border-border last:border-0">
-                        <td className="py-3 px-4 text-sm">{row.permission}</td>
-                        <td className="py-3 px-4 text-center">
-                          {row.admin ? (
-                            <Check className="w-5 h-5 text-green-600 mx-auto" />
-                          ) : (
-                            <X className="w-5 h-5 text-muted-foreground mx-auto" />
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          {row.staff ? (
-                            <Check className="w-5 h-5 text-green-600 mx-auto" />
-                          ) : (
-                            <X className="w-5 h-5 text-muted-foreground mx-auto" />
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </CardContent>
           </Card>

@@ -10,7 +10,6 @@ import { useBranchStore } from "@/store/branch-store";
 import { useStaffRewardStore } from "@/store/staff-reward-store";
 import { getCompanyTargetResults } from "@/lib/staff-rewards/calculate-job-reward";
 import {
-  canManageStaffUsers,
   canCreateStaffAccounts,
   getAssignableStaffRoles,
   roleDisplayLabel,
@@ -69,7 +68,12 @@ import { pushActivityLog } from "@/lib/activity-log-helper";
 import { apiPostForm, ApiError } from "@/lib/api-client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
-import { GRANULAR_PERMISSION_MODULES, SIMPLE_PERMISSIONS_FOR_UI } from "@/lib/permission-keys";
+import {
+  deriveStaffAccessLevel,
+  permissionsForStaffAccessLevel,
+  type StaffAccessLevel,
+} from "@/lib/staff-access";
+import { StaffAccessSelector } from "@/components/staff/staff-access-selector";
 import { Switch } from "@/components/ui/switch";
 import { validateStrongPassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 import type { UpdatePinResult } from "@/store/staff-store";
@@ -91,8 +95,6 @@ const MONTH_LABELS = [
   "November",
   "December",
 ];
-
-const ALL_PERMISSIONS = SIMPLE_PERMISSIONS_FOR_UI;
 
 function StaffPasswordCard({
   member,
@@ -393,65 +395,38 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [savingPermissions, setSavingPermissions] = useState(false);
+  const [accessLevel, setAccessLevel] = useState<StaffAccessLevel>("withEditAccess");
+  const [savingAccess, setSavingAccess] = useState(false);
   const applyAuthPayload = useAuthStore((s) => s.applyAuthPayload);
 
   useEffect(() => {
     if (member) {
-      setPermissions(member.permissions || []);
+      setAccessLevel(deriveStaffAccessLevel(member.permissions));
     }
   }, [member]);
 
   const isEditingAdmin = member?.role === "SUPER_ADMIN" || member?.role === "ADMIN";
 
-  const handleTogglePermission = (key: string) => {
-    setPermissions((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  };
+  const savedAccessLevel = useMemo(
+    () => deriveStaffAccessLevel(member?.permissions),
+    [member?.permissions]
+  );
 
-  /**
-   * Toggle a granular action (CREATE/VIEW/EDIT) for a module.
-   * If the module's base key is currently in the array (legacy/old format),
-   * it is "exploded" into individual CVE keys first so the user's intent is
-   * preserved precisely — removing the base key but keeping the other two actions.
-   */
-  const toggleModuleAction = (moduleKey: string, action: "CREATE" | "VIEW" | "EDIT" | "DELETE") => {
-    setPermissions((prev) => {
-      const hasBase = prev.includes(moduleKey);
-      if (hasBase) {
-        // Explode base key → keep the two untouched actions ON, turn toggled action OFF
-        const next = prev.filter((k) => k !== moduleKey);
-        const ALL_ACTIONS: Array<"CREATE" | "VIEW" | "EDIT" | "DELETE"> = ["CREATE", "VIEW", "EDIT", "DELETE"];
-        ALL_ACTIONS.forEach((a) => {
-          if (a !== action) next.push(`${moduleKey}_${a}`);
-        });
-        return next;
-      }
-      const granularKey = `${moduleKey}_${action}`;
-      return prev.includes(granularKey)
-        ? prev.filter((k) => k !== granularKey)
-        : [...prev, granularKey];
-    });
-  };
-
-  const handleSavePermissions = async () => {
+  const handleSaveAccess = async () => {
     if (!member) return;
-    setSavingPermissions(true);
+    setSavingAccess(true);
     try {
-      const result = await updateStaff(member.id, {
-        permissions,
-      });
+      const permissions = permissionsForStaffAccessLevel(member.permissions, accessLevel);
+      const result = await updateStaff(member.id, { permissions });
       if (result.ok) {
-        toast.success("Permissions updated successfully.");
+        toast.success("Access updated successfully.");
       } else {
-        toast.error("Failed to update permissions.");
+        toast.error("Failed to update access.");
       }
     } catch {
-      toast.error("An error occurred while updating permissions.");
+      toast.error("An error occurred while updating access.");
     } finally {
-      setSavingPermissions(false);
+      setSavingAccess(false);
     }
   };
 
@@ -499,7 +474,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     return active;
   }, [branches, editBranchId]);
 
-  const canEditStaff = canManageStaffUsers(user?.role);
+  const canEditStaff = userCanEdit(user, "STAFF");
 
   const canEditAttendancePin = canEditStaff;
 
@@ -1294,77 +1269,26 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="w-4 h-4" />
-              Staff Permissions
+              User Access
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Select which modules this staff member can access. Admins and Super Admins always have full access.
+              Control whether this user can edit and delete records. Admins and Super Admins always have full access.
             </p>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Granular Create / View / Edit toggles per module */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Module Access
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {GRANULAR_PERMISSION_MODULES.map((mod) => {
-                  const hasBase = isEditingAdmin || permissions.includes(mod.key);
-                  const isOn = (action: "CREATE" | "VIEW" | "EDIT" | "DELETE") =>
-                    hasBase || permissions.includes(`${mod.key}_${action}`);
-                  return (
-                    <div
-                      key={mod.key}
-                      className="rounded-lg border border-border bg-muted/30 p-3 space-y-2"
-                    >
-                      <p className="text-sm font-semibold leading-none">{mod.label}</p>
-                      {(["CREATE", "VIEW", "EDIT", "DELETE"] as const).map((action) => (
-                        <div key={action} className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {action.charAt(0) + action.slice(1).toLowerCase()}
-                          </span>
-                          <Switch
-                            checked={isOn(action)}
-                            disabled={isEditingAdmin || savingPermissions}
-                            onCheckedChange={() => toggleModuleAction(mod.key, action)}
-                            className="scale-90 origin-right"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Simple on/off checkboxes for the remaining modules */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {ALL_PERMISSIONS.map((perm) => {
-                  const isChecked = isEditingAdmin || permissions.includes(perm.key);
-                  return (
-                    <div key={perm.key} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`perm-${perm.key}`}
-                        checked={isChecked}
-                        disabled={isEditingAdmin || savingPermissions}
-                        onCheckedChange={() => handleTogglePermission(perm.key)}
-                      />
-                      <Label
-                        htmlFor={`perm-${perm.key}`}
-                        className="text-sm font-normal cursor-pointer leading-tight"
-                      >
-                        {perm.label}
-                      </Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
+          <CardContent className="space-y-4">
+            <StaffAccessSelector
+              value={isEditingAdmin ? "withEditAccess" : accessLevel}
+              onChange={setAccessLevel}
+              disabled={isEditingAdmin || savingAccess}
+              name={`staff-access-${member.id}`}
+            />
             {!isEditingAdmin && (
-              <div className="pt-4 border-t border-border flex justify-end">
-                <Button onClick={handleSavePermissions} disabled={savingPermissions || JSON.stringify(permissions.sort()) === JSON.stringify((member.permissions || []).sort())}>
-                  {savingPermissions ? "Saving..." : "Save Permissions"}
+              <div className="pt-2 border-t border-border flex justify-end">
+                <Button
+                  onClick={handleSaveAccess}
+                  disabled={savingAccess || accessLevel === savedAccessLevel}
+                >
+                  {savingAccess ? "Saving..." : "Save Access"}
                 </Button>
               </div>
             )}

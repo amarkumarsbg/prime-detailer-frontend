@@ -35,6 +35,7 @@ import {
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanCreate, userCanEdit } from "@/lib/rbac";
 import type { StockTransfer, StockTransferItem, StockTransferStatus } from "@/types";
 
 const NEXT_ACTIONS: Partial<Record<StockTransferStatus, StockTransferStatus[]>> = {
@@ -58,6 +59,8 @@ export function InventoryTransfersTab() {
   const updateStockTransferStatus = useInventoryStore((s) => s.updateStockTransferStatus);
   const branches = useBranchStore((s) => s.branches);
   const user = useAuthStore((s) => s.user);
+  const canEditInventory = userCanEdit(user, "INVENTORY");
+  const canCreateInventory = userCanCreate(user, "INVENTORY");
 
   const [open, setOpen] = useState(false);
   const [fromBranchId, setFromBranchId] = useState("");
@@ -175,16 +178,18 @@ export function InventoryTransfersTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={() => {
-            resetForm();
-            setOpen(true);
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create transfer
-        </Button>
+        {canCreateInventory && (
+          <Button
+            type="button"
+            onClick={() => {
+              resetForm();
+              setOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create transfer
+          </Button>
+        )}
       </div>
 
       <DataTable
@@ -253,7 +258,7 @@ export function InventoryTransfersTab() {
             className: "text-right",
             render: (t) => {
               const next = NEXT_ACTIONS[t.status] ?? [];
-              if (!next.length) return null;
+              if (!next.length || !canEditInventory) return null;
               return (
                 <div className="flex flex-wrap justify-end gap-1">
                   {next.map((status) => (

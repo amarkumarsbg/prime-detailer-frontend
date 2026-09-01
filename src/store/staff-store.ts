@@ -33,6 +33,7 @@ interface AddStaffInput {
   notes?: string;
   isAttendanceTracked?: boolean;
   baseSalary?: number;
+  permissions?: string[];
   /** Omit for server-generated temporary password (recommended). */
   password?: string;
 }
@@ -168,6 +169,7 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       anniversary: hr.anniversary ?? null,
       notes: hr.notes ?? null,
       ...(pwd ? { password: pwd } : {}),
+      ...(input.permissions ? { permissions: input.permissions } : {}),
     });
     set({ staff: [user, ...list] });
     return { temporaryPassword, credentialsEmailSent };

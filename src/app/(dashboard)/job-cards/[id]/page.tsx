@@ -145,7 +145,7 @@ import {
 import { computeGstFromSubtotal } from "@/lib/gst-tax";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { pushActivityLog } from "@/lib/activity-log-helper";
-import { userHasPermission } from "@/lib/rbac";
+import { userCanEdit, userHasPermission } from "@/lib/rbac";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useStaffRewardStore } from "@/store/staff-reward-store";
 import {
@@ -523,13 +523,17 @@ export default function JobCardDetailPage() {
 
   const inventoryParts = useInventoryStore((s) => s.parts);
 
-  const canEditJobDetails = Boolean(jobCard && jobCardIsEditable({ status: currentStatus }));
+  const canEditJobCards = userCanEdit(authUser, "JOB_CARDS");
+  const canEditJobDetails = Boolean(
+    jobCard && jobCardIsEditable({ status: currentStatus }) && canEditJobCards
+  );
   const canEditParts = Boolean(
     jobCard &&
       jobCardPartsEditable({
         status: currentStatus,
         inventoryConsumedAt: jobCard.inventoryConsumedAt,
-      })
+      }) &&
+      canEditJobCards
   );
   const canEditPricing = Boolean(
     jobCard && canEditJobCardPricing(authUser, { status: currentStatus }, Boolean(invoiceForJob))
@@ -2378,8 +2382,7 @@ export default function JobCardDetailPage() {
               const cfg = highEndServiceConfigs.find((c) => c.id === hesId);
               if (!cfg) return null;
               const hasReminders = cfg.reminderIntervals.length > 0;
-              const canEdit =
-                currentStatus !== "DELIVERED" && currentStatus !== "CANCELLED";
+              const canEdit = canEditJobDetails;
               const monthsVal = hasReminders
                 ? highEndFollowUpById[hesId] ?? cfg.reminderIntervals[0]!
                 : 0;
