@@ -63,6 +63,16 @@ export default function ProfilePage() {
               <p className="text-sm font-medium">{memberSince}</p>
             </div>
           </div>
+
+          {customer?.notes && (
+            <div className="flex items-start gap-3 pt-2 border-t border-border/50">
+              <div className="w-4 h-4 mt-0.5" />
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Workshop Notes</p>
+                <p className="text-sm text-muted-foreground italic whitespace-pre-wrap">{customer.notes}</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
