@@ -9,7 +9,6 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { InvoiceQuickPaymentDialog } from "@/components/billing/invoice-quick-payment-dialog";
 import { useAuthStore } from "@/store/auth-store";
 import { userCanEdit, userCanDelete } from "@/lib/rbac";
 import { Badge } from "@/components/ui/badge";
