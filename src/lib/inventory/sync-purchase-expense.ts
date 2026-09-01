@@ -1,8 +1,10 @@
 import type { Expense, ExpensePaymentMethod, ExpensePaymentStatus, PaymentMethod, ProductPurchase } from "@/types";
 import { apiGet } from "@/lib/api-client";
 import { purchaseGrandTotal } from "@/lib/inventory/purchase-math";
+import { useAuthStore } from "@/store/auth-store";
 import { useCashBankStore } from "@/store/cash-bank-store";
 import { useExpenseStore } from "@/store/expense-store";
+import { userCanCreate } from "@/lib/rbac";
 
 function mapPaymentMethod(method?: PaymentMethod): ExpensePaymentMethod {
   if (method === "UPI") return "UPI";
@@ -133,6 +135,11 @@ export async function backfillPurchaseExpenses(
   purchases: ProductPurchase[],
   actor: { createdBy: string; createdByName: string }
 ): Promise<void> {
+  const user = useAuthStore.getState().user;
+  if (!userCanCreate(user, "EXPENSES")) {
+    return; // Don't attempt backfill if the user lacks expense creation permission
+  }
+
   await hydrateExpensesIfEmpty();
   const linked = new Set(
     useExpenseStore
@@ -143,7 +150,11 @@ export async function backfillPurchaseExpenses(
   for (const purchase of purchases) {
     if (linked.has(purchase.id)) continue;
     if (purchaseGrandTotal(purchase) <= 0) continue;
-    await syncPurchaseToExpense(purchase, actor);
-    linked.add(purchase.id);
+    try {
+      await syncPurchaseToExpense(purchase, actor);
+      linked.add(purchase.id);
+    } catch (err) {
+      console.warn("Failed to backfill expense for purchase", purchase.id, err);
+    }
   }
 }
