@@ -1,5 +1,5 @@
 /** Default matches current product primary in globals.css. */
-export const DEFAULT_BRAND_PRIMARY = "#3B82F6";
+export const DEFAULT_BRAND_PRIMARY = "#14B8A6";
 
 export type BrandPreset = {
   id: string;
@@ -80,6 +80,7 @@ export type BrandCssVars = {
   sidebarActiveForeground: string;
   sidebarGlow: string;
   sidebarGlowDim: string;
+  sidebarAccent: string;
 };
 
 export function resolveBrandCssVars(hex: string): BrandCssVars {
@@ -93,6 +94,7 @@ export function resolveBrandCssVars(hex: string): BrandCssVars {
     sidebarActiveForeground: primaryForeground,
     sidebarGlow: primary,
     sidebarGlowDim: brandGlowDim(primary, 0.1),
+    sidebarAccent: brandGlowDim(primary, 0.15),
   };
 }
 
@@ -106,6 +108,7 @@ export function applyBrandCssVars(hex: string, root: HTMLElement = document.docu
   root.style.setProperty("--sidebar-active-foreground", v.sidebarActiveForeground);
   root.style.setProperty("--sidebar-glow", v.sidebarGlow);
   root.style.setProperty("--sidebar-glow-dim", v.sidebarGlowDim);
+  root.style.setProperty("--sidebar-accent", v.sidebarAccent);
 }
 
 export function matchingBrandPresetId(hex: string): string | null {

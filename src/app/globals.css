@@ -53,9 +53,8 @@
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  /* Align with dark mode: brighter blue-500 reads stronger on white than blue-600.
-   * Runtime company brand may override --primary / --ring / --sidebar-active* via BrandThemeApplier. */
-  --primary: #3b82f6;
+  /* Runtime company brand may override --primary / --ring / --sidebar-active* via BrandThemeApplier. */
+  --primary: #14b8a6;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
@@ -67,21 +66,21 @@
   --destructive-foreground: #ffffff;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #3b82f6;
+  --ring: #14b8a6;
   --radius: 0.625rem;
   /**
-   * App rail: white sidebar + dark navy text + solid blue active.
+   * App rail: white sidebar + dark navy text + solid teal active.
    */
   --sidebar: #ffffff;
   --sidebar-foreground: #475569;
-  --sidebar-accent: #dbeafe;
+  --sidebar-accent: rgba(20, 184, 166, 0.15);
   --sidebar-accent-foreground: #0f172a;
   --sidebar-border: #cbd5e1;
   --sidebar-section-heading: #0f172a;
-  --sidebar-active: #3b82f6;
+  --sidebar-active: #14b8a6;
   --sidebar-active-foreground: #ffffff;
-  --sidebar-glow: #3b82f6;
-  --sidebar-glow-dim: rgba(37, 99, 235, 0.08);
+  --sidebar-glow: #14b8a6;
+  --sidebar-glow-dim: rgba(20, 184, 166, 0.08);
   /** Pill at bottom of scrollable nav (“Scroll for more options”) */
   --sidebar-scroll-hint-bg: #e2e8f0;
 }
@@ -94,7 +93,7 @@
   --card-foreground: #f1f5f9;
   --popover: #2a3a54;
   --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
+  --primary: #14b8a6;
   --primary-foreground: #ffffff;
   --secondary: #3b536f;
   --secondary-foreground: #f1f5f9;
@@ -106,18 +105,18 @@
   --destructive-foreground: #ffffff;
   --border: #45607d;
   --input: #45607d;
-  --ring: #3b82f6;
+  --ring: #14b8a6;
   /* Dark mode rail: deep slate navy (not white) */
   --sidebar: #1b2840;
   --sidebar-foreground: #a8b6ca;
-  --sidebar-accent: rgba(59, 130, 246, 0.22);
+  --sidebar-accent: rgba(20, 184, 166, 0.22);
   --sidebar-accent-foreground: #f1f5f9;
   --sidebar-border: #45607d;
   --sidebar-section-heading: #f1f5f9;
-  --sidebar-active: #3b82f6;
+  --sidebar-active: #14b8a6;
   --sidebar-active-foreground: #ffffff;
-  --sidebar-glow: #3b82f6;
-  --sidebar-glow-dim: rgba(37, 99, 235, 0.15);
+  --sidebar-glow: #14b8a6;
+  --sidebar-glow-dim: rgba(20, 184, 166, 0.15);
   --sidebar-scroll-hint-bg: rgba(69, 96, 125, 0.82);
 }
 
