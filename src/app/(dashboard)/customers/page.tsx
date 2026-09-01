@@ -88,8 +88,8 @@ GridItem.displayName = "GridItem";
 const addCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
-  email: z.string().email("Invalid email address"),
-  address: z.string().min(1, "Address is required"),
+  email: z.string().email("Invalid email address").or(z.literal("")).optional(),
+  address: z.string().optional(),
   referredBy: z.string().optional(),
 });
 
@@ -366,8 +366,8 @@ export default function CustomersPage() {
       const created = await addCustomerToStore({
         name: data.name,
         phone: data.phone,
-        email: data.email,
-        address: data.address,
+        email: data.email || "",
+        address: data.address || "",
         referralCode: generateReferralCode(),
         referredBy: referred.referredBy,
         totalVisits: 0,
