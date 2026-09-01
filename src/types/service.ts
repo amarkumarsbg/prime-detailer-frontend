@@ -89,6 +89,8 @@ export interface CustomerMembership {
   id: string;
   customerId: string;
   packageId: string;
+  /** Display name of the membership package — populated by the backend when returning customer data. */
+  packageName?: string;
   startDate: string;
   endDate: string;
   status: CustomerMembershipStatus;

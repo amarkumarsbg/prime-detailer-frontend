@@ -2,7 +2,7 @@
 
 import { use, useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useStaffStore, generateRandomAttendancePin } from "@/store/staff-store";
+import { useStaffStore, generateRandomAttendancePin, generateRandomStaffPassword } from "@/store/staff-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -11,6 +11,7 @@ import { useStaffRewardStore } from "@/store/staff-reward-store";
 import { getCompanyTargetResults } from "@/lib/staff-rewards/calculate-job-reward";
 import {
   canManageStaffUsers,
+  canCreateStaffAccounts,
   getAssignableStaffRoles,
   roleDisplayLabel,
 } from "@/lib/rbac";
@@ -53,6 +54,9 @@ import {
   Copy,
   Target,
   X,
+  Eye,
+  EyeOff,
+  Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,7 +67,9 @@ import { pushActivityLog } from "@/lib/activity-log-helper";
 import { apiPostForm, ApiError } from "@/lib/api-client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
-import { PERMISSIONS_FOR_UI } from "@/lib/permission-keys";
+import { GRANULAR_PERMISSION_MODULES, SIMPLE_PERMISSIONS_FOR_UI } from "@/lib/permission-keys";
+import { Switch } from "@/components/ui/switch";
+import { validateStrongPassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 import type { UpdatePinResult } from "@/store/staff-store";
 import type { Branch, User, UserRole } from "@/types";
 
@@ -84,7 +90,118 @@ const MONTH_LABELS = [
   "December",
 ];
 
-const ALL_PERMISSIONS = PERMISSIONS_FOR_UI;
+const ALL_PERMISSIONS = SIMPLE_PERMISSIONS_FOR_UI;
+
+function StaffPasswordCard({
+  member,
+  resetStaffPassword,
+}: {
+  member: User;
+  resetStaffPassword: (staffId: string, password: string, mustChange: boolean) => Promise<{ ok: boolean }>;
+}) {
+  const [passwordInput, setPasswordInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [mustChange, setMustChange] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [generated, setGenerated] = useState("");
+
+  const handleGenerate = () => {
+    const pwd = generateRandomStaffPassword();
+    setPasswordInput(pwd);
+    setGenerated(pwd);
+    setShowPassword(true);
+  };
+
+  const handleSave = async () => {
+    const pwd = passwordInput.trim();
+    if (!pwd) {
+      toast.error("Enter a password or click \"Auto-generate\".");
+      return;
+    }
+    const err = validateStrongPassword(pwd);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await resetStaffPassword(member.id, pwd, mustChange);
+      if (result.ok) {
+        toast.success("Password updated.", {
+          description: mustChange ? "Staff member will be prompted to change it on next login." : undefined,
+        });
+        setPasswordInput("");
+        setGenerated("");
+        setShowPassword(false);
+      } else {
+        toast.error("Failed to update password. Try again.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Lock className="w-4 h-4" />
+          Staff Password
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Set or reset the login password for this staff member.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2 max-w-sm">
+          <Label htmlFor="staff-password">New Password</Label>
+          <div className="relative">
+            <Input
+              id="staff-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="Min 8 chars, upper, lower, digit, special"
+              value={passwordInput}
+              onChange={(e) => { setPasswordInput(e.target.value); setGenerated(""); }}
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowPassword((v) => !v)}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
+          {generated && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+              Copy this password now — it won&apos;t be shown again after saving.
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="must-change"
+            checked={mustChange}
+            onCheckedChange={setMustChange}
+          />
+          <Label htmlFor="must-change" className="text-sm cursor-pointer">
+            Require staff to change password on next login
+          </Label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" disabled={saving} onClick={() => void handleSave()}>
+            {saving ? "Saving..." : "Set Password"}
+          </Button>
+          <Button type="button" variant="outline" onClick={handleGenerate}>
+            Auto-generate
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function StaffAttendancePinCard({
   member,
@@ -170,6 +287,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const member = useStaffStore((s) => s.staff.find((row) => row.id === id));
   const updateAttendancePin = useStaffStore((s) => s.updateAttendancePin);
   const updateStaff = useStaffStore((s) => s.updateStaff);
+  const resetStaffPasswordFn = useStaffStore((s) => s.resetStaffPassword);
   const jobCards = useJobCardStore((s) => s.jobCards);
   const invoices = useInvoiceStore((s) => s.invoices);
 
@@ -289,6 +407,31 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     setPermissions((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
+  };
+
+  /**
+   * Toggle a granular action (CREATE/VIEW/EDIT) for a module.
+   * If the module's base key is currently in the array (legacy/old format),
+   * it is "exploded" into individual CVE keys first so the user's intent is
+   * preserved precisely — removing the base key but keeping the other two actions.
+   */
+  const toggleModuleAction = (moduleKey: string, action: "CREATE" | "VIEW" | "EDIT") => {
+    setPermissions((prev) => {
+      const hasBase = prev.includes(moduleKey);
+      if (hasBase) {
+        // Explode base key → keep the two untouched actions ON, turn toggled action OFF
+        const next = prev.filter((k) => k !== moduleKey);
+        const ALL_ACTIONS: Array<"CREATE" | "VIEW" | "EDIT"> = ["CREATE", "VIEW", "EDIT"];
+        ALL_ACTIONS.forEach((a) => {
+          if (a !== action) next.push(`${moduleKey}_${a}`);
+        });
+        return next;
+      }
+      const granularKey = `${moduleKey}_${action}`;
+      return prev.includes(granularKey)
+        ? prev.filter((k) => k !== granularKey)
+        : [...prev, granularKey];
+    });
   };
 
   const handleSavePermissions = async () => {
@@ -1136,6 +1279,14 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
 
+      {canCreateStaffAccounts(user?.role) && !isEditingSuperAdmin && (
+        <StaffPasswordCard
+          key={member.id}
+          member={member}
+          resetStaffPassword={resetStaffPasswordFn}
+        />
+      )}
+
       {user?.role === "SUPER_ADMIN" && (
         <Card>
           <CardHeader>
@@ -1148,27 +1299,69 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {ALL_PERMISSIONS.map((perm) => {
-                const isChecked = isEditingSuperAdmin || permissions.includes(perm.key);
-                return (
-                  <div key={perm.key} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`perm-${perm.key}`}
-                      checked={isChecked}
-                      disabled={isEditingSuperAdmin || savingPermissions}
-                      onCheckedChange={() => handleTogglePermission(perm.key)}
-                    />
-                    <label
-                      htmlFor={`perm-${perm.key}`}
-                      className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            {/* Granular Create / View / Edit toggles per module */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Module Access
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {GRANULAR_PERMISSION_MODULES.map((mod) => {
+                  const hasBase = isEditingSuperAdmin || permissions.includes(mod.key);
+                  const isOn = (action: "CREATE" | "VIEW" | "EDIT") =>
+                    hasBase || permissions.includes(`${mod.key}_${action}`);
+                  return (
+                    <div
+                      key={mod.key}
+                      className="rounded-lg border border-border bg-muted/30 p-3 space-y-2"
                     >
-                      {perm.label}
-                    </label>
-                  </div>
-                );
-              })}
+                      <p className="text-sm font-semibold leading-none">{mod.label}</p>
+                      {(["CREATE", "VIEW", "EDIT"] as const).map((action) => (
+                        <div key={action} className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {action.charAt(0) + action.slice(1).toLowerCase()}
+                          </span>
+                          <Switch
+                            checked={isOn(action)}
+                            disabled={isEditingSuperAdmin || savingPermissions}
+                            onCheckedChange={() => toggleModuleAction(mod.key, action)}
+                            className="scale-90 origin-right"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Simple on/off checkboxes for the remaining modules */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Additional Access
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {ALL_PERMISSIONS.map((perm) => {
+                  const isChecked = isEditingSuperAdmin || permissions.includes(perm.key);
+                  return (
+                    <div key={perm.key} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`perm-${perm.key}`}
+                        checked={isChecked}
+                        disabled={isEditingSuperAdmin || savingPermissions}
+                        onCheckedChange={() => handleTogglePermission(perm.key)}
+                      />
+                      <label
+                        htmlFor={`perm-${perm.key}`}
+                        className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {perm.label}
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {!isEditingSuperAdmin && (
               <div className="flex justify-end">
                 <Button

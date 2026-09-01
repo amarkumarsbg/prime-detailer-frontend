@@ -90,6 +90,46 @@ export function canAccessNavItem(
   return true;
 }
 
+/**
+ * Granular Create / View / Edit helpers.
+ * Falls back to the base module key for backward compatibility —
+ * existing staff with e.g. "JOB_CARDS" keep full access automatically.
+ * SUPER_ADMIN and ADMIN always pass regardless of stored permissions.
+ * Delete is never grantable to staff.
+ */
+function granularCheck(
+  user: Pick<User, "role" | "permissions"> | null | undefined,
+  moduleKey: string,
+  action: "CREATE" | "VIEW" | "EDIT"
+): boolean {
+  if (!user?.role) return false;
+  if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") return true;
+  const perms = user.permissions ?? [];
+  if (perms.includes(moduleKey)) return true; // base key = full access
+  return perms.includes(`${moduleKey}_${action}`);
+}
+
+export function userCanCreate(
+  user: Pick<User, "role" | "permissions"> | null | undefined,
+  moduleKey: string
+): boolean {
+  return granularCheck(user, moduleKey, "CREATE");
+}
+
+export function userCanView(
+  user: Pick<User, "role" | "permissions"> | null | undefined,
+  moduleKey: string
+): boolean {
+  return granularCheck(user, moduleKey, "VIEW");
+}
+
+export function userCanEdit(
+  user: Pick<User, "role" | "permissions"> | null | undefined,
+  moduleKey: string
+): boolean {
+  return granularCheck(user, moduleKey, "EDIT");
+}
+
 export function roleDisplayLabel(role: UserRole): string {
   const labels: Record<UserRole, string> = {
     PLATFORM_OWNER: "Platform Owner",

@@ -85,3 +85,31 @@ export const PERMISSIONS_FOR_UI = PERMISSION_KEYS.map((key) => ({
   key,
   label: PERMISSION_KEY_LABELS[key],
 }));
+
+/**
+ * Modules that expose granular Create / View / Edit toggles in the permissions UI.
+ * Delete is intentionally excluded — only Admin can delete.
+ */
+export const GRANULAR_PERMISSION_MODULES = [
+  { key: "JOB_CARDS",    label: "Job Cards" },
+  { key: "BOOKINGS",     label: "Bookings" },
+  { key: "PICKUP_DROP",  label: "Pickup & Drop" },
+  { key: "QUOTATIONS",   label: "Quotations" },
+  { key: "APPOINTMENTS", label: "Appointments" },
+  { key: "CUSTOMERS",    label: "Customers" },
+  { key: "VEHICLES",     label: "Vehicles" },
+  { key: "MEMBERSHIP",   label: "Membership" },
+  { key: "BILLING",      label: "Billing" },
+  { key: "EXPENSES",     label: "Expenses" },
+  { key: "INVENTORY",    label: "Inventory" },
+  { key: "STAFF",        label: "Users & Staff" },
+  { key: "ATTENDANCE",   label: "Attendance" },
+] as const;
+
+export type GranularModuleKey = (typeof GRANULAR_PERMISSION_MODULES)[number]["key"];
+export type GranularAction = "CREATE" | "VIEW" | "EDIT";
+
+/** Remaining modules shown as simple on/off checkboxes. */
+export const SIMPLE_PERMISSIONS_FOR_UI = PERMISSIONS_FOR_UI.filter(
+  (p) => !GRANULAR_PERMISSION_MODULES.some((m) => m.key === p.key)
+);

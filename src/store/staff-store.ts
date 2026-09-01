@@ -63,13 +63,46 @@ interface StaffStoreState {
       }>
   ) => Promise<UpdateStaffResult>;
   updateAttendancePin: (staffId: string, pin: string) => Promise<UpdatePinResult>;
+  resetStaffPassword: (
+    staffId: string,
+    password: string,
+    mustChangeOnLogin: boolean
+  ) => Promise<{ ok: boolean }>;
   deleteStaff: (staffId: string) => Promise<void>;
   findByAttendancePin: (pin: string) => User | undefined;
   resetToSeed: () => Promise<void>;
 }
 
-function generateRandomAttendancePin(): string {
+export function generateRandomAttendancePin(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+/**
+ * Generate a random password that satisfies the password policy:
+ * 8+ chars, uppercase, lowercase, digit, special character.
+ */
+export function generateRandomStaffPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "#@$%&*!?+-";
+  const all = upper + lower + digits + special;
+  // Guarantee one of each required character class
+  let pwd =
+    upper[Math.floor(Math.random() * upper.length)] +
+    lower[Math.floor(Math.random() * lower.length)] +
+    digits[Math.floor(Math.random() * digits.length)] +
+    special[Math.floor(Math.random() * special.length)];
+  for (let i = pwd.length; i < 10; i++) {
+    pwd += all[Math.floor(Math.random() * all.length)];
+  }
+  // Fisher-Yates shuffle so the mandatory chars aren't always at the start
+  const arr = pwd.split("");
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join("");
 }
 
 function nextStaffId(existing: User[]): string {
@@ -253,6 +286,21 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
       return { ok: true };
     } catch {
       return { ok: false, error: "INVALID" };
+    }
+  },
+
+  resetStaffPassword: async (staffId, password, mustChangeOnLogin) => {
+    try {
+      const { user } = await apiPut<{ user: User }>(
+        `/api/users/${staffId}/reset-password`,
+        { password, mustChangePassword: mustChangeOnLogin }
+      );
+      set((s) => ({
+        staff: s.staff.map((m) => (m.id === staffId ? user : m)),
+      }));
+      return { ok: true };
+    } catch {
+      return { ok: false };
     }
   },
 

@@ -32,21 +32,6 @@ export function NotesStep({
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <Label>Internal Notes (Not visible to customer)</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_INTERNAL_NOTES.map((note) => (
-              <Button
-                key={note}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => onAppendQuickInternalNote(note)}
-              >
-                <Check className="h-3 w-3 mr-1 text-primary" />
-                {note}
-              </Button>
-            ))}
-          </div>
           <Textarea
             value={internalNotes}
             onChange={(e) => onInternalNotesChange(e.target.value)}

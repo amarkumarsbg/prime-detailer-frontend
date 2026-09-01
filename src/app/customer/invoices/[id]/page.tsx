@@ -5,7 +5,7 @@ import { useCustomerDashboardStore } from "@/store/customer-dashboard-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, ExternalLink, Download } from "lucide-react";
 import Link from "next/link";
 import { cn, formatDate, formatCurrency } from "@/lib/utils";
 
@@ -79,6 +79,17 @@ export default function InvoiceDetailPage() {
             <Badge className={cn(STATUS_COLORS[status] || "")}>
               {status.replace(/_/g, " ")}
             </Badge>
+            {status === "PAID" && (
+              <Link
+                href={`/public-invoice/${invoice.id}${customer?.referralCode ? `?ref=${encodeURIComponent(customer.referralCode)}` : ""}`}
+                target="_blank"
+              >
+                <Button variant="default" size="sm" className="gap-1.5">
+                  <Download className="h-3.5 w-3.5" />
+                  Download PDF
+                </Button>
+              </Link>
+            )}
             <Link href={`/public-invoice/${invoice.id}${customer?.referralCode ? `?ref=${encodeURIComponent(customer.referralCode)}` : ""}`} target="_blank">
               <Button variant="outline" size="sm" className="gap-1.5">
                 <ExternalLink className="h-3.5 w-3.5" />

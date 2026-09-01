@@ -35,7 +35,7 @@ export default function MembershipsPage() {
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
-                        <p className="font-semibold">{(mem as any).packageName || "Service Plan"}</p>
+                        <p className="font-semibold">{mem.packageName || "Service Plan"}</p>
                         {mem.startDate && (
                           <p className="text-xs text-muted-foreground">
                             Started: {formatDate(mem.startDate)}
@@ -64,7 +64,7 @@ export default function MembershipsPage() {
               {expired.map((mem) => (
                 <Card key={mem.id} className="opacity-60">
                   <CardContent className="pt-4 pb-4">
-                    <p className="font-medium">{(mem as any).packageName || "Service Plan"}</p>
+                    <p className="font-medium">{mem.packageName || "Service Plan"}</p>
                     {mem.endDate && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Expired: {formatDate(mem.endDate)}
