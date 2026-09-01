@@ -40,23 +40,31 @@ export function buildCustomerCredentialsWhatsAppMessage(
   const firstName = customerName.split(" ")[0];
 
   const bookingLine = bookingReference
-    ? `Your booking ${bookingReference} has been confirmed. Here are your account credentials to track your service:`
-    : `Here are your account credentials to track your service:`;
-
-  const portalLine = customerPortalUrl
-    ? `Please log in at our portal to track your vehicle:\n${customerPortalUrl}`
-    : "";
+    ? `Your booking *${bookingReference}* has been confirmed. ✅`
+    : `Your booking has been confirmed. ✅`;
 
   const lines = [
-    `Hi ${firstName}! 🎉 Welcome to ${businessName}!`,
+    `Hi *${firstName}*! 👋🎉`,
+    ``,
+    `Welcome to *${businessName}*! 🚗✨`,
     ``,
     bookingLine,
+    ``,
+    `Here are your account details to track your service:`,
     ``,
     `📱 Phone: ${phone}`,
     `🔑 Password: ${password}`,
     ``,
-    ...(portalLine ? [portalLine, ``] : []),
-    `Thank you for choosing ${businessName}! 🚗`,
+    ...(customerPortalUrl
+      ? [
+          `🔗 *Track your vehicle:*`,
+          `${customerPortalUrl}`,
+          ``,
+          `🔐 Please change your password after your first login.`,
+          ``,
+        ]
+      : []),
+    `Thank you for choosing *${businessName}*! ❤️`,
   ];
 
   return lines.join("\n");
@@ -112,21 +120,22 @@ export function buildJobDeliveredWhatsAppMessage(
   const firstName = customerName.split(" ")[0];
 
   const lines = [
-    `Hi ${firstName}! ✅ Your vehicle is delivered!`,
+    `Hi *${firstName}*! 🎉`,
     ``,
-    `Your ${vehicleMakeModel} (${registrationNumber}) has been successfully serviced and delivered.`,
+    `Your vehicle is *ready and delivered*. We hope you love the results! ✨`,
     ``,
-    `📋 Job Card: ${jobCardNumber}`,
+    `🚗 Vehicle: ${vehicleMakeModel} (${registrationNumber})`,
+    `📋 Job Card: *${jobCardNumber}*`,
     ``,
     ...(customerPortalUrl
       ? [
-          `View your invoice and service details on our portal:`,
-          `${customerPortalUrl}`,
+          `View your invoice and service details:`,
+          `🔗 ${customerPortalUrl}`,
           ``,
         ]
       : []),
-    `Thank you for choosing ${businessName}! 🚗`,
-    `We hope to see you again soon.`,
+    `Thank you for choosing *${businessName}*! ❤️`,
+    `We look forward to serving you again.`,
   ];
 
   return lines.join("\n");

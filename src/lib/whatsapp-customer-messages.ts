@@ -84,6 +84,7 @@ export function buildJobCardCustomerWhatsAppMessage(
         `📱 Phone: ${job.customerPhone}`,
         `🔑 Password: ${options.temporaryPassword}`,
         `🔗 Login: ${portalUrl}`,
+        `🔐 Please change your password after first login.`,
       ]
     : [
         ``,
@@ -93,19 +94,20 @@ export function buildJobCardCustomerWhatsAppMessage(
       ];
 
   return [
-    `Hi *${firstName}*,`,
+    `Hi *${firstName}*! 👋`,
     ``,
-    `Your job card has been created at *Prime Detailers*.`,
-    `Job: *${job.jobNumber}*`,
-    `Status: *${statusLabel}*`,
-    `Vehicle: ${vehicle}`,
-    serviceNames ? `Services: ${serviceNames}${more}` : "",
+    `Your job card has been created at *Prime Detailers*. 🚗`,
+    ``,
+    `📋 Job: *${job.jobNumber}*`,
+    `🟢 Status: *${statusLabel}*`,
+    `🚗 Vehicle: ${vehicle}`,
+    serviceNames ? `🔧 Services: ${serviceNames}${more}` : null,
     ...credentialsBlock,
     ``,
     `Reply here if you have any questions.`,
     `— Team Prime Detailers`,
   ]
-    .filter((l) => l !== null && l !== undefined && (l !== "" || true))
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -116,19 +118,20 @@ export function buildServiceReminderWhatsAppMessage(reminder: ServiceReminder): 
   const vehicle = `${reminder.vehicleMakeModel} (${reminder.vehicleRegNumber})`.trim();
 
   return [
-    `Hi *${firstName}*,`,
+    `Hi *${firstName}*! 👋`,
     ``,
-    `Friendly reminder from *Prime Detailers* regarding your vehicle.`,
-    `Reminder: *${typeLabel}*`,
-    `Vehicle: ${vehicle}`,
-    `Due: *${due}*`,
-    reminder.notes?.trim() ? `Note: ${reminder.notes.trim()}` : "",
+    `Friendly reminder from *Prime Detailers* — your service is coming up! 🔔`,
     ``,
-    `Book a slot when convenient — reply here or call us.`,
+    `🔧 Service: *${typeLabel}*`,
+    `🚗 Vehicle: ${vehicle}`,
+    `📅 Due: *${due}*`,
+    reminder.notes?.trim() ? `📝 Note: ${reminder.notes.trim()}` : "",
+    ``,
+    `Book a slot at your convenience — reply here or call us. We'll be happy to help!`,
     ``,
     `— Team Prime Detailers`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -137,46 +140,49 @@ export function buildQuotationWhatsAppMessage(q: Quotation): string {
   const hasServices = q.services.length > 0;
   const hasParts = (q.parts ?? []).length > 0;
   const serviceLines = q.services
-    .map((s) => `• ${s.name}: ${formatCurrency(s.price)}`)
+    .map((s) => `  • ${s.name}: ${formatCurrency(s.price)}`)
     .join("\n");
   const partLines = (q.parts ?? [])
-    .map((p) => `• ${p.name} × ${p.quantity} ${p.unit}: ${formatCurrency(p.lineTotal)}`)
+    .map((p) => `  • ${p.name} × ${p.quantity} ${p.unit}: ${formatCurrency(p.lineTotal)}`)
     .join("\n");
   const valid = q.validUntil
     ? format(parseISO(q.validUntil), "EEE, dd-MMM-yyyy")
     : null;
 
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `Please find your estimate *${q.quotationNumber}* from *Prime Detailers*.`,
+    `Here is your estimate *${q.quotationNumber}* from *Prime Detailers*. 📄`,
     ``,
-    hasServices ? `*Vehicle:* ${q.vehicleMakeModel} (${q.vehicleRegNumber})` : hasParts ? `*Type:* Counter Sale` : "",
-    hasServices ? `*Services:*\n${serviceLines}` : "",
-    hasParts ? `*Counter Sale:*\n${partLines}` : "",
+    hasServices ? `🚗 Vehicle: ${q.vehicleMakeModel} (${q.vehicleRegNumber})` : hasParts ? `🛝 Type: Counter Sale` : "",
+    hasServices ? `\n🔧 *Services:*\n${serviceLines}` : "",
+    hasParts ? `\n🛝 *Counter Sale:*\n${partLines}` : "",
     ``,
-    `Subtotal: ${formatCurrency(q.subtotal)}`,
-    q.taxAmount > 0 ? `GST: ${formatCurrency(q.taxAmount)}` : "",
-    `*Total:* *${formatCurrency(q.grandTotal)}*`,
-    valid ? `Valid until: *${valid}*` : "",
+    `💰 Subtotal: ${formatCurrency(q.subtotal)}`,
+    q.taxAmount > 0 ? `🧾 GST: ${formatCurrency(q.taxAmount)}` : "",
+    `*Total: ${formatCurrency(q.grandTotal)}*`,
+    valid ? `📅 Valid until: *${valid}*` : "",
     ``,
-    `Reply here to approve or ask questions.`,
+    `Reply here to approve or ask any questions. We're happy to help!`,
     ``,
     `— Team Prime Detailers`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
 export function buildFollowUpWhatsAppMessage(fu: FollowUp, lastVisitLabel: string): string {
   const first = fu.customerName.trim().split(/\s+/)[0] ?? fu.customerName;
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `We miss you at *Prime Detailers* — it’s been a while since your last visit.`,
-    `Last visit: *${lastVisitLabel}* (${fu.daysSinceLastVisit} days ago).`,
+    `We miss you at *Prime Detailers*! ❤️`,
     ``,
-    `Reply here or call us to book a service — we’ll be happy to help.`,
+    `It\'s been a while since your last visit — *${lastVisitLabel}* (${fu.daysSinceLastVisit} days ago).`,
+    ``,
+    `Your vehicle deserves some love! 🚗✨`,
+    ``,
+    `Reply here or call us to book a service — we\'ll be happy to have you back.`,
     ``,
     `— Team Prime Detailers`,
   ].join("\n");
@@ -298,7 +304,7 @@ export function buildPickupDropWhatsAppMessage(
   };
 
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
     ...(req.type === "PICKUP" ? pickupBody() : dropBody()),
     vehicleLine,
@@ -333,22 +339,24 @@ export function buildPickupAndDropScheduledWhatsAppMessage(
     mm && reg ? `Vehicle: ${mm} (${reg})` : mm ? `Vehicle: ${mm}` : reg ? `Vehicle: ${reg}` : "";
 
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `We’ve scheduled *pickup and drop-off* for your vehicle with *${biz}*.`,
+    `We\'ve scheduled *pickup and drop-off* for your vehicle with *${biz}*. 🚗`,
+    ``,
     vehicleLine,
-    `Pickup: ${pickup.address}`,
-    `Drop-off: ${drop.address}`,
-    `Scheduled: *${when}*`,
-    pickup.driverName?.trim() ? `Pickup driver: *${pickup.driverName.trim()}*` : "",
-    drop.driverName?.trim() ? `Drop-off driver: *${drop.driverName.trim()}*` : "",
-    opts.branchName?.trim() ? `Workshop: *${opts.branchName.trim()}*` : "",
+    `📍 Pickup: ${pickup.address}`,
+    `📍 Drop-off: ${drop.address}`,
+    `📅 Scheduled: *${when}*`,
+    pickup.driverName?.trim() ? `👤 Pickup driver: *${pickup.driverName.trim()}*` : "",
+    drop.driverName?.trim() ? `👤 Drop-off driver: *${drop.driverName.trim()}*` : "",
+    opts.branchName?.trim() ? `🏢 Workshop: *${opts.branchName.trim()}*` : "",
     ``,
-    `We’ll message you when the driver is on the way. Reply here to reschedule.`,
+    `We\'ll message you when the driver is on the way.`,
+    `Reply here to reschedule or if you have any questions.`,
     ``,
     `— ${biz}`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -359,7 +367,7 @@ export function buildInvoiceWhatsAppMessage(
   const first = invoice.customerName.trim().split(/\s+/)[0] ?? invoice.customerName;
   const lineSummary = invoice.lineItems
     .slice(0, 8)
-    .map((l) => `• ${l.description}: ${formatCurrency(l.total)}`)
+    .map((l) => `  • ${l.description}: ${formatCurrency(l.total)}`)
     .join("\n");
   const more =
     invoice.lineItems.length > 8
@@ -367,17 +375,19 @@ export function buildInvoiceWhatsAppMessage(
       : "";
 
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `Your ${opts.invoiceLabel ?? "tax invoice"} *${invoice.invoiceNumber}* (Job *${invoice.jobNumber}*) from *${opts.businessName}*.`,
+    `Your ${opts.invoiceLabel ?? "tax invoice"} *${invoice.invoiceNumber}* is ready from *${opts.businessName}*. 🧾`,
     ``,
-    `*Vehicle:* ${invoice.vehicleRegNumber}`,
-    `${lineSummary}${more}`,
+    `🚗 Vehicle: ${invoice.vehicleRegNumber}`,
+    `Job: *${invoice.jobNumber}*`,
     ``,
-    `*Grand total:* *${formatCurrency(invoice.grandTotal)}*`,
-    `*Balance due:* *${formatCurrency(opts.remainingBalance)}*`,
+    lineSummary + more,
     ``,
-    `Use the invoice PDF for UPI/bank details, or reply here for help.`,
+    `*Grand Total: ${formatCurrency(invoice.grandTotal)}*`,
+    `*Balance Due: ${formatCurrency(opts.remainingBalance)}*`,
+    ``,
+    `Use the invoice PDF for UPI / bank details, or reply here for help.`,
     ``,
     `— ${opts.businessName}`,
   ].join("\n");
@@ -453,7 +463,7 @@ export function buildPaymentPendingReminderWhatsAppMessage(opts: {
   businessName: string;
   /**
    * `customerTotal` — pendingAmount is sum of all open invoices.
-   * `singleInvoice` — pendingAmount is that invoice's outstanding only.
+   * `singleInvoice` — pendingAmount is that invoice\'s outstanding only.
    */
   mode?: "customerTotal" | "singleInvoice";
   /** Public invoice URL (optional) */
@@ -464,61 +474,69 @@ export function buildPaymentPendingReminderWhatsAppMessage(opts: {
   invoiceNumber?: string;
 }): string {
   const mode = opts.mode ?? "customerTotal";
-  const lines: string[] = [`Hi sir/ma'am,`, ``];
 
   if (mode === "singleInvoice") {
-    const invLabel = opts.invoiceNumber ? ` on invoice ${opts.invoiceNumber}` : "";
-    lines.push(
-      `Your payment of ${formatWhatsAppInr(opts.pendingAmount)} is pending${invLabel}.`,
-      ``
-    );
-    if (opts.invoiceUrl) {
-      lines.push(`View invoice:`, opts.invoiceUrl, ``);
-    }
-    lines.push(
-      `View full ledger statement:`,
-      opts.statementUrl,
-      `Please clear the payment as soon as possible.`,
+    const invLabel = opts.invoiceNumber ? ` on invoice *${opts.invoiceNumber}*` : "";
+    return [
+      `Hi! 👋`,
       ``,
-      `Thank you,`,
-      opts.businessName
-    );
-    return lines.join("\n");
+      `This is a gentle reminder from *${opts.businessName}*. 💳`,
+      ``,
+      `A payment of *${formatWhatsAppInr(opts.pendingAmount)}* is pending${invLabel}.`,
+      ``,
+      ...(opts.invoiceUrl ? [`📎 View invoice:`, opts.invoiceUrl, ``] : []),
+      `📄 View full statement:`,
+      opts.statementUrl,
+      ``,
+      `Please clear the payment at your earliest convenience. Thank you! 🙏`,
+      ``,
+      `— ${opts.businessName}`,
+    ]
+      .filter((l): l is string => l !== null && l !== undefined)
+      .join("\n");
   }
 
-  // customerTotal — multiple unpaid: ledger only; single unpaid: invoice + ledger
+  // customerTotal
   if (opts.invoiceUrl) {
-    // Exactly one unpaid invoice — amount matches the invoice; include both links.
-    const invNo = opts.invoiceNumber ? ` ${opts.invoiceNumber}` : "";
-    lines.push(
-      `Your payment of ${formatWhatsAppInr(opts.pendingAmount)} is pending.`,
+    const invNo = opts.invoiceNumber ? ` *${opts.invoiceNumber}*` : "";
+    return [
+      `Hi! 👋`,
       ``,
-      `View invoice${invNo}:`,
+      `This is a gentle reminder from *${opts.businessName}*. 💳`,
+      ``,
+      `A payment of *${formatWhatsAppInr(opts.pendingAmount)}* is pending.`,
+      ``,
+      `📎 View invoice${invNo}:`,
       opts.invoiceUrl,
       ``,
-      `View full ledger statement:`,
+      `📄 View full statement:`,
       opts.statementUrl,
-      `Please clear the payment as soon as possible.`,
       ``,
-      `Thank you,`,
-      opts.businessName
-    );
-    return lines.join("\n");
+      `Please clear the payment at your earliest convenience. Thank you! 🙏`,
+      ``,
+      `— ${opts.businessName}`,
+    ]
+      .filter((l): l is string => l !== null && l !== undefined)
+      .join("\n");
   }
 
-  lines.push(
-    `*Total pending amount:* ${formatWhatsAppInr(opts.pendingAmount)}`,
-    `(Sum of all unpaid invoices on your account.)`,
+  return [
+    `Hi! 👋`,
     ``,
-    `View full ledger statement:`,
+    `This is a gentle reminder from *${opts.businessName}*. 💳`,
+    ``,
+    `*Total pending amount: ${formatWhatsAppInr(opts.pendingAmount)}*`,
+    `_(Sum of all unpaid invoices on your account.)_`,
+    ``,
+    `📄 View full statement:`,
     opts.statementUrl,
-    `Please clear the payment as soon as possible.`,
     ``,
-    `Thank you,`,
-    opts.businessName
-  );
-
-  return lines.join("\n");
+    `Please clear the payment at your earliest convenience. Thank you! 🙏`,
+    ``,
+    `— ${opts.businessName}`,
+  ]
+    .filter((l): l is string => l !== null && l !== undefined)
+    .join("\n");
 }
 
 /**
@@ -531,25 +549,22 @@ export function buildInvoiceReadyWhatsAppMessage(
   const first = invoice.customerName.trim().split(/\s+/)[0] ?? invoice.customerName;
   const invoiceDate = format(parseISO(invoice.createdAt), "dd.MM.yyyy");
   return [
-    `Hey ${first} ,`,
+    `Hey *${first}*! 👋`,
     ``,
-    `Thank you for your business`,
-    `Your Sales Invoice is ready! Check the details below`,
+    `Thank you for your business! ❤️`,
+    `Your invoice is ready — here are the details:`,
     ``,
-    `*Due Amount*`,
-    `*${formatWhatsAppInr(opts.remainingBalance)}*`,
-    `Status: ${invoiceStatusShareLabel(invoice.status)}`,
-    `Invoice Date : ${invoiceDate}`,
+    `🧾 *Invoice No:* ${invoice.invoiceNumber}`,
+    `📅 Date: ${invoiceDate}`,
+    `💰 Amount: ${formatWhatsAppInrDecimal(invoice.grandTotal)}`,
+    `🔴 Balance Due: *${formatWhatsAppInrDecimal(opts.remainingBalance)}*`,
+    `🟢 Status: ${invoiceStatusShareLabel(invoice.status)}`,
     ``,
-    `Sales Invoice No: ${invoice.invoiceNumber}`,
-    `Invoice Amount: ${formatWhatsAppInrDecimal(invoice.grandTotal)}`,
-    `Balance Due: ${formatWhatsAppInrDecimal(opts.remainingBalance)}`,
-    ``,
-    `Click the link below to view your invoice:`,
+    `🔗 View Invoice:`,
     opts.viewUrl,
     ``,
-    `Happy to serve you`,
-    `${opts.businessName}.`,
+    `Happy to serve you! 🚗✨`,
+    `— *${opts.businessName}*`,
   ].join("\n");
 }
 
@@ -642,7 +657,7 @@ export function buildInvoicePaymentReceivedWhatsAppMessage(
     ``,
     `— ${opts.businessName}`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -661,7 +676,7 @@ export function appendAdvanceAckToJobMessage(base: string, job: JobCard): string
     refLine,
     `This will be adjusted on your final invoice.`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -677,7 +692,7 @@ export function buildJobReadyForPickupWhatsAppMessage(
   const password = opts.temporaryPassword ?? inferDefaultCustomerPassword(job.customerName, phone);
 
   const credentialsBlock = [
-    `Your Customer login id and password is 👇🏻`,
+    `*Login to track your service & view your invoice:*`,
     ``,
     `📱 Phone: ${phone}`,
     `🔑 Password: ${password}`,
@@ -686,27 +701,25 @@ export function buildJobReadyForPickupWhatsAppMessage(
   ];
 
   return [
-    `Hi *${firstName}*,`,
+    `Hi *${firstName}*! 🎉`,
     ``,
-    `Good News- your vehicle is *ready for pickup* from *${opts.businessName}*.`,
+    `Great news — your vehicle is *ready for pickup* from *${opts.businessName}*! 🚗✨`,
     ``,
-    `Job: *${job.jobNumber}*`,
-    `Status: *Ready For Pickup*`,
-    `Vehicle: ${vehicle}`,
-    serviceNames ? `Services: ${serviceNames}` : "",
-    ``,
-    `*Track your service status online & View your invoice:*`,
+    `📋 Job: *${job.jobNumber}*`,
+    `🟢 Status: *Ready for Pickup*`,
+    `🚗 Vehicle: ${vehicle}`,
+    serviceNames ? `🔧 Services Completed: ${serviceNames}` : null,
     ``,
     ...credentialsBlock,
     ``,
-    `*View Before photos and Job Status by clicking on the link above*`,
+    `📸 View your before & after photos via the link above.`,
     ``,
-    `Please Collect your vehicle at your convenience.`,
-    ``,
+    `Please collect your vehicle at your convenience.`,
     `Reply here if you have any questions.`,
-    `— Team ${opts.businessName}`,
+    ``,
+    `— Team *${opts.businessName}*`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -732,14 +745,13 @@ export function buildBeforePhotosReadyWhatsAppMessage(
   const credentialsBlock = phone
     ? [
         ``,
-        `Your Customer login id and password is 👇🏻`,
+        `*Login to track your job status & view before photos:*`,
         ``,
         `📱 Phone: ${phone}`,
         `🔑 Password: ${password}`,
         ``,
         `🔗 Login: ${portalUrl}`,
-        ``,
-        `View Before photos and Job Status by clicking on the link above`,
+        `🔐 Please change your password after first login.`,
       ]
     : [
         ``,
@@ -748,19 +760,20 @@ export function buildBeforePhotosReadyWhatsAppMessage(
       ];
 
   return [
-    `Hi *${firstName}*,`,
+    `Hi *${firstName}*! 👋`,
     ``,
-    `Your job card has been created at *${opts.businessName}*.`,
-    `Job: *${job.jobNumber}*`,
-    `Status: *Received*`,
-    `Vehicle: ${vehicle}`,
-    serviceNames ? `Services: ${serviceNames}` : "",
+    `Your job card has been created at *${opts.businessName}*. 🚗`,
+    ``,
+    `📋 Job: *${job.jobNumber}*`,
+    `🟢 Status: *Received*`,
+    `🚗 Vehicle: ${vehicle}`,
+    serviceNames ? `🔧 Services: ${serviceNames}` : "",
     ...credentialsBlock,
     ``,
-    `Your vehicle is now with our team, we will notify you once it is ready for pickup.`,
+    `Your vehicle is now with our team. We\'ll notify you when it\'s ready for pickup.`,
     ``,
     `Reply here if you have any questions.`,
-    `— Team ${opts.businessName}`,
+    `— Team *${opts.businessName}*`,
   ]
     .filter((l) => l !== undefined && l !== null)
     .join("\n");
@@ -805,34 +818,28 @@ export function buildJobDeliveredWhatsAppMessage(
     : [];
   const password = opts.temporaryPassword ?? inferDefaultCustomerPassword(firstName, phone);
   const reviewLine = opts.googleReviewUrl
-    ? `If yes please review us on Google: ${opts.googleReviewUrl}`
-    : `If yes please review us on Google: https://maps.app.goo.gl/example-review-link`;
+    ? `⭐ Review us on Google:\n${opts.googleReviewUrl}`
+    : `⭐ Review us on Google:\nhttps://maps.app.goo.gl/example-review-link`;
 
   return [
-    `Hi *${firstName}*,`,
+    `Hi *${firstName}*! 🎉`,
     ``,
-    `Thank you for choosing ${opts.businessName}. Your vehicle has been marked Delivered `,
-    ``,
+    `Thank you for choosing *${opts.businessName}*!`,
+    `Your vehicle has been *delivered*. We hope you love the results! ✨`,
     ...paymentBlock,
     ``,
-    `Your Customer login id and password is 👇🏻`,
+    `*Login to view your invoice & reward points:*`,
+    ``,
     `📱 Phone: ${phone}`,
     `🔑 Password: ${password}`,
+    `🔗 ${portalUrl}`,
     ``,
-    `*View your reward points in your profile.*`,
+    `Are you happy with our work? 🙏`,
+    reviewLine,
     ``,
-    ``,
-    `Customer login link`,
-    ``,
-    `${portalUrl}`,
-    ``,
-    `We hope you are happy with our work. `,
-    ``,
-    `${reviewLine}`,
-    ``,
-    `— Team ${opts.businessName}`,
+    `— Team *${opts.businessName}*`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -844,13 +851,14 @@ export function buildQuotationConvertedWhatsAppMessage(
 ): string {
   const first = q.customerName.trim().split(/\s+/)[0] ?? q.customerName;
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `Your estimate *${q.quotationNumber}* is now an active job at *${businessName}*.`,
-    `Job number: *${jobNumber}*`,
-    `Vehicle: ${q.vehicleMakeModel} (${q.vehicleRegNumber})`,
+    `Your estimate *${q.quotationNumber}* has been converted to an active job at *${businessName}*. 🔧`,
     ``,
-    `We’ll proceed as agreed. Reply here for changes or questions.`,
+    `📋 Job Number: *${jobNumber}*`,
+    `🚗 Vehicle: ${q.vehicleMakeModel} (${q.vehicleRegNumber})`,
+    ``,
+    `We\'ll proceed as agreed. Reply here if you have any changes or questions.`,
     ``,
     `— ${businessName}`,
   ].join("\n");
@@ -875,10 +883,10 @@ export function buildMembershipWelcomeWhatsAppMessage(params: {
   const first = params.customerName.trim().split(/\s+/)[0] ?? params.customerName;
   const until = format(parseISO(params.validUntilIso), "EEE, dd-MMM-yyyy");
   const tierLabel = TIER_CUSTOMER_LABEL[params.tier] ?? params.tier;
-  const veh = params.vehicleReg?.trim() ? `Vehicle: *${params.vehicleReg.trim()}*` : "";
+  const veh = params.vehicleReg?.trim() ? `🚗 Vehicle: *${params.vehicleReg.trim()}*` : "";
   const included =
     params.includedServiceNames && params.includedServiceNames.length > 0
-      ? `Included services: ${params.includedServiceNames.slice(0, 8).join(", ")}${
+      ? `🔧 Included: ${params.includedServiceNames.slice(0, 8).join(", ")}${
           params.includedServiceNames.length > 8
             ? ` (+${params.includedServiceNames.length - 8} more)`
             : ""
@@ -886,18 +894,21 @@ export function buildMembershipWelcomeWhatsAppMessage(params: {
       : "";
 
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 🎉`,
     ``,
-    `Your *${params.packageName}* membership is now active at *${params.businessName}*.`,
-    `Plan: *${tierLabel}* · Valid until *${until}*`,
+    `Your *${params.packageName}* membership is now *active* at *${params.businessName}*! ⭐`,
+    ``,
+    `📅 Plan: *${tierLabel}*`,
+    `✅ Valid until: *${until}*`,
     veh,
     included,
     ``,
-    `Show this message or your vehicle registration when you visit. Questions? Reply here.`,
+    `Show this message or your vehicle registration at the workshop.`,
+    `Questions? Reply here anytime.`,
     ``,
     `— ${params.businessName}`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -913,23 +924,25 @@ export function buildHighEndAdvanceReceiptWhatsAppMessage(
   const first = job.customerName.trim().split(/\s+/)[0] ?? job.customerName;
   const vehicle = `${job.vehicleMakeModel} (${job.vehicleRegNumber})`.trim();
   const methodLabel = PAYMENT_METHOD_CUSTOMER_LABEL[opts.method] ?? opts.method;
-  const refLine = opts.reference?.trim() ? `Reference: *${opts.reference.trim()}*` : "";
+  const refLine = opts.reference?.trim() ? `📋 Ref: *${opts.reference.trim()}*` : "";
 
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `We’ve recorded an *advance payment* at *${opts.businessName}* for job *${job.jobNumber}*.`,
-    `Vehicle: ${vehicle}`,
+    `We\'ve received your advance payment at *${opts.businessName}*. 🙏`,
     ``,
-    `*Amount:* *${formatCurrency(opts.amount)}*`,
-    `Method: *${methodLabel}*`,
+    `📋 Job: *${job.jobNumber}*`,
+    `🚗 Vehicle: ${vehicle}`,
+    ``,
+    `💵 *Advance: ${formatCurrency(opts.amount)}*`,
+    `💳 Method: *${methodLabel}*`,
     refLine,
     ``,
-    `This will be adjusted against your final invoice. Thank you.`,
+    `This amount will be adjusted against your final invoice.`,
     ``,
     `— ${opts.businessName}`,
   ]
-    .filter(Boolean)
+    .filter((l): l is string => l !== null && l !== undefined)
     .join("\n");
 }
 
@@ -941,14 +954,14 @@ export function buildJobCardPhotosWhatsAppMessage(params: {
 }): string {
   const first = params.customerName.trim().split(/\s+/)[0] ?? params.customerName;
   return [
-    `Hi *${first}*,`,
+    `Hi *${first}*! 👋`,
     ``,
-    `Your vehicle photos for Job Card *${params.jobCardNumber}* are ready.`,
+    `Your vehicle photos for Job Card *${params.jobCardNumber}* are ready. 📸`,
     ``,
-    `View Before & After Photos:`,
+    `🔗 View Before & After Photos:`,
     params.customerPhotosLink,
     ``,
-    `Thank you for choosing *${params.workshopName}*.`,
+    `Thank you for choosing *${params.workshopName}*! ❤️`,
     ``,
     `— ${params.workshopName}`,
   ].join("\n");
