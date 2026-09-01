@@ -30,6 +30,7 @@ import { getCanonicalStockSecondary, hasDualUnitPart, formatDualUnitStockEquival
 import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit } from "@/lib/rbac";
 import type { Part } from "@/types";
 
 type StockStatusFilter = "all" | "In Stock" | "Low Stock" | "Out of Stock";
@@ -75,6 +76,7 @@ export function InventoryBranchStockTab() {
   const updateBranchStockMeta = useInventoryStore((s) => s.updateBranchStockMeta);
   const branches = useBranchStore((s) => s.branches);
   const user = useAuthStore((s) => s.user);
+  const canEditInventory = userCanEdit(user, "INVENTORY");
 
   const [branchFilter, setBranchFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>("all");
@@ -303,16 +305,19 @@ export function InventoryBranchStockTab() {
             key: "actions",
             label: "",
             className: "text-right",
-            render: (item) => (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => openAdjust(item)}
-              >
-                Adjust
-              </Button>
-            ),
+            render: (item) =>
+              canEditInventory ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openAdjust(item)}
+                >
+                  Adjust
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              ),
           },
         ]}
         searchPlaceholder="Search part, SKU, or branch…"
@@ -340,9 +345,11 @@ export function InventoryBranchStockTab() {
                 })()}
               </div>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => openAdjust(item)}>
-              Adjust stock
-            </Button>
+            {canEditInventory ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => openAdjust(item)}>
+                Adjust stock
+              </Button>
+            ) : null}
           </div>
         )}
       />

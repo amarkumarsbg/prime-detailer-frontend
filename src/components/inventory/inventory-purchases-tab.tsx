@@ -31,6 +31,7 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useExpenseStore, type AddVendorDirectoryInput } from "@/store/expense-store";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanCreate, userCanDelete, userCanEdit } from "@/lib/rbac";
 import {
   backfillPurchaseExpenses,
   postPurchasePaymentToCashBank,
@@ -71,6 +72,9 @@ export function InventoryPurchasesTab({
   const vendors = useExpenseStore((s) => s.vendorDirectory);
   const addVendorDirectoryEntry = useExpenseStore((s) => s.addVendorDirectoryEntry);
   const user = useAuthStore((s) => s.user);
+  const canEditInventory = userCanEdit(user, "INVENTORY");
+  const canCreateInventory = userCanCreate(user, "INVENTORY");
+  const canDeleteInventory = userCanDelete(user, "INVENTORY");
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const { selectedBranchId } = useBranchScope();
 
@@ -232,6 +236,10 @@ export function InventoryPurchasesTab({
   };
 
   const openEdit = (purchase: ProductPurchase) => {
+    if (!canEditInventory) {
+      toast.error("You do not have permission to edit purchases.");
+      return;
+    }
     const safePurchaseDate =
       typeof purchase.purchasedAt === "string" && purchase.purchasedAt.length >= 10
         ? purchase.purchasedAt.slice(0, 10)
@@ -283,6 +291,10 @@ export function InventoryPurchasesTab({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isEditing ? !canEditInventory : !canCreateInventory) {
+      toast.error("You do not have permission to save this purchase.");
+      return;
+    }
     if (!supplierName.trim()) {
       toast.error("Supplier is required.");
       return;
@@ -389,15 +401,15 @@ export function InventoryPurchasesTab({
   );
 
   useEffect(() => {
-    if (openCreateToken <= 0) return;
+    if (openCreateToken <= 0 || !canCreateInventory) return;
     reset();
     setOpen(true);
     onCreateTokenConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openCreateToken, onCreateTokenConsumed]);
+  }, [openCreateToken, onCreateTokenConsumed, canCreateInventory]);
 
   useEffect(() => {
-    if (!openPurchaseRequest || openPurchaseRequest.token <= 0) return;
+    if (!openPurchaseRequest || openPurchaseRequest.token <= 0 || !canEditInventory) return;
     const purchase = purchases.find((p) => p.id === openPurchaseRequest.purchaseId);
     if (!purchase) {
       toast.error("Purchase record not found for this item.");
@@ -418,23 +430,25 @@ export function InventoryPurchasesTab({
       </div>
 
       <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={() => {
-            reset();
-            setOpen(true);
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create purchase
-        </Button>
+        {canCreateInventory && (
+          <Button
+            type="button"
+            onClick={() => {
+              reset();
+              setOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create purchase
+          </Button>
+        )}
       </div>
 
       <PurchaseExpandableTable
         purchases={rows}
-        onPay={(p) => setPayTarget(p)}
-        onEdit={openEdit}
-        onDelete={(p) => setDeleteTarget(p)}
+        onPay={canEditInventory ? (p) => setPayTarget(p) : undefined}
+        onEdit={canEditInventory ? openEdit : undefined}
+        onDelete={canDeleteInventory ? (p) => setDeleteTarget(p) : undefined}
       />
 
       {/* Delete confirmation dialog */}

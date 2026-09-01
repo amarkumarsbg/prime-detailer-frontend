@@ -44,6 +44,7 @@ import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useQuotationStore } from "@/store/quotation-store";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanCreate, userCanEdit } from "@/lib/rbac";
 import { useBranchStore } from "@/store/branch-store";
 import { resolveJobBranchId } from "@/lib/job-from-appointment";
 import { useSettingsStore } from "@/store/settings-store";
@@ -189,6 +190,8 @@ export default function QuotationsPage() {
   const updateQuotation = useQuotationStore((s) => s.updateQuotation);
   const getNextQuotationNumber = useQuotationStore((s) => s.getNextQuotationNumber);
   const authUser = useAuthStore((s) => s.user);
+  const canEditQuotations = userCanEdit(authUser, "QUOTATIONS");
+  const canCreateQuotations = userCanCreate(authUser, "QUOTATIONS");
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const branches = useBranchStore((s) => s.branches);
   const { businessName, gstRegistrationStatus } = useSettingsStore();
@@ -464,6 +467,10 @@ export default function QuotationsPage() {
 
   const openEditQuotation = (q: Quotation, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    if (!canEditQuotations) {
+      toast.error("You do not have permission to edit quotations");
+      return;
+    }
     if (!quotationIsEditable(q)) {
       toast.error("This quotation can no longer be edited");
       return;
@@ -1095,7 +1102,7 @@ export default function QuotationsPage() {
                     <Eye className="mr-2 h-4 w-4" />
                     View Details
                   </DropdownMenuItem>
-                  {quotationIsEditable(item) && (
+                  {canEditQuotations && quotationIsEditable(item) && (
                     <DropdownMenuItem onClick={(e) => openEditQuotation(item, e)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
@@ -1153,17 +1160,19 @@ export default function QuotationsPage() {
         hideDescriptionOnMobile
         inlineActionsOnMobile
         actions={
-          <Button
-            size="sm"
-            className="shrink-0 whitespace-nowrap"
-            onClick={() => {
-              resetForm();
-              setNewDialogOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-1.5" />
-            New Quotation
-          </Button>
+          canCreateQuotations ? (
+            <Button
+              size="sm"
+              className="shrink-0 whitespace-nowrap"
+              onClick={() => {
+                resetForm();
+                setNewDialogOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              New Quotation
+            </Button>
+          ) : undefined
         }
       />
 
@@ -2023,7 +2032,7 @@ export default function QuotationsPage() {
                 </Button>
               ) : quotationCanConvertToJob(selectedQuotation.status) ? (
                 <>
-                  {quotationIsEditable(selectedQuotation) && (
+                  {canEditQuotations && quotationIsEditable(selectedQuotation) && (
                     <Button
                       type="button"
                       variant="secondary"

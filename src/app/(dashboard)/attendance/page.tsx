@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAttendanceStore } from "@/store/attendance-store";
 import { useStaffStore } from "@/store/staff-store";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanCreate, userCanEdit } from "@/lib/rbac";
 import { useBranchStore } from "@/store/branch-store";
 import { useLeaveStore } from "@/store/leave-store";
 import { AttendanceQrPanel } from "@/components/attendance/attendance-qr-panel";
@@ -114,6 +115,8 @@ export default function AttendancePage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const canEditAttendance = userCanEdit(user, "ATTENDANCE");
+  const canCreateAttendance = userCanCreate(user, "ATTENDANCE");
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, viewingLabel } = useBranchScope();
   const attendanceRecords = useAttendanceStore((s) => s.records);
@@ -475,10 +478,12 @@ export default function AttendancePage() {
           <Badge variant="success" className="w-fit shrink-0">
             Live
           </Badge>
-          <Button type="button" size="sm" onClick={() => void openAddAttendanceDialog()}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add / Edit Attendance
-          </Button>
+          {(canCreateAttendance || canEditAttendance) && (
+            <Button type="button" size="sm" onClick={() => void openAddAttendanceDialog()}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add / Edit Attendance
+            </Button>
+          )}
         </div>
       </div>
 
@@ -607,18 +612,20 @@ export default function AttendancePage() {
                             <p className="font-medium">{formatDuration(r.durationMinutes)}</p>
                           </div>
                         </div>
-                        <div className="mt-3">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => void openEditAttendanceDialog(r.id)}
-                          >
-                            <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                            Edit
-                          </Button>
-                        </div>
+                        {canEditAttendance && (
+                          <div className="mt-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => void openEditAttendanceDialog(r.id)}
+                            >
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                          </div>
+                        )}
                       </MobileRowCard>
                     );
                   })
@@ -672,16 +679,20 @@ export default function AttendancePage() {
                               <Badge variant={shift.variant}>{shift.label}</Badge>
                             </td>
                             <td className="py-3 px-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => void openEditAttendanceDialog(r.id)}
-                              >
-                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                Edit
-                              </Button>
+                              {canEditAttendance ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => void openEditAttendanceDialog(r.id)}
+                                >
+                                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                  Edit
+                                </Button>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
                             </td>
                           </tr>
                         );

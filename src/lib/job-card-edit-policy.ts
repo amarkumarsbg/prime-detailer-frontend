@@ -1,5 +1,5 @@
 import type { JobCard, User } from "@/types";
-import { userHasPermission } from "@/lib/rbac";
+import { userCanEdit } from "@/lib/rbac";
 
 /** Core / service edits allowed until delivered or cancelled. */
 export function jobCardIsEditable(job: Pick<JobCard, "status">): boolean {
@@ -30,7 +30,7 @@ export function canEditJobCardPricing(
   job: Pick<JobCard, "status">,
   hasInvoice: boolean
 ): boolean {
-  return jobCardPricingEditable(job, hasInvoice) && userHasPermission(user, "JOB_CARD_PRICING");
+  return jobCardPricingEditable(job, hasInvoice) && userCanEdit(user, "JOB_CARD_PRICING");
 }
 
 /** Status workflow transitions (and delivery snapshot) from an open job. */

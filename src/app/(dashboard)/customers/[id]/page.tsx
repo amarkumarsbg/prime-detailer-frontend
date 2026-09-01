@@ -55,7 +55,7 @@ import { ApiError } from "@/lib/api-client";
 import { getTransferTagForCustomer } from "@/lib/ownership-transfers";
 import type { Vehicle, JobCard, Invoice, WalletTransaction } from "@/types";
 import { useAuthStore } from "@/store/auth-store";
-import { userCanDelete } from "@/lib/rbac";
+import { userCanCreate, userCanDelete, userCanEdit } from "@/lib/rbac";
 
 function vehicleColorHex(colorName: string): string {
   const lower = colorName.toLowerCase();
@@ -106,6 +106,8 @@ export default function CustomerDetailPage() {
 
   const { customers: allCustomers, updateCustomer, findByPhone, deleteCustomer } = useCustomerStore();
   const user = useAuthStore((s) => s.user);
+  const canEditCustomers = userCanEdit(user, "CUSTOMERS");
+  const canCreateVehicles = userCanCreate(user, "VEHICLES");
   const customer = useMemo(() => {
     return allCustomers.find((c) => c.id === id) ?? null;
   }, [id, allCustomers]);
@@ -275,6 +277,10 @@ export default function CustomerDetailPage() {
   };
 
   const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (!canEditCustomers) setIsEditing(false);
+  }, [canEditCustomers]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editName, setEditName] = useState("");
@@ -331,7 +337,7 @@ export default function CustomerDetailPage() {
   };
 
   const startEditing = () => {
-    if (!customer) return;
+    if (!canEditCustomers || !customer) return;
     setEditName(customer.name);
     setEditPhone(customer.phone);
     setEditEmail(customer.email);
@@ -342,6 +348,7 @@ export default function CustomerDetailPage() {
   const cancelEditing = () => setIsEditing(false);
 
   const saveEditing = async () => {
+    if (!canEditCustomers) return;
     if (!editName.trim() || !editPhone.trim()) {
       toast.error("Name and phone are required");
       return;
@@ -501,23 +508,25 @@ export default function CustomerDetailPage() {
                       </AvatarFallback>
                     </Avatar>
                   </button>
-                  {/* Camera badge — bottom-right, always visible */}
-                  <button
-                    type="button"
-                    disabled={avatarUploading}
-                    onClick={() => avatarFileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md border-2 border-background hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                    aria-label={avatarUploading ? "Uploading photo…" : customer.avatar ? "Change profile photo" : "Upload profile photo"}
-                  >
-                    {avatarUploading ? (
-                      <span className="h-3 w-3 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    ) : (
-                      <Camera className="h-3 w-3" />
-                    )}
-                  </button>
+                  {/* Camera badge — bottom-right, visible when edit is allowed */}
+                  {canEditCustomers && (
+                    <button
+                      type="button"
+                      disabled={avatarUploading}
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md border-2 border-background hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      aria-label={avatarUploading ? "Uploading photo…" : customer.avatar ? "Change profile photo" : "Upload profile photo"}
+                    >
+                      {avatarUploading ? (
+                        <span className="h-3 w-3 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      ) : (
+                        <Camera className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
                 </div>
-                {/* Remove photo — only shown when a photo exists */}
-                {customer.avatar && !avatarUploading && (
+                {/* Remove photo — only shown when a photo exists and edit is allowed */}
+                {canEditCustomers && customer.avatar && !avatarUploading && (
                   <button
                     type="button"
                     onClick={() => void handleRemoveAvatar()}
@@ -644,23 +653,25 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Customer Information</CardTitle>
-              {isEditing ? (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={cancelEditing}>Cancel</Button>
-                  <Button size="sm" onClick={saveEditing}>Save</Button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={startEditing}>
-                  <Pencil className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
+              {canEditCustomers && (
+                isEditing ? (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={cancelEditing}>Cancel</Button>
+                    <Button size="sm" onClick={saveEditing}>Save</Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={startEditing}>
+                    <Pencil className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                )
               )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Name</p>
-                  {isEditing ? (
+                  {canEditCustomers && isEditing ? (
                     <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
                   ) : (
                     <p className="font-medium break-words">{customer.name}</p>
@@ -668,7 +679,7 @@ export default function CustomerDetailPage() {
                 </div>
                 <div className="min-w-0 space-y-1">
                   <p className="text-sm text-muted-foreground">Phone</p>
-                  {isEditing ? (
+                  {canEditCustomers && isEditing ? (
                     <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                   ) : (
                     <p className="font-medium break-all">{customer.phone}</p>
@@ -676,7 +687,7 @@ export default function CustomerDetailPage() {
                 </div>
                 <div className="min-w-0 space-y-1 col-span-1 max-[479px]:col-span-2">
                   <p className="text-sm text-muted-foreground">Email</p>
-                  {isEditing ? (
+                  {canEditCustomers && isEditing ? (
                     <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
                   ) : (
                     <p className="font-medium break-all">{customer.email}</p>
@@ -684,7 +695,7 @@ export default function CustomerDetailPage() {
                 </div>
                 <div className="min-w-0 space-y-1 col-span-1 max-[479px]:col-span-2">
                   <p className="text-sm text-muted-foreground">Address</p>
-                  {isEditing ? (
+                  {canEditCustomers && isEditing ? (
                     <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
                   ) : (
                     <p className="font-medium break-words">{customer.address || "—"}</p>
@@ -723,10 +734,12 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Vehicles</CardTitle>
-              <Button variant="outline" size="sm" type="button" onClick={() => setAddVehicleOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Vehicle
-              </Button>
+              {canCreateVehicles && (
+                <Button variant="outline" size="sm" type="button" onClick={() => setAddVehicleOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Vehicle
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {customerVehicles.length === 0 ? (
@@ -897,10 +910,12 @@ export default function CustomerDetailPage() {
                     Debits
                   </Button>
                 </div>
-                <Button size="sm" onClick={() => setWalletAdjustOpen(true)}>
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Adjust Wallet
-                </Button>
+                {canEditCustomers && (
+                  <Button size="sm" onClick={() => setWalletAdjustOpen(true)}>
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Adjust Wallet
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -1306,32 +1321,33 @@ export default function CustomerDetailPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Reset Password</p>
-                <p className="text-xs text-muted-foreground">
-                  Minimum 6 characters — e.g. <span className="font-mono">AMAR7004</span>. The new password will be shown here for manual delivery if WhatsApp is not configured.
-                </p>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={portalShowPassword ? "text" : "password"}
-                      value={portalNewPassword}
-                      onChange={(e) => setPortalNewPassword(e.target.value)}
-                      placeholder="e.g. AMAR7004  (min 6 chars)"
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setPortalShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {portalShowPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={portalResetting || portalNewPassword.length < 6}
-                    onClick={async () => {
+              {canEditCustomers ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Reset Password</p>
+                  <p className="text-xs text-muted-foreground">
+                    Minimum 6 characters — e.g. <span className="font-mono">AMAR7004</span>. The new password will be shown here for manual delivery if WhatsApp is not configured.
+                  </p>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={portalShowPassword ? "text" : "password"}
+                        value={portalNewPassword}
+                        onChange={(e) => setPortalNewPassword(e.target.value)}
+                        placeholder="e.g. AMAR7004  (min 6 chars)"
+                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPortalShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {portalShowPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={portalResetting || portalNewPassword.length < 6}
+                      onClick={async () => {
                       setPortalResetting(true);
                       try {
                         const { buildApiUrl } = await import("@/lib/api-base");
@@ -1373,6 +1389,11 @@ export default function CustomerDetailPage() {
                   </Button>
                 </div>
               </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  You do not have permission to reset this customer&apos;s portal password.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

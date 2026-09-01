@@ -58,6 +58,7 @@ import { notifyMembershipWelcomeWhatsApp } from "@/lib/whatsapp-automation-trigg
 import { createInvoiceForMembershipActivation } from "@/lib/membership-invoice";
 import { salesInvoiceDetailPath } from "@/lib/billing/payment-helpers";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanCreate, userCanEdit } from "@/lib/rbac";
 import { computeCustomerLookupMatches } from "@/lib/customer-vehicle-lookup";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import type { Customer } from "@/types";
@@ -118,11 +119,13 @@ function MembershipPackageMobileCard({
   serviceLabels,
   onEdit,
   onToggleActive,
+  canEditPackage,
 }: {
   pkg: MembershipPackage;
   serviceLabels: string[];
   onEdit: () => void;
   onToggleActive: (active: boolean) => void;
+  canEditPackage: boolean;
 }) {
   const [servicesExpanded, setServicesExpanded] = useState(false);
   const overflowCount = Math.max(0, serviceLabels.length - MOBILE_SERVICES_PREVIEW);
@@ -153,16 +156,18 @@ function MembershipPackageMobileCard({
           </div>
           <p className="mt-2 text-lg font-bold tabular-nums leading-none">{formatInrFull(pkg.price)}</p>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="h-8 shrink-0 gap-1 px-2.5"
-          onClick={onEdit}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit
-        </Button>
+        {canEditPackage && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 shrink-0 gap-1 px-2.5"
+            onClick={onEdit}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+        )}
       </div>
 
       {serviceLabels.length > 0 ? (
@@ -202,6 +207,7 @@ function MembershipPackageMobileCard({
           <Switch
             checked={pkg.isActive}
             onCheckedChange={onToggleActive}
+            disabled={!canEditPackage}
             aria-label={`Active ${pkg.name}`}
           />
           <span
@@ -263,6 +269,9 @@ export function MembershipPageClient() {
   const vehicles = useVehicleStore((s) => s.vehicles);
   const businessName = useSettingsStore((s) => s.businessName);
   const currentBranch = useAuthStore((s) => s.currentBranch);
+  const user = useAuthStore((s) => s.user);
+  const canEditMembership = userCanEdit(user, "MEMBERSHIP");
+  const canCreateMembership = userCanCreate(user, "MEMBERSHIP");
 
   const activeServices = useMemo(
     () => [...catalog].filter((s) => s.isActive).sort((a, b) => a.name.localeCompare(b.name)),
@@ -297,6 +306,10 @@ export function MembershipPageClient() {
   );
 
   const openNewPackage = () => {
+    if (!canCreateMembership) {
+      toast.error("You do not have permission to create membership packages.");
+      return;
+    }
     setEditingPackage(null);
     setFormName("");
     setFormDescription("");
@@ -309,6 +322,10 @@ export function MembershipPageClient() {
   };
 
   const openEditPackage = (p: MembershipPackage) => {
+    if (!canEditMembership) {
+      toast.error("You do not have permission to edit membership packages.");
+      return;
+    }
     setEditingPackage(p);
     setFormName(p.name);
     setFormDescription(p.description ?? "");
@@ -340,6 +357,10 @@ export function MembershipPageClient() {
   }, [selectedServiceIds, catalog]);
 
   const savePackage = () => {
+    if (editingPackage ? !canEditMembership : !canCreateMembership) {
+      toast.error("You do not have permission to save this package.");
+      return;
+    }
     const price = parseFloat(formPrice.replace(/,/g, ""));
     if (!formName.trim()) {
       toast.error("Enter a package name.");
@@ -673,14 +694,16 @@ export function MembershipPageClient() {
           <Card>
             <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg">Membership packages</CardTitle>
-              <Button
-                type="button"
-                onClick={openNewPackage}
-                className="w-full shrink-0 bg-violet-600 hover:bg-violet-700 sm:w-auto"
-              >
-                <Crown className="mr-2 h-4 w-4" />
-                Add package
-              </Button>
+              {canCreateMembership && (
+                <Button
+                  type="button"
+                  onClick={openNewPackage}
+                  className="w-full shrink-0 bg-violet-600 hover:bg-violet-700 sm:w-auto"
+                >
+                  <Crown className="mr-2 h-4 w-4" />
+                  Add package
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="pb-2 md:pb-6">
               <MobileCardList className="space-y-2.5 pb-6">
@@ -699,6 +722,7 @@ export function MembershipPageClient() {
                     serviceLabels={serviceLabels}
                     onEdit={() => openEditPackage(p)}
                     onToggleActive={(c) => setPackageActive(p.id, c)}
+                    canEditPackage={canEditMembership}
                   />
                     );
                   })()
@@ -752,13 +776,18 @@ export function MembershipPageClient() {
                           <Switch
                             checked={p.isActive}
                             onCheckedChange={(c) => setPackageActive(p.id, c)}
+                            disabled={!canEditMembership}
                             aria-label={`Active ${p.name}`}
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <Button variant="outline" size="sm" onClick={() => openEditPackage(p)}>
-                            Edit
-                          </Button>
+                          {canEditMembership ? (
+                            <Button variant="outline" size="sm" onClick={() => openEditPackage(p)}>
+                              Edit
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -976,14 +1005,16 @@ export function MembershipPageClient() {
                     onChange={(e) => setAssignStartDate(e.target.value)}
                   />
                 </div>
-                <Button
-                  type="button"
-                  className="bg-violet-600 hover:bg-violet-700"
-                  onClick={() => void onAssign()}
-                  disabled={assigning}
-                >
-                  {assigning ? "Activating…" : "Activate membership"}
-                </Button>
+                {canCreateMembership ? (
+                  <Button
+                    type="button"
+                    className="bg-violet-600 hover:bg-violet-700"
+                    onClick={() => void onAssign()}
+                    disabled={assigning}
+                  >
+                    {assigning ? "Activating…" : "Activate membership"}
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           )}
@@ -1154,7 +1185,7 @@ export function MembershipPageClient() {
                           </Badge>
                         </td>
                         <td className="px-2 py-2">
-                          {sub.status === "ACTIVE" && eff !== "EXPIRED" ? (
+                          {canEditMembership && sub.status === "ACTIVE" && eff !== "EXPIRED" ? (
                             <Button
                               variant="ghost"
                               size="sm"

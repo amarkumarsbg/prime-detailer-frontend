@@ -88,6 +88,7 @@ import { appointmentIsEditable } from "@/lib/appointment-edit-policy";
 import { EditReservationDialog } from "@/components/reservations/edit-reservation-dialog";
 import { SearchableServiceSelect } from "@/components/services/searchable-service-select";
 import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit } from "@/lib/rbac";
 import {
   sendCustomerWhatsApp,
   openWhatsAppComposer,
@@ -155,6 +156,7 @@ export default function AppointmentsPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const authUser = useAuthStore((s) => s.user);
+  const canEditAppointments = userCanEdit(authUser, "APPOINTMENTS");
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const vehicles = useVehicleStore((s) => s.vehicles);
@@ -1431,7 +1433,7 @@ export default function AppointmentsPage() {
                               <p className="text-xs text-muted-foreground">Mechanic: {apt.mechanicName}</p>
                             )}
                             <div className="flex flex-wrap items-center gap-2">
-                              {appointmentIsEditable(apt) && (
+                              {canEditAppointments && appointmentIsEditable(apt) && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1543,7 +1545,7 @@ export default function AppointmentsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
-                        {appointmentIsEditable(apt) && (
+                        {canEditAppointments && appointmentIsEditable(apt) && (
                           <Button
                             size="sm"
                             variant="outline"

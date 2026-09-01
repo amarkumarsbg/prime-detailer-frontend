@@ -36,7 +36,8 @@ import {
   resolveBranchScopeLabel,
   useBranchScope,
 } from "@/lib/branch-scope";
-import { roleDisplayLabel } from "@/lib/rbac";
+import { roleDisplayLabel, userCanCreate, userCanDelete, userCanEdit } from "@/lib/rbac";
+import { useAuthStore } from "@/store/auth-store";
 import type {
   ExperienceBand,
   PayrollRecord,
@@ -114,6 +115,10 @@ function statusBadge(status: PayrollRecordStatus) {
 
 export default function PayrollPage() {
   const storesReady = useDashboardStoresReady();
+  const user = useAuthStore((s) => s.user);
+  const canEditPayroll = userCanEdit(user, "PAYROLL");
+  const canCreatePayroll = userCanCreate(user, "PAYROLL");
+  const canDeletePayroll = userCanDelete(user, "PAYROLL");
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker, viewingLabel } = useBranchScope();
   const staff = useStaffStore((s) => s.staff);
@@ -403,15 +408,17 @@ export default function PayrollPage() {
         hideDescriptionOnMobile
         inlineActionsOnMobile
         actions={
-          <Button
-            type="button"
-            size="sm"
-            className="shrink-0 whitespace-nowrap"
-            onClick={handleGenerate}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Generate Payroll
-          </Button>
+          canCreatePayroll ? (
+            <Button
+              type="button"
+              size="sm"
+              className="shrink-0 whitespace-nowrap"
+              onClick={handleGenerate}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Generate Payroll
+            </Button>
+          ) : undefined
         }
       />
 
@@ -1012,27 +1019,31 @@ export default function PayrollPage() {
                         {formatCurrency(s.absenceDeductionPerDay)}
                       </td>
                       <td className="px-3 py-3 align-middle text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEditStructure(s)}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={() => {
-                            removeSalaryStructure(s.id);
-                            toast.success("Structure removed.");
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {canEditPayroll && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEditStructure(s)}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {canDeletePayroll && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => {
+                              removeSalaryStructure(s.id);
+                              toast.success("Structure removed.");
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
