@@ -185,6 +185,18 @@ export default function JobDetailPage() {
         </Card>
       )}
 
+      {/* Workshop Notes */}
+      {job.notes && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Workshop Notes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{job.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Services */}
       {(job.services || []).length > 0 && (
         <Card>
