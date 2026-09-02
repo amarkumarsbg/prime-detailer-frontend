@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useActivityLogStore } from "@/store/activity-log-store";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useScopedActivityLogs } from "@/hooks/use-scoped-data";
 import { PageHeader } from "@/components/shared/page-header";
@@ -40,6 +41,7 @@ import {
   Gift,
   Activity,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import type { ActivityAction, ActivityEntityType } from "@/types";
 
@@ -166,9 +168,31 @@ function formatLogDetails(log: any): string {
 export default function ActivityPage() {
   const router = useRouter();
   const logs = useScopedActivityLogs();
+  const { hasMore, isLoadingMore, fetchNextPage } = useActivityLogStore();
+  
   const { viewingLabel } = useBranchScope();
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [actionFilter, setActionFilter] = useState<string>("all");
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastLogElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (isLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        fetchNextPage();
+      }
+    }, { threshold: 0.5 });
+    
+    if (node) observer.current.observe(node);
+  }, [isLoadingMore, hasMore, fetchNextPage]);
+
+  useEffect(() => {
+    return () => {
+      if (observer.current) observer.current.disconnect();
+    };
+  }, []);
 
   const sorted = useMemo(() => {
     let result = [...logs].sort(
@@ -246,8 +270,11 @@ export default function ActivityPage() {
                   const route = ENTITY_ROUTE_MAP[log.entityType as ActivityEntityType];
                   const hasDetailRoute = !["EXPENSE"].includes(log.entityType);
 
+                  const isLastLog = log.id === sorted[sorted.length - 1].id;
+
                   return (
                     <div
+                      ref={isLastLog ? lastLogElementRef : undefined}
                       key={log.id ? `${log.id}-${index}` : `log-${index}`}
                       className="flex items-start gap-4 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => {
@@ -294,6 +321,12 @@ export default function ActivityPage() {
           </div>
         ))}
       </div>
+
+      {isLoadingMore && (
+        <div className="flex justify-center py-6">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
 
       {sorted.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">

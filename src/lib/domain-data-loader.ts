@@ -110,7 +110,7 @@ const inflight = new Map<DomainResource, Promise<void>>();
 const loadGeneration = new Map<DomainResource, number>();
 
 async function getCollectionItems<T>(collection: string): Promise<T[]> {
-  const data = await apiGet<{ items: T[] }>(`/api/collections/${collection}`);
+  const data = await apiGet<{ items: T[] }>(`/api/collections/${collection}?page=1&pageSize=500`);
   return Array.isArray(data.items) ? data.items : [];
 }
 
@@ -240,10 +240,14 @@ async function loadOne(resource: DomainResource): Promise<void> {
       return;
     }
     case "activityLogs": {
-      useActivityLogStore.setState({
-        logs: await getCollectionItems<ActivityLog>("activityLogs"),
-      });
-      return;
+      const data = await apiGet<{ items: ActivityLog[], page: number, totalPages: number }>(`/api/collections/activityLogs?page=1&pageSize=15`);
+      useActivityLogStore.getState().setInitialPage(
+        Array.isArray(data.items) ? data.items : [],
+        data.page || 1,
+        15,
+        data.totalPages || 1
+      );
+      break;
     }
     case "communications": {
       const data = await apiGet<{ items: CustomerMessage[] }>("/api/collections/communications?page=1&pageSize=500");
