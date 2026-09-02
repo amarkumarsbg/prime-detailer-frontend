@@ -55,7 +55,8 @@ export function formatDateTime(date: string | Date): string {
   }).format(d);
 }
 
-export function getInitials(name: string): string {
+export function getInitials(name?: string | null): string {
+  if (!name) return "?";
   return name
     .split(" ")
     .map((n) => n[0])

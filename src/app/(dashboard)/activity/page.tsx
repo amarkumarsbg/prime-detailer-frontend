@@ -38,14 +38,25 @@ import {
   FileText,
   Banknote,
   Gift,
+  Activity,
+  Trash2,
 } from "lucide-react";
 import type { ActivityAction, ActivityEntityType } from "@/types";
 
-const ACTION_ICON_MAP: Record<ActivityAction, { icon: React.ElementType; className: string }> = {
+const ACTION_ICON_MAP: Record<string, { icon: React.ElementType; className: string }> = {
+  // Frontend Actions
   CREATED: { icon: Plus, className: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
   UPDATED: { icon: Pencil, className: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
+  DELETED: { icon: Trash2, className: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" },
   STATUS_CHANGED: { icon: ArrowRightLeft, className: "bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400" },
   PAYMENT_RECEIVED: { icon: CreditCard, className: "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400" },
+  
+  // Backend Actions
+  CREATE: { icon: Plus, className: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  UPDATE: { icon: Pencil, className: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
+  DELETE: { icon: Trash2, className: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" },
+  UPDATE_STATUS: { icon: ArrowRightLeft, className: "bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400" },
+  RECORD_PAYMENT: { icon: CreditCard, className: "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400" },
   ASSIGNED: { icon: UserPlus, className: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" },
   COMPLETED: { icon: CheckCircle2, className: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
   CANCELLED: { icon: XCircle, className: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" },
@@ -90,11 +101,18 @@ const ENTITY_ROUTE_MAP: Record<ActivityEntityType, string> = {
   WALLET: "/customers",
 };
 
-const ACTION_LABELS: Record<ActivityAction, string> = {
+const ACTION_LABELS: Record<string, string> = {
   CREATED: "Created",
   UPDATED: "Updated",
+  DELETED: "Deleted",
   STATUS_CHANGED: "Status Changed",
   PAYMENT_RECEIVED: "Payment Received",
+  
+  CREATE: "Created",
+  UPDATE: "Updated",
+  DELETE: "Deleted",
+  UPDATE_STATUS: "Status Changed",
+  RECORD_PAYMENT: "Payment Received",
   ASSIGNED: "Assigned",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
@@ -122,6 +140,28 @@ const ENTITY_LABELS: Record<ActivityEntityType, string> = {
   EXPENSE: "Expense",
   WALLET: "Wallet",
 };
+
+function formatLogDetails(log: any): string {
+  if (typeof log.details === "string") return log.details;
+  
+  if (typeof log.details === "object" && log.details !== null) {
+    const details = log.details as Record<string, any>;
+    
+    if (log.action === "UPDATE_STATUS" && details.oldStatus && details.newStatus) {
+      return `Status changed from ${details.oldStatus} to ${details.newStatus}`;
+    }
+    
+    if (log.action === "RECORD_PAYMENT" && details.amount) {
+      return `Recorded payment of ₹${details.amount}`;
+    }
+    
+    // Generic fallback for empty objects or unknown objects
+    const actionName = ACTION_LABELS[log.action] || log.action;
+    return `${actionName} ${log.entityLabel}`;
+  }
+  
+  return String(log.details);
+}
 
 export default function ActivityPage() {
   const router = useRouter();
@@ -196,16 +236,19 @@ export default function ActivityPage() {
             <h3 className="text-sm font-semibold text-muted-foreground mb-3">{date}</h3>
             <Card>
               <CardContent className="!p-0 divide-y divide-border">
-                {logs.map((log) => {
-                  const actionStyle = ACTION_ICON_MAP[log.action];
+                {logs.map((log, index) => {
+                  const actionStyle = ACTION_ICON_MAP[log.action as ActivityAction] || { 
+                    icon: Activity, 
+                    className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" 
+                  };
                   const ActionIcon = actionStyle.icon;
-                  const EntityIcon = ENTITY_ICON_MAP[log.entityType];
-                  const route = ENTITY_ROUTE_MAP[log.entityType];
+                  const EntityIcon = ENTITY_ICON_MAP[log.entityType as ActivityEntityType] || FileText;
+                  const route = ENTITY_ROUTE_MAP[log.entityType as ActivityEntityType];
                   const hasDetailRoute = !["EXPENSE"].includes(log.entityType);
 
                   return (
                     <div
-                      key={log.id}
+                      key={log.id ? `${log.id}-${index}` : `log-${index}`}
                       className="flex items-start gap-4 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => {
                         if (route && log.entityId && hasDetailRoute) {
@@ -220,7 +263,9 @@ export default function ActivityPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm">{log.details}</span>
+                          <span className="font-medium text-sm">
+                            {formatLogDetails(log)}
+                          </span>
                         </div>
                         <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
