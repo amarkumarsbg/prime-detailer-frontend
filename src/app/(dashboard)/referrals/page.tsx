@@ -27,6 +27,8 @@ import {
   useReferralSettingsStore,
   type ReferralRewardMode,
 } from "@/store/referral-settings-store";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit } from "@/lib/rbac";
 import { useCustomerStore } from "@/store/customer-store";
 import { useWalletStore } from "@/store/wallet-store";
 import {
@@ -57,16 +59,26 @@ const cardSurface = "rounded-xl border border-border/80 bg-card shadow-sm";
 const guideHeader = "space-y-0 px-4 pb-3 pt-4 sm:px-6 sm:pb-5 sm:pt-7";
 const guideBody = "space-y-3 px-4 pb-5 pt-0 sm:space-y-4 sm:px-6 sm:pb-6 sm:pt-2";
 
-function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+function ToggleSwitch({
+  enabled,
+  onToggle,
+  disabled = false,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={enabled}
+      disabled={disabled}
       onClick={onToggle}
       className={cn(
         "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:h-7 sm:w-12",
         enabled ? "bg-primary" : "bg-muted",
+        disabled && "cursor-not-allowed opacity-60",
         ACCENT.ring
       )}
     >
@@ -131,6 +143,9 @@ export default function ReferralsPage() {
   const setMinJobAmountInr = useReferralSettingsStore((s) => s.setMinJobAmountInr);
   const resetToDefaults = useReferralSettingsStore((s) => s.resetToDefaults);
 
+  const user = useAuthStore((s) => s.user);
+  const canEditReferrals = userCanEdit(user, "REFERRALS");
+
   const customers = useCustomerStore((s) => s.customers);
   const walletTransactions = useWalletStore((s) => s.transactions);
 
@@ -174,8 +189,9 @@ export default function ReferralsPage() {
     toast.message("Restored defaults");
   };
 
-  const rulesHelpText =
-    "Changes save to the server as you edit. Use Save referral rules to confirm, or Reset to restore defaults.";
+  const rulesHelpText = canEditReferrals
+    ? "Changes save to the server as you edit. Use Save referral rules to confirm, or Reset to restore defaults."
+    : "You can view referral rules here. Contact an admin to change them.";
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -272,7 +288,14 @@ export default function ReferralsPage() {
                   </p>
                 </div>
               </div>
-              <ToggleSwitch enabled={programEnabled} onToggle={() => setProgramEnabled(!programEnabled)} />
+              <ToggleSwitch
+                enabled={programEnabled}
+                disabled={!canEditReferrals}
+                onToggle={() => {
+                  if (!canEditReferrals) return;
+                  setProgramEnabled(!programEnabled);
+                }}
+              />
             </section>
 
             <RuleSection
@@ -285,6 +308,7 @@ export default function ReferralsPage() {
                   <Label className="text-xs sm:text-sm">Reward type</Label>
                   <Select
                     value={advocateRewardMode}
+                    disabled={!canEditReferrals}
                     onValueChange={(v) => setAdvocateRewardMode(v as ReferralRewardMode)}
                   >
                     <SelectTrigger className="h-9">
@@ -306,6 +330,7 @@ export default function ReferralsPage() {
                     min="0"
                     step={advocateRewardMode === "fixed_inr" ? "0.01" : "0.1"}
                     value={advocateAmount}
+                    disabled={!canEditReferrals}
                     onChange={(e) => setAdvocateAmount(e.target.value)}
                   />
                 </div>
@@ -326,6 +351,7 @@ export default function ReferralsPage() {
                   <Label className="text-xs sm:text-sm">Reward type</Label>
                   <Select
                     value={newCustomerRewardMode}
+                    disabled={!canEditReferrals}
                     onValueChange={(v) => setNewCustomerRewardMode(v as ReferralRewardMode)}
                   >
                     <SelectTrigger className="h-9">
@@ -347,6 +373,7 @@ export default function ReferralsPage() {
                     min="0"
                     step={newCustomerRewardMode === "fixed_inr" ? "0.01" : "0.1"}
                     value={newCustomerAmount}
+                    disabled={!canEditReferrals}
                     onChange={(e) => setNewCustomerAmount(e.target.value)}
                   />
                 </div>
@@ -369,6 +396,7 @@ export default function ReferralsPage() {
                   min="0"
                   step="0.01"
                   value={minJobAmountInr}
+                  disabled={!canEditReferrals}
                   onChange={(e) => setMinJobAmountInr(e.target.value)}
                 />
                 <p className="hidden text-xs text-muted-foreground md:block">
@@ -378,16 +406,18 @@ export default function ReferralsPage() {
             </RuleSection>
           </Card>
 
-          <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-2 border-t border-border bg-background/95 px-4 py-2.5 backdrop-blur-sm md:static md:inset-auto md:justify-end md:border-0 md:bg-transparent md:px-0 md:py-0 md:pt-2">
-            <Button type="button" variant="outline" size="sm" className="h-9 flex-1 md:flex-none" onClick={handleReset}>
-              Reset
-            </Button>
-            <Button type="button" size="sm" className="h-9 flex-1 gap-1.5 md:flex-none" onClick={handleSave}>
-              <Save className="h-3.5 w-3.5" />
-              <span className="sm:hidden">Save</span>
-              <span className="hidden sm:inline">Save referral rules</span>
-            </Button>
-          </div>
+          {canEditReferrals && (
+            <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-2 border-t border-border bg-background/95 px-4 py-2.5 backdrop-blur-sm md:static md:inset-auto md:justify-end md:border-0 md:bg-transparent md:px-0 md:py-0 md:pt-2">
+              <Button type="button" variant="outline" size="sm" className="h-9 flex-1 md:flex-none" onClick={handleReset}>
+                Reset
+              </Button>
+              <Button type="button" size="sm" className="h-9 flex-1 gap-1.5 md:flex-none" onClick={handleSave}>
+                <Save className="h-3.5 w-3.5" />
+                <span className="sm:hidden">Save</span>
+                <span className="hidden sm:inline">Save referral rules</span>
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="guide" className="mt-0 outline-none focus-visible:outline-none">

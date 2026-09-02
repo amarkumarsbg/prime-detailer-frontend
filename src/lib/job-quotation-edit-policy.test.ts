@@ -72,6 +72,13 @@ describe("JOB_CARD_PRICING permission", () => {
   it("canEditJobCardPricing requires permission and status/invoice lock", () => {
     expect(canEditJobCardPricing(staff, { status: "AWAITING_SERVICE" }, false)).toBe(false);
     expect(canEditJobCardPricing(priced, { status: "AWAITING_SERVICE" }, false)).toBe(true);
+    expect(
+      canEditJobCardPricing(
+        { ...staff, permissions: ["JOB_CARD_PRICING_EDIT"] },
+        { status: "AWAITING_SERVICE" },
+        false
+      )
+    ).toBe(true);
     expect(canEditJobCardPricing(priced, { status: "DELIVERED" }, false)).toBe(false);
     expect(canEditJobCardPricing(priced, { status: "AWAITING_SERVICE" }, true)).toBe(false);
     expect(canEditJobCardPricing(admin, { status: "AWAITING_SERVICE" }, false)).toBe(true);

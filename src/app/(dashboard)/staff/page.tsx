@@ -11,7 +11,6 @@ import Link from "next/link";
 import { useStaffStore } from "@/store/staff-store";
 import { useBranchStore } from "@/store/branch-store";
 import { useAuthStore } from "@/store/auth-store";
-import { useCustomerStore } from "@/store/customer-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { Badge } from "@/components/ui/badge";
 import { userCanEdit, userCanDelete } from "@/lib/rbac";
@@ -22,7 +21,6 @@ import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { resolveUploadsPublicUrl } from "@/lib/api-base";
@@ -31,14 +29,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getInitials } from "@/lib/utils";
 import { getStaffJobStats } from "@/lib/staff-job-stats";
 import { getAssignableStaffRoles, canManageStaffUsers, canCreateStaffAccounts, roleDisplayLabel } from "@/lib/rbac";
-import { validateStrongPassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -59,8 +55,6 @@ import {
   Building2,
   UserCheck,
   Eye,
-  EyeOff,
-  Info,
   Pencil,
   Trash2,
   SlidersHorizontal,
@@ -69,11 +63,14 @@ import {
   MailCheck,
   Loader2,
 } from "lucide-react";
-import type { User, UserRole, Customer } from "@/types";
+import type { User, UserRole } from "@/types";
 import { toast } from "sonner";
 import { pushActivityLog } from "@/lib/activity-log-helper";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
+import { StaffAccessSelector } from "@/components/staff/staff-access-selector";
+import type { StaffAccessLevel } from "@/lib/staff-access";
+import { buildInitialPermissions } from "@/lib/staff-role-defaults";
 
 const ROLE_BADGE_MAP: Record<
   UserRole,
@@ -155,6 +152,42 @@ const ALL_ROLES_FILTER: (UserRole | "ALL")[] = [
   "MECHANIC",
 ];
 
+/** Roles shown in the Add User form and Users tab (UI only — backend role values unchanged). */
+const ADD_USER_ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "BRANCH_MANAGER", label: "Branch Manager" },
+  { value: "MANAGER", label: "Manager" },
+  { value: "SUPERVISOR", label: "Supervisor" },
+  { value: "RECEPTIONIST", label: "Receptionist" },
+];
+
+const USER_DIRECTORY_ROLES = new Set<UserRole>(
+  ADD_USER_ROLE_OPTIONS.map((option) => option.value)
+);
+
+const USER_ROLES_FILTER: (UserRole | "ALL")[] = ["ALL", ...ADD_USER_ROLE_OPTIONS.map((o) => o.value)];
+
+const STAFF_ROLES_FILTER: (UserRole | "ALL")[] = ALL_ROLES_FILTER.filter(
+  (role) => role === "ALL" || !USER_DIRECTORY_ROLES.has(role)
+);
+
+/** Roles shown in the Add Staff form (Super Admin cannot be assigned here). */
+const ADD_STAFF_ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "MECHANIC", label: "Mechanic" },
+];
+
+function suggestAddUserEmail(name: string, phoneDigits: string, existingEmails: Set<string>): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "");
+  const base = `${slug || "user"}.${phoneDigits}`;
+  let email = `${base}@primecarwash.local`;
+  if (!existingEmails.has(email.toLowerCase())) return email;
+  return `${base}.${Date.now().toString(36)}@primecarwash.local`;
+}
+
 export default function StaffPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
@@ -168,54 +201,65 @@ export default function StaffPage() {
     authRole === "BRANCH_MANAGER" || authRole === "MANAGER";
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [addDialogMode, setAddDialogMode] = useState<"staff" | "users">("staff");
   const [creatingUser, setCreatingUser] = useState(false);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [deletingUserBusy, setDeletingUserBusy] = useState(false);
   const staff = useStaffStore((s) => s.staff);
   const addStaff = useStaffStore((s) => s.addStaff);
   const deleteStaff = useStaffStore((s) => s.deleteStaff);
-  const customers = useCustomerStore((s) => s.customers);
   const jobCards = useJobCardStore((s) => s.jobCards);
 
-  const [mainTab, setMainTab] = useState<"staff" | "customers">("staff");
+  const [mainTab, setMainTab] = useState<"staff" | "users">("staff");
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [filterRole, setFilterRole] = useState<UserRole | "ALL">("ALL");
+  const [filterUserRole, setFilterUserRole] = useState<UserRole | "ALL">("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [filterUserStatus, setFilterUserStatus] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
   const [tablePageSize, setTablePageSize] = useState(20);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [userFilterSheetOpen, setUserFilterSheetOpen] = useState(false);
 
   const activeStaffFilterCount =
     (filterRole !== "ALL" ? 1 : 0) +
     (filterStatus !== "ALL" ? 1 : 0) +
     (showBranchPicker && filterBranch !== "all" ? 1 : 0);
 
+  const activeUserFilterCount =
+    (filterUserRole !== "ALL" ? 1 : 0) +
+    (filterUserStatus !== "ALL" ? 1 : 0) +
+    (showBranchPicker && filterBranch !== "all" ? 1 : 0);
+
   const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
-  const [showAddUserPassword, setShowAddUserPassword] = useState(false);
-  const [newRole, setNewRole] = useState<UserRole>("MECHANIC");
+  const [newRole, setNewRole] = useState<UserRole>("BRANCH_MANAGER");
+  const [newAccess, setNewAccess] = useState<StaffAccessLevel>("withEditAccess");
   const [newBranchId, setNewBranchId] = useState(defaultBranchId);
-  const [newBirthday, setNewBirthday] = useState("");
-  const [newAnniversary, setNewAnniversary] = useState("");
-  const [newEmployeeCode, setNewEmployeeCode] = useState("");
-  const [newDesignation, setNewDesignation] = useState("");
-  const [newDepartment, setNewDepartment] = useState("");
-  const [newJoiningDate, setNewJoiningDate] = useState("");
-  const [newNotes, setNewNotes] = useState("");
-  const [newIsActive, setNewIsActive] = useState(true);
-  const [newIsAttendanceTracked, setNewIsAttendanceTracked] = useState(true);
-  const [newBaseSalary, setNewBaseSalary] = useState("");
 
   const assignableRoles = useMemo(() => getAssignableStaffRoles(authRole, authPermissions), [authRole, authPermissions]);
+  const addUserRoleOptions = useMemo(
+    () =>
+      ADD_USER_ROLE_OPTIONS.filter((option) => assignableRoles.includes(option.value)),
+    [assignableRoles]
+  );
+  const addStaffRoleOptions = useMemo(
+    () =>
+      ADD_STAFF_ROLE_OPTIONS.filter((option) => assignableRoles.includes(option.value)),
+    [assignableRoles]
+  );
+  const activeAddRoleOptions =
+    addDialogMode === "users" ? addUserRoleOptions : addStaffRoleOptions;
   const canManageUsers = canManageStaffUsers(authRole);
 
   useEffect(() => {
-    if (assignableRoles.length && !assignableRoles.includes(newRole)) {
-      queueMicrotask(() => setNewRole(assignableRoles[0]!));
+    if (!dialogOpen) return;
+    if (
+      activeAddRoleOptions.length &&
+      !activeAddRoleOptions.some((option) => option.value === newRole)
+    ) {
+      queueMicrotask(() => setNewRole(activeAddRoleOptions[0]!.value));
     }
-  }, [assignableRoles, newRole]);
+  }, [dialogOpen, activeAddRoleOptions, newRole]);
 
   useEffect(() => {
     if (branchLocked && authUser?.branchId) {
@@ -261,62 +305,67 @@ export default function StaffPage() {
     return map;
   }, [staff, jobCards]);
 
-  const resetAddForm = () => {
+  const branchScopedStaffOnly = useMemo(
+    () => branchScopedStaff.filter((s) => !USER_DIRECTORY_ROLES.has(s.role)),
+    [branchScopedStaff]
+  );
+
+  const branchScopedUsers = useMemo(
+    () => branchScopedStaff.filter((s) => USER_DIRECTORY_ROLES.has(s.role)),
+    [branchScopedStaff]
+  );
+
+  const resetAddForm = (mode: "staff" | "users" = addDialogMode) => {
     setNewName("");
-    setNewEmail("");
     setNewPhone("");
-    setNewPassword("");
-    setNewPasswordConfirm("");
-    setShowAddUserPassword(false);
-    setNewRole(assignableRoles[0] ?? "MECHANIC");
+    setNewRole(
+      mode === "users"
+        ? addUserRoleOptions[0]?.value ?? "BRANCH_MANAGER"
+        : addStaffRoleOptions.find((option) => option.value === "MECHANIC")?.value ??
+            addStaffRoleOptions[0]?.value ??
+            "MECHANIC"
+    );
+    setNewAccess("withEditAccess");
     setNewBranchId(branchLocked && authUser?.branchId ? authUser.branchId : defaultBranchId);
-    setNewBirthday("");
-    setNewAnniversary("");
-    setNewEmployeeCode("");
-    setNewDesignation("");
-    setNewDepartment("");
-    setNewJoiningDate("");
-    setNewNotes("");
-    setNewIsActive(true);
-    setNewIsAttendanceTracked(true);
-    setNewBaseSalary("");
+  };
+
+  const openAddDialog = (mode: "staff" | "users") => {
+    setAddDialogMode(mode);
+    resetAddForm(mode);
+    setDialogOpen(true);
   };
 
   const filteredStaff = useMemo(() => {
-    return branchScopedStaff.filter((s) => {
+    return branchScopedStaffOnly.filter((s) => {
       if (filterRole !== "ALL" && s.role !== filterRole) return false;
       if (filterStatus === "ACTIVE" && !s.isActive) return false;
       if (filterStatus === "INACTIVE" && s.isActive) return false;
       return true;
     });
-  }, [branchScopedStaff, filterRole, filterStatus]);
+  }, [branchScopedStaffOnly, filterRole, filterStatus]);
+
+  const filteredUsers = useMemo(() => {
+    return branchScopedUsers.filter((s) => {
+      if (filterUserRole !== "ALL" && s.role !== filterUserRole) return false;
+      if (filterUserStatus === "ACTIVE" && !s.isActive) return false;
+      if (filterUserStatus === "INACTIVE" && s.isActive) return false;
+      return true;
+    });
+  }, [branchScopedUsers, filterUserRole, filterUserStatus]);
 
   const staffStats = useMemo(() => {
-    const total = branchScopedStaff.length;
-    const active = branchScopedStaff.filter((s) => s.isActive).length;
-    const verified = branchScopedStaff.filter((s) => s.emailVerified).length;
+    const total = branchScopedStaffOnly.length;
+    const active = branchScopedStaffOnly.filter((s) => s.isActive).length;
+    const verified = branchScopedStaffOnly.filter((s) => s.emailVerified).length;
     return { total, active, inactive: total - active, verified };
-  }, [branchScopedStaff]);
+  }, [branchScopedStaffOnly]);
 
-  const branchScopedCustomers = useMemo(() => {
-    if (!selectedBranchId && (!showBranchPicker || filterBranch === "all")) {
-      return customers;
-    }
-    const branchId =
-      selectedBranchId ?? (filterBranch !== "all" ? filterBranch : null);
-    if (!branchId) return customers;
-    const customerIds = new Set(
-      jobCards.filter((jc) => jc.branchId === branchId).map((jc) => jc.customerId)
-    );
-    return customers.filter((c) => customerIds.has(c.id));
-  }, [customers, jobCards, selectedBranchId, showBranchPicker, filterBranch]);
-
-  const customerStats = useMemo(() => {
-    const total = branchScopedCustomers.length;
-    const inactive = branchScopedCustomers.filter((c) => c.isInactive).length;
-    const verified = branchScopedCustomers.filter((c) => c.emailVerified).length;
-    return { total, active: total - inactive, inactive, verified };
-  }, [branchScopedCustomers]);
+  const userStats = useMemo(() => {
+    const total = branchScopedUsers.length;
+    const active = branchScopedUsers.filter((s) => s.isActive).length;
+    const verified = branchScopedUsers.filter((s) => s.emailVerified).length;
+    return { total, active, inactive: total - active, verified };
+  }, [branchScopedUsers]);
 
   const columns = useMemo(
     () => [
@@ -497,57 +546,6 @@ export default function StaffPage() {
     [staff, branches, staffJobStatsById, canManageUsers, deletingUserBusy]
   );
 
-  const customerColumns = useMemo(
-    () => [
-      {
-        key: "id",
-        label: "ID",
-        render: (c: Customer) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            #{c.id.replace(/\D/g, "").slice(-4) || c.id}
-          </span>
-        ),
-      },
-      {
-        key: "name",
-        label: "Name",
-        render: (c: Customer) => (
-          <div>
-            <p className="font-medium">{c.name}</p>
-            <p className="text-xs text-muted-foreground">{c.email}</p>
-          </div>
-        ),
-      },
-      { key: "phone", label: "Phone" },
-      {
-        key: "totalVisits",
-        label: "Visits",
-        render: (c: Customer) => <span className="tabular-nums">{c.totalVisits}</span>,
-      },
-      {
-        key: "isInactive",
-        label: "Status",
-        render: (c: Customer) => (
-          <span
-            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${c.isInactive ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
-          >
-            {c.isInactive ? "Inactive" : "Active"}
-          </span>
-        ),
-      },
-      {
-        key: "actions",
-        label: "Actions",
-        render: (c: Customer) => (
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={`/customers/${c.id}`}>View</Link>
-          </Button>
-        ),
-      },
-    ],
-    []
-  );
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canCreateStaffAccounts(authRole)) {
@@ -555,10 +553,9 @@ export default function StaffPage() {
       return;
     }
     const name = newName.trim();
-    const email = newEmail.trim();
     const phone = newPhone.trim();
-    if (!name || !email || !phone) {
-      toast.error("Please enter name, email, and mobile.");
+    if (!name || !phone) {
+      toast.error("Please enter name and mobile number.");
       return;
     }
     // Accept formats like 9876543210, +919876543210, +91-98765-43210, etc.
@@ -568,44 +565,33 @@ export default function StaffPage() {
       toast.error("Please enter a valid 10-digit mobile number.");
       return;
     }
-    const pwd = newPassword.trim();
-    const pwdConfirm = newPasswordConfirm.trim();
-    if (pwd !== pwdConfirm) {
-      toast.error("Passwords do not match.");
+    if (!activeAddRoleOptions.some((option) => option.value === newRole)) {
+      toast.error("Please select a valid role.");
       return;
     }
-    if (pwd) {
-      const strength = validateStrongPassword(pwd);
-      if (strength) {
-        toast.error(strength);
-        return;
-      }
-    }
-    if (!assignableRoles.includes(newRole)) {
-      toast.error("You cannot assign that role.");
-      return;
-    }
-    const dup = staff.some((s) => s.email.toLowerCase() === email.toLowerCase());
-    if (dup) {
+    const existingEmails = new Set(staff.map((s) => s.email.toLowerCase()));
+    const email = suggestAddUserEmail(name, phoneDigits, existingEmails);
+    if (existingEmails.has(email.toLowerCase())) {
       toast.error("A staff member with this email already exists.");
       return;
     }
-    let finalEmployeeCode = newEmployeeCode.trim();
-    if (!finalEmployeeCode) {
-      let maxNumber = 0;
-      for (const s of staff) {
-        if (s.employeeCode && s.employeeCode.startsWith("EMP-")) {
-          const numStr = s.employeeCode.replace("EMP-", "");
-          const num = parseInt(numStr, 10);
-          if (!Number.isNaN(num) && num > maxNumber) {
-            maxNumber = num;
-          }
+    let maxNumber = 0;
+    for (const s of staff) {
+      if (s.employeeCode && s.employeeCode.startsWith("EMP-")) {
+        const numStr = s.employeeCode.replace("EMP-", "");
+        const num = parseInt(numStr, 10);
+        if (!Number.isNaN(num) && num > maxNumber) {
+          maxNumber = num;
         }
       }
-      finalEmployeeCode = `EMP-${String(maxNumber + 1).padStart(3, "0")}`;
     }
+    const finalEmployeeCode = `EMP-${String(maxNumber + 1).padStart(3, "0")}`;
 
     const branchId = branchLocked && authUser?.branchId ? authUser.branchId : newBranchId;
+    const permissions = buildInitialPermissions(
+      newRole,
+      addDialogMode === "users" ? newAccess : "withEditAccess"
+    );
     setCreatingUser(true);
     try {
       const { temporaryPassword, credentialsEmailSent } = await addStaff({
@@ -614,34 +600,27 @@ export default function StaffPage() {
         phone,
         role: newRole,
         branchId,
-        isActive: newIsActive,
-        ...(pwd ? { password: pwd } : {}),
-        ...(newBirthday.trim() ? { birthday: newBirthday.trim() } : {}),
-        ...(newAnniversary.trim() ? { anniversary: newAnniversary.trim() } : {}),
+        isActive: true,
         employeeCode: finalEmployeeCode,
-        ...(newDesignation.trim() ? { designation: newDesignation.trim() } : {}),
-        ...(newDepartment.trim() ? { department: newDepartment.trim() } : {}),
-        ...(newJoiningDate.trim() ? { joiningDate: newJoiningDate.trim() } : {}),
-        ...(newNotes.trim() ? { notes: newNotes.trim() } : {}),
-        isAttendanceTracked: newIsAttendanceTracked,
-        ...(newBaseSalary.trim() && !Number.isNaN(Number(newBaseSalary)) ? { baseSalary: Number(newBaseSalary) } : {}),
+        isAttendanceTracked: true,
+        ...(permissions.length > 0 ? { permissions } : {}),
       });
       pushActivityLog({
         action: "CREATED",
         entityType: "STAFF",
         entityId: email,
         entityLabel: name,
-        details: `Staff created${newEmployeeCode.trim() ? ` (${newEmployeeCode.trim()})` : ""}`,
+        details: `Staff created (${finalEmployeeCode})`,
       });
       if (temporaryPassword) {
-        toast.success("User created.", {
+        toast.success(addDialogMode === "users" ? "User created." : "Staff member created.", {
           description: `${credentialsEmailSent ? "Credentials emailed. " : ""}Temporary password (copy now — not stored): ${temporaryPassword}`,
           duration: credentialsEmailSent ? 20_000 : 45_000,
         });
       } else {
-        toast.success("User created successfully.");
+        toast.success(addDialogMode === "users" ? "User created successfully." : "Staff member created successfully.");
       }
-      resetAddForm();
+      resetAddForm(addDialogMode);
       setDialogOpen(false);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -670,318 +649,142 @@ export default function StaffPage() {
 
   if (!storesReady && staff.length === 0) return <PageSkeleton />;
 
+  const addAccountDialog = canCreateStaffAccounts(authRole) ? (
+    <Dialog
+      open={dialogOpen}
+      onOpenChange={(open) => {
+        setDialogOpen(open);
+        if (!open) resetAddForm(addDialogMode);
+      }}
+    >
+      <DialogContent className="sm:max-w-lg max-h-[min(90vh,720px)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{addDialogMode === "users" ? "Add User" : "Add Staff"}</DialogTitle>
+          <DialogDescription>
+            {addDialogMode === "users"
+              ? "Create an office user account with role and access level."
+              : "Create a workshop staff account such as a mechanic."}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="Enter full name"
+                required
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Mobile Number</Label>
+              <Input
+                id="phone"
+                placeholder="+91-9876543210"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                inputMode="tel"
+                autoComplete="tel"
+                required
+              />
+              {(() => {
+                const raw = newPhone.trim();
+                if (!raw) return null;
+                const digits = raw.replace(/[\s\-()]/g, "");
+                const core = digits.startsWith("+91") ? digits.slice(3) : digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
+                if (!/^\d{10}$/.test(core)) {
+                  return <p className="text-xs text-destructive">Enter a valid 10-digit mobile number.</p>;
+                }
+                return null;
+              })()}
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="role">{addDialogMode === "users" ? "User Role" : "Staff Role"}</Label>
+              <Select
+                required
+                disabled={activeAddRoleOptions.length === 0}
+                value={newRole}
+                onValueChange={(v) => setNewRole(v as UserRole)}
+              >
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeAddRoleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {addDialogMode === "users" ? (
+              <div className="space-y-2 sm:col-span-2">
+                <StaffAccessSelector
+                  value={newAccess}
+                  onChange={setNewAccess}
+                  name="add-user-access"
+                />
+              </div>
+            ) : null}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={creatingUser}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={creatingUser || activeAddRoleOptions.length === 0}>
+              {creatingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {creatingUser ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  ) : null;
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <RefreshingBar show={!storesReady} />
       <PageHeader
-        title="Users Management"
-        description="Directory and attendance PINs for staff. Super Admin and Admin can create accounts (no public signup)."
+        title="Users & Staff"
+        description="Manage staff accounts, office users, roles, and attendance PINs."
         hideDescriptionOnMobile
         inlineActionsOnMobile
         actions={
           <div className="flex flex-wrap gap-2">
-            {mainTab === "customers" ? (
-              <Button size="sm" className="shrink-0 whitespace-nowrap" asChild>
-                <Link href="/customers">
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Add customer
-                </Link>
+            {canCreateStaffAccounts(authRole) && mainTab === "staff" ? (
+              <Button
+                size="sm"
+                className="shrink-0 whitespace-nowrap"
+                onClick={() => openAddDialog("staff")}
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                Add Staff
               </Button>
-            ) : (
-              canCreateStaffAccounts(authRole) && (
-                <Dialog
-                  open={dialogOpen}
-                  onOpenChange={(open) => {
-                    setDialogOpen(open);
-                    if (!open) resetAddForm();
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <Button size="sm" className="shrink-0 whitespace-nowrap">
-                      <Plus className="w-4 h-4 mr-1.5" />
-                      Add Staff
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg max-h-[min(90vh,720px)] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Add New User</DialogTitle>
-                      <DialogDescription>
-                        Assign role and branch. Leave password blank for an auto-generated temporary password (also emailed when Resend is configured).
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2 sm:col-span-2">
-                          <Label htmlFor="name">Full Name</Label>
-                          <Input
-                            id="name"
-                            placeholder="Enter full name"
-                            required
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            autoComplete="name"
-                          />
-                        </div>
-                        <div className="space-y-2 sm:col-span-2">
-                          <Label htmlFor="email">Email</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            placeholder="email@primecarwash.com"
-                            required
-                            value={newEmail}
-                            onChange={(e) => setNewEmail(e.target.value)}
-                            autoComplete="email"
-                          />
-                        </div>
-                        <div className="space-y-2 sm:col-span-2">
-                          <Label htmlFor="phone">Mobile</Label>
-                          <Input
-                            id="phone"
-                            placeholder="+91-9876543210"
-                            value={newPhone}
-                            onChange={(e) => setNewPhone(e.target.value)}
-                            inputMode="tel"
-                            autoComplete="tel"
-                            required
-                          />
-                          {(() => {
-                            const raw = newPhone.trim();
-                            if (!raw) return null;
-                            const digits = raw.replace(/[\s\-()]/g, "");
-                            const core = digits.startsWith("+91") ? digits.slice(3) : digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
-                            if (!/^\d{10}$/.test(core)) {
-                              return <p className="text-xs text-destructive">Enter a valid 10-digit mobile number.</p>;
-                            }
-                            return null;
-                          })()}
-                        </div>
-                        <p className="text-xs text-muted-foreground sm:col-span-2">
-                          Optional manual password — {PASSWORD_POLICY_HINT} Leave both fields blank to generate a compliant temporary password automatically.
-                        </p>
-                        <div className="space-y-2">
-                          <Label htmlFor="new-password">Password</Label>
-                          <div className="relative">
-                            <Input
-                              id="new-password"
-                              type={showAddUserPassword ? "text" : "password"}
-                              placeholder="Leave blank to auto-generate"
-                              value={newPassword}
-                              onChange={(e) => setNewPassword(e.target.value)}
-                              className="pr-10"
-                              autoComplete="new-password"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowAddUserPassword((v) => !v)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              aria-label={showAddUserPassword ? "Hide password" : "Show password"}
-                            >
-                              {showAddUserPassword ? (
-                                <EyeOff className="w-4 h-4" />
-                              ) : (
-                                <Eye className="w-4 h-4" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="new-password-confirm">Confirm password</Label>
-                          <div className="relative">
-                            <Input
-                              id="new-password-confirm"
-                              type={showAddUserPassword ? "text" : "password"}
-                              placeholder="Repeat if setting manually"
-                              value={newPasswordConfirm}
-                              onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                              className="pr-10"
-                              autoComplete="new-password"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowAddUserPassword((v) => !v)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              aria-label={showAddUserPassword ? "Hide password" : "Show password"}
-                            >
-                              {showAddUserPassword ? (
-                                <EyeOff className="w-4 h-4" />
-                              ) : (
-                                <Eye className="w-4 h-4" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="role">Role</Label>
-                          <Select
-                            required
-                            disabled={assignableRoles.length === 0}
-                            value={newRole}
-                            onValueChange={(v) => setNewRole(v as UserRole)}
-                          >
-                            <SelectTrigger id="role">
-                              <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {assignableRoles.map((r) => (
-                                <SelectItem key={r} value={r}>
-                                  {roleDisplayLabel(r)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="branch">Branch</Label>
-                          <Select
-                            required
-                            value={newBranchId}
-                            onValueChange={setNewBranchId}
-                            disabled={branchLocked}
-                          >
-                            <SelectTrigger id="branch">
-                              <SelectValue placeholder="Select branch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {branches.filter((b) => b.isActive).map((b) => (
-                                <SelectItem key={b.id} value={b.id}>
-                                  {b.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {branchLocked && authUser && (
-                            <div className="flex gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-                              <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                              <p>
-                                <span className="font-medium">Your branch.</span> New users are assigned to{" "}
-                                <span className="font-medium">
-                                  {branches.find((b) => b.id === authUser.branchId)?.name ?? "your branch"}
-                                </span>{" "}
-                                automatically.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="employeeCode">Employee Code</Label>
-                          <Input
-                            id="employeeCode"
-                            placeholder="e.g. EMP-001"
-                            value={newEmployeeCode}
-                            onChange={(e) => setNewEmployeeCode(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="designation">Designation</Label>
-                          <Input
-                            id="designation"
-                            placeholder="e.g. Lead Detailer"
-                            value={newDesignation}
-                            onChange={(e) => setNewDesignation(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="department">Department</Label>
-                          <Input
-                            id="department"
-                            placeholder="e.g. Workshop"
-                            value={newDepartment}
-                            onChange={(e) => setNewDepartment(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="joiningDate">Joining Date</Label>
-                          <Input
-                            id="joiningDate"
-                            type="date"
-                            className="date-input-icon-end pr-9"
-                            value={newJoiningDate}
-                            onChange={(e) => setNewJoiningDate(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="baseSalary">Basic Salary (₹)</Label>
-                          <Input
-                            id="baseSalary"
-                            inputMode="numeric"
-                            placeholder="e.g. 15000"
-                            value={newBaseSalary}
-                            onChange={(e) => setNewBaseSalary(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="birthday">Date of Birth</Label>
-                          <Input
-                            id="birthday"
-                            type="date"
-                            className="date-input-icon-end pr-9"
-                            value={newBirthday}
-                            onChange={(e) => setNewBirthday(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="anniversary">Anniversary</Label>
-                          <Input
-                            id="anniversary"
-                            type="date"
-                            className="date-input-icon-end pr-9"
-                            value={newAnniversary}
-                            onChange={(e) => setNewAnniversary(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2 sm:col-span-2">
-                          <Label htmlFor="staffNotes">Notes</Label>
-                          <Input
-                            id="staffNotes"
-                            placeholder="Optional notes"
-                            value={newNotes}
-                            onChange={(e) => setNewNotes(e.target.value)}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2 sm:col-span-2 pt-1">
-                          <Checkbox
-                            id="new-active"
-                            checked={newIsActive}
-                            onCheckedChange={(c) => setNewIsActive(c === true)}
-                          />
-                          <Label htmlFor="new-active" className="text-sm font-normal cursor-pointer">
-                            Active account
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-2 sm:col-span-2 pt-1">
-                          <Checkbox
-                            id="new-track-attendance"
-                            checked={newIsAttendanceTracked}
-                            onCheckedChange={(c) => setNewIsAttendanceTracked(c === true)}
-                          />
-                          <Label htmlFor="new-track-attendance" className="text-sm font-normal cursor-pointer">
-                            Track Attendance for Payroll
-                          </Label>
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={creatingUser}>
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={creatingUser}>
-                          {creatingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          {creatingUser ? "Creating..." : "Create User"}
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              )
-            )}
+            ) : null}
+            {canCreateStaffAccounts(authRole) && mainTab === "users" ? (
+              <Button
+                size="sm"
+                className="shrink-0 whitespace-nowrap"
+                onClick={() => openAddDialog("users")}
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                Add User
+              </Button>
+            ) : null}
           </div>
         }
       />
 
-      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "staff" | "customers")}>
+      {addAccountDialog}
+
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "staff" | "users")}>
         <TabsList>
           <TabsTrigger value="staff">Staff</TabsTrigger>
-          <TabsTrigger value="customers">Customers</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
 
         <TabsContent value="staff" className="mt-4 flex flex-col gap-3 md:gap-4">
@@ -1060,7 +863,7 @@ export default function StaffPage() {
           <div className="order-2 grid grid-cols-2 gap-2 md:order-1 lg:grid-cols-4 md:gap-3">
             <KPICard
               size="compact"
-              title="Total users"
+              title="Total staff"
               value={staffStats.total}
               icon={Users}
               tone="violet"
@@ -1127,7 +930,7 @@ export default function StaffPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {ALL_ROLES_FILTER.map((r) => (
+                      {STAFF_ROLES_FILTER.map((r) => (
                         <SelectItem key={r} value={r}>
                           {r === "ALL" ? "All roles" : roleDisplayLabel(r)}
                         </SelectItem>
@@ -1225,7 +1028,7 @@ export default function StaffPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ALL_ROLES_FILTER.map((r) => (
+                  {STAFF_ROLES_FILTER.map((r) => (
                     <SelectItem key={r} value={r}>
                       {r === "ALL" ? "All roles" : roleDisplayLabel(r)}
                     </SelectItem>
@@ -1270,43 +1073,85 @@ export default function StaffPage() {
           </MobileFilterSheet>
         </TabsContent>
 
-        <TabsContent value="customers" className="mt-4 flex flex-col gap-3 md:gap-4">
-          <div className="order-1 md:order-2">
-          <DataTable
-            data={branchScopedCustomers}
-            columns={customerColumns}
-            searchPlaceholder="Search customers…"
-            searchKeys={["name", "email", "phone", "id"]}
-            pageSize={tablePageSize}
-            onRowClick={(c) => router.push(`/customers/${c.id}`)}
-            renderMobileCard={(item) => {
-              const c = item as Customer;
-              return (
-                <>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold leading-tight text-foreground">{c.name}</p>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${c.isInactive ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
-                    >
-                      {c.isInactive ? "Inactive" : "Active"}
+        <TabsContent value="users" className="mt-4 flex flex-col gap-3 md:gap-4">
+          <div className="order-1 md:order-3">
+            <h2 className="mb-2 text-sm font-semibold">Users list</h2>
+            <DataTable
+              data={filteredUsers}
+              columns={columns}
+              searchPlaceholder="Search users…"
+              searchKeys={["name", "email", "phone", "role", "id"]}
+              pageSize={tablePageSize}
+              onRowClick={(item) => router.push(`/staff/${item.id}`)}
+              actions={
+                <Button
+                  type="button"
+                  variant={activeUserFilterCount > 0 ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs md:hidden"
+                  onClick={() => setUserFilterSheetOpen(true)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+                  Filters
+                  {activeUserFilterCount > 0 ? (
+                    <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[10px] font-semibold leading-none">
+                      {activeUserFilterCount}
                     </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{c.email}</p>
-                  <p className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>{c.phone}</span>
-                    <span className="tabular-nums">{c.totalVisits} visits</span>
-                  </p>
-                </>
-              );
-            }}
-          />
+                  ) : null}
+                </Button>
+              }
+              renderMobileCard={(item) => {
+                const u = item as User;
+                const badge = roleBadgeFor(u.role);
+                const Icon = badge.icon;
+                const branch = branches.find((b) => b.id === u.branchId);
+                return (
+                  <>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar className="size-8 shrink-0">
+                        {resolveUploadsPublicUrl(u.avatar) ? (
+                          <AvatarImage src={resolveUploadsPublicUrl(u.avatar)!} alt="" className="object-cover" />
+                        ) : null}
+                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+                          {getInitials(u.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold leading-tight text-foreground">
+                          {u.name}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">{u.email}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${u.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}
+                      >
+                        {u.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.className}`}
+                      >
+                        <Icon className="size-2.5 shrink-0" />
+                        {badge.label}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {u.phone?.trim() || "No phone"}
+                        {showBranchPicker ? ` · ${branch?.name ?? "—"}` : ""}
+                      </span>
+                    </div>
+                  </>
+                );
+              }}
+            />
           </div>
+
           <div className="order-2 grid grid-cols-2 gap-2 md:order-1 lg:grid-cols-4 md:gap-3">
             <KPICard
               size="compact"
-              title="Total customers"
-              value={customerStats.total}
-              icon={Users}
+              title="Total users"
+              value={userStats.total}
+              icon={UserCog}
               tone="violet"
               titleClassName="text-[11px] leading-tight sm:text-xs"
               valueClassName="text-lg sm:text-xl"
@@ -1314,7 +1159,7 @@ export default function StaffPage() {
             <KPICard
               size="compact"
               title="Active"
-              value={customerStats.active}
+              value={userStats.active}
               icon={UserCheck}
               tone="emerald"
               titleClassName="text-[11px] leading-tight sm:text-xs"
@@ -1323,7 +1168,7 @@ export default function StaffPage() {
             <KPICard
               size="compact"
               title="Inactive"
-              value={customerStats.inactive}
+              value={userStats.inactive}
               icon={UserX}
               tone="rose"
               titleClassName="text-[11px] leading-tight sm:text-xs"
@@ -1332,13 +1177,186 @@ export default function StaffPage() {
             <KPICard
               size="compact"
               title="Verified email"
-              value={customerStats.verified}
+              value={userStats.verified}
               icon={MailCheck}
               tone="blue"
               titleClassName="text-[11px] leading-tight sm:text-xs"
               valueClassName="text-lg sm:text-xl"
             />
           </div>
+
+          <Card className="order-3 hidden md:order-2 md:block">
+            <CardContent className="flex flex-col gap-3 p-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {showBranchPicker ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Filter by branch</Label>
+                    <Select value={filterBranch} onValueChange={setFilterBranch}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All branches</SelectItem>
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Filter by role</Label>
+                  <Select
+                    value={filterUserRole}
+                    onValueChange={(v) => setFilterUserRole(v as UserRole | "ALL")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_ROLES_FILTER.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r === "ALL"
+                            ? "All roles"
+                            : ADD_USER_ROLE_OPTIONS.find((option) => option.value === r)?.label ??
+                              roleDisplayLabel(r)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Filter by status</Label>
+                  <Select
+                    value={filterUserStatus}
+                    onValueChange={(v) => setFilterUserStatus(v as typeof filterUserStatus)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All status</SelectItem>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="INACTIVE">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Items per page</Label>
+                  <Select
+                    value={String(tablePageSize)}
+                    onValueChange={(v) => setTablePageSize(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[10, 20, 50].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {showBranchPicker ? (
+                <p className="text-xs text-muted-foreground">
+                  Showing users for:{" "}
+                  <span className="font-medium text-foreground">{branchScopeLabel}</span>
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <MobileFilterSheet
+            open={userFilterSheetOpen}
+            onOpenChange={setUserFilterSheetOpen}
+            title="User filters"
+            activeCount={activeUserFilterCount}
+            onReset={() => {
+              setFilterBranch("all");
+              setFilterUserRole("ALL");
+              setFilterUserStatus("ALL");
+              setTablePageSize(20);
+            }}
+          >
+            {showBranchPicker ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Branch</p>
+                <Select value={filterBranch} onValueChange={setFilterBranch}>
+                  <SelectTrigger className="h-10 w-full bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All branches</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Role</p>
+              <Select
+                value={filterUserRole}
+                onValueChange={(v) => setFilterUserRole(v as UserRole | "ALL")}
+              >
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {USER_ROLES_FILTER.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r === "ALL"
+                        ? "All roles"
+                        : ADD_USER_ROLE_OPTIONS.find((option) => option.value === r)?.label ??
+                          roleDisplayLabel(r)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Status</p>
+              <Select
+                value={filterUserStatus}
+                onValueChange={(v) => setFilterUserStatus(v as typeof filterUserStatus)}
+              >
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All status</SelectItem>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Items per page</p>
+              <Select
+                value={String(tablePageSize)}
+                onValueChange={(v) => setTablePageSize(Number(v))}
+              >
+                <SelectTrigger className="h-10 w-full bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </MobileFilterSheet>
         </TabsContent>
       </Tabs>
 

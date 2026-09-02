@@ -46,7 +46,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
-import { userHasPermission, userCanDelete } from "@/lib/rbac";
+import { userCanDelete, userCanEdit, userHasPermission } from "@/lib/rbac";
 import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { buildJobCardTemplateMessage, defaultWhatsAppTemplateForStatus } from "@/lib/job-card-whatsapp-templates";
@@ -169,6 +169,7 @@ const STATUS_BADGE_STYLES: Record<JobCardStatus, string> = {
 
 export default function JobCardsPage() {
   const user = useAuthStore((s) => s.user);
+  const canEditJobCards = userCanEdit(user, "JOB_CARDS");
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
   const jobCards = useJobCardStore((s) => s.jobCards);
@@ -923,8 +924,12 @@ export default function JobCardsPage() {
                               }}
                               className="gap-2 text-xs"
                             >
-                              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                              Edit Job Card
+                              {canEditJobCards ? (
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                              )}
+                              {canEditJobCards ? "Edit Job Card" : "View Job Card"}
                             </DropdownMenuItem>
                             {(() => {
                               const invoice = invoices.find((inv) => inv.jobCardId === jc.id);

@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/tooltip";
 import { ImportCustomersDialog } from "@/components/customers/import-customers-dialog";
 import { useCustomerStore } from "@/store/customer-store";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanCreate } from "@/lib/rbac";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { useJobCardStore } from "@/store/job-card-store";
 import { useDashboardFilterStore, DASHBOARD_FILTER } from "@/store/dashboard-filter-store";
@@ -116,6 +118,8 @@ function safeNumber(value: unknown, fallback = 0): number {
 export default function CustomersPage() {
   const storesReady = useDashboardStoresReady();
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const canCreateCustomers = userCanCreate(user, "CUSTOMERS");
   
   const filteredData = useCustomerStore((s) => s.customers);
   const total = useCustomerStore((s) => s.total);
@@ -493,33 +497,37 @@ export default function CustomersPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={() => setImportDialogOpen(true)}
-                    aria-label="Import customers"
-                  >
-                    <Upload className="h-4 w-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Import</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="sm:hidden">
-                  Import
-                </TooltipContent>
-              </Tooltip>
-              <Button
-                size="sm"
-                className="min-w-0 flex-1 whitespace-nowrap sm:flex-none"
-                onClick={() => setAddDialogOpen(true)}
-                aria-label="Add customer"
-              >
-                <Plus className="mr-1.5 h-4 w-4 shrink-0" />
-                <span className="sm:hidden">Add</span>
-                <span className="hidden sm:inline">Add Customer</span>
-              </Button>
+              {canCreateCustomers && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => setImportDialogOpen(true)}
+                      aria-label="Import customers"
+                    >
+                      <Upload className="h-4 w-4 sm:mr-1.5" />
+                      <span className="hidden sm:inline">Import</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="sm:hidden">
+                    Import
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {canCreateCustomers && (
+                <Button
+                  size="sm"
+                  className="min-w-0 flex-1 whitespace-nowrap sm:flex-none"
+                  onClick={() => setAddDialogOpen(true)}
+                  aria-label="Add customer"
+                >
+                  <Plus className="mr-1.5 h-4 w-4 shrink-0" />
+                  <span className="sm:hidden">Add</span>
+                  <span className="hidden sm:inline">Add Customer</span>
+                </Button>
+              )}
             </div>
           </TooltipProvider>
         }

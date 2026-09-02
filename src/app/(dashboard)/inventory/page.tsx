@@ -71,6 +71,7 @@ import { isLowStockPart } from "@/lib/dashboard-filters";
 import { FilterBanner } from "@/components/shared/filter-banner";
 import { useAuthStore } from "@/store/auth-store";
 import { useBranchStore } from "@/store/branch-store";
+import { userCanCreate, userCanDelete, userCanEdit } from "@/lib/rbac";
 import { useDashboardStoresReady } from "@/hooks/use-dashboard-stores-ready";
 import { PageSkeleton, RefreshingBar } from "@/components/shared/skeleton-loader";
 
@@ -80,6 +81,9 @@ export default function InventoryPage() {
   const storesReady = useDashboardStoresReady();
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const user = useAuthStore((s) => s.user);
+  const canEditInventory = userCanEdit(user, "INVENTORY");
+  const canCreateInventory = userCanCreate(user, "INVENTORY");
+  const canDeleteInventory = userCanDelete(user, "INVENTORY");
   const branches = useBranchStore((s) => s.branches);
   const performedBy = user?.id ?? "unknown";
   const activeFilter = useDashboardFilterStore((s) => s.activeFilter);
@@ -125,9 +129,21 @@ export default function InventoryPage() {
   }, []);
 
   const openEditPart = useCallback((part: Part) => {
+    if (!canEditInventory) {
+      toast.error("You do not have permission to edit catalog items.");
+      return;
+    }
     setEditingPart(part);
     setAddDialogOpen(true);
-  }, []);
+  }, [canEditInventory]);
+
+  const openDeletePart = useCallback((part: Part) => {
+    if (!canDeleteInventory) {
+      toast.error("You do not have permission to delete catalog items.");
+      return;
+    }
+    setDeleteTarget(part);
+  }, [canDeleteInventory]);
 
   const partsForTable = useMemo(() => {
     let list = scopedParts;
@@ -192,12 +208,10 @@ export default function InventoryPage() {
       return;
     }
     setInventoryTab("purchases");
-    setOpenPurchaseRequest({ purchaseId: meta.purchaseId, token: Date.now() });
-  }, [latestPurchaseByPartId]);
-
-  const openDeletePart = useCallback((part: Part) => {
-    setDeleteTarget(part);
-  }, []);
+    if (canEditInventory) {
+      setOpenPurchaseRequest({ purchaseId: meta.purchaseId, token: Date.now() });
+    }
+  }, [latestPurchaseByPartId, canEditInventory]);
 
   const deleteLinkedServiceCount = useMemo(() => {
     if (!deleteTarget) return 0;
@@ -485,10 +499,11 @@ export default function InventoryPage() {
         hideDescriptionOnMobile
         actions={
           <div className="flex flex-wrap gap-2">
-            <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">Adjust quantity</Button>
-              </DialogTrigger>
+            {canEditInventory && (
+              <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">Adjust quantity</Button>
+                </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Adjust on-hand quantity</DialogTitle>
@@ -550,23 +565,28 @@ export default function InventoryPage() {
                 </form>
               </DialogContent>
             </Dialog>
-            <Button
-              onClick={() => {
-                setInventoryTab("purchases");
-                setOpenCreatePurchaseToken((v) => v + 1);
-              }}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create purchase
-            </Button>
-            <CatalogItemFormDialog
-              open={addDialogOpen}
-              onOpenChange={(open) => {
-                setAddDialogOpen(open);
-                if (!open) setEditingPart(null);
-              }}
-              editingPart={editingPart}
-            />
+            )}
+            {canCreateInventory && (
+              <Button
+                onClick={() => {
+                  setInventoryTab("purchases");
+                  setOpenCreatePurchaseToken((v) => v + 1);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create purchase
+              </Button>
+            )}
+            {(canCreateInventory || canEditInventory) && (
+              <CatalogItemFormDialog
+                open={addDialogOpen}
+                onOpenChange={(open) => {
+                  setAddDialogOpen(open);
+                  if (!open) setEditingPart(null);
+                }}
+                editingPart={editingPart}
+              />
+            )}
           </div>
         }
       />

@@ -43,6 +43,7 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { sortByNewest } from "@/lib/sort-by-date";
 import { appointmentIsEditable } from "@/lib/appointment-edit-policy";
 import { EditReservationDialog } from "@/components/reservations/edit-reservation-dialog";
+import { userCanEdit } from "@/lib/rbac";
 import type { Appointment, Invoice, JobCard, JobCardStatus } from "@/types";
 import {
   Plus,
@@ -130,6 +131,7 @@ export default function BookingsPage() {
   const invoices = useInvoiceStore((s) => s.invoices);
   const currentBranch = useAuthStore((s) => s.currentBranch);
   const authUser = useAuthStore((s) => s.user);
+  const canEditBookings = userCanEdit(authUser, "BOOKINGS");
   const branches = useBranchStore((s) => s.branches);
   const { selectedBranchId, showBranchPicker } = useBranchScope();
   const appointments = useAppointmentStore((s) => s.appointments);
@@ -582,7 +584,7 @@ export default function BookingsPage() {
 
                   {/* Footer */}
                   <div className="mx-5 border-t border-border/50 py-3 flex items-center gap-2">
-                    {appointmentIsEditable(apt) && (
+                    {canEditBookings && appointmentIsEditable(apt) && (
                       <button
                         type="button"
                         className="flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
@@ -767,7 +769,7 @@ export default function BookingsPage() {
                       {apt.serviceType}
                     </p>
                     <div className="mt-3 flex flex-col gap-2">
-                      {appointmentIsEditable(apt) ? (
+                      {canEditBookings && appointmentIsEditable(apt) ? (
                         <Button
                           type="button"
                           variant="outline"
@@ -834,7 +836,7 @@ export default function BookingsPage() {
                         </td>
                         <td className="p-3 text-right">
                           <div className="inline-flex flex-wrap justify-end gap-1.5">
-                            {appointmentIsEditable(apt) ? (
+                            {canEditBookings && appointmentIsEditable(apt) ? (
                               <Button
                                 type="button"
                                 size="sm"
