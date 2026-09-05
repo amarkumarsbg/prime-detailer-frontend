@@ -416,7 +416,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     if (!member) return;
     setSavingAccess(true);
     try {
-      const permissions = permissionsForStaffAccessLevel(member.permissions, accessLevel);
+      const permissions = permissionsForStaffAccessLevel(member.permissions, accessLevel, member.role);
       const result = await updateStaff(member.id, { permissions });
       if (result.ok) {
         toast.success("Access updated successfully.");

@@ -26,15 +26,27 @@ export function deriveStaffAccessLevel(permissions: string[] | undefined): Staff
   return "withoutEditAccess";
 }
 
+import { getDefaultModuleKeysForRole } from "@/lib/staff-role-defaults";
+import type { UserRole } from "@/types";
+
 /**
  * Map the simplified access choice onto the existing permissions array shape.
  * Uses granular CREATE / VIEW / EDIT keys only — no API contract changes.
  */
 export function permissionsForStaffAccessLevel(
   current: string[] | undefined,
-  level: StaffAccessLevel
+  level: StaffAccessLevel,
+  role?: UserRole
 ): string[] {
-  const expanded = expandLegacyBaseKeys(current ?? []).filter((p) => !p.endsWith("_DELETE"));
+  let basePerms = current ?? [];
+  // If the user has no permissions (e.g. legacy or cleared), applying "With Edit Access"
+  // should bootstrap them with their role defaults so they don't get stuck with nothing.
+  if (basePerms.length === 0 && role) {
+    const defaultModules = getDefaultModuleKeysForRole(role);
+    basePerms = defaultModules.flatMap(m => [`${m}_CREATE`, `${m}_VIEW`]);
+  }
+
+  const expanded = expandLegacyBaseKeys(basePerms).filter((p) => !p.endsWith("_DELETE"));
 
   if (level === "withoutEditAccess") {
     return expanded.filter((p) => !p.endsWith("_EDIT") && !MODULE_KEYS.has(p));
