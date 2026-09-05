@@ -14,8 +14,8 @@ export function ServiceAddonCard({
   onDelete,
 }: {
   service: ServiceCatalogItem;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const scope = service.scope ?? "GLOBAL";
 
@@ -80,24 +80,28 @@ export function ServiceAddonCard({
         </div>
 
         <div className="mt-auto flex flex-row gap-2 pt-3">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 min-w-0 flex-1 gap-1 border-emerald-300 px-2 text-emerald-700 hover:bg-emerald-50 sm:h-8 sm:flex-none sm:px-3"
-            onClick={onEdit}
-          >
-            <Pencil className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Edit</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 min-w-0 flex-1 gap-1 border-destructive/30 px-2 text-destructive hover:bg-destructive/10 sm:h-8 sm:flex-none sm:px-3"
-            onClick={onDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Delete</span>
-          </Button>
+          {onEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 min-w-0 flex-1 gap-1 border-emerald-300 px-2 text-emerald-700 hover:bg-emerald-50 sm:h-8 sm:flex-none sm:px-3"
+              onClick={onEdit}
+            >
+              <Pencil className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Edit</span>
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 min-w-0 flex-1 gap-1 border-destructive/30 px-2 text-destructive hover:bg-destructive/10 sm:h-8 sm:flex-none sm:px-3"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Delete</span>
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

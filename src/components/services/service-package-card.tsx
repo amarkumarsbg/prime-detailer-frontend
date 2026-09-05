@@ -31,8 +31,8 @@ export function ServicePackageCard({
   onDelete,
 }: {
   service: ServiceCatalogItem;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const gstOn = isGstRegistered(useSettingsStore((s) => s.gstRegistrationStatus));
   const scope = service.scope ?? "GLOBAL";
@@ -148,24 +148,28 @@ export function ServicePackageCard({
               <span className="truncate text-xs">Parts</span>
             </Link>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1 border-emerald-200 px-1.5 text-emerald-700 sm:h-8 sm:px-2"
-            onClick={onEdit}
-          >
-            <Pencil className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate text-xs">Edit</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1 border-destructive/30 px-1.5 text-destructive hover:bg-destructive/10 sm:h-8 sm:px-2"
-            onClick={onDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate text-xs">Delete</span>
-          </Button>
+          {onEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1 border-emerald-200 px-1.5 text-emerald-700 sm:h-8 sm:px-2"
+              onClick={onEdit}
+            >
+              <Pencil className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate text-xs">Edit</span>
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1 border-destructive/30 px-1.5 text-destructive hover:bg-destructive/10 sm:h-8 sm:px-2"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate text-xs">Delete</span>
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -45,8 +45,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth-store";
+import { userCanEdit, userCanDelete, userCanCreate } from "@/lib/rbac";
 
 export default function ServicesPage() {
+  const authUser = useAuthStore((s) => s.user);
+  const canEdit = userCanEdit(authUser, "SERVICES");
+  const canDelete = userCanDelete(authUser, "SERVICES");
+  const canCreate = userCanCreate(authUser, "SERVICES");
+
   const catalog = useServiceCatalogStore((s) => s.catalog);
   const setCatalog = useServiceCatalogStore((s) => s.setCatalog);
   const removeFromCatalog = useServiceCatalogStore((s) => s.removeFromCatalog);
@@ -248,35 +255,39 @@ export default function ServicesPage() {
 
   const headerActions = (
     <>
-      <div className="flex items-center gap-1.5 sm:hidden">
-        <Button
-          size="sm"
-          className="h-9 shrink-0 px-2.5"
-          onClick={() => setPackageDialogOpen(true)}
-        >
-          <Plus className="mr-1 h-4 w-4" />
-          Service
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-9 shrink-0 px-2.5"
-          onClick={() => setAddonDialogOpen(true)}
-        >
-          <Plus className="mr-1 h-4 w-4" />
-          Add-on
-        </Button>
-      </div>
-      <div className="hidden gap-2 sm:flex">
-        <Button className="gap-2" onClick={() => setPackageDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add Service
-        </Button>
-        <Button variant="outline" className="gap-2" onClick={() => setAddonDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add Add-on
-        </Button>
-      </div>
+      {canCreate && (
+        <div className="flex items-center gap-1.5 sm:hidden">
+          <Button
+            size="sm"
+            className="h-9 shrink-0 px-2.5"
+            onClick={() => setPackageDialogOpen(true)}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Service
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 shrink-0 px-2.5"
+            onClick={() => setAddonDialogOpen(true)}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Add-on
+          </Button>
+        </div>
+      )}
+      {canCreate && (
+        <div className="hidden gap-2 sm:flex">
+          <Button className="gap-2" onClick={() => setPackageDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add Service
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setAddonDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add Add-on
+          </Button>
+        </div>
+      )}
       <AddServicePackageDialog
         open={packageDialogOpen}
         onOpenChange={setPackageDialogOpen}
@@ -449,11 +460,11 @@ export default function ServicesPage() {
               <ServicePackageCard
                 key={service.id}
                 service={service}
-                onEdit={() => {
+                onEdit={canEdit ? () => {
                   setEditTarget(service);
                   setEditOpen(true);
-                }}
-                onDelete={() => setDeleteTarget(service)}
+                } : undefined}
+                onDelete={canDelete ? () => setDeleteTarget(service) : undefined}
               />
             ))}
           </div>
@@ -485,8 +496,8 @@ export default function ServicesPage() {
               <ServiceAddonCard
                 key={service.id}
                 service={service}
-                onEdit={() => setAddonEdit(service)}
-                onDelete={() => setDeleteTarget(service)}
+                onEdit={canEdit ? () => setAddonEdit(service) : undefined}
+                onDelete={canDelete ? () => setDeleteTarget(service) : undefined}
               />
             ))}
           </div>
