@@ -7,21 +7,24 @@ export type StaffAccessLevel = "withEditAccess" | "withoutEditAccess";
 /** Sidebar / command-menu group label for HR modules. */
 export const HR_STAFF_NAV_GROUP_LABEL = "HR & staff";
 
-/** Routes under the HR & Staff sidebar section. */
+/**
+ * HR & Staff routes hidden for Without Edit Access users.
+ * Leave stays available so staff can still apply for leave.
+ */
 export const HR_STAFF_NAV_HREFS = [
   "/staff",
   "/attendance",
-  "/leave",
   "/rewards",
   "/performance",
   "/payroll",
 ] as const;
 
-/** Module keys that belong to the HR & Staff nav section. */
+/**
+ * HR modules stripped for Without Edit Access (Leave is kept).
+ */
 export const HR_STAFF_MODULE_KEYS = [
   "STAFF",
   "ATTENDANCE",
-  "LEAVE",
   "PAYROLL",
   "STAFF_REWARDS",
   "PERFORMANCE",
@@ -107,10 +110,13 @@ export function permissionsForStaffAccessLevel(
   const expanded = expandLegacyBaseKeys(basePerms).filter((p) => !p.endsWith("_DELETE"));
 
   if (level === "withoutEditAccess") {
-    // No edit/delete, and strip HR & Staff modules so that section stays hidden.
-    return expanded.filter(
+    // No edit/delete; strip HR modules except Leave (users can still apply for leave).
+    const next = expanded.filter(
       (p) => !p.endsWith("_EDIT") && !MODULE_KEYS.has(p) && !isHrStaffPermissionKey(p)
     );
+    if (!next.includes("LEAVE_VIEW")) next.push("LEAVE_VIEW");
+    if (!next.includes("LEAVE_CREATE")) next.push("LEAVE_CREATE");
+    return next;
   }
 
   const next = new Set(expanded.filter((p) => !MODULE_KEYS.has(p)));

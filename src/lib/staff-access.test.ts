@@ -50,7 +50,7 @@ describe("userHasWithoutEditAccess", () => {
 });
 
 describe("permissionsForStaffAccessLevel withoutEditAccess", () => {
-  it("strips edit keys and HR module permissions", () => {
+  it("strips edit keys and HR modules but keeps Leave", () => {
     const next = permissionsForStaffAccessLevel(
       [
         "JOB_CARDS_CREATE",
@@ -65,8 +65,9 @@ describe("permissionsForStaffAccessLevel withoutEditAccess", () => {
     );
     expect(next.some((p) => p.endsWith("_EDIT"))).toBe(false);
     expect(next.some((p) => p.startsWith("STAFF"))).toBe(false);
-    expect(next.some((p) => p.startsWith("LEAVE"))).toBe(false);
     expect(next.some((p) => p.startsWith("ATTENDANCE"))).toBe(false);
+    expect(next).toContain("LEAVE_VIEW");
+    expect(next).toContain("LEAVE_CREATE");
     expect(next).toContain("JOB_CARDS_CREATE");
     expect(next).toContain("JOB_CARDS_VIEW");
   });

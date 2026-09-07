@@ -15,11 +15,7 @@ import { useAppointmentStore } from "@/store/appointment-store";
 import { resolveAppointmentKind } from "@/lib/appointment-ids";
 import { canAccessNavItem } from "@/lib/rbac";
 import { NAV_GROUPS } from "@/lib/nav-items";
-import {
-  HR_STAFF_NAV_GROUP_LABEL,
-  isHrStaffNavHref,
-  userHasWithoutEditAccess,
-} from "@/lib/staff-access";
+import { isHrStaffNavHref, userHasWithoutEditAccess } from "@/lib/staff-access";
 import {
   CarFront,
   X,
@@ -101,9 +97,7 @@ function SidebarContent({
       if (hideHrStaffNav && isHrStaffNavHref(item.href)) return false;
       return canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions);
     }),
-  }))
-    .filter((group) => group.items.length > 0)
-    .filter((group) => !(hideHrStaffNav && group.label === HR_STAFF_NAV_GROUP_LABEL));
+  })).filter((group) => group.items.length > 0);
 
   const navRef = useRef<HTMLElement>(null);
   const navContentRef = useRef<HTMLDivElement>(null);
