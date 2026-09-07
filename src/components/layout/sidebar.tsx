@@ -16,6 +16,10 @@ import { resolveAppointmentKind } from "@/lib/appointment-ids";
 import { canAccessNavItem } from "@/lib/rbac";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import {
+  HR_STAFF_NAV_GROUP_LABEL,
+  userHasWithoutEditAccess,
+} from "@/lib/staff-access";
+import {
   CarFront,
   X,
   LogOut,
@@ -61,8 +65,10 @@ function SidebarContent({
   className?: string;
 }) {
   const pathname = usePathname();
-  const userRole = useAuthStore((s) => s.user?.role);
-  const userPermissions = useAuthStore((s) => s.user?.permissions);
+  const user = useAuthStore((s) => s.user);
+  const userRole = user?.role;
+  const userPermissions = user?.permissions;
+  const hideHrStaffNav = userHasWithoutEditAccess(user);
   const clearDashboardFilter = useDashboardFilterStore((s) => s.setActiveFilter);
   const allAppointments = useAppointmentStore((s) => s.appointments);
 
@@ -91,7 +97,9 @@ function SidebarContent({
   const filteredGroups = NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions)),
-  })).filter((group) => group.items.length > 0);
+  }))
+    .filter((group) => group.items.length > 0)
+    .filter((group) => !(hideHrStaffNav && group.label === HR_STAFF_NAV_GROUP_LABEL));
 
   const navRef = useRef<HTMLElement>(null);
   const navContentRef = useRef<HTMLDivElement>(null);

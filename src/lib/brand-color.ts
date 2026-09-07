@@ -152,4 +152,12 @@ export function applyBrandFavicon(hex: string): void {
     document.head.appendChild(link);
   }
   link.href = href;
+
+  // Prefer the brand data-URL over Next's static /icon.svg so tabs don't keep the default file.
+  for (const el of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]')) {
+    if (el === link) continue;
+    if (el.href.includes("/icon") || el.href.endsWith("favicon.ico") || el.getAttribute("href")?.includes("icon")) {
+      el.remove();
+    }
+  }
 }

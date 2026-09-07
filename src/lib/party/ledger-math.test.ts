@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPartyStatement,
   customerHasPendingInvoiceDues,
   expenseOutstanding,
   expensePaidAmount,
   invoiceOutstanding,
   invoicePaidTotal,
+  paymentLedgerTimestamp,
 } from "@/lib/party/ledger-math";
 import type { Expense, Invoice } from "@/types";
+import type { Party } from "@/types/party";
 
 function inv(partial: Partial<Invoice> & Pick<Invoice, "id" | "grandTotal" | "payments">): Invoice {
   return {
@@ -24,6 +27,20 @@ function inv(partial: Partial<Invoice> & Pick<Invoice, "id" | "grandTotal" | "pa
     createdAt: "2026-01-01",
     ...partial,
   } as Invoice;
+}
+
+function customerParty(): Party {
+  return {
+    id: "c:c-1",
+    kind: "customer",
+    name: "A",
+    openingBalance: 0,
+    openingBalanceSide: "toCollect",
+    customFields: [],
+    customerId: "c-1",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
 }
 
 describe("invoicePaidTotal / invoiceOutstanding", () => {
@@ -101,5 +118,82 @@ describe("customerHasPendingInvoiceDues", () => {
     ];
     expect(customerHasPendingInvoiceDues("c-1", invoices)).toBe(true);
     expect(customerHasPendingInvoiceDues("c-other", invoices)).toBe(false);
+  });
+});
+
+describe("paymentLedgerTimestamp", () => {
+  it("prefers paidAt and falls back to invoice createdAt", () => {
+    expect(paymentLedgerTimestamp("2026-09-07T12:00:00.000Z", "2026-09-01T10:00:00.000Z")).toBe(
+      "2026-09-07T12:00:00.000Z"
+    );
+    expect(paymentLedgerTimestamp("", "2026-09-01T10:00:00.000Z")).toBe("2026-09-01T10:00:00.000Z");
+    expect(paymentLedgerTimestamp(null, "2026-09-01T10:00:00.000Z")).toBe("2026-09-01T10:00:00.000Z");
+  });
+});
+
+describe("buildPartyStatement payment dates", () => {
+  it("shows payment on paidAt, not invoice createdAt, for later settlement", () => {
+    const invoices = [
+      inv({
+        id: "old",
+        invoiceNumber: "INV-2026-0025",
+        grandTotal: 75000,
+        createdAt: "2026-09-01T10:00:00.000Z",
+        status: "PAID",
+        payments: [
+          {
+            id: "pay-today",
+            invoiceId: "old",
+            amount: 75000,
+            method: "CASH",
+            paidAt: "2026-09-07T12:00:00.000Z",
+          },
+        ],
+      }),
+    ];
+    const lines = buildPartyStatement(customerParty(), invoices, [], "all").filter(
+      (l) => !l.isSummary
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]?.voucher).toMatch(/Sales|Invoice/i);
+    expect(lines[0]?.debit).toBe(75000);
+    expect(lines[0]?.date).toMatch(/01/);
+    expect(lines[1]?.voucher).toBe("Payment In");
+    expect(lines[1]?.credit).toBe(75000);
+    expect(lines[1]?.date).toMatch(/07/);
+    expect(lines[1]?.balance).toBe(0);
+  });
+
+  it("includes payment rows even when building from mixed invoice/payment dates", () => {
+    const invoices = [
+      inv({
+        id: "old",
+        grandTotal: 500,
+        createdAt: "2025-01-01T10:00:00.000Z",
+        payments: [
+          {
+            id: "pay-new",
+            invoiceId: "old",
+            amount: 200,
+            method: "UPI",
+            paidAt: "2026-09-07T12:00:00.000Z",
+          },
+          {
+            id: "pay-mid",
+            invoiceId: "old",
+            amount: 300,
+            method: "CASH",
+            paidAt: "2026-09-05T12:00:00.000Z",
+          },
+        ],
+      }),
+    ];
+    const lines = buildPartyStatement(customerParty(), invoices, [], "all").filter(
+      (l) => !l.isSummary
+    );
+    const payments = lines.filter((l) => l.voucher === "Payment In");
+    expect(payments).toHaveLength(2);
+    expect(payments.map((p) => p.credit).sort()).toEqual([200, 300]);
+    expect(lines.at(-1)?.balance).toBe(0);
   });
 });

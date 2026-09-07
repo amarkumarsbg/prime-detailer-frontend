@@ -145,7 +145,7 @@ import {
 import { computeGstFromSubtotal } from "@/lib/gst-tax";
 import { formatDate, formatCurrency, cn } from "@/lib/utils";
 import { pushActivityLog } from "@/lib/activity-log-helper";
-import { userCanEdit, userHasPermission } from "@/lib/rbac";
+import { userCanCreate, userCanEdit } from "@/lib/rbac";
 import { useBranchScope } from "@/lib/branch-scope";
 import { useStaffRewardStore } from "@/store/staff-reward-store";
 import {
@@ -1783,7 +1783,7 @@ export default function JobCardDetailPage() {
         onAssignMechanic={() => setShowQuickAssignDialog(true)}
         onDeliverVehicle={() => setDeliverVehicleOpen(true)}
         onRecordPayment={
-          userHasPermission(useAuthStore.getState().user, "BILLING")
+          userCanCreate(useAuthStore.getState().user, "BILLING")
             ? () => setRecordPaymentOpen(true)
             : undefined
         }

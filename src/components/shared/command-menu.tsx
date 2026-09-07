@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import type { UserRole } from "@/types";
 import { canAccessNavItem } from "@/lib/rbac";
+import { HR_STAFF_NAV_HREFS, userHasWithoutEditAccess } from "@/lib/staff-access";
 import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useVehicleStore } from "@/store/vehicle-store";
@@ -108,8 +109,10 @@ const NAV_PAGES: NavPageItem[] = [
 
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const router = useRouter();
-  const userRole = useAuthStore((s) => s.user?.role);
-  const userPermissions = useAuthStore((s) => s.user?.permissions);
+  const user = useAuthStore((s) => s.user);
+  const userRole = user?.role;
+  const userPermissions = user?.permissions;
+  const hideHrStaffNav = userHasWithoutEditAccess(user);
   const [search, setSearch] = useState("");
   const { customers } = useCustomerStore();
   const vehicles = useVehicleStore((s) => s.vehicles);
@@ -124,9 +127,14 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     if (!open) queueMicrotask(() => setSearch(""));
   }, [open]);
 
+  const hrHrefSet = useMemo(() => new Set<string>(HR_STAFF_NAV_HREFS), []);
+
   const visibleNavPages = useMemo(
-    () => NAV_PAGES.filter((p) => canAccessNavItem(p.roles, userRole, p.permissionKey, userPermissions)),
-    [userRole, userPermissions]
+    () =>
+      NAV_PAGES.filter((p) => canAccessNavItem(p.roles, userRole, p.permissionKey, userPermissions)).filter(
+        (p) => !(hideHrStaffNav && hrHrefSet.has(p.href))
+      ),
+    [userRole, userPermissions, hideHrStaffNav, hrHrefSet]
   );
 
   const navigate = (href: string) => {
@@ -229,22 +237,24 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               ))}
             </Command.Group>
 
-            <Command.Group heading="Staff" className={groupClass}>
-              {staff.map((s) => (
-                <Command.Item
-                  key={s.id}
-                  value={`staff ${s.name} ${s.phone} ${s.email} ${s.role}`}
-                  onSelect={() => navigate(`/staff/${s.id}`)}
-                  className={itemClass}
-                >
-                  <UserCog className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium">{s.name}</span>
-                    <span className="text-muted-foreground text-xs ml-2 capitalize">{s.role.toLowerCase()}</span>
-                  </div>
-                </Command.Item>
-              ))}
-            </Command.Group>
+            {!hideHrStaffNav && (
+              <Command.Group heading="Staff" className={groupClass}>
+                {staff.map((s) => (
+                  <Command.Item
+                    key={s.id}
+                    value={`staff ${s.name} ${s.phone} ${s.email} ${s.role}`}
+                    onSelect={() => navigate(`/staff/${s.id}`)}
+                    className={itemClass}
+                  >
+                    <UserCog className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-muted-foreground text-xs ml-2 capitalize">{s.role.toLowerCase()}</span>
+                    </div>
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
 
             <Command.Group heading="Invoices" className={groupClass}>
               {invoices.slice(0, 6).map((inv) => (

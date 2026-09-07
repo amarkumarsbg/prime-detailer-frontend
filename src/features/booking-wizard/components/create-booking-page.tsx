@@ -1578,10 +1578,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
           lastVisitDate: now,
         });
       } catch {
-        toast.error("Could not update customer visit stats.", {
-          description: "Check that the API server is running.",
-        });
-        return;
+        // Non-critical: without-edit users lack CUSTOMERS_EDIT; do not block job create.
       }
     }
 
@@ -1739,17 +1736,21 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     }
 
     if (matchedVehicle) {
-      await updateVehicle(matchedVehicle.id, {
-        customerId: custId,
-        customerName: customerName.trim(),
-        registrationNumber: regStored,
-        make: vehicleBrand.trim(),
-        model: vehicleModel.trim() || "—",
-        segment: seg,
-        ...(odometerReading.trim()
-          ? { odometer: Number.parseInt(odometerReading, 10) || matchedVehicle.odometer }
-          : {}),
-      });
+      try {
+        await updateVehicle(matchedVehicle.id, {
+          customerId: custId,
+          customerName: customerName.trim(),
+          registrationNumber: regStored,
+          make: vehicleBrand.trim(),
+          model: vehicleModel.trim() || "—",
+          segment: seg,
+          ...(odometerReading.trim()
+            ? { odometer: Number.parseInt(odometerReading, 10) || matchedVehicle.odometer }
+            : {}),
+        });
+      } catch {
+        // Non-critical for create: without-edit users lack VEHICLES_EDIT.
+      }
     } else {
       await addVehicle({
         id: resolvedVehicleId,
@@ -1981,6 +1982,19 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     toast.message("Job card created", {
       description: "Complete vehicle check-in with before photos to open the job.",
     });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Could not create job card";
+      toast.error(msg, {
+        description:
+          e instanceof ApiError && e.status === 403
+            ? "Your account may be missing create access for job cards. Ask an admin to update access, then log out and back in."
+            : undefined,
+      });
     } finally {
       isSubmittingJobRef.current = false;
       setIsCreatingBooking(false);

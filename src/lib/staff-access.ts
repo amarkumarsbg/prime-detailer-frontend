@@ -1,6 +1,21 @@
 import { PERMISSION_KEYS } from "@/lib/permission-keys";
+import { getDefaultModuleKeysForRole } from "@/lib/staff-role-defaults";
+import type { User, UserRole } from "@/types";
 
 export type StaffAccessLevel = "withEditAccess" | "withoutEditAccess";
+
+/** Sidebar / command-menu group label for HR modules. */
+export const HR_STAFF_NAV_GROUP_LABEL = "HR & staff";
+
+/** Routes under the HR & Staff sidebar section. */
+export const HR_STAFF_NAV_HREFS = [
+  "/staff",
+  "/attendance",
+  "/leave",
+  "/rewards",
+  "/performance",
+  "/payroll",
+] as const;
 
 const MODULE_KEYS = new Set<string>(PERMISSION_KEYS);
 
@@ -26,8 +41,22 @@ export function deriveStaffAccessLevel(permissions: string[] | undefined): Staff
   return "withoutEditAccess";
 }
 
-import { getDefaultModuleKeysForRole } from "@/lib/staff-role-defaults";
-import type { UserRole } from "@/types";
+/**
+ * True when the user is on Without Edit Access.
+ * Admins / Super Admins always have full access (role bypass).
+ */
+export function userHasWithoutEditAccess(
+  user: Pick<User, "role" | "permissions"> | null | undefined
+): boolean {
+  if (!user?.role) return false;
+  if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") return false;
+  return deriveStaffAccessLevel(user.permissions) === "withoutEditAccess";
+}
+
+export function isHrStaffNavPath(pathname: string): boolean {
+  const path = pathname.split(/[?#]/)[0] ?? pathname;
+  return HR_STAFF_NAV_HREFS.some((href) => path === href || path.startsWith(`${href}/`));
+}
 
 /**
  * Map the simplified access choice onto the existing permissions array shape.

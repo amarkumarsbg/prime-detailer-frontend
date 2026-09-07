@@ -135,11 +135,12 @@ export function buildPartyTransactions(
         });
       }
       for (const p of inv.payments) {
-        if (!dateInPreset(p.paidAt, period)) continue;
+        const paidAt = paymentLedgerTimestamp(p.paidAt, inv.createdAt);
+        if (!dateInPreset(paidAt, period)) continue;
         const serial = p.id.replace(/^pay-(?:hitech-)?/, "") || p.id.slice(-6);
         rows.push({
           id: p.id,
-          at: p.paidAt,
+          at: paidAt,
           typeLabel: "Payment In",
           reference: serial,
           amount: p.amount,
@@ -176,6 +177,18 @@ export function buildPartyTransactions(
       };
     })
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+}
+
+/**
+ * Authoritative ledger timestamp for a payment.
+ * Prefer stored `paidAt`; fall back to invoice createdAt for legacy rows missing paidAt.
+ */
+export function paymentLedgerTimestamp(
+  paidAt: string | undefined | null,
+  invoiceCreatedAtFallback: string
+): string {
+  if (typeof paidAt === "string" && paidAt.trim()) return paidAt.trim();
+  return invoiceCreatedAtFallback;
 }
 
 function formatLedgerDate(iso: string): string {
@@ -216,30 +229,36 @@ export function buildPartyStatement(
 
   if (party.kind === "customer") {
     for (const inv of invs) {
-      if (!dateInPreset(inv.createdAt, period)) continue;
-      entries.push({
-        at: inv.createdAt,
-        line: {
-          id: `inv-${inv.id}`,
-          date: formatLedgerDate(inv.createdAt),
-          voucher: invoiceSourceLedgerLabel(inv),
-          serialNo: inv.invoiceNumber,
-          paymentMode: "—",
-          debit: inv.grandTotal,
-          dueLabel:
-            invoiceOutstanding(inv) > 0.01 ? `${formatLedgerDate(inv.createdAt)} (unpaid)` : undefined,
-        },
-      });
-      for (const p of inv.payments) {
-        if (!dateInPreset(p.paidAt, period)) continue;
+      // Invoice row keyed by invoice date; payment rows keyed by payment.paidAt independently.
+      if (dateInPreset(inv.createdAt, period)) {
         entries.push({
-          at: p.paidAt,
+          at: inv.createdAt,
+          line: {
+            id: `inv-${inv.id}`,
+            date: formatLedgerDate(inv.createdAt),
+            voucher: invoiceSourceLedgerLabel(inv),
+            serialNo: inv.invoiceNumber,
+            paymentMode: "—",
+            debit: inv.grandTotal,
+            dueLabel:
+              invoiceOutstanding(inv) > 0.01
+                ? `${formatLedgerDate(inv.createdAt)} (unpaid)`
+                : undefined,
+          },
+        });
+      }
+      for (const p of inv.payments) {
+        const paidAt = paymentLedgerTimestamp(p.paidAt, inv.createdAt);
+        if (!dateInPreset(paidAt, period)) continue;
+        entries.push({
+          at: paidAt,
           line: {
             id: `pay-${p.id}`,
-            date: formatLedgerDate(p.paidAt),
+            date: formatLedgerDate(paidAt),
             voucher: "Payment In",
             serialNo: String(p.id).replace(/^pay-(?:hitech-)?/, "") || "—",
-            paymentMode: paymentModeLabel(p.method) + (p.referenceNumber ? ` (${p.referenceNumber})` : ""),
+            paymentMode:
+              paymentModeLabel(p.method) + (p.referenceNumber ? ` (${p.referenceNumber})` : ""),
             credit: p.amount,
           },
         });
@@ -313,7 +332,8 @@ export function buildPartySummary(
     let totalReceived = 0;
     for (const inv of invs) {
       for (const p of inv.payments) {
-        if (dateInPreset(p.paidAt, period)) totalReceived += p.amount;
+        const paidAt = paymentLedgerTimestamp(p.paidAt, inv.createdAt);
+        if (dateInPreset(paidAt, period)) totalReceived += p.amount;
       }
     }
     const overdue = invs

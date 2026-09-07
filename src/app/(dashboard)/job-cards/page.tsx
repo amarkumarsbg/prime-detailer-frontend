@@ -46,7 +46,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useVehicleStore } from "@/store/vehicle-store";
-import { userCanDelete, userCanEdit, userHasPermission } from "@/lib/rbac";
+import { userCanCreate, userCanDelete, userCanEdit } from "@/lib/rbac";
 import { RecordPaymentDialog } from "@/components/billing/record-payment-dialog";
 import { createOrGetInvoiceForJob } from "@/lib/invoice-from-job-card";
 import { buildJobCardTemplateMessage, defaultWhatsAppTemplateForStatus } from "@/lib/job-card-whatsapp-templates";
@@ -940,7 +940,7 @@ export default function JobCardsPage() {
                                 ? invoice.grandTotal - paid
                                 : jc.estimatedAmount - paid;
                               if (due <= 0.01) return null;
-                              if (!userHasPermission(useAuthStore.getState().user, "BILLING")) return null;
+                              if (!userCanCreate(useAuthStore.getState().user, "BILLING")) return null;
                               
                               return (
                                 <DropdownMenuItem

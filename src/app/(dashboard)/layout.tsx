@@ -14,6 +14,7 @@ import { DomainDataSync } from "@/components/layout/domain-data-sync";
 import { Button } from "@/components/ui/button";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import { canAccessNavItem } from "@/lib/rbac";
+import { isHrStaffNavPath, userHasWithoutEditAccess } from "@/lib/staff-access";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { cn } from "@/lib/utils";
 import { SubscriptionRenewBanner } from "@/components/billing/subscription-renew-banner";
@@ -83,6 +84,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!authReady || !sessionChecked || !isAuthenticated || !user) return;
     if (user.role === "SUPER_ADMIN") return;
+    if (userHasWithoutEditAccess(user) && isHrStaffNavPath(pathname)) {
+      toast.error("Access Denied", {
+        description: "HR & Staff is not available without edit access.",
+      });
+      void router.replace("/dashboard");
+      return;
+    }
     if (currentNavItem) {
       const hasRoleAccess = canAccessNavItem(
         currentNavItem.roles,
@@ -97,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         void router.replace("/dashboard");
       }
     }
-  }, [authReady, sessionChecked, isAuthenticated, user, currentNavItem, router]);
+  }, [authReady, sessionChecked, isAuthenticated, user, currentNavItem, pathname, router]);
 
   const runBootstrap = useAppBootstrapStore((s) => s.run);
   const resetBootstrap = useAppBootstrapStore((s) => s.reset);
