@@ -137,12 +137,11 @@ export function buildPartyTransactions(
       for (const p of inv.payments) {
         const paidAt = paymentLedgerTimestamp(p.paidAt, inv.createdAt);
         if (!dateInPreset(paidAt, period)) continue;
-        const serial = p.id.replace(/^pay-(?:hitech-)?/, "") || p.id.slice(-6);
         rows.push({
           id: p.id,
           at: paidAt,
           typeLabel: "Payment In",
-          reference: serial,
+          reference: inv.invoiceNumber,
           amount: p.amount,
           status: "",
           statusTone: "muted",
@@ -255,8 +254,8 @@ export function buildPartyStatement(
           line: {
             id: `pay-${p.id}`,
             date: formatLedgerDate(paidAt),
-            voucher: "Payment In",
-            serialNo: String(p.id).replace(/^pay-(?:hitech-)?/, "") || "—",
+            voucher: `Payment In · ${inv.invoiceNumber}`,
+            serialNo: inv.invoiceNumber,
             paymentMode:
               paymentModeLabel(p.method) + (p.referenceNumber ? ` (${p.referenceNumber})` : ""),
             credit: p.amount,

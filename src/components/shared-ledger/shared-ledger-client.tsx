@@ -14,6 +14,7 @@ import {
   FileText,
   ClipboardList,
   Banknote,
+  BookMarked,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,7 @@ import {
   invoiceOutstanding,
   invoicePaidTotal,
 } from "@/lib/party/ledger-math";
-import { shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
+import { customerLedgerHref, shareCustomerLedgerWhatsApp } from "@/lib/share-customer-ledger";
 import type { Expense, ExpensePaymentMethod, Invoice } from "@/types";
 
 type PartyKind = "customer" | "supplier";
@@ -493,6 +494,17 @@ export function SharedLedgerClient({
                         />
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
+                        {selected.kind === "customer" && selectedCustomer ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => router.push(customerLedgerHref(selectedCustomer.id))}
+                          >
+                            <BookMarked className="h-4 w-4" />
+                            View Ledger Statement
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="outline"

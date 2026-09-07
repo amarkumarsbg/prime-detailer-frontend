@@ -158,7 +158,8 @@ describe("buildPartyStatement payment dates", () => {
     expect(lines[0]?.voucher).toMatch(/Sales|Invoice/i);
     expect(lines[0]?.debit).toBe(75000);
     expect(lines[0]?.date).toMatch(/01/);
-    expect(lines[1]?.voucher).toBe("Payment In");
+    expect(lines[1]?.voucher).toMatch(/^Payment In/);
+    expect(lines[1]?.serialNo).toBe("INV-2026-0025");
     expect(lines[1]?.credit).toBe(75000);
     expect(lines[1]?.date).toMatch(/07/);
     expect(lines[1]?.balance).toBe(0);
@@ -191,7 +192,7 @@ describe("buildPartyStatement payment dates", () => {
     const lines = buildPartyStatement(customerParty(), invoices, [], "all").filter(
       (l) => !l.isSummary
     );
-    const payments = lines.filter((l) => l.voucher === "Payment In");
+    const payments = lines.filter((l) => l.voucher.startsWith("Payment In"));
     expect(payments).toHaveLength(2);
     expect(payments.map((p) => p.credit).sort()).toEqual([200, 300]);
     expect(lines.at(-1)?.balance).toBe(0);
