@@ -16,7 +16,7 @@ const thClass =
   "border-r border-border bg-muted px-4 py-3 text-left text-sm font-semibold text-foreground align-middle last:border-r-0 whitespace-nowrap";
 const tdClass =
   "border-r border-t border-border px-4 py-3 text-sm text-foreground align-middle last:border-r-0 bg-background";
-const tdNumClass = cn(tdClass, "tabular-nums text-right");
+const tdNumClass = cn(tdClass, "whitespace-nowrap tabular-nums text-right");
 
 function debitForRow(row: PartyStatementLine): string {
   if (row.debit != null) return formatInrTable(row.debit);
@@ -76,7 +76,9 @@ export function PartyLedgerTab({ lines, returnTo }: PartyLedgerTabProps) {
                   <p className="text-[11px] text-muted-foreground">{row.date}</p>
                   <p className="mt-0.5 truncate text-sm font-medium leading-tight">{row.voucher}</p>
                 </div>
-                <p className="shrink-0 text-sm font-bold tabular-nums">{balanceForRow(row)}</p>
+                <p className="shrink-0 whitespace-nowrap text-sm font-bold tabular-nums">
+                  {balanceForRow(row)}
+                </p>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                 <span>

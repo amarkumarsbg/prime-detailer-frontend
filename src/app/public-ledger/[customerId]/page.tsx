@@ -50,7 +50,7 @@ function formatAmt(n: number | null | undefined): string {
 }
 
 function formatRupee(n: number): string {
-  return `₹ ${formatAmt(n)}`;
+  return `₹\u00A0${formatAmt(n)}`;
 }
 
 function dash(v: string | null | undefined): string {

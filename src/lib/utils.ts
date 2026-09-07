@@ -24,13 +24,13 @@ export function formatInrFull(amount: number): string {
   }).format(amount);
 }
 
-/** Table/list style: `₹ 0`, `₹ 1,234.5` (rupee symbol + space, no currency style). */
+/** Table/list style: `₹ 0`, `₹ 1,234.5` (rupee + non-breaking space so symbol stays with value). */
 export function formatInrTable(amount: number): string {
   const formatted = new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(Math.abs(amount));
-  return `₹ ${formatted}`;
+  return `₹\u00A0${formatted}`;
 }
 
 export function formatDate(date: string | Date): string {
