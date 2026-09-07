@@ -17,7 +17,18 @@ export const HR_STAFF_NAV_HREFS = [
   "/payroll",
 ] as const;
 
+/** Module keys that belong to the HR & Staff nav section. */
+export const HR_STAFF_MODULE_KEYS = [
+  "STAFF",
+  "ATTENDANCE",
+  "LEAVE",
+  "PAYROLL",
+  "STAFF_REWARDS",
+  "PERFORMANCE",
+] as const;
+
 const MODULE_KEYS = new Set<string>(PERMISSION_KEYS);
+const HR_MODULE_KEY_SET = new Set<string>(HR_STAFF_MODULE_KEYS);
 
 function expandLegacyBaseKeys(perms: string[]): string[] {
   const out = new Set<string>();
@@ -33,11 +44,24 @@ function expandLegacyBaseKeys(perms: string[]): string[] {
   return [...out];
 }
 
+function isHrStaffPermissionKey(perm: string): boolean {
+  if (HR_MODULE_KEY_SET.has(perm)) return true;
+  const match = /^(.+)_(CREATE|VIEW|EDIT|DELETE)$/.exec(perm);
+  return Boolean(match?.[1] && HR_MODULE_KEY_SET.has(match[1]));
+}
+
 /** Infer access level from stored permission keys (best-effort). */
 export function deriveStaffAccessLevel(permissions: string[] | undefined): StaffAccessLevel {
   const perms = permissions ?? [];
+  // Explicit edit grants always mean With Edit Access.
   if (perms.some((p) => p.endsWith("_EDIT"))) return "withEditAccess";
-  if (perms.some((p) => MODULE_KEYS.has(p))) return "withEditAccess";
+
+  const hasGranular = perms.some((p) => /_(CREATE|VIEW|EDIT|DELETE)$/.test(p));
+  // Legacy full-access payloads used bare module keys with no granular breakdown.
+  if (!hasGranular && perms.some((p) => MODULE_KEYS.has(p))) return "withEditAccess";
+
+  // Granular CREATE/VIEW (and no EDIT) → Without Edit Access, even if a stray
+  // base key like DASHBOARD remains in the array.
   return "withoutEditAccess";
 }
 
@@ -58,6 +82,11 @@ export function isHrStaffNavPath(pathname: string): boolean {
   return HR_STAFF_NAV_HREFS.some((href) => path === href || path.startsWith(`${href}/`));
 }
 
+export function isHrStaffNavHref(href: string): boolean {
+  const path = href.split(/[?#]/)[0] ?? href;
+  return HR_STAFF_NAV_HREFS.some((hr) => path === hr || path.startsWith(`${hr}/`));
+}
+
 /**
  * Map the simplified access choice onto the existing permissions array shape.
  * Uses granular CREATE / VIEW / EDIT keys only — no API contract changes.
@@ -72,13 +101,16 @@ export function permissionsForStaffAccessLevel(
   // should bootstrap them with their role defaults so they don't get stuck with nothing.
   if (basePerms.length === 0 && role) {
     const defaultModules = getDefaultModuleKeysForRole(role);
-    basePerms = defaultModules.flatMap(m => [`${m}_CREATE`, `${m}_VIEW`]);
+    basePerms = defaultModules.flatMap((m) => [`${m}_CREATE`, `${m}_VIEW`]);
   }
 
   const expanded = expandLegacyBaseKeys(basePerms).filter((p) => !p.endsWith("_DELETE"));
 
   if (level === "withoutEditAccess") {
-    return expanded.filter((p) => !p.endsWith("_EDIT") && !MODULE_KEYS.has(p));
+    // No edit/delete, and strip HR & Staff modules so that section stays hidden.
+    return expanded.filter(
+      (p) => !p.endsWith("_EDIT") && !MODULE_KEYS.has(p) && !isHrStaffPermissionKey(p)
+    );
   }
 
   const next = new Set(expanded.filter((p) => !MODULE_KEYS.has(p)));

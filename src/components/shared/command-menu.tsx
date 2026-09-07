@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import type { UserRole } from "@/types";
 import { canAccessNavItem } from "@/lib/rbac";
-import { HR_STAFF_NAV_HREFS, userHasWithoutEditAccess } from "@/lib/staff-access";
+import { isHrStaffNavHref, userHasWithoutEditAccess } from "@/lib/staff-access";
 import { useCustomerStore } from "@/store/customer-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useVehicleStore } from "@/store/vehicle-store";
@@ -127,14 +127,12 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     if (!open) queueMicrotask(() => setSearch(""));
   }, [open]);
 
-  const hrHrefSet = useMemo(() => new Set<string>(HR_STAFF_NAV_HREFS), []);
-
   const visibleNavPages = useMemo(
     () =>
       NAV_PAGES.filter((p) => canAccessNavItem(p.roles, userRole, p.permissionKey, userPermissions)).filter(
-        (p) => !(hideHrStaffNav && hrHrefSet.has(p.href))
+        (p) => !(hideHrStaffNav && isHrStaffNavHref(p.href))
       ),
-    [userRole, userPermissions, hideHrStaffNav, hrHrefSet]
+    [userRole, userPermissions, hideHrStaffNav]
   );
 
   const navigate = (href: string) => {

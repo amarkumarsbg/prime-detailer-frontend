@@ -17,6 +17,7 @@ import { canAccessNavItem } from "@/lib/rbac";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import {
   HR_STAFF_NAV_GROUP_LABEL,
+  isHrStaffNavHref,
   userHasWithoutEditAccess,
 } from "@/lib/staff-access";
 import {
@@ -96,7 +97,10 @@ function SidebarContent({
 
   const filteredGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions)),
+    items: group.items.filter((item) => {
+      if (hideHrStaffNav && isHrStaffNavHref(item.href)) return false;
+      return canAccessNavItem(item.roles, userRole, item.permissionKey, userPermissions);
+    }),
   }))
     .filter((group) => group.items.length > 0)
     .filter((group) => !(hideHrStaffNav && group.label === HR_STAFF_NAV_GROUP_LABEL));
