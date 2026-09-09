@@ -38,7 +38,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MEMBERSHIP_TIER_DAYS,
+  membershipTierDurationLabel,
   membershipIncludedQuantity,
   useMembershipStore,
 } from "@/store/membership-store";
@@ -67,10 +67,10 @@ import { referredByFromOptionalInput } from "@/lib/referral-eligibility";
 import { matchesExpenseDate, type ExpenseDateFilter } from "@/components/expenses/expense-date-range-picker";
 
 const TIER_OPTIONS: { value: MembershipTier; label: string }[] = [
-  { value: "MONTHLY", label: "Monthly (~30 days)" },
-  { value: "QUARTERLY", label: "Quarterly (3 months)" },
-  { value: "HALF_YEARLY", label: "Half yearly (6 months)" },
-  { value: "YEARLY", label: "Yearly (365 days)" },
+  { value: "MONTHLY", label: `Monthly (${membershipTierDurationLabel("MONTHLY")})` },
+  { value: "QUARTERLY", label: `Quarterly (${membershipTierDurationLabel("QUARTERLY")})` },
+  { value: "HALF_YEARLY", label: `Half-Yearly (${membershipTierDurationLabel("HALF_YEARLY")})` },
+  { value: "YEARLY", label: `Yearly (${membershipTierDurationLabel("YEARLY")})` },
 ];
 
 const VEHICLE_SEGMENT_LABELS: Record<VehicleSegment, string> = {
@@ -151,7 +151,7 @@ function MembershipPackageMobileCard({
               {formatTierLabel(pkg.tier)}
             </Badge>
             <span className="text-[11px] text-muted-foreground">
-              {MEMBERSHIP_TIER_DAYS[pkg.tier]} days
+              {membershipTierDurationLabel(pkg.tier)}
             </span>
           </div>
           <p className="mt-2 text-lg font-bold tabular-nums leading-none">{formatInrFull(pkg.price)}</p>
@@ -758,7 +758,7 @@ export function MembershipPageClient() {
                         <td className="px-2 py-2">
                           <Badge variant={tierBadgeVariant(p.tier)}>{p.tier}</Badge>
                           <span className="ml-2 text-xs text-muted-foreground">
-                            {MEMBERSHIP_TIER_DAYS[p.tier]} days
+                            {membershipTierDurationLabel(p.tier)}
                           </span>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums">{formatInrFull(p.price)}</td>

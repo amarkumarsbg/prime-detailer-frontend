@@ -9,13 +9,14 @@ import type {
   MembershipServiceUsage,
   MembershipTier,
 } from "@/types";
+import { computeMembershipEndDate } from "@/lib/membership-duration";
 
-export const MEMBERSHIP_TIER_DAYS: Record<MembershipTier, number> = {
-  MONTHLY: 30,
-  QUARTERLY: 90,
-  HALF_YEARLY: 180,
-  YEARLY: 365,
-};
+export {
+  MEMBERSHIP_TIER_MONTHS,
+  MEMBERSHIP_TIER_DAYS,
+  membershipTierDurationLabel,
+  computeMembershipEndDate,
+} from "@/lib/membership-duration";
 
 function toPositiveInt(value: unknown, fallback = 1): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -101,13 +102,6 @@ export function normalizeMembershipSubscription(sub: CustomerMembership): Custom
 
 export function normalizeMembershipSubscriptions(subscriptions: CustomerMembership[]): CustomerMembership[] {
   return subscriptions.map(normalizeMembershipSubscription);
-}
-
-function addDays(isoStart: string, days: number): string {
-  const d = new Date(isoStart);
-  d.setDate(d.getDate() + days);
-  d.setHours(23, 59, 59, 999);
-  return d.toISOString();
 }
 
 function subscriptionKey(vehicleId: string | undefined): string {
@@ -214,8 +208,7 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
     if (!pkg.isActive) return { ok: false, error: "Package is inactive" };
 
     const start = input.startDate ?? new Date().toISOString();
-    const days = MEMBERSHIP_TIER_DAYS[pkg.tier];
-    const endDate = addDays(start, days);
+    const endDate = computeMembershipEndDate(start, pkg.tier);
 
     const wantKey = subscriptionKey(input.vehicleId);
     const conflict = get().subscriptions.some((sub) => {

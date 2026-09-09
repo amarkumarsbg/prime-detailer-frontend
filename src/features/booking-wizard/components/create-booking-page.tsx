@@ -108,7 +108,7 @@ import { useVehicleCatalogStore } from "@/store/vehicle-catalog-store";
 import { useHighEndServiceStore, highEndPriceForSegment } from "@/store/high-end-service-store";
 import { useSettingsStore } from "@/store/settings-store"
 import { averageServiceRewardPercent } from "@/lib/reward-category-rates";
-import { useMembershipStore, MEMBERSHIP_TIER_DAYS } from "@/store/membership-store";
+import { useMembershipStore, computeMembershipEndDate, membershipTierDurationLabel } from "@/store/membership-store";
 import { filterMembershipPackagesForVehicleSegment } from "@/lib/membership-package-eligibility";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -974,15 +974,13 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
     if (wizardMembershipPackageId) {
       const pkg = membershipPackagesAll.find((p) => p.id === wizardMembershipPackageId);
       if (pkg) {
-        const days = MEMBERSHIP_TIER_DAYS[pkg.tier] || 365;
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + days);
+        const endDateIso = computeMembershipEndDate(new Date().toISOString(), pkg.tier);
         return {
           id: "virtual-new-sub",
           customerId: existingCustomerId || "new-cust",
           packageId: wizardMembershipPackageId,
           startDate: new Date().toISOString(),
-          endDate: endDate.toISOString(),
+          endDate: endDateIso,
           status: "ACTIVE",
           notes: "Activating during this visit",
           vehicleId: selectedVehicleId || undefined,
@@ -3579,7 +3577,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                       <div className="grid min-w-0 w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {eligibleActiveMembershipPackages.map((pkg) => {
                           const selected = wizardMembershipPackageId === pkg.id;
-                          const durationDays = MEMBERSHIP_TIER_DAYS[pkg.tier];
+                          const durationLabel = membershipTierDurationLabel(pkg.tier);
                           return (
                             <button
                               key={pkg.id}
@@ -3603,7 +3601,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                                 <div>
                                   <p className="font-bold text-foreground text-sm leading-snug line-clamp-1">{pkg.name}</p>
                                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    {membershipTierLabel(pkg.tier)} · {durationDays} days
+                                    {membershipTierLabel(pkg.tier)} · {durationLabel}
                                   </p>
                                   <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 mt-2">
                                     {formatCurrency(pkg.price)}
@@ -3657,7 +3655,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                   <div className="grid min-w-0 w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {eligibleActiveMembershipPackages.map((pkg) => {
                       const selected = wizardMembershipPackageId === pkg.id;
-                      const durationDays = MEMBERSHIP_TIER_DAYS[pkg.tier];
+                      const durationLabel = membershipTierDurationLabel(pkg.tier);
                       return (
                         <button
                           key={pkg.id}
@@ -3675,7 +3673,7 @@ export function CreateBookingPage({ variant }: { variant: CreateBookingVariant }
                             <span className="font-medium text-foreground/80">
                               {membershipTierLabel(pkg.tier)}
                             </span>
-                            <span className="text-muted-foreground/80"> · {durationDays} days</span>
+                            <span className="text-muted-foreground/80"> · {durationLabel}</span>
                           </p>
                           <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-3">
                             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">

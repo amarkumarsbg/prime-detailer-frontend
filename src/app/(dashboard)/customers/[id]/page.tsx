@@ -35,7 +35,7 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { useInvoiceStore } from "@/store/invoice-store";
 import { useCommunicationStore } from "@/store/communication-store";
 import {
-  MEMBERSHIP_TIER_DAYS,
+  membershipTierDurationLabel,
   membershipIncludedQuantity,
   useMembershipStore,
 } from "@/store/membership-store";
@@ -1095,7 +1095,7 @@ export default function CustomerDetailPage() {
                           <div className="mt-2 flex flex-wrap gap-2">
                             <Badge variant="secondary">{pkg.tier}</Badge>
                             <span className="text-xs text-muted-foreground self-center">
-                              {MEMBERSHIP_TIER_DAYS[pkg.tier]} days window
+                              {membershipTierDurationLabel(pkg.tier)} window
                             </span>
                           </div>
                         </div>
