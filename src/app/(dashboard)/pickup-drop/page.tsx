@@ -431,7 +431,7 @@ export default function PickupDropPage() {
     const owned = vehicles
       .filter((v) => v.customerId === c.id)
       .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
-    setSelectedVehicleId(owned[0]?.id ?? "");
+    setSelectedVehicleId(owned[0]?.id ?? null);
     setOdometerReading("");
     setLookupPanelCustomers([]);
   };
@@ -452,6 +452,18 @@ export default function PickupDropPage() {
     if (!selectedBranchId) return active;
     return active.filter((b) => b.id === selectedBranchId);
   }, [branches, selectedBranchId]);
+
+  // Branch picker is hidden when only one scoped branch exists. If branches load after
+  // the dialog opens, newBranchId can stay empty and Create stays disabled forever.
+  useEffect(() => {
+    if (!createOpen) return;
+    if (newBranchId) {
+      const stillValid = scopedBranches.some((b) => b.id === newBranchId);
+      if (stillValid) return;
+    }
+    const fallback = selectedBranchId || scopedBranches[0]?.id || "";
+    if (fallback && fallback !== newBranchId) setNewBranchId(fallback);
+  }, [createOpen, newBranchId, selectedBranchId, scopedBranches]);
 
   const filteredGroups = useMemo(() => {
     return groupPickupDropByJob(scopedRequests).filter((group) =>
@@ -503,6 +515,30 @@ export default function PickupDropPage() {
     setAddVehicleForExistingCustomerDialogOpen(false);
   };
 
+  const fallbackCustomerAddress = hasExistingCustomer
+    ? selectedExistingCustomer?.address?.trim() ?? ""
+    : newCustomerAddress.trim();
+
+  const effectiveCreateBranchId =
+    newBranchId || selectedBranchId || scopedBranches[0]?.id || "";
+
+  const canSubmitCreate = (() => {
+    const customerReady = hasExistingCustomer
+      ? !!(existingCustomerId && selectedVehicleId)
+      : !!(
+          newCustomerName.trim() &&
+          newCustomerPhone.trim() &&
+          vehicleReg.trim() &&
+          vehicleMake.trim() &&
+          vehicleModel.trim()
+        );
+    const legsReady =
+      (pickupRequired || dropRequired) &&
+      (!pickupRequired || pickupAddress.trim()) &&
+      (!dropRequired || dropAddress.trim());
+    return customerReady && legsReady && !!effectiveCreateBranchId && !!newScheduledLocal;
+  })();
+
   const handleCreate = async () => {
     if (!pickupRequired && !dropRequired) {
       toast.error("Choose pickup, drop-off, or both.");
@@ -516,7 +552,7 @@ export default function PickupDropPage() {
       toast.error("Enter the drop-off address.");
       return;
     }
-    if (!newBranchId) {
+    if (!effectiveCreateBranchId) {
       toast.error("Select a branch.");
       return;
     }
@@ -534,6 +570,10 @@ export default function PickupDropPage() {
         description: "Choose a future date and time.",
       });
       return;
+    }
+
+    if (!newBranchId && effectiveCreateBranchId) {
+      setNewBranchId(effectiveCreateBranchId);
     }
 
     let customerNameStr = "";
@@ -667,7 +707,7 @@ export default function PickupDropPage() {
     const shared = {
       jobCardId: targetJobCardId,
       jobNumber: targetJobNumber,
-      branchId: newBranchId,
+      branchId: effectiveCreateBranchId,
       customerName: customerNameStr,
       customerPhone: customerPhoneStr || undefined,
       scheduledTime: scheduled.toISOString(),
@@ -708,7 +748,7 @@ export default function PickupDropPage() {
       );
     }
 
-    const branchName = branches.find((b) => b.id === newBranchId)?.name;
+    const branchName = branches.find((b) => b.id === effectiveCreateBranchId)?.name;
     notifyPickupDropCreatedWhatsApp(created, { branchName, businessName });
 
     toast.success(
@@ -721,27 +761,6 @@ export default function PickupDropPage() {
     setCreateOpen(false);
     resetForm();
   };
-
-  const fallbackCustomerAddress = hasExistingCustomer
-    ? selectedExistingCustomer?.address?.trim() ?? ""
-    : newCustomerAddress.trim();
-
-  const canSubmitCreate = (() => {
-    const customerReady = hasExistingCustomer
-      ? !!(existingCustomerId && selectedVehicleId)
-      : !!(
-          newCustomerName.trim() &&
-          newCustomerPhone.trim() &&
-          vehicleReg.trim() &&
-          vehicleMake.trim() &&
-          vehicleModel.trim()
-        );
-    const legsReady =
-      (pickupRequired || dropRequired) &&
-      (!pickupRequired || pickupAddress.trim()) &&
-      (!dropRequired || dropAddress.trim());
-    return customerReady && legsReady && !!newBranchId && !!newScheduledLocal;
-  })();
 
   const handlePickupDropWhatsApp = (r: PickupDropRequest) => {
     const phone = customerPhoneFromPickupRequest(r);
