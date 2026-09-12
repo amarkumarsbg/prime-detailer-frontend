@@ -109,7 +109,10 @@ export interface Invoice {
   taxRate: number;
   taxAmount: number;
   discountAmount: number;
+  /** INR discount from reward points redemption. */
   rewardDiscount: number;
+  /** Points redeemed for `rewardDiscount` (preferred over legacy 1:1 interpretation). */
+  rewardPointsRedeemed?: number;
   walletAmountUsed: number;
   grandTotal: number;
   status: InvoiceStatus;

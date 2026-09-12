@@ -37,6 +37,7 @@ export type DomainResource =
   | "membership"
   | "appSettings"
   | "referralProgram"
+  | "customerRewardSettings"
   | "balanceSheetManual"
   | "highEndServices"
   | "reportSchedules"
@@ -85,6 +86,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "appSettings",
       "vehicleCatalog",
       "staffRewards",
+      "customerRewardSettings",
       "highEndServices",
       "serviceCategories",
       "serviceCatalog",
@@ -160,7 +162,17 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   { prefix: "/vendors", resources: ["expenses", "expenseMeta", "productPurchases", "parts", "invoices", "cashBank"] },
   {
     prefix: "/billing",
-    resources: ["invoices", "jobCards", "customers", "vehicles", "membership", "appSettings", "notifications", "cashBank"],
+    resources: [
+      "invoices",
+      "jobCards",
+      "customers",
+      "vehicles",
+      "membership",
+      "appSettings",
+      "customerRewardSettings",
+      "notifications",
+      "cashBank",
+    ],
   },
   {
     prefix: "/quotations",
@@ -189,7 +201,15 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
   },
   {
     prefix: "/job-cards",
-    resources: [...OPS_CORE, "parts", "stockMovements", "serviceReminders", "cashBank", "pickupDropRequests"],
+    resources: [
+      ...OPS_CORE,
+      "parts",
+      "stockMovements",
+      "serviceReminders",
+      "cashBank",
+      "pickupDropRequests",
+      "customerRewardSettings",
+    ],
   },
   {
     prefix: "/customers",

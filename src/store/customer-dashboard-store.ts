@@ -4,6 +4,10 @@ import { create } from "zustand";
 import type { Customer, JobCard, Invoice, Vehicle, CustomerMembership, WalletTransaction } from "@/types";
 import type { ServiceItem } from "@/types/job-card";
 import { buildApiUrl } from "@/lib/api-base";
+import {
+  DEFAULT_CUSTOMER_REWARD_CONFIG,
+  type CustomerRewardConfig,
+} from "@/lib/customer-reward-config";
 import { useCustomerAuthStore } from "@/store/customer-auth-store";
 
 // Helper function to calculate total paid from payments array
@@ -11,19 +15,10 @@ function getTotalPaid(invoice: Invoice): number {
   return (invoice.payments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
 }
 
-export interface RewardConfig {
-  pointsPer100: number;
-  pointValue: number;
-  referralBonus: number;
-  minRedeem: number;
-}
+export type { CustomerRewardConfig };
+export type RewardConfig = CustomerRewardConfig;
 
-const DEFAULT_REWARD_CONFIG: RewardConfig = {
-  pointsPer100: 1,
-  pointValue: 0.25,
-  referralBonus: 100,
-  minRedeem: 200,
-};
+const DEFAULT_REWARD_CONFIG = DEFAULT_CUSTOMER_REWARD_CONFIG;
 
 interface CustomerDashboardData {
   customer: Customer | null;

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn, formatDate } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings-store";
+import { useCustomerRewardSettingsStore } from "@/store/customer-reward-settings-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
 import { useStaffRewardStore } from "@/store/staff-reward-store";
@@ -208,10 +209,23 @@ export default function SettingsPage() {
     { id: "5", category: "Body Work", rate: "18" },
   ]);
 
-  const [earningRate, setEarningRate] = useState("1");
-  const [redemptionValue, setRedemptionValue] = useState("0.25");
-  const [referralBonus, setReferralBonus] = useState("100");
-  const [minRedeemPoints, setMinRedeemPoints] = useState("200");
+  const rewardPointsPer100 = useCustomerRewardSettingsStore((s) => s.pointsPer100);
+  const rewardPointValue = useCustomerRewardSettingsStore((s) => s.pointValue);
+  const rewardReferralBonus = useCustomerRewardSettingsStore((s) => s.referralBonus);
+  const rewardMinRedeem = useCustomerRewardSettingsStore((s) => s.minRedeem);
+  const saveRewardConfig = useCustomerRewardSettingsStore((s) => s.saveConfig);
+
+  const [earningRate, setEarningRate] = useState(String(rewardPointsPer100));
+  const [redemptionValue, setRedemptionValue] = useState(String(rewardPointValue));
+  const [referralBonus, setReferralBonus] = useState(String(rewardReferralBonus));
+  const [minRedeemPoints, setMinRedeemPoints] = useState(String(rewardMinRedeem));
+
+  useEffect(() => {
+    setEarningRate(String(rewardPointsPer100));
+    setRedemptionValue(String(rewardPointValue));
+    setReferralBonus(String(rewardReferralBonus));
+    setMinRedeemPoints(String(rewardMinRedeem));
+  }, [rewardPointsPer100, rewardPointValue, rewardReferralBonus, rewardMinRedeem]);
 
   const [notifJobUpdate, setNotifJobUpdate] = useState(true);
   const [notifPayment, setNotifPayment] = useState(true);
@@ -1123,6 +1137,32 @@ export default function SettingsPage() {
 
                 <Button
                   onClick={() => {
+                    const pointsPer100 = Number(earningRate);
+                    const pointValue = Number(redemptionValue);
+                    const referralBonusPts = Number(referralBonus);
+                    const minRedeem = Number(minRedeemPoints);
+                    if (!Number.isFinite(pointsPer100) || pointsPer100 <= 0) {
+                      toast.error("Points earning rate must be a positive number");
+                      return;
+                    }
+                    if (!Number.isFinite(pointValue) || pointValue <= 0) {
+                      toast.error("Redemption value must be a positive amount");
+                      return;
+                    }
+                    if (!Number.isFinite(referralBonusPts) || referralBonusPts < 0) {
+                      toast.error("Referral bonus must be zero or greater");
+                      return;
+                    }
+                    if (!Number.isFinite(minRedeem) || minRedeem < 0) {
+                      toast.error("Minimum redeem points must be zero or greater");
+                      return;
+                    }
+                    saveRewardConfig({
+                      pointsPer100,
+                      pointValue,
+                      referralBonus: referralBonusPts,
+                      minRedeem: Math.floor(minRedeem),
+                    });
                     toast.success("Rewards configuration saved");
                   }}
                 >

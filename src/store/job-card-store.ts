@@ -5,6 +5,11 @@ import { toast } from "sonner";
 import type { JobCard, PaginationParams } from "@/types";
 import { deleteCollectionDocument, putCollectionDocument } from "@/lib/collection-sync";
 import { apiGet, ApiError } from "@/lib/api-client";
+import {
+  loyaltyPointsEarned,
+  pointsRedeemedFromInvoice,
+} from "@/lib/customer-reward-config";
+import { useCustomerRewardSettingsStore } from "@/store/customer-reward-settings-store";
 import { refreshJobCardFromServer } from "@/lib/job-card-inspection-photo-upload";
 import { syncPickupFromJobCard } from "@/lib/sync-pickup-from-job-card";
 import { jobCardUpdateAllowed } from "@/lib/job-card-edit-policy";
@@ -16,6 +21,7 @@ import { useInvoiceStore } from "@/store/invoice-store";
 function rewardPointReversalForInvoice(invoice: {
   subtotal: number;
   rewardDiscount?: number;
+  rewardPointsRedeemed?: number;
   discountAmount?: number;
   referralDiscount?: number;
   grandTotal: number;
@@ -29,11 +35,19 @@ function rewardPointReversalForInvoice(invoice: {
   if (!isFullyPaid) {
     return { shouldReverse: false, pointsEarned: 0, pointsRedeemed: 0 };
   }
-  const pointsRedeemed = invoice.rewardDiscount || 0;
+  const pointsRedeemed = pointsRedeemedFromInvoice(invoice);
   const discountAmt = invoice.discountAmount || 0;
   const refDiscount = invoice.referralDiscount || 0;
-  const taxable = Math.max(0, invoice.subtotal - discountAmt - pointsRedeemed - refDiscount);
-  const pointsEarned = Math.floor(taxable / 100);
+  const rewardDiscountInr = invoice.rewardDiscount || 0;
+  const taxable = Math.max(0, invoice.subtotal - discountAmt - rewardDiscountInr - refDiscount);
+  const rewardCfg = useCustomerRewardSettingsStore.getState();
+  const pointsEarned = loyaltyPointsEarned(taxable, {
+    pointsPer100: rewardCfg.pointsPer100,
+    pointValue: rewardCfg.pointValue,
+    referralBonus: rewardCfg.referralBonus,
+    minRedeem: rewardCfg.minRedeem,
+    ...(rewardCfg.maxRedeem != null ? { maxRedeem: rewardCfg.maxRedeem } : {}),
+  });
   return { shouldReverse: true, pointsEarned, pointsRedeemed };
 }
 

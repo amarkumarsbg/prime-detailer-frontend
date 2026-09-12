@@ -56,7 +56,17 @@ import { useJobCardStore } from "@/store/job-card-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useSettingsStore } from "@/store/settings-store";
+import { useCustomerRewardSettingsStore } from "@/store/customer-reward-settings-store";
 import { useMembershipStore } from "@/store/membership-store";
+import {
+  canRedeemRewardPoints,
+  loyaltyPointsEarned,
+  maxRedeemablePoints,
+  pointsRedeemedFromInvoice,
+  rewardDiscountFromPoints,
+  rewardRedemptionHelpText,
+  validateRewardPointsRedemption,
+} from "@/lib/customer-reward-config";
 import { useVehicleStore } from "@/store/vehicle-store";
 import { userCanCreate } from "@/lib/rbac";
 import { resolveMembershipInvoiceDetails, vehicleMakeModelLabel } from "@/lib/membership-invoice";
@@ -605,8 +615,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const [flatDiscountStr, setFlatDiscountStr] = useState(() => invoice ? String(invoice.discountAmount || "") : "");
   const [pointsRedeemStr, setPointsRedeemStr] = useState(() => {
     if (!invoice) return "";
-    const dbPts = invoice.rewardDiscount || 0;
-    return dbPts > 200 ? "" : String(dbPts || "");
+    const pts = pointsRedeemedFromInvoice(invoice);
+    return pts > 0 ? String(pts) : "";
   });
   const [referralCode, setReferralCode] = useState(() => invoice ? String(invoice.referralCodeUsed || "") : "");
   const [appliedReferrerId, setAppliedReferrerId] = useState(() => invoice ? invoice.referralAdvocateId || "" : "");
@@ -616,7 +626,27 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const [isApplying, setIsApplying] = useState(false);
 
   const availablePoints = invoiceCustomer?.rewardPoints ?? 0;
-  const maxAllowedPoints = Math.min(200, availablePoints);
+  const rewardPointsPer100 = useCustomerRewardSettingsStore((s) => s.pointsPer100);
+  const rewardPointValue = useCustomerRewardSettingsStore((s) => s.pointValue);
+  const rewardReferralBonus = useCustomerRewardSettingsStore((s) => s.referralBonus);
+  const rewardMinRedeem = useCustomerRewardSettingsStore((s) => s.minRedeem);
+  const rewardMaxRedeem = useCustomerRewardSettingsStore((s) => s.maxRedeem);
+  const rewardConfigSnapshot = useMemo(
+    () => ({
+      pointsPer100: rewardPointsPer100,
+      pointValue: rewardPointValue,
+      referralBonus: rewardReferralBonus,
+      minRedeem: rewardMinRedeem,
+      ...(rewardMaxRedeem != null ? { maxRedeem: rewardMaxRedeem } : {}),
+    }),
+    [
+      rewardPointsPer100,
+      rewardPointValue,
+      rewardReferralBonus,
+      rewardMinRedeem,
+      rewardMaxRedeem,
+    ]
+  );
 
   useEffect(() => {
     if (invoice && typeof window !== "undefined") {
@@ -647,10 +677,30 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       if (hasRewardDraft || hasReferralDraft) {
         finalFlat = "";
         if (hasRewardDraft) {
-          const dbPts = invoice.rewardDiscount || 0;
-          const initialPts = dbPts > 200 ? 0 : dbPts;
-          const parsedDraftReward = (Number(draftReward) <= 200 && Number(draftReward) <= availablePoints) ? draftReward : null;
-          finalReward = parsedDraftReward !== null ? parsedDraftReward : (initialPts > 0 ? String(initialPts) : "");
+          const initialPts = pointsRedeemedFromInvoice(invoice);
+          const draftPts = Number(draftReward);
+          const maxForDraft = maxRedeemablePoints(
+            availablePoints,
+            rewardConfigSnapshot,
+            invoice.subtotal
+          );
+          const parsedDraftReward =
+            draftPts > 0 &&
+            draftPts <= maxForDraft &&
+            !validateRewardPointsRedemption({
+              points: draftPts,
+              availablePoints,
+              config: rewardConfigSnapshot,
+              subtotalInr: invoice.subtotal,
+            })
+              ? draftReward
+              : null;
+          finalReward =
+            parsedDraftReward !== null
+              ? parsedDraftReward
+              : initialPts > 0
+                ? String(initialPts)
+                : "";
         }
         if (hasReferralDraft) {
           finalCode = draftCode || "";
@@ -666,8 +716,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
           finalAdvocate = "";
           finalRefDiscount = 0;
         } else {
-          const dbPts = invoice.rewardDiscount || 0;
-          const initialPts = dbPts > 200 ? 0 : dbPts;
+          const initialPts = pointsRedeemedFromInvoice(invoice);
           finalReward = initialPts > 0 ? String(initialPts) : "";
 
           finalCode = invoice.referralCodeUsed || "";
@@ -694,7 +743,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       );
       setReferralErrorMsg("");
     }
-  }, [invoice, availablePoints, canApplyReferral]);
+  }, [invoice, availablePoints, canApplyReferral, rewardConfigSnapshot]);
 
   const clearPointsDraft = () => {
     setPointsRedeemStr("");
@@ -785,28 +834,43 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
   const referralDiscount = referralDiscountApplied;
 
   const hasFlatInput = (Number(flatDiscountStr) || 0) > 0;
-  const hasPointsInput = pointsRedeemStr.trim() !== "" && (Number(pointsRedeemStr) || 0) > 0;
+  const redemptionAllowed = canRedeemRewardPoints(availablePoints, rewardConfigSnapshot);
+  const hasPointsInput =
+    redemptionAllowed &&
+    pointsRedeemStr.trim() !== "" &&
+    (Number(pointsRedeemStr) || 0) > 0;
   const hasReferralInput =
     referralCode.trim() !== "" || Boolean(appliedReferrerId) || referralDiscountApplied > 0;
 
   const isFlatDisabled = hasPointsInput || hasReferralInput;
-  const isPointsDisabled = hasFlatInput || hasReferralInput;
+  const isPointsDisabled = hasFlatInput || hasReferralInput || !redemptionAllowed;
   const isReferralDisabled = hasFlatInput || hasPointsInput;
 
+  const maxAllowedPoints = maxRedeemablePoints(
+    availablePoints,
+    rewardConfigSnapshot,
+    subtotal
+  );
+  const rewardValidationError = validateRewardPointsRedemption({
+    points: pointsRedeem,
+    availablePoints,
+    config: rewardConfigSnapshot,
+    subtotalInr: subtotal,
+  });
   const activeFlatDiscount = isFlatDisabled ? 0 : flatDiscount;
-  const activeRewardDiscount = isPointsDisabled ? 0 : ((pointsRedeem > 200 || pointsRedeem > availablePoints) ? 0 : pointsRedeem);
+  const activeRewardDiscount =
+    isPointsDisabled || rewardValidationError
+      ? 0
+      : rewardDiscountFromPoints(pointsRedeem, rewardConfigSnapshot);
   const activeReferralDiscount = isReferralDisabled ? 0 : referralDiscount;
 
   // Derive pointsErrorMsg synchronously during render to prevent render lags
-  const pointsErrorMsg = (() => {
-    if (pointsRedeem > 200) {
-      return "Maximum reward points redemption limit is 200 points.";
-    }
-    if (pointsRedeem > availablePoints) {
-      return `Insufficient points. Customer has ${availablePoints} points.`;
-    }
-    return "";
-  })();
+  const pointsErrorMsg = rewardValidationError ?? "";
+  const pointsHelpText = rewardRedemptionHelpText(
+    rewardConfigSnapshot,
+    availablePoints,
+    maxAllowedPoints
+  );
 
   const discountTotal = activeFlatDiscount + activeRewardDiscount + activeReferralDiscount;
   const hasReferralPending =
@@ -826,7 +890,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       : DEFAULT_GST_RATE;
   const taxAmount = Math.round(taxableSubtotal * taxRate * 100) / 100;
   const grandTotalComputed = Math.round((taxableSubtotal + taxAmount) * 100) / 100;
-  const pointsToEarn = Math.floor(taxableSubtotal / 100);
+  const pointsToEarn = loyaltyPointsEarned(taxableSubtotal, rewardConfigSnapshot);
 
   const handleVerifyReferralCode = () => {
     setReferralErrorMsg("");
@@ -923,6 +987,7 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
       await updateInvoice(invoice.id, {
         discountAmount: activeFlatDiscount,
         rewardDiscount: activeRewardDiscount,
+        rewardPointsRedeemed: activeRewardDiscount > 0 ? pointsRedeem : 0,
         referralDiscount: shouldCreditReferralWallets
           ? savedReferralDiscount
           : persistReferral
@@ -1008,12 +1073,8 @@ export function SalesInvoiceDetailClient({ invoiceId: id }: SalesInvoiceDetailCl
 
   const invoicePdfOpts = useMemo((): InvoicePdfOpts | null => {
     if (!invoice) return null;
-    const sanitizedInvoice = {
-      ...invoice,
-      rewardDiscount: (invoice.rewardDiscount || 0) > 200 ? 0 : invoice.rewardDiscount,
-    };
     return {
-      invoice: sanitizedInvoice,
+      invoice,
       jobCard: jobCard ?? null,
       customerName: invoice.customerName,
       customerPhone: invoice.customerPhone,
@@ -1649,7 +1710,11 @@ ${businessNameVal}`;
                     id="reward-points"
                     type="text"
                     inputMode="numeric"
-                    placeholder="Enter points"
+                    placeholder={
+                      redemptionAllowed
+                        ? "Enter points"
+                        : `Need ${rewardConfigSnapshot.minRedeem} pts`
+                    }
                     value={pointsRedeemStr}
                     disabled={isPointsDisabled}
                     onChange={(e) =>
@@ -1657,16 +1722,20 @@ ${businessNameVal}`;
                     }
                     className="[appearance:textfield]"
                   />
-                  {isPointsDisabled && (
+                  {isPointsDisabled && (hasFlatInput || hasReferralInput) && (
                     <p className="text-[11px] text-amber-600">
                       Disabled because direct discount or referral is active.
                     </p>
                   )}
-                  {pointsErrorMsg ? (
-                    <p className="text-[11px] text-destructive">{pointsErrorMsg}</p>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Max 200 points redemption allowed (1 pt = ₹1 discount).</p>
+                  {!redemptionAllowed && !hasFlatInput && !hasReferralInput && (
+                    <p className="text-[11px] text-amber-600">{pointsHelpText}</p>
                   )}
+                  {redemptionAllowed && pointsErrorMsg ? (
+                    <p className="text-[11px] text-destructive">{pointsErrorMsg}</p>
+                  ) : null}
+                  {redemptionAllowed && !pointsErrorMsg ? (
+                    <p className="text-[11px] text-muted-foreground">{pointsHelpText}</p>
+                  ) : null}
                 </div>
 
                 {/* Referral Code Input — new customers only */}
@@ -1743,7 +1812,7 @@ ${businessNameVal}`;
                   )}
                   {activeRewardDiscount > 0 && (
                     <div className="flex justify-between text-amber-600 font-medium">
-                      <span>Reward Discount ({activeRewardDiscount} pts)</span>
+                      <span>Reward Discount ({pointsRedeem} pts)</span>
                       <span className="font-mono">-{formatCurrency(activeRewardDiscount)}</span>
                     </div>
                   )}

@@ -87,6 +87,10 @@ import {
   mergeReferralProgramPayload,
   useReferralSettingsStore,
 } from "@/store/referral-settings-store";
+import {
+  mergeCustomerRewardSettingsPayload,
+  useCustomerRewardSettingsStore,
+} from "@/store/customer-reward-settings-store";
 import { useReminderStore } from "@/store/reminder-store";
 import { useServiceCatalogStore } from "@/store/service-catalog-store";
 import { useServiceCategoryStore } from "@/store/service-category-store";
@@ -463,6 +467,14 @@ async function loadOne(resource: DomainResource): Promise<void> {
       const patch = mergeReferralProgramPayload(raw);
       if (Object.keys(patch).length > 0) {
         useReferralSettingsStore.getState().patchFromBootstrap(patch);
+      }
+      return;
+    }
+    case "customerRewardSettings": {
+      const raw = await getSingleton<unknown>("customerRewardSettings");
+      const patch = mergeCustomerRewardSettingsPayload(raw);
+      if (Object.keys(patch).length > 0) {
+        useCustomerRewardSettingsStore.getState().patchFromBootstrap(patch);
       }
       return;
     }

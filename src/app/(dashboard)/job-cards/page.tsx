@@ -215,7 +215,7 @@ export default function JobCardsPage() {
 
     const sanitizedInvoice = {
       ...invoice,
-      rewardDiscount: (invoice.rewardDiscount || 0) > 200 ? 0 : invoice.rewardDiscount,
+      rewardDiscount: invoice.rewardDiscount,
     };
 
     const invoicePdfOpts: InvoicePdfOpts = {

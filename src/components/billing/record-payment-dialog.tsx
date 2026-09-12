@@ -34,8 +34,13 @@ import { useInvoiceStore } from "@/store/invoice-store";
 import { useSettingsStore } from "@/store/settings-store";
 import { useWalletStore } from "@/store/wallet-store";
 import { useReferralSettingsStore } from "@/store/referral-settings-store";
+import { useCustomerRewardSettingsStore } from "@/store/customer-reward-settings-store";
 import { creditReferralWalletsForInvoice } from "@/lib/referral-wallet-credits";
 import { resolveReferralProgramRewards } from "@/lib/referral-program-rewards";
+import {
+  loyaltyPointsEarned,
+  pointsRedeemedFromInvoice,
+} from "@/lib/customer-reward-config";
 import { maxWalletRedeemForPayment, MAX_WALLET_REDEEM_INR } from "@/lib/wallet-redeem";
 import type { PaymentMethod } from "@/types";
 import { Loader2 } from "lucide-react";
@@ -204,14 +209,22 @@ export function RecordPaymentDialog({
           useCustomerStore.getState().customers.find((c) => c.id === latestInvoice.customerId) ||
           customer;
         if (buyer) {
-          const pointsRedeemed = latestInvoice.rewardDiscount || 0;
+          const pointsRedeemed = pointsRedeemedFromInvoice(latestInvoice);
           const discountAmt = latestInvoice.discountAmount || 0;
           const refDiscount = latestInvoice.referralDiscount || 0;
+          const rewardDiscountInr = latestInvoice.rewardDiscount || 0;
           const taxable = Math.max(
             0,
-            latestInvoice.subtotal - discountAmt - pointsRedeemed - refDiscount
+            latestInvoice.subtotal - discountAmt - rewardDiscountInr - refDiscount
           );
-          const pointsEarned = Math.floor(taxable / 100);
+          const rewardCfg = useCustomerRewardSettingsStore.getState();
+          const pointsEarned = loyaltyPointsEarned(taxable, {
+            pointsPer100: rewardCfg.pointsPer100,
+            pointValue: rewardCfg.pointValue,
+            referralBonus: rewardCfg.referralBonus,
+            minRedeem: rewardCfg.minRedeem,
+            ...(rewardCfg.maxRedeem != null ? { maxRedeem: rewardCfg.maxRedeem } : {}),
+          });
           const nextPoints = Math.max(0, buyer.rewardPoints - pointsRedeemed + pointsEarned);
 
           await useCustomerStore.getState().updateCustomer(buyer.id, {
