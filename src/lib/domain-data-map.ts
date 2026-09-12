@@ -172,6 +172,9 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       "customerRewardSettings",
       "notifications",
       "cashBank",
+      "parts",
+      "stockMovements",
+      "branchStocks",
     ],
   },
   {
@@ -205,6 +208,7 @@ const ROUTE_PACKS: { prefix: string; resources: DomainResource[] }[] = [
       ...OPS_CORE,
       "parts",
       "stockMovements",
+      "branchStocks",
       "serviceReminders",
       "cashBank",
       "pickupDropRequests",

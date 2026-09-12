@@ -26,6 +26,8 @@ describe("resourcesForPath", () => {
     const r = resourcesForPath("/job-cards/jc-001");
     expect(r).toContain("jobCards");
     expect(r).toContain("serviceCatalog");
+    expect(r).toContain("branchStocks");
+    expect(r).not.toContain("productPurchases");
   });
 
   it("loads appSettings for job-cards, booking, and payment pricing routes", () => {

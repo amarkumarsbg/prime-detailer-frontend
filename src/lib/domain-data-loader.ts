@@ -283,31 +283,37 @@ async function loadOne(resource: DomainResource): Promise<void> {
     case "parts": {
       const parts = await getCollectionItems<Part>("parts");
       useInventoryStore.setState({ parts: parts.map(normalizePartUnits) });
+      useInventoryStore.getState().markCollectionsHydrated(["parts"]);
       return;
     }
     case "stockMovements": {
       const stockMovements = await getCollectionItems<StockMovement>("stockMovements");
       useInventoryStore.setState({ stockMovements });
+      useInventoryStore.getState().markCollectionsHydrated(["stockMovements"]);
       return;
     }
     case "productPurchases": {
       const productPurchases = await getCollectionItems<ProductPurchase>("productPurchases");
       useInventoryStore.setState({ productPurchases });
+      useInventoryStore.getState().markCollectionsHydrated(["productPurchases"]);
       return;
     }
     case "branchStocks": {
       const branchStocks = await getCollectionItems<BranchStock>("branchStocks");
       useInventoryStore.setState({ branchStocks });
+      useInventoryStore.getState().markCollectionsHydrated(["branchStocks"]);
       return;
     }
     case "stockTransfers": {
       const stockTransfers = await getCollectionItems<StockTransfer>("stockTransfers");
       useInventoryStore.setState({ stockTransfers });
+      useInventoryStore.getState().markCollectionsHydrated(["stockTransfers"]);
       return;
     }
     case "partCategories": {
       const partCategories = await getCollectionItems<PartCategoryRecord>("partCategories");
       useInventoryStore.setState({ partCategories });
+      useInventoryStore.getState().markCollectionsHydrated(["partCategories"]);
       return;
     }
     case "followUps": {

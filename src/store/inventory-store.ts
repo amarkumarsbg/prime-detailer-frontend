@@ -37,6 +37,14 @@ import {
 } from "@/lib/inventory/branch-stock";
 import { mergePartCategoryNames, normalizePartCategoryName } from "@/lib/inventory/part-categories";
 
+export type InventoryCollectionKey =
+  | "parts"
+  | "stockMovements"
+  | "productPurchases"
+  | "branchStocks"
+  | "stockTransfers"
+  | "partCategories";
+
 interface InventoryStore {
   parts: Part[];
   stockMovements: StockMovement[];
@@ -44,6 +52,9 @@ interface InventoryStore {
   branchStocks: BranchStock[];
   stockTransfers: StockTransfer[];
   partCategories: PartCategoryRecord[];
+  /** Collections loaded from the server — never snapshot an unloaded financial/history slice. */
+  hydratedCollections: Partial<Record<InventoryCollectionKey, boolean>>;
+  markCollectionsHydrated: (keys: InventoryCollectionKey[]) => void;
   addPart: (part: Part) => Part;
   addPartCategory: (name: string) => { ok: true; name: string } | { ok: false; error: string };
   updatePart: (
@@ -141,15 +152,40 @@ interface InventoryStore {
 }
 
 function persistInventorySnapshot(get: () => InventoryStore): void {
-  const { parts, stockMovements, productPurchases, branchStocks, stockTransfers, partCategories } = get();
-  void Promise.all([
-    postCollectionSnapshot("parts", parts),
-    postCollectionSnapshot("stockMovements", stockMovements),
-    postCollectionSnapshot("productPurchases", productPurchases),
-    postCollectionSnapshot("branchStocks", branchStocks),
-    postCollectionSnapshot("stockTransfers", stockTransfers),
-    postCollectionSnapshot("partCategories", partCategories),
-  ]).catch((err) => {
+  const {
+    parts,
+    stockMovements,
+    productPurchases,
+    branchStocks,
+    stockTransfers,
+    partCategories,
+    hydratedCollections,
+  } = get();
+
+  const tasks: Promise<void>[] = [];
+  if (hydratedCollections.parts) {
+    tasks.push(postCollectionSnapshot("parts", parts));
+  }
+  if (hydratedCollections.stockMovements) {
+    tasks.push(postCollectionSnapshot("stockMovements", stockMovements));
+  }
+  // Never push an unloaded productPurchases/branchStocks/etc. empty array — BE rejects
+  // empty financial snapshots, and non-financial empties would silently wipe history.
+  if (hydratedCollections.productPurchases) {
+    tasks.push(postCollectionSnapshot("productPurchases", productPurchases));
+  }
+  if (hydratedCollections.branchStocks) {
+    tasks.push(postCollectionSnapshot("branchStocks", branchStocks));
+  }
+  if (hydratedCollections.stockTransfers) {
+    tasks.push(postCollectionSnapshot("stockTransfers", stockTransfers));
+  }
+  if (hydratedCollections.partCategories) {
+    tasks.push(postCollectionSnapshot("partCategories", partCategories));
+  }
+  if (tasks.length === 0) return;
+
+  void Promise.all(tasks).catch((err) => {
     if (process.env.NODE_ENV !== "production") {
       console.warn("Failed to persist inventory snapshot", err);
     }
@@ -310,6 +346,16 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   branchStocks: [],
   stockTransfers: [],
   partCategories: [],
+  hydratedCollections: {},
+
+  markCollectionsHydrated: (keys) => {
+    if (keys.length === 0) return;
+    set((state) => {
+      const next = { ...state.hydratedCollections };
+      for (const key of keys) next[key] = true;
+      return { hydratedCollections: next };
+    });
+  },
 
   addPartCategory: (name) => {
     const trimmed = normalizePartCategoryName(name);
@@ -407,12 +453,21 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     );
 
     await deleteCollectionDocument("parts", partId);
-    await Promise.all([
-      postCollectionSnapshot("stockMovements", nextMovements),
-      postCollectionSnapshot("productPurchases", nextPurchases),
-      postCollectionSnapshot("branchStocks", nextBranchStocks),
-      postCollectionSnapshot("stockTransfers", stockTransfers),
-    ]);
+    const hydrated = get().hydratedCollections;
+    const persistTasks: Promise<void>[] = [];
+    if (hydrated.stockMovements) {
+      persistTasks.push(postCollectionSnapshot("stockMovements", nextMovements));
+    }
+    if (hydrated.productPurchases) {
+      persistTasks.push(postCollectionSnapshot("productPurchases", nextPurchases));
+    }
+    if (hydrated.branchStocks) {
+      persistTasks.push(postCollectionSnapshot("branchStocks", nextBranchStocks));
+    }
+    if (hydrated.stockTransfers) {
+      persistTasks.push(postCollectionSnapshot("stockTransfers", stockTransfers));
+    }
+    await Promise.all(persistTasks);
     if (needsCatalogUpdate) {
       await useServiceCatalogStore.getState().setCatalog((prev) =>
         prev.map((s) => ({
